@@ -1,0 +1,27 @@
+ERC 报告 (2026-04-28T23:40:41+0800, UTF8 编码)
+
+***** 图纸 /
+[missing_unit]: 符号 RESET1 有未放置的单元 [ 单元 B ]
+    ; warning
+    @(48.26 mm, 226.06 mm): 符号 RESET1 [SW_Push_Dual_x2]
+[multiple_net_names]: GND 和 NRST 都连接到同一项上; 将使用 GND 作为网表中的网络名称
+    ; warning
+    @(129.54 mm, 99.06 mm): 全局标签 'GND'
+    @(91.44 mm, 232.41 mm): 全局标签 'NRST'
+[missing_unit]: 符号 KEY1 有未放置的单元 [ 单元 B ]
+    ; warning
+    @(472.44 mm, 391.16 mm): 符号 KEY1 [SW_Push_Dual_x2]
+[missing_unit]: 符号 KEY2 有未放置的单元 [ 单元 B ]
+    ; warning
+    @(502.92 mm, 391.16 mm): 符号 KEY2 [SW_Push_Dual_x2]
+[missing_unit]: 符号 KEY3 有未放置的单元 [ 单元 B ]
+    ; warning
+    @(533.40 mm, 391.16 mm): 符号 KEY3 [SW_Push_Dual_x2]
+[missing_unit]: 符号 KEY4 有未放置的单元 [ 单元 B ]
+    ; warning
+    @(563.88 mm, 391.16 mm): 符号 KEY4 [SW_Push_Dual_x2]
+[global_label_dangling]: 在原理图中的任何其他位置都未连接全局标签
+    ; warning
+    @(716.28 mm, 180.34 mm): 全局标签 'BT_UART_RX'
+
+ ** ERC 信息: 7 个错误 0 个警告 7

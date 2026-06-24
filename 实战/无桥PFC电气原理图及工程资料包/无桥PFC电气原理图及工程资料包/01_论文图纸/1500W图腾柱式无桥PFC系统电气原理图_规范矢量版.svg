@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1800" height="1120" viewBox="0 0 1800 1120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:38px;font-weight:700;fill:#111;}
+      .h{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:24px;font-weight:700;fill:#111;}
+      .t{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:18px;fill:#111;}
+      .small{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:15px;fill:#111;}
+      .tiny{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:13px;fill:#111;}
+      .wire{stroke:#111;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+      .sig{stroke:#6a35b1;stroke-width:2.4;fill:none;stroke-dasharray:7 6;stroke-linecap:round;}
+      .drv{stroke:#1463d8;stroke-width:2.4;fill:none;stroke-dasharray:8 6;stroke-linecap:round;}
+      .box{fill:#fff;stroke:#111;stroke-width:2.2;rx:12;ry:12;}
+      .soft{fill:#fbfbfb;stroke:#777;stroke-width:1.8;stroke-dasharray:8 5;rx:12;ry:12;}
+      .redbox{fill:#fff;stroke:#d92525;stroke-width:2.2;stroke-dasharray:7 5;rx:12;ry:12;}
+      .bluebox{fill:#fff;stroke:#1463d8;stroke-width:2.2;stroke-dasharray:7 5;rx:12;ry:12;}
+      .greenbox{fill:#fff;stroke:#148447;stroke-width:2.2;stroke-dasharray:7 5;rx:12;ry:12;}
+      .purplebox{fill:#fff;stroke:#6a35b1;stroke-width:2.2;stroke-dasharray:7 5;rx:12;ry:12;}
+      .orangebox{fill:#fff;stroke:#e57200;stroke-width:2.2;stroke-dasharray:7 5;rx:12;ry:12;}
+      .labelblue{fill:#1463d8;font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:18px;font-weight:700;}
+      .labelred{fill:#d92525;font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:18px;font-weight:700;}
+      .labelgreen{fill:#148447;font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:18px;font-weight:700;}
+      .labelpurple{fill:#6a35b1;font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:18px;font-weight:700;}
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#111"/>
+    </marker>
+    <marker id="arrowB" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#1463d8"/>
+    </marker>
+    <marker id="arrowP" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#6a35b1"/>
+    </marker>
+  </defs>
+  <rect x="8" y="8" width="1784" height="1104" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="900" y="58" text-anchor="middle" class="title">1500W 图腾柱式无桥 PFC 系统电气原理图（论文规范版）</text>
+
+  <!-- Main power region -->
+  <rect x="30" y="88" width="1740" height="455" class="box"/>
+  <text x="55" y="123" class="h">1. 主功率电路</text>
+  <text x="55" y="178" class="t">AC IN</text>
+  <text x="52" y="208" class="small">85~265VAC</text>
+  <text x="52" y="232" class="small">50/60Hz</text>
+  <circle cx="120" cy="180" r="8" fill="#fff" stroke="#111" stroke-width="2"/>
+  <circle cx="120" cy="320" r="8" fill="#fff" stroke="#111" stroke-width="2"/>
+  <circle cx="120" cy="435" r="8" fill="#fff" stroke="#148447" stroke-width="2"/>
+  <text x="82" y="185" class="t">L</text>
+  <text x="82" y="325" class="t">N</text>
+  <text x="78" y="441" class="t">PE</text>
+
+  <path d="M128,180 H250" class="wire"/>
+  <path d="M128,320 H250" class="wire"/>
+  <rect x="250" y="160" width="70" height="40" class="box"/>
+  <text x="285" y="185" text-anchor="middle" class="small">F1</text>
+  <text x="285" y="207" text-anchor="middle" class="tiny">T25A</text>
+  <path d="M320,180 H375" class="wire"/>
+  <path d="M250,320 H375" class="wire"/>
+  <path d="M350,180 V320" class="wire"/>
+  <rect x="334" y="230" width="32" height="45" fill="#fff" stroke="#111" stroke-width="2" transform="rotate(15 350 252)"/>
+  <text x="380" y="260" class="small">MOV1 14D471K</text>
+
+  <rect x="430" y="125" width="210" height="255" class="soft"/>
+  <text x="535" y="153" text-anchor="middle" class="labelblue">软启动电路</text>
+  <path d="M375,180 H455" class="wire"/>
+  <path d="M375,320 H455" class="wire"/>
+  <rect x="455" y="162" width="70" height="36" class="box"/>
+  <text x="490" y="185" text-anchor="middle" class="small">NTC1</text>
+  <text x="490" y="208" text-anchor="middle" class="tiny">5Ω/15A</text>
+  <path d="M525,180 H615" class="wire"/>
+  <path d="M615,180 V320" class="wire"/>
+  <path d="M525,320 H615" class="wire"/>
+  <path d="M555,180 V320" stroke="#111" stroke-width="2" fill="none" stroke-dasharray="6 5"/>
+  <rect x="540" y="240" width="30" height="45" class="box"/>
+  <text x="585" y="265" class="small">K1 旁路</text>
+  <text x="470" y="350" class="tiny">上电限流，母线建立后短接 NTC/限流电阻</text>
+
+  <rect x="680" y="125" width="250" height="285" class="soft"/>
+  <text x="805" y="153" text-anchor="middle" class="labelblue">EMI 滤波器</text>
+  <path d="M615,180 H690" class="wire"/>
+  <path d="M615,320 H690" class="wire"/>
+  <path d="M690,180 H750" class="wire"/>
+  <path d="M690,320 H750" class="wire"/>
+  <rect x="750" y="160" width="90" height="180" class="box"/>
+  <path d="M770,180 q20,20 40,0 q20,-20 40,0" class="wire"/>
+  <path d="M770,320 q20,-20 40,0 q20,20 40,0" class="wire"/>
+  <text x="795" y="236" text-anchor="middle" class="small">Lcm</text>
+  <path d="M840,180 H930" class="wire"/>
+  <path d="M840,320 H930" class="wire"/>
+  <path d="M885,180 V320" stroke="#111" stroke-width="2"/>
+  <text x="898" y="255" class="small">Cx</text>
+  <path d="M760,320 V430" class="wire"/>
+  <path d="M850,320 V430" class="wire"/>
+  <text x="735" y="400" class="small">Cy1</text>
+  <text x="862" y="400" class="small">Cy2</text>
+  <path d="M120,435 H900" stroke="#148447" stroke-width="2"/>
+  <path d="M760,430 V450" stroke="#148447" stroke-width="2"/>
+  <path d="M850,430 V450" stroke="#148447" stroke-width="2"/>
+
+  <rect x="980" y="102" width="485" height="365" class="redbox"/>
+  <text x="1222" y="132" text-anchor="middle" class="labelred">图腾柱式无桥 PFC 主电路</text>
+  <path d="M930,180 H1030" class="wire"/>
+  <path d="M930,320 H1030" class="wire"/>
+  <text x="970" y="165" class="small">A(L)</text>
+  <text x="970" y="345" class="small">B(N)</text>
+  <path d="M1030,180 H1430" class="wire"/>
+  <path d="M1030,420 H1430" class="wire"/>
+  <path d="M1030,180 V420" class="wire"/>
+  <path d="M1305,180 V420" class="wire"/>
+  <!-- MOSFETs -->
+  <rect x="1060" y="205" width="70" height="70" class="box"/>
+  <text x="1095" y="233" text-anchor="middle" class="small">Q1</text>
+  <text x="1095" y="257" text-anchor="middle" class="tiny">高频 SiC</text>
+  <rect x="1060" y="325" width="70" height="70" class="box"/>
+  <text x="1095" y="353" text-anchor="middle" class="small">Q2</text>
+  <text x="1095" y="377" text-anchor="middle" class="tiny">高频 SiC</text>
+  <rect x="1335" y="205" width="70" height="70" class="box"/>
+  <text x="1370" y="233" text-anchor="middle" class="small">Q3</text>
+  <text x="1370" y="257" text-anchor="middle" class="tiny">工频同步</text>
+  <rect x="1335" y="325" width="70" height="70" class="box"/>
+  <text x="1370" y="353" text-anchor="middle" class="small">Q4</text>
+  <text x="1370" y="377" text-anchor="middle" class="tiny">工频同步</text>
+  <circle cx="1030" cy="300" r="5" fill="#111"/>
+  <circle cx="1305" cy="300" r="5" fill="#111"/>
+  <path d="M1030,300 H1135" class="wire"/>
+  <path d="M1170,300 q30,-28 60,0 q30,28 60,0" class="wire"/>
+  <path d="M1290,300 H1305" class="wire"/>
+  <text x="1220" y="285" text-anchor="middle" class="small">L1 升压电感 450µH</text>
+  <path d="M1135,300 H1170" class="wire"/>
+  <rect x="1395" y="337" width="120" height="40" class="box"/>
+  <text x="1455" y="362" text-anchor="middle" class="small">CS1 电流采样</text>
+
+  <path d="M1430,180 H1600" class="wire"/>
+  <path d="M1430,420 H1600" class="wire"/>
+  <path d="M1540,180 V420" class="wire"/>
+  <rect x="1520" y="228" width="40" height="120" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="1515" y="250" text-anchor="middle" class="small">Cbus</text>
+  <text x="1515" y="273" text-anchor="middle" class="tiny">2×470µF/450V</text>
+  <circle cx="1660" cy="180" r="7" fill="#fff" stroke="#d92525" stroke-width="2"/>
+  <circle cx="1660" cy="420" r="7" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="1680" y="185" class="labelred">+400VDC</text>
+  <text x="1680" y="425" class="small">PGND</text>
+  <path d="M1600,180 H1660" class="wire"/>
+  <path d="M1600,420 H1660" class="wire"/>
+  <rect x="1600" y="260" width="70" height="90" class="box"/>
+  <text x="1635" y="295" text-anchor="middle" class="small">RL</text>
+  <text x="1635" y="318" text-anchor="middle" class="tiny">负载</text>
+
+  <!-- Driver circuits -->
+  <rect x="30" y="565" width="540" height="320" class="bluebox"/>
+  <text x="55" y="600" class="h" fill="#1463d8">2. 驱动电路</text>
+  <rect x="70" y="635" width="220" height="135" class="box"/>
+  <text x="180" y="663" text-anchor="middle" class="labelblue">高频桥臂驱动</text>
+  <text x="92" y="700" class="small">U1：隔离高低边驱动</text>
+  <text x="92" y="730" class="small">输出：GH、GL</text>
+  <text x="92" y="758" class="small">驱动对象：Q1/Q2</text>
+  <rect x="330" y="635" width="220" height="135" class="box"/>
+  <text x="440" y="663" text-anchor="middle" class="labelgreen">工频桥臂驱动</text>
+  <text x="352" y="700" class="small">U2：隔离/电平驱动</text>
+  <text x="352" y="730" class="small">输出：GDH、GDL</text>
+  <text x="352" y="758" class="small">驱动对象：Q3/Q4</text>
+  <text x="70" y="815" class="small">要求：15V 驱动电源、栅极电阻、米勒钳位/关断通道、驱动地隔离处理。</text>
+  <path d="M290,690 C700,600 1060,500 1095,275" class="drv" marker-end="url(#arrowB)"/>
+  <path d="M290,735 C710,650 1060,520 1095,395" class="drv" marker-end="url(#arrowB)"/>
+  <path d="M550,690 C850,610 1370,510 1370,275" class="drv" marker-end="url(#arrowB)"/>
+  <path d="M550,735 C850,670 1370,530 1370,395" class="drv" marker-end="url(#arrowB)"/>
+
+  <!-- Control circuits -->
+  <rect x="610" y="565" width="630" height="440" class="purplebox"/>
+  <text x="635" y="600" class="h" fill="#6a35b1">3. 采样与控制电路</text>
+  <rect x="650" y="635" width="210" height="90" class="box"/>
+  <text x="755" y="663" text-anchor="middle" class="labelpurple">输入电压采样</text>
+  <text x="670" y="695" class="small">AC_L / AC_N → VIN_S</text>
+  <rect x="650" y="745" width="210" height="90" class="box"/>
+  <text x="755" y="773" text-anchor="middle" class="labelpurple">母线电压采样</text>
+  <text x="670" y="805" class="small">+400V → VBUS_S</text>
+  <rect x="650" y="855" width="210" height="90" class="box"/>
+  <text x="755" y="883" text-anchor="middle" class="labelpurple">电感电流采样</text>
+  <text x="670" y="915" class="small">CS1 → IL_S</text>
+  <rect x="895" y="675" width="290" height="255" class="box"/>
+  <text x="1040" y="710" text-anchor="middle" class="h">U5 PFC 控制器</text>
+  <text x="925" y="750" class="small">电压外环：稳定 400V 母线</text>
+  <text x="925" y="785" class="small">电流内环：跟踪输入电压正弦</text>
+  <text x="925" y="820" class="small">过零检测：识别正/负半周</text>
+  <text x="925" y="855" class="small">故障输入：UVLO/OVP/OCP/OTP</text>
+  <text x="925" y="890" class="small">PWM 输出：GH、GL、GDH、GDL</text>
+  <path d="M860,680 H895" class="sig" marker-end="url(#arrowP)"/>
+  <path d="M860,790 H895" class="sig" marker-end="url(#arrowP)"/>
+  <path d="M860,900 H895" class="sig" marker-end="url(#arrowP)"/>
+  <path d="M1185,760 H1230 C1300,760 1320,690 1370,660" class="drv" marker-end="url(#arrowB)"/>
+  <path d="M1185,800 H1235 C1300,805 1320,730 1370,700" class="drv" marker-end="url(#arrowB)"/>
+
+  <!-- Protection -->
+  <rect x="1270" y="565" width="500" height="320" class="orangebox"/>
+  <text x="1295" y="600" class="h" fill="#e57200">4. 保护电路</text>
+  <rect x="1310" y="640" width="190" height="150" class="box"/>
+  <text x="1405" y="670" text-anchor="middle" class="small">保护检测</text>
+  <text x="1330" y="705" class="small">UVLO 输入欠压</text>
+  <text x="1330" y="735" class="small">OVP 输出过压</text>
+  <text x="1330" y="765" class="small">OCP 过流/短路</text>
+  <rect x="1535" y="640" width="190" height="150" class="box"/>
+  <text x="1630" y="670" text-anchor="middle" class="small">温度/软启动</text>
+  <text x="1555" y="705" class="small">OTP 功率器件过热</text>
+  <text x="1555" y="735" class="small">K1 旁路控制</text>
+  <text x="1555" y="765" class="small">FAULT 锁存关断</text>
+  <path d="M1500,715 H1535" class="sig" marker-end="url(#arrowP)"/>
+  <path d="M1525,790 C1430,845 1260,865 1185,855" class="sig" marker-end="url(#arrowP)"/>
+  <text x="1308" y="835" class="small">作用：异常工况下立即关断 PWM，防止母线过压、器件过流和热失效。</text>
+
+  <!-- Auxiliary power -->
+  <rect x="30" y="910" width="540" height="175" class="orangebox"/>
+  <text x="55" y="945" class="h" fill="#e57200">5. 辅助电源电路</text>
+  <rect x="85" y="970" width="200" height="70" class="box"/>
+  <text x="185" y="999" text-anchor="middle" class="small">反激式 DC-DC</text>
+  <text x="185" y="1025" text-anchor="middle" class="tiny">400V 母线取电/启动供电</text>
+  <rect x="330" y="960" width="210" height="105" class="box"/>
+  <text x="350" y="994" class="small">+15V：栅极驱动</text>
+  <text x="350" y="1025" class="small">+5V/3.3V：控制与采样</text>
+  <path d="M285,1005 H330" class="wire" marker-end="url(#arrow)"/>
+
+  <!-- Notes -->
+  <rect x="1270" y="910" width="500" height="175" class="box"/>
+  <text x="1295" y="945" class="h">图纸说明</text>
+  <text x="1295" y="980" class="small">1. Q1/Q2 为高频桥臂，开关频率按 ≥65kHz 设计。</text>
+  <text x="1295" y="1010" class="small">2. Q3/Q4 为工频同步整流桥臂，按交流半周换向。</text>
+  <text x="1295" y="1040" class="small">3. 控制采用电压外环 + 电流内环，实现 400V 稳压与高功率因数。</text>
+  <text x="1295" y="1070" class="small">4. 工程 PCB 阶段需按器件封装、安全间距和热设计进一步校核。</text>
+</svg>

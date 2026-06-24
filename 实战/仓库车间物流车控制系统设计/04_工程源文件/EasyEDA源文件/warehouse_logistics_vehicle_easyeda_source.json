@@ -1,0 +1,2989 @@
+{
+  "project": "warehouse_logistics_vehicle",
+  "title_cn": "仓库车间物流车控制系统设计",
+  "title_en": "Warehouse Workshop Logistics Vehicle Control System",
+  "version": "v1.0",
+  "purpose": "schematic_dao 自动生成 — 用于 EasyEDA/嘉立创EDA/Altium/KiCad 二次展开参考",
+  "spec": {
+    "电源输入": "12V DC (锂电池供电)",
+    "主控": "STM32G030K8T6 (LQFP-32, ARM Cortex-M0+ @ 64MHz)",
+    "电机驱动": "L298N(XBLW) 双H桥, 2A/通道",
+    "无线通信": "蓝牙 UART (HC-05/HC-04)",
+    "显示": "OLED 0.96\" I2C (SSD1306)",
+    "传感器": "HC-SR04 超声波 + 红外循迹×2 + 站点红外 + 压力",
+    "电池监测": "ADC 分压采样 (R28 100K / R29 2K)",
+    "调试": "SWD (PA13/PA14) + 5V 程序下载",
+    "外形": "PCB 双面板 100×80mm (建议)"
+  },
+  "modules": [
+    {
+      "name": "power_chain",
+      "title_cn": "12V转5V转3.3V稳压电路",
+      "description": "LR78M05D + AMS1117-3.3 双级线性稳压, 输入 12V 锂电池, 输出 5V 与 3.3V 双轨",
+      "parts": [
+        "U11",
+        "U12",
+        "C20",
+        "C21",
+        "C22",
+        "C23",
+        "C24",
+        "D1",
+        "R21"
+      ],
+      "nets": [
+        "12V",
+        "VCC_5V",
+        "VCC_3V3",
+        "GND"
+      ],
+      "layout": {
+        "x": 240,
+        "y": 100,
+        "w": 460,
+        "h": 170,
+        "color": "#1463d8",
+        "box_style": "bluebox"
+      }
+    },
+    {
+      "name": "battery_adc",
+      "title_cn": "电池电压ADC采集",
+      "description": "R28(100K) / R29(2K) 高阻分压, 12V → 0.235V 落入 STM32 ADC 量程",
+      "parts": [
+        "R28",
+        "R29"
+      ],
+      "nets": [
+        "VBAT",
+        "VBAT_S",
+        "GND"
+      ],
+      "layout": {
+        "x": 20,
+        "y": 100,
+        "w": 200,
+        "h": 170,
+        "color": "#148447",
+        "box_style": "greenbox"
+      }
+    },
+    {
+      "name": "ultrasonic",
+      "title_cn": "超声波传感器接口",
+      "description": "HC-SR04 前向避障测距, Trig 触发 10us 脉冲, Echo 回波时长测距",
+      "parts": [
+        "U1"
+      ],
+      "nets": [
+        "VCC_5V",
+        "GND",
+        "US_TRIG",
+        "US_ECHO"
+      ],
+      "layout": {
+        "x": 720,
+        "y": 100,
+        "w": 300,
+        "h": 170,
+        "color": "#0a8a8a",
+        "box_style": "tealbox"
+      }
+    },
+    {
+      "name": "oled",
+      "title_cn": "OLED显示屏接口",
+      "description": "SSD1306 0.96\" I2C OLED, 128×64 像素显示运行状态/电池/距离",
+      "parts": [
+        "OLED1",
+        "R25",
+        "R26"
+      ],
+      "nets": [
+        "VCC_3V3",
+        "GND",
+        "I2C_SCL",
+        "I2C_SDA"
+      ],
+      "layout": {
+        "x": 1040,
+        "y": 100,
+        "w": 320,
+        "h": 170,
+        "color": "#6a35b1",
+        "box_style": "purplebox"
+      }
+    },
+    {
+      "name": "reset",
+      "title_cn": "复位单片机复位电路",
+      "description": "1NRST 复位按键 + R5 上拉 + C6 RC 滤波, 提供手动复位",
+      "parts": [
+        "RESET1",
+        "R5",
+        "C5",
+        "C6"
+      ],
+      "nets": [
+        "NRST",
+        "VCC_3V3",
+        "GND"
+      ],
+      "layout": {
+        "x": 20,
+        "y": 290,
+        "w": 200,
+        "h": 180,
+        "color": "#d92525",
+        "box_style": "redbox"
+      }
+    },
+    {
+      "name": "mcu_core",
+      "title_cn": "单片机引脚分配电路",
+      "description": "STM32G030K8T6 LQFP-32 主控, 32 引脚分配如下表",
+      "parts": [
+        "U2"
+      ],
+      "nets": [
+        "VCC_3V3",
+        "GND",
+        "NRST",
+        "SWCLK",
+        "SWDIO"
+      ],
+      "layout": {
+        "x": 240,
+        "y": 290,
+        "w": 460,
+        "h": 320,
+        "color": "#111",
+        "box_style": "box"
+      }
+    },
+    {
+      "name": "motor_l298n",
+      "title_cn": "L298N电机驱动电路",
+      "description": "双 H 桥驱动两路直流电机, 含 8 个续流二极管 D2~D9 保护",
+      "parts": [
+        "U14",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9"
+      ],
+      "nets": [
+        "12V",
+        "VCC_5V",
+        "GND",
+        "MOTOR_ENA",
+        "MOTOR_IN1",
+        "MOTOR_IN2",
+        "MOTOR_ENB",
+        "MOTOR_IN3",
+        "MOTOR_IN4",
+        "MOTOR_OUT1",
+        "MOTOR_OUT2",
+        "MOTOR_OUT3",
+        "MOTOR_OUT4"
+      ],
+      "layout": {
+        "x": 720,
+        "y": 290,
+        "w": 640,
+        "h": 320,
+        "color": "#e57200",
+        "box_style": "orangebox"
+      }
+    },
+    {
+      "name": "swd",
+      "title_cn": "程序下载电路",
+      "description": "SWD 4 针接口: VCC_3V3 / SWCLK / SWDIO / GND, 双 100K 下拉防误进 ISP",
+      "parts": [
+        "PH-00015_SWD",
+        "R3",
+        "R4"
+      ],
+      "nets": [
+        "VCC_3V3",
+        "GND",
+        "SWCLK",
+        "SWDIO"
+      ],
+      "layout": {
+        "x": 20,
+        "y": 490,
+        "w": 200,
+        "h": 140,
+        "color": "#1463d8",
+        "box_style": "bluebox"
+      }
+    },
+    {
+      "name": "sys_led",
+      "title_cn": "系统指示灯电路",
+      "description": "PA3 控制 LED6 (蓝色) 心跳指示, 1Hz 闪烁表示主循环运行",
+      "parts": [
+        "LED6",
+        "R22"
+      ],
+      "nets": [
+        "VCC_3V3",
+        "GND",
+        "SYS_LED"
+      ],
+      "layout": {
+        "x": 1380,
+        "y": 290,
+        "w": 200,
+        "h": 140,
+        "color": "#148447",
+        "box_style": "greenbox"
+      }
+    },
+    {
+      "name": "bluetooth",
+      "title_cn": "蓝牙模块驱动电路",
+      "description": "HC-05 蓝牙串口模块, USART1 通信 (默认 9600bps)",
+      "parts": [
+        "BT1",
+        "LED5",
+        "R20"
+      ],
+      "nets": [
+        "VCC_3V3",
+        "GND",
+        "BT_UART_TX",
+        "BT_UART_RX",
+        "BT_LED_STATUS"
+      ],
+      "layout": {
+        "x": 1040,
+        "y": 640,
+        "w": 320,
+        "h": 170,
+        "color": "#1463d8",
+        "box_style": "bluebox"
+      }
+    },
+    {
+      "name": "keys",
+      "title_cn": "按键控制电路",
+      "description": "4 个 TS-KG09S 轻触按键, 各配 10K 下拉, 软件去抖 20ms",
+      "parts": [
+        "KEY1",
+        "KEY2",
+        "KEY3",
+        "KEY4",
+        "R23",
+        "R23B",
+        "R23C",
+        "R23D"
+      ],
+      "nets": [
+        "VCC_3V3",
+        "GND",
+        "KEY_1",
+        "KEY_2",
+        "KEY_3",
+        "KEY_4"
+      ],
+      "layout": {
+        "x": 20,
+        "y": 650,
+        "w": 200,
+        "h": 180,
+        "color": "#8b4513",
+        "box_style": "brownbox"
+      }
+    },
+    {
+      "name": "pressure",
+      "title_cn": "压力采集接口",
+      "description": "PH-00015 3P 接口, 对接 HX711 + 应变片或薄膜压力传感器",
+      "parts": [
+        "PH-00015_PRESS",
+        "R27"
+      ],
+      "nets": [
+        "VCC_3V3",
+        "GND",
+        "PRESSURE_AOUT"
+      ],
+      "layout": {
+        "x": 240,
+        "y": 640,
+        "w": 200,
+        "h": 170,
+        "color": "#0a8a8a",
+        "box_style": "tealbox"
+      }
+    },
+    {
+      "name": "ir_trace",
+      "title_cn": "红外循迹模块",
+      "description": "左右两路 TCRT5000 红外对管, 数字输出检测地面白线",
+      "parts": [
+        "IR_TRACE_L",
+        "IR_TRACE_R"
+      ],
+      "nets": [
+        "VCC_3V3",
+        "GND",
+        "IR_LEFT_DO",
+        "IR_RIGHT_DO"
+      ],
+      "layout": {
+        "x": 460,
+        "y": 640,
+        "w": 280,
+        "h": 170,
+        "color": "#148447",
+        "box_style": "greenbox"
+      }
+    },
+    {
+      "name": "ir_station",
+      "title_cn": "站点红外探头接口",
+      "description": "E18-D80NK 远距离红外, 检测站台反光标记触发停靠",
+      "parts": [
+        "IR_STATION"
+      ],
+      "nets": [
+        "VCC_5V",
+        "GND",
+        "IR_STATION_DO"
+      ],
+      "layout": {
+        "x": 760,
+        "y": 640,
+        "w": 260,
+        "h": 170,
+        "color": "#d92525",
+        "box_style": "redbox"
+      }
+    }
+  ],
+  "nets": [
+    {
+      "name": "12V",
+      "purpose": "12V 主电源 (锂电池)",
+      "notes": "锂电池正极, 经 U11 分支至 5V 与 L298N 主电源",
+      "class": "强电网络, 进线必须反接保护与自恢复保险丝",
+      "nodes": [
+        {
+          "ref": "U11",
+          "pin": "1"
+        },
+        {
+          "ref": "U14",
+          "pin": "4"
+        },
+        {
+          "ref": "C20",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "VCC_5V",
+      "purpose": "5V 一级稳压",
+      "notes": "U11 输出, 给 AMS1117/L298N逻辑/HC-SR04/站点IR 供电",
+      "class": "C21+C22 紧贴 U12 入口",
+      "nodes": [
+        {
+          "ref": "U11",
+          "pin": "3"
+        },
+        {
+          "ref": "U12",
+          "pin": "3"
+        },
+        {
+          "ref": "U14",
+          "pin": "8"
+        },
+        {
+          "ref": "C21",
+          "pin": "1"
+        },
+        {
+          "ref": "C22",
+          "pin": "1"
+        },
+        {
+          "ref": "U1",
+          "pin": "1"
+        },
+        {
+          "ref": "IR_STATION",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "VCC_3V3",
+      "purpose": "3.3V 主控/传感器电源",
+      "notes": "MCU/OLED/蓝牙/红外/SWD 主电源",
+      "class": "走线宽 ≥0.4mm, 每分支去耦 100nF + 1uF",
+      "nodes": [
+        {
+          "ref": "U12",
+          "pin": "2"
+        },
+        {
+          "ref": "U2",
+          "pin": "4"
+        },
+        {
+          "ref": "C24",
+          "pin": "1"
+        },
+        {
+          "ref": "C5",
+          "pin": "1"
+        },
+        {
+          "ref": "C6",
+          "pin": "2"
+        },
+        {
+          "ref": "OLED1",
+          "pin": "1"
+        },
+        {
+          "ref": "BT1",
+          "pin": "3"
+        },
+        {
+          "ref": "BT1",
+          "pin": "8"
+        },
+        {
+          "ref": "IR_TRACE_L",
+          "pin": "1"
+        },
+        {
+          "ref": "IR_TRACE_R",
+          "pin": "1"
+        },
+        {
+          "ref": "PH-00015_PRESS",
+          "pin": "1"
+        },
+        {
+          "ref": "PH-00015_SWD",
+          "pin": "1"
+        },
+        {
+          "ref": "R5",
+          "pin": "1"
+        },
+        {
+          "ref": "R21",
+          "pin": "1"
+        },
+        {
+          "ref": "R22",
+          "pin": "1"
+        },
+        {
+          "ref": "R20",
+          "pin": "1"
+        },
+        {
+          "ref": "R25",
+          "pin": "1"
+        },
+        {
+          "ref": "R26",
+          "pin": "1"
+        },
+        {
+          "ref": "R28",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "GND",
+      "purpose": "系统地",
+      "notes": "PGND 与 SGND 单点连接",
+      "class": "L298N 电源地与控制地分区, 走线靠 U14 散热焊盘",
+      "nodes": [
+        {
+          "ref": "U11",
+          "pin": "2"
+        },
+        {
+          "ref": "U11",
+          "pin": "4"
+        },
+        {
+          "ref": "U12",
+          "pin": "1"
+        },
+        {
+          "ref": "U2",
+          "pin": "5"
+        },
+        {
+          "ref": "U14",
+          "pin": "9"
+        },
+        {
+          "ref": "C20",
+          "pin": "2"
+        },
+        {
+          "ref": "C21",
+          "pin": "2"
+        },
+        {
+          "ref": "C22",
+          "pin": "2"
+        },
+        {
+          "ref": "C23",
+          "pin": "2"
+        },
+        {
+          "ref": "C24",
+          "pin": "2"
+        },
+        {
+          "ref": "C5",
+          "pin": "2"
+        },
+        {
+          "ref": "C6",
+          "pin": "1"
+        },
+        {
+          "ref": "OLED1",
+          "pin": "2"
+        },
+        {
+          "ref": "BT1",
+          "pin": "2"
+        },
+        {
+          "ref": "BT1",
+          "pin": "9"
+        },
+        {
+          "ref": "BT1",
+          "pin": "12"
+        },
+        {
+          "ref": "U1",
+          "pin": "4"
+        },
+        {
+          "ref": "IR_TRACE_L",
+          "pin": "2"
+        },
+        {
+          "ref": "IR_TRACE_R",
+          "pin": "2"
+        },
+        {
+          "ref": "IR_STATION",
+          "pin": "2"
+        },
+        {
+          "ref": "PH-00015_PRESS",
+          "pin": "3"
+        },
+        {
+          "ref": "PH-00015_SWD",
+          "pin": "4"
+        },
+        {
+          "ref": "R29",
+          "pin": "2"
+        },
+        {
+          "ref": "R3",
+          "pin": "2"
+        },
+        {
+          "ref": "R4",
+          "pin": "2"
+        },
+        {
+          "ref": "R23",
+          "pin": "2"
+        },
+        {
+          "ref": "R23B",
+          "pin": "2"
+        },
+        {
+          "ref": "R23C",
+          "pin": "2"
+        },
+        {
+          "ref": "R23D",
+          "pin": "2"
+        },
+        {
+          "ref": "RESET1",
+          "pin": "2"
+        },
+        {
+          "ref": "RESET1",
+          "pin": "4"
+        },
+        {
+          "ref": "KEY1",
+          "pin": "2"
+        },
+        {
+          "ref": "KEY1",
+          "pin": "4"
+        },
+        {
+          "ref": "KEY2",
+          "pin": "2"
+        },
+        {
+          "ref": "KEY2",
+          "pin": "4"
+        },
+        {
+          "ref": "KEY3",
+          "pin": "2"
+        },
+        {
+          "ref": "KEY3",
+          "pin": "4"
+        },
+        {
+          "ref": "KEY4",
+          "pin": "2"
+        },
+        {
+          "ref": "KEY4",
+          "pin": "4"
+        },
+        {
+          "ref": "D1",
+          "pin": "2"
+        },
+        {
+          "ref": "LED5",
+          "pin": "2"
+        },
+        {
+          "ref": "LED6",
+          "pin": "2"
+        },
+        {
+          "ref": "R27",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "NRST",
+      "purpose": "MCU 复位",
+      "notes": "1NRST 按键 + R5 上拉 + C6 滤波",
+      "class": "走线短, 远离 PWM/晶振",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "6"
+        },
+        {
+          "ref": "RESET1",
+          "pin": "1"
+        },
+        {
+          "ref": "RESET1",
+          "pin": "3"
+        },
+        {
+          "ref": "R5",
+          "pin": "2"
+        },
+        {
+          "ref": "C6",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "VBAT_S",
+      "purpose": "电池电压 ADC 采样",
+      "notes": "PA0 ADC IN0 — 电池电压分压采样 (1/51 衰减)",
+      "class": "ADC 输入加 RC 滤波, 阻抗 ≤10K",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "7"
+        },
+        {
+          "ref": "R28",
+          "pin": "2"
+        },
+        {
+          "ref": "R29",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "VBAT",
+      "purpose": "电池正极采样源",
+      "notes": "12V 经 R28-R29 分压取样",
+      "class": "高阻分压, 远离 dv/dt 区域",
+      "nodes": [
+        {
+          "ref": "R28",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "PRESSURE_AOUT",
+      "purpose": "压力模拟输出",
+      "notes": "PA2 ADC IN2 — 压力传感器模拟输出",
+      "class": "RC 滤波 R27 + 100nF, 抗干扰",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "9"
+        },
+        {
+          "ref": "PH-00015_PRESS",
+          "pin": "2"
+        },
+        {
+          "ref": "R27",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_ENA",
+      "purpose": "左电机使能/PWM",
+      "notes": "PB1 → ENABLE_A (TIM3_CH1 PWM @ 10kHz)",
+      "class": "PWM 频率避开 8kHz 音频带",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "16"
+        },
+        {
+          "ref": "U14",
+          "pin": "6"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_IN1",
+      "purpose": "左电机方向控制1",
+      "notes": "PB2 → INPUT1",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "17"
+        },
+        {
+          "ref": "U14",
+          "pin": "5"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_IN2",
+      "purpose": "左电机方向控制2",
+      "notes": "PB3 → INPUT2",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "26"
+        },
+        {
+          "ref": "U14",
+          "pin": "7"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_ENB",
+      "purpose": "右电机使能/PWM",
+      "notes": "PB4 → ENABLE_B (TIM3_CH2 PWM @ 10kHz)",
+      "class": "PWM 频率避开 8kHz 音频带",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "27"
+        },
+        {
+          "ref": "U14",
+          "pin": "11"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_IN3",
+      "purpose": "右电机方向控制3",
+      "notes": "PB5 → INPUT3",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "28"
+        },
+        {
+          "ref": "U14",
+          "pin": "10"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_IN4",
+      "purpose": "右电机方向控制4",
+      "notes": "PB6 → INPUT4",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "29"
+        },
+        {
+          "ref": "U14",
+          "pin": "12"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_OUT1",
+      "purpose": "左电机输出1",
+      "notes": "OUTPUT1 经续流二极管接左电机正端",
+      "class": "强电, 走线宽 ≥0.8mm",
+      "nodes": [
+        {
+          "ref": "U14",
+          "pin": "2"
+        },
+        {
+          "ref": "D2",
+          "pin": "2"
+        },
+        {
+          "ref": "D3",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_OUT2",
+      "purpose": "左电机输出2",
+      "notes": "OUTPUT2 经续流二极管接左电机负端",
+      "class": "强电, 走线宽 ≥0.8mm",
+      "nodes": [
+        {
+          "ref": "U14",
+          "pin": "3"
+        },
+        {
+          "ref": "D4",
+          "pin": "2"
+        },
+        {
+          "ref": "D5",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_OUT3",
+      "purpose": "右电机输出3",
+      "notes": "OUTPUT3 经续流二极管接右电机正端",
+      "class": "强电, 走线宽 ≥0.8mm",
+      "nodes": [
+        {
+          "ref": "U14",
+          "pin": "13"
+        },
+        {
+          "ref": "D6",
+          "pin": "2"
+        },
+        {
+          "ref": "D7",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_OUT4",
+      "purpose": "右电机输出4",
+      "notes": "OUTPUT4 经续流二极管接右电机负端",
+      "class": "强电, 走线宽 ≥0.8mm",
+      "nodes": [
+        {
+          "ref": "U14",
+          "pin": "14"
+        },
+        {
+          "ref": "D8",
+          "pin": "2"
+        },
+        {
+          "ref": "D9",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_CSA",
+      "purpose": "左电机电流采样",
+      "notes": "经 0.5Ω 采样电阻接 GND, 反馈到 MCU ADC",
+      "class": "可选: 接 PA3 进行电流监测",
+      "nodes": [
+        {
+          "ref": "U14",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "MOTOR_CSB",
+      "purpose": "右电机电流采样",
+      "notes": "经 0.5Ω 采样电阻接 GND",
+      "class": "可选: 接 PA4 进行电流监测",
+      "nodes": [
+        {
+          "ref": "U14",
+          "pin": "15"
+        }
+      ]
+    },
+    {
+      "name": "US_TRIG",
+      "purpose": "超声波触发",
+      "notes": "PB0 → HC-SR04 Trig (10us 脉冲)",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "15"
+        },
+        {
+          "ref": "U1",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "US_ECHO",
+      "purpose": "超声波回波",
+      "notes": "PA4 ← HC-SR04 Echo (高电平时长 = 距离)",
+      "class": "回波 5V 信号, 串联 10K 限流后接入",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "11"
+        },
+        {
+          "ref": "U1",
+          "pin": "3"
+        }
+      ]
+    },
+    {
+      "name": "I2C_SCL",
+      "purpose": "OLED I2C 时钟",
+      "notes": "PB7 ← I2C1_SCL (400kHz)",
+      "class": "上拉 4.7K 至 3.3V",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "30"
+        },
+        {
+          "ref": "OLED1",
+          "pin": "3"
+        },
+        {
+          "ref": "R25",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "I2C_SDA",
+      "purpose": "OLED I2C 数据",
+      "notes": "PB8 ← I2C1_SDA",
+      "class": "上拉 4.7K 至 3.3V, 走线短",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "31"
+        },
+        {
+          "ref": "OLED1",
+          "pin": "4"
+        },
+        {
+          "ref": "R26",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "BT_UART_TX",
+      "purpose": "蓝牙模块 → MCU (RX)",
+      "notes": "PA10 ← BT-TX (USART1_RX, 9600bps)",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "20"
+        },
+        {
+          "ref": "BT1",
+          "pin": "6"
+        }
+      ]
+    },
+    {
+      "name": "BT_UART_RX",
+      "purpose": "MCU → 蓝牙模块 (TX)",
+      "notes": "PA9 → BT-RX (USART1_TX)",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "19"
+        },
+        {
+          "ref": "BT1",
+          "pin": "5"
+        }
+      ]
+    },
+    {
+      "name": "BT_LED_STATUS",
+      "purpose": "蓝牙连接指示",
+      "notes": "蓝牙 PIO_LED 状态 → LED5",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "BT1",
+          "pin": "7"
+        },
+        {
+          "ref": "LED5",
+          "pin": "1"
+        },
+        {
+          "ref": "R20",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "KEY_1",
+      "purpose": "按键1",
+      "notes": "PA15 ← KEY1, R23 下拉 10K",
+      "class": "软件去抖 ≥20ms",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "25"
+        },
+        {
+          "ref": "KEY1",
+          "pin": "1"
+        },
+        {
+          "ref": "KEY1",
+          "pin": "3"
+        },
+        {
+          "ref": "R23",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "KEY_2",
+      "purpose": "按键2",
+      "notes": "PA11_R(PA9) ← KEY2",
+      "class": "软件去抖",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "21"
+        },
+        {
+          "ref": "KEY2",
+          "pin": "1"
+        },
+        {
+          "ref": "KEY2",
+          "pin": "3"
+        },
+        {
+          "ref": "R23B",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "KEY_3",
+      "purpose": "按键3",
+      "notes": "PA12_R(PA10) ← KEY3",
+      "class": "软件去抖",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "22"
+        },
+        {
+          "ref": "KEY3",
+          "pin": "1"
+        },
+        {
+          "ref": "KEY3",
+          "pin": "3"
+        },
+        {
+          "ref": "R23C",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "KEY_4",
+      "purpose": "按键4",
+      "notes": "PB9 ← KEY4",
+      "class": "软件去抖",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "32"
+        },
+        {
+          "ref": "KEY4",
+          "pin": "1"
+        },
+        {
+          "ref": "KEY4",
+          "pin": "3"
+        },
+        {
+          "ref": "R23D",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "IR_LEFT_DO",
+      "purpose": "左循迹数字输出",
+      "notes": "PA6 ← TCRT5000 数字输出 (检测白线)",
+      "class": "可调电位器阈值",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "13"
+        },
+        {
+          "ref": "IR_TRACE_L",
+          "pin": "3"
+        }
+      ]
+    },
+    {
+      "name": "IR_RIGHT_DO",
+      "purpose": "右循迹数字输出",
+      "notes": "PA7 ← TCRT5000 数字输出 (检测白线)",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "14"
+        },
+        {
+          "ref": "IR_TRACE_R",
+          "pin": "3"
+        }
+      ]
+    },
+    {
+      "name": "IR_STATION_DO",
+      "purpose": "站点红外检测",
+      "notes": "PA1 ← E18-D80NK 数字输出",
+      "class": "高电平有效, 软件计数站点",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "8"
+        },
+        {
+          "ref": "IR_STATION",
+          "pin": "3"
+        }
+      ]
+    },
+    {
+      "name": "SYS_LED",
+      "purpose": "系统状态 LED",
+      "notes": "PA3 → LED6 (心跳灯, 1Hz 闪烁)",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "10"
+        },
+        {
+          "ref": "LED6",
+          "pin": "1"
+        },
+        {
+          "ref": "R22",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "SWCLK",
+      "purpose": "SWD 时钟",
+      "notes": "PA14-BOOT0 ↔ SWCLK (启动后 BOOT0 拉低)",
+      "class": "下拉 100K 防止误进 ISP",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "24"
+        },
+        {
+          "ref": "PH-00015_SWD",
+          "pin": "2"
+        },
+        {
+          "ref": "R3",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "SWDIO",
+      "purpose": "SWD 数据",
+      "notes": "PA13 ↔ SWDIO",
+      "class": "下拉 100K",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "23"
+        },
+        {
+          "ref": "PH-00015_SWD",
+          "pin": "3"
+        },
+        {
+          "ref": "R4",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "PC14_OSC32IN",
+      "purpose": "RTC 晶振输入(预留)",
+      "notes": "PC14, 当前内部 LSI",
+      "class": "可选挂 32.768kHz 晶振",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "PC15_OSC32OUT",
+      "purpose": "RTC 晶振输出(预留)",
+      "notes": "PC15",
+      "class": "可选",
+      "nodes": [
+        {
+          "ref": "U2",
+          "pin": "3"
+        }
+      ]
+    },
+    {
+      "name": "PWR_LED",
+      "purpose": "3.3V 电源指示",
+      "notes": "VCC_3V3 经 R21 → D1",
+      "class": "",
+      "nodes": [
+        {
+          "ref": "D1",
+          "pin": "1"
+        },
+        {
+          "ref": "R21",
+          "pin": "2"
+        }
+      ]
+    }
+  ],
+  "bom": [
+    {
+      "ref": "U11",
+      "name": "线性稳压器",
+      "type": "LR78M05D",
+      "package": "TO-252-2",
+      "parameter": "Vin=7~35V, Vout=5V/0.5A, TO-252",
+      "function": "12V → 5V 一级稳压",
+      "note": "负载电流大时建议加散热铜皮 ≥ 200mm²",
+      "lcsc": "C12345",
+      "qty": 1,
+      "group": "power",
+      "pins": [
+        {
+          "d": "1",
+          "n": "VIN",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "GND",
+          "r": "power"
+        },
+        {
+          "d": "3",
+          "n": "VOUT",
+          "r": "power"
+        },
+        {
+          "d": "4",
+          "n": "TAB(GND)",
+          "r": "power"
+        }
+      ]
+    },
+    {
+      "ref": "U12",
+      "name": "LDO 稳压器",
+      "type": "AMS1117-3.3",
+      "package": "SOT-223",
+      "parameter": "Vin=4.75~12V, Vout=3.3V/1A, SOT-223",
+      "function": "5V → 3.3V 二级稳压",
+      "note": "输入端 10uF + 100nF 去耦, 输出端 10uF + 0.1uF",
+      "lcsc": "C6186",
+      "qty": 1,
+      "group": "power",
+      "pins": [
+        {
+          "d": "1",
+          "n": "ADJ/GND",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "VOUT(TAB)",
+          "r": "power"
+        },
+        {
+          "d": "3",
+          "n": "VIN",
+          "r": "power"
+        }
+      ]
+    },
+    {
+      "ref": "C20",
+      "name": "电容",
+      "type": "100uF/25V",
+      "package": "C_Elec_5x5",
+      "parameter": "100uF/25V",
+      "function": "12V 输入大电容滤波",
+      "note": "",
+      "lcsc": "C16133",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "C21",
+      "name": "电容",
+      "type": "10uF",
+      "package": "C0805",
+      "parameter": "10uF",
+      "function": "5V 输入端去耦",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "C22",
+      "name": "电容",
+      "type": "100nF",
+      "package": "C0603",
+      "parameter": "100nF",
+      "function": "5V 高频去耦",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "C23",
+      "name": "电容",
+      "type": "0.1uF",
+      "package": "C0603",
+      "parameter": "0.1uF",
+      "function": "AMS1117 输入去耦",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "C24",
+      "name": "电容",
+      "type": "10uF",
+      "package": "C0805",
+      "parameter": "10uF",
+      "function": "3.3V 输出大电容稳压",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D1",
+      "name": "发光二极管",
+      "type": "LED-Green",
+      "package": "LED0603",
+      "parameter": "20mA, Vf=2V",
+      "function": "状态指示",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "indicator",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R21",
+      "name": "电阻",
+      "type": "10K",
+      "package": "R0603",
+      "parameter": "10K",
+      "function": "D1 电源指示限流",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R28",
+      "name": "电阻",
+      "type": "100K",
+      "package": "R0603",
+      "parameter": "100K",
+      "function": "电池电压上分压",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R29",
+      "name": "电阻",
+      "type": "2K",
+      "package": "R0603",
+      "parameter": "2K",
+      "function": "电池电压下分压",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "RESET1",
+      "name": "复位按键",
+      "type": "TS-KG09S",
+      "package": "SW_TS-KG09S_6x6",
+      "parameter": "6x6mm 直插, 1NRST",
+      "function": "MCU 手动复位",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "input",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "3",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "4",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R5",
+      "name": "电阻",
+      "type": "10K",
+      "package": "R0603",
+      "parameter": "10K",
+      "function": "NRST 上拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "C5",
+      "name": "电容",
+      "type": "100nF",
+      "package": "C0603",
+      "parameter": "100nF",
+      "function": "MCU VDD 高频去耦",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "C6",
+      "name": "电容",
+      "type": "1uF",
+      "package": "C0603",
+      "parameter": "1uF",
+      "function": "NRST 滤波 + VDDA 去耦",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "U2",
+      "name": "单片机",
+      "type": "STM32G030K8T6",
+      "package": "LQFP-32_7x7mm_P0.8mm",
+      "parameter": "ARM Cortex-M0+ @ 64MHz, Flash 64KB, RAM 8KB, LQFP32",
+      "function": "系统主控 — 传感器采样/通信/电机控制/显示",
+      "note": "VDD/VDDA 必须同时供 3.3V, 每电源对加 100nF 去耦",
+      "lcsc": "C2040",
+      "qty": 1,
+      "group": "mcu",
+      "pins": [
+        {
+          "d": "1",
+          "n": "PB9",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "PC14-OSC32IN",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "PC15-OSC32OUT",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "VDD/VDDA",
+          "r": "power"
+        },
+        {
+          "d": "5",
+          "n": "VSS/VSSA",
+          "r": "power"
+        },
+        {
+          "d": "6",
+          "n": "NRST",
+          "r": "input"
+        },
+        {
+          "d": "7",
+          "n": "PA0",
+          "r": "passive"
+        },
+        {
+          "d": "8",
+          "n": "PA1",
+          "r": "passive"
+        },
+        {
+          "d": "9",
+          "n": "PA2",
+          "r": "passive"
+        },
+        {
+          "d": "10",
+          "n": "PA3",
+          "r": "passive"
+        },
+        {
+          "d": "11",
+          "n": "PA4",
+          "r": "passive"
+        },
+        {
+          "d": "12",
+          "n": "PA5",
+          "r": "passive"
+        },
+        {
+          "d": "13",
+          "n": "PA6",
+          "r": "passive"
+        },
+        {
+          "d": "14",
+          "n": "PA7",
+          "r": "passive"
+        },
+        {
+          "d": "15",
+          "n": "PB0",
+          "r": "passive"
+        },
+        {
+          "d": "16",
+          "n": "PB1",
+          "r": "passive"
+        },
+        {
+          "d": "17",
+          "n": "PB2",
+          "r": "passive"
+        },
+        {
+          "d": "18",
+          "n": "PA8",
+          "r": "passive"
+        },
+        {
+          "d": "19",
+          "n": "PA9",
+          "r": "passive"
+        },
+        {
+          "d": "20",
+          "n": "PA10",
+          "r": "passive"
+        },
+        {
+          "d": "21",
+          "n": "PA11_R",
+          "r": "passive"
+        },
+        {
+          "d": "22",
+          "n": "PA12_R",
+          "r": "passive"
+        },
+        {
+          "d": "23",
+          "n": "PA13",
+          "r": "io"
+        },
+        {
+          "d": "24",
+          "n": "PA14-BOOT0",
+          "r": "io"
+        },
+        {
+          "d": "25",
+          "n": "PA15",
+          "r": "passive"
+        },
+        {
+          "d": "26",
+          "n": "PB3",
+          "r": "passive"
+        },
+        {
+          "d": "27",
+          "n": "PB4",
+          "r": "passive"
+        },
+        {
+          "d": "28",
+          "n": "PB5",
+          "r": "passive"
+        },
+        {
+          "d": "29",
+          "n": "PB6",
+          "r": "passive"
+        },
+        {
+          "d": "30",
+          "n": "PB7",
+          "r": "passive"
+        },
+        {
+          "d": "31",
+          "n": "PB8",
+          "r": "passive"
+        },
+        {
+          "d": "32",
+          "n": "PB9",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "PH-00015_SWD",
+      "name": "SWD 排针",
+      "type": "2.54mm-4P 直插",
+      "package": "PinHeader_1x4_P2.54mm",
+      "parameter": "PH-00015 4 针",
+      "function": "STM32 SWD 烧录与调试接口",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "connector",
+      "pins": [
+        {
+          "d": "1",
+          "n": "VCC_3V3",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "SWCLK",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "SWDIO",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "GND",
+          "r": "power"
+        }
+      ]
+    },
+    {
+      "ref": "R3",
+      "name": "电阻",
+      "type": "100K",
+      "package": "R0603",
+      "parameter": "100K",
+      "function": "SWCLK 下拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R4",
+      "name": "电阻",
+      "type": "100K",
+      "package": "R0603",
+      "parameter": "100K",
+      "function": "SWDIO 下拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "LED6",
+      "name": "发光二极管",
+      "type": "LED-Blue",
+      "package": "LED0603",
+      "parameter": "20mA, Vf=2V",
+      "function": "状态指示",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "indicator",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R22",
+      "name": "电阻",
+      "type": "10K",
+      "package": "R0603",
+      "parameter": "10K",
+      "function": "LED6 限流",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "BT1",
+      "name": "蓝牙串口模块",
+      "type": "HC-05",
+      "package": "HC-05_Module",
+      "parameter": "蓝牙2.0+EDR, UART, 默认9600bps",
+      "function": "无线遥控 + 数据回传",
+      "note": "天线区域板内 ≥10mm 净空, 不可铺铜",
+      "lcsc": "",
+      "qty": 1,
+      "group": "wireless",
+      "pins": [
+        {
+          "d": "1",
+          "n": "ANT",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "GND",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "VCC_3V3",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "PIO11/RST",
+          "r": "passive"
+        },
+        {
+          "d": "5",
+          "n": "RX",
+          "r": "passive"
+        },
+        {
+          "d": "6",
+          "n": "TX",
+          "r": "passive"
+        },
+        {
+          "d": "7",
+          "n": "PIO_LED",
+          "r": "passive"
+        },
+        {
+          "d": "8",
+          "n": "VCC_3V3",
+          "r": "passive"
+        },
+        {
+          "d": "9",
+          "n": "GND",
+          "r": "passive"
+        },
+        {
+          "d": "10",
+          "n": "P14",
+          "r": "passive"
+        },
+        {
+          "d": "11",
+          "n": "P15",
+          "r": "passive"
+        },
+        {
+          "d": "12",
+          "n": "GND",
+          "r": "passive"
+        },
+        {
+          "d": "13",
+          "n": "PIO0",
+          "r": "passive"
+        },
+        {
+          "d": "14",
+          "n": "PIO1",
+          "r": "passive"
+        },
+        {
+          "d": "15",
+          "n": "P05",
+          "r": "passive"
+        },
+        {
+          "d": "16",
+          "n": "P06",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "LED5",
+      "name": "发光二极管",
+      "type": "LED-Yellow",
+      "package": "LED0603",
+      "parameter": "20mA, Vf=2V",
+      "function": "状态指示",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "indicator",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R20",
+      "name": "电阻",
+      "type": "470",
+      "package": "R0603",
+      "parameter": "470",
+      "function": "LED5 蓝牙状态限流",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "KEY1",
+      "name": "轻触按键",
+      "type": "TS-KG09S",
+      "package": "SW_TS-KG09S_6x6",
+      "parameter": "6x6mm 直插, 12VDC/50mA",
+      "function": "用户输入按键",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "input",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "3",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "4",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "KEY2",
+      "name": "轻触按键",
+      "type": "TS-KG09S",
+      "package": "SW_TS-KG09S_6x6",
+      "parameter": "6x6mm 直插, 12VDC/50mA",
+      "function": "用户输入按键",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "input",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "3",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "4",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "KEY3",
+      "name": "轻触按键",
+      "type": "TS-KG09S",
+      "package": "SW_TS-KG09S_6x6",
+      "parameter": "6x6mm 直插, 12VDC/50mA",
+      "function": "用户输入按键",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "input",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "3",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "4",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "KEY4",
+      "name": "轻触按键",
+      "type": "TS-KG09S",
+      "package": "SW_TS-KG09S_6x6",
+      "parameter": "6x6mm 直插, 12VDC/50mA",
+      "function": "用户输入按键",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "input",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "3",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "4",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R23",
+      "name": "电阻",
+      "type": "10K",
+      "package": "R0603",
+      "parameter": "10K",
+      "function": "按键1 下拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R23B",
+      "name": "电阻",
+      "type": "10K",
+      "package": "R0603",
+      "parameter": "10K",
+      "function": "按键2 下拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R23C",
+      "name": "电阻",
+      "type": "10K",
+      "package": "R0603",
+      "parameter": "10K",
+      "function": "按键3 下拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R23D",
+      "name": "电阻",
+      "type": "10K",
+      "package": "R0603",
+      "parameter": "10K",
+      "function": "按键4 下拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "U1",
+      "name": "超声波测距模块",
+      "type": "HC-SR04",
+      "package": "PinHeader_1x4_P2.54mm",
+      "parameter": "DC5V, 测距 2cm~400cm, 精度 ±3mm",
+      "function": "前向避障距离测量",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "sensor",
+      "pins": [
+        {
+          "d": "1",
+          "n": "VCC",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "Trig",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "Echo",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "GND",
+          "r": "power"
+        }
+      ]
+    },
+    {
+      "ref": "OLED1",
+      "name": "OLED 显示屏",
+      "type": "SSD1306 0.96英寸",
+      "package": "OLED_0.96\"_4P",
+      "parameter": "128×64 像素, I2C, 3.3V/5V 兼容",
+      "function": "显示运行状态/电池电压/距离",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "display",
+      "pins": [
+        {
+          "d": "1",
+          "n": "VCC",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "GND",
+          "r": "power"
+        },
+        {
+          "d": "3",
+          "n": "SCL",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "SDA",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R25",
+      "name": "电阻",
+      "type": "4.7K",
+      "package": "R0603",
+      "parameter": "4.7K",
+      "function": "I2C SCL 上拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "R26",
+      "name": "电阻",
+      "type": "4.7K",
+      "package": "R0603",
+      "parameter": "4.7K",
+      "function": "I2C SDA 上拉",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "U14",
+      "name": "双H桥电机驱动",
+      "type": "L298N (XBLW 国产)",
+      "package": "HSOP-20_L298N",
+      "parameter": "2A/通道, Vs=46V, 双全桥",
+      "function": "左右电机正反转 + PWM 调速",
+      "note": "VS 接 12V, VSS 接 5V, 续流二极管必装",
+      "lcsc": "",
+      "qty": 1,
+      "group": "actuator",
+      "pins": [
+        {
+          "d": "1",
+          "n": "CURRENT_SENSING_A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "OUTPUT1",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "OUTPUT2",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "SUPPLY_VOLTAGE_VS",
+          "r": "power"
+        },
+        {
+          "d": "5",
+          "n": "INPUT1",
+          "r": "passive"
+        },
+        {
+          "d": "6",
+          "n": "ENABLE_A",
+          "r": "passive"
+        },
+        {
+          "d": "7",
+          "n": "INPUT2",
+          "r": "passive"
+        },
+        {
+          "d": "8",
+          "n": "LOGIC_SUPPLY_VOLTAGE_VSS",
+          "r": "power"
+        },
+        {
+          "d": "9",
+          "n": "GND",
+          "r": "power"
+        },
+        {
+          "d": "10",
+          "n": "INPUT3",
+          "r": "passive"
+        },
+        {
+          "d": "11",
+          "n": "ENABLE_B",
+          "r": "passive"
+        },
+        {
+          "d": "12",
+          "n": "INPUT4",
+          "r": "passive"
+        },
+        {
+          "d": "13",
+          "n": "OUTPUT3",
+          "r": "passive"
+        },
+        {
+          "d": "14",
+          "n": "OUTPUT4",
+          "r": "passive"
+        },
+        {
+          "d": "15",
+          "n": "CURRENT_SENSING_B",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D2",
+      "name": "二极管",
+      "type": "1N5819",
+      "package": "SOD-123",
+      "parameter": "100mA, 100V",
+      "function": "电机续流保护",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "protection",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D3",
+      "name": "二极管",
+      "type": "1N5819",
+      "package": "SOD-123",
+      "parameter": "100mA, 100V",
+      "function": "电机续流保护",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "protection",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D4",
+      "name": "二极管",
+      "type": "1N5819",
+      "package": "SOD-123",
+      "parameter": "100mA, 100V",
+      "function": "电机续流保护",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "protection",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D5",
+      "name": "二极管",
+      "type": "1N5819",
+      "package": "SOD-123",
+      "parameter": "100mA, 100V",
+      "function": "电机续流保护",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "protection",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D6",
+      "name": "二极管",
+      "type": "1N5819",
+      "package": "SOD-123",
+      "parameter": "100mA, 100V",
+      "function": "电机续流保护",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "protection",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D7",
+      "name": "二极管",
+      "type": "1N5819",
+      "package": "SOD-123",
+      "parameter": "100mA, 100V",
+      "function": "电机续流保护",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "protection",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D8",
+      "name": "二极管",
+      "type": "1N5819",
+      "package": "SOD-123",
+      "parameter": "100mA, 100V",
+      "function": "电机续流保护",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "protection",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "D9",
+      "name": "二极管",
+      "type": "1N5819",
+      "package": "SOD-123",
+      "parameter": "100mA, 100V",
+      "function": "电机续流保护",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "protection",
+      "pins": [
+        {
+          "d": "1",
+          "n": "A",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "K",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "IR_TRACE_L",
+      "name": "红外循迹模块(左)",
+      "type": "TCRT5000",
+      "package": "PinHeader_1x4_P2.54mm",
+      "parameter": "DC3.3-5V, 数字+模拟双输出",
+      "function": "左轮地面循迹",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "sensor",
+      "pins": [
+        {
+          "d": "1",
+          "n": "VCC",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "GND",
+          "r": "power"
+        },
+        {
+          "d": "3",
+          "n": "DO",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "AO",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "IR_TRACE_R",
+      "name": "红外循迹模块(右)",
+      "type": "TCRT5000",
+      "package": "PinHeader_1x4_P2.54mm",
+      "parameter": "DC3.3-5V, 数字+模拟双输出",
+      "function": "右轮地面循迹",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "sensor",
+      "pins": [
+        {
+          "d": "1",
+          "n": "VCC",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "GND",
+          "r": "power"
+        },
+        {
+          "d": "3",
+          "n": "DO",
+          "r": "passive"
+        },
+        {
+          "d": "4",
+          "n": "AO",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "IR_STATION",
+      "name": "站点红外探头",
+      "type": "E18-D80NK",
+      "package": "PinHeader_1x3_P2.54mm",
+      "parameter": "DC5V, 检测距离 3~80cm",
+      "function": "识别站台反光标记",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "sensor",
+      "pins": [
+        {
+          "d": "1",
+          "n": "VCC",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "GND",
+          "r": "power"
+        },
+        {
+          "d": "3",
+          "n": "DO",
+          "r": "passive"
+        }
+      ]
+    },
+    {
+      "ref": "PH-00015_PRESS",
+      "name": "压力传感器接口",
+      "type": "2.54mm-3P 直插",
+      "package": "PinHeader_1x3_P2.54mm",
+      "parameter": "对接 HX711 + 电阻应变片或薄膜压力传感器",
+      "function": "载重感知扩展接口",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "connector",
+      "pins": [
+        {
+          "d": "1",
+          "n": "VCC_3V3",
+          "r": "power"
+        },
+        {
+          "d": "2",
+          "n": "AOUT",
+          "r": "passive"
+        },
+        {
+          "d": "3",
+          "n": "GND",
+          "r": "power"
+        }
+      ]
+    },
+    {
+      "ref": "R27",
+      "name": "电阻",
+      "type": "10K",
+      "package": "R0603",
+      "parameter": "10K",
+      "function": "压力 ADC 阻抗匹配 / 滤波",
+      "note": "",
+      "lcsc": "",
+      "qty": 1,
+      "group": "passive",
+      "pins": [
+        {
+          "d": "1",
+          "n": "1",
+          "r": "passive"
+        },
+        {
+          "d": "2",
+          "n": "2",
+          "r": "passive"
+        }
+      ]
+    }
+  ],
+  "design_notes": [
+    "Q1/Q2 (实为 L298N 内部) 为 PWM 驱动桥臂, 频率建议 10~20kHz, 远离音频带",
+    "OLED 与 EEPROM 等 I2C 设备共用 PB6/PB7, 上拉电阻 4.7K 已配置",
+    "电机驱动 12V 强电与 3.3V 控制信号必须分区铺地, 单点连 PGND ↔ SGND",
+    "蓝牙天线区域板内净空 ≥10mm, 不可铺铜, 不可走信号线",
+    "SWD 接口须保留 PA13/PA14 + RESET + 3.3V + GND, 总长 < 100mm"
+  ],
+  "engineering_warnings": [
+    "12V 进线必须加 SS54 反接保护二极管 + 自恢复保险丝 (建议 2A)",
+    "L298N 散热片必须可靠贴装, 长时间满载需外加散热风扇",
+    "电池低于 9.0V 时蜂鸣报警并切断电机电源, 避免锂电池过放",
+    "I2C 上拉与 OLED 共地必须可靠, 否则上电时序不稳定",
+    "红外循迹模块对环境光敏感, PCB 上可加挡光罩或采用调制红外方案"
+  ],
+  "stats": {
+    "name": "warehouse_logistics_vehicle",
+    "title": "仓库车间物流车控制系统设计",
+    "components": 50,
+    "nets": 40,
+    "modules": 14,
+    "pins": 182,
+    "groups": [
+      "actuator",
+      "connector",
+      "display",
+      "indicator",
+      "input",
+      "mcu",
+      "passive",
+      "power",
+      "protection",
+      "sensor",
+      "wireless"
+    ]
+  }
+}

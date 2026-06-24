@@ -1,0 +1,34 @@
+* 1500W Totem-Pole Bridgeless PFC - Simplified Power Stage Skeleton
+* Purpose: initial engineering reference, not final closed-loop verified model.
+* Input: 85-265 VAC, Output bus: 400 VDC, Power: 1500 W
+
+.param VAC=220
+.param FLINE=50
+.param LBOOST=450u
+.param CBUS=940u
+.param RLOAD={400*400/1500}
+.param FSW=65k
+
+Vin AC_L AC_N SIN(0 {VAC*sqrt(2)} {FLINE})
+L1 AC_L SW_HF {LBOOST}
+Cbus HV_BUS PGND {CBUS}
+Rload HV_BUS PGND {RLOAD}
+Rbleed HV_BUS PGND 220k
+
+* Idealized switches for topology placeholder
+S_Q1 HV_BUS SW_HF GH PGND SWMOD
+S_Q2 SW_HF PGND GL PGND SWMOD
+S_Q3 HV_BUS AC_N GDH PGND SWMOD
+S_Q4 AC_N PGND GDL PGND SWMOD
+
+.model SWMOD SW(Ron=0.045 Roff=1Meg Vt=4 Vh=1)
+
+* Gate pulses below are placeholders. Replace with closed-loop PFC controller in PSIM/Simulink/LTspice.
+VGH GH PGND PULSE(0 15 0 20n 20n 7u 15.38u)
+VGL GL PGND PULSE(15 0 0 20n 20n 7u 15.38u)
+VGDH GDH PGND PULSE(0 15 0 1u 1u 10m 20m)
+VGDL GDL PGND PULSE(15 0 0 1u 1u 10m 20m)
+
+.tran 0 80m 0 200n
+.options plotwinsize=0
+.end

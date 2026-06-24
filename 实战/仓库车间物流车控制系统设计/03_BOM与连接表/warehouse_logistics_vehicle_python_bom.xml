@@ -1,0 +1,1377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<export version="E">
+  <design>
+    <source>D:\道\道生一\一生二\PCB设计\实战\仓库车间物流车控制系统设计\04_工程源文件\KiCad工程\warehouse_logistics_vehicle.kicad_sch</source>
+    <date>2026-04-28T23:40:39+0800</date>
+    <tool>Eeschema 9.0.4</tool>
+    <sheet number="1" name="/" tstamps="/">
+      <title_block>
+        <title>仓库车间物流车控制系统设计</title>
+        <company>schematic_dao 自动生成 (基于嘉立创EDA原理图)</company>
+        <rev>v1.0</rev>
+        <date>2026-04-27</date>
+        <source>warehouse_logistics_vehicle.kicad_sch</source>
+        <comment number="1" value="电源输入=12V DC (锂电池供电); 主控=STM32G030K8T6 (LQFP-32, ARM Cortex-M0+ @ 64MHz); 电机驱动=L298N(XBLW) 双H桥, 2A/通道; 无线通信=蓝牙 UART (HC-0"/>
+        <comment number="2" value="本系统为面向仓库车间物流场景的小型轮式物流车控制板. 以 STM32G030K8T6 为主控, 通过 L298N 驱动两个直流电机实现差速转向; 前向 HC-SR04 超声波测距用于避障; 底部双路红外循迹模块沿地面预设白线巡线; 站点红外"/>
+        <comment number="3" value="schematic_dao 自动生成 — 50 元件 / 40 网络 / 14 模块"/>
+        <comment number="4" value=""/>
+        <comment number="5" value=""/>
+        <comment number="6" value=""/>
+        <comment number="7" value=""/>
+        <comment number="8" value=""/>
+        <comment number="9" value=""/>
+      </title_block>
+    </sheet>
+  </design>
+  <components>
+    <comp ref="BT1">
+      <value>HC-05</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x16" description="Generic connector, single row, 01x16, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="connector"/>
+      <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>a9dc4919-f0b1-5920-8f58-283ce6dd7b59</tstamps>
+    </comp>
+    <comp ref="C5">
+      <value>100nF</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="C" description="Unpolarized capacitor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="cap capacitor"/>
+      <property name="ki_fp_filters" value="C_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>82080359-e1c9-55e7-8354-caf847360201</tstamps>
+    </comp>
+    <comp ref="C6">
+      <value>1uF</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="C" description="Unpolarized capacitor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="cap capacitor"/>
+      <property name="ki_fp_filters" value="C_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>8855cff5-2493-5ed8-90ca-563ca12a36b1</tstamps>
+    </comp>
+    <comp ref="C20">
+      <value>100uF/25V</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="C" description="Unpolarized capacitor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="cap capacitor"/>
+      <property name="ki_fp_filters" value="C_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>f570e130-2cc2-5e03-a2ae-0ffd485d166a</tstamps>
+    </comp>
+    <comp ref="C21">
+      <value>10uF</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="C" description="Unpolarized capacitor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="cap capacitor"/>
+      <property name="ki_fp_filters" value="C_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>f560d1ab-6143-55aa-8b93-1f3f0724b396</tstamps>
+    </comp>
+    <comp ref="C22">
+      <value>100nF</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="C" description="Unpolarized capacitor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="cap capacitor"/>
+      <property name="ki_fp_filters" value="C_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>94ab747e-db9d-58af-9792-350d9c166374</tstamps>
+    </comp>
+    <comp ref="C23">
+      <value>0.1uF</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="C" description="Unpolarized capacitor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="cap capacitor"/>
+      <property name="ki_fp_filters" value="C_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>5e8baa5c-51c1-5d32-afd5-a5b03a42141f</tstamps>
+    </comp>
+    <comp ref="C24">
+      <value>10uF</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="C" description="Unpolarized capacitor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="cap capacitor"/>
+      <property name="ki_fp_filters" value="C_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>c303fa56-603b-5fd2-9b96-aec152c35c30</tstamps>
+    </comp>
+    <comp ref="D1">
+      <value>LED-Green</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <property name="ki_fp_filters" value="LED* LED_SMD:* LED_THT:*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>a2365773-e2e4-5184-bf12-7c820766fed4</tstamps>
+    </comp>
+    <comp ref="D2">
+      <value>1N5819</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="D" description="Diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="diode"/>
+      <property name="ki_fp_filters" value="TO-???* *_Diode_* *SingleDiode* D_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>39fa7ac2-76ab-55ce-9127-4abef08f722a</tstamps>
+    </comp>
+    <comp ref="D3">
+      <value>1N5819</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="D" description="Diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="diode"/>
+      <property name="ki_fp_filters" value="TO-???* *_Diode_* *SingleDiode* D_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>f19799e3-2a20-5f7e-9187-deb10b2d427c</tstamps>
+    </comp>
+    <comp ref="D4">
+      <value>1N5819</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="D" description="Diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="diode"/>
+      <property name="ki_fp_filters" value="TO-???* *_Diode_* *SingleDiode* D_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>ac1a89ce-1316-5362-bcf5-9eb5ffd5f575</tstamps>
+    </comp>
+    <comp ref="D5">
+      <value>1N5819</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="D" description="Diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="diode"/>
+      <property name="ki_fp_filters" value="TO-???* *_Diode_* *SingleDiode* D_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>5fff6746-91af-5b9c-8c02-776d1de3b98a</tstamps>
+    </comp>
+    <comp ref="D6">
+      <value>1N5819</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="D" description="Diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="diode"/>
+      <property name="ki_fp_filters" value="TO-???* *_Diode_* *SingleDiode* D_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>fa16ef91-8c0d-5c67-9d34-651493f4b3a9</tstamps>
+    </comp>
+    <comp ref="D7">
+      <value>1N5819</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="D" description="Diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="diode"/>
+      <property name="ki_fp_filters" value="TO-???* *_Diode_* *SingleDiode* D_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>87f7830f-14b1-563c-80d4-2563216d180d</tstamps>
+    </comp>
+    <comp ref="D8">
+      <value>1N5819</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="D" description="Diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="diode"/>
+      <property name="ki_fp_filters" value="TO-???* *_Diode_* *SingleDiode* D_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>a267f10e-ec25-5ec6-8d27-7388594534a5</tstamps>
+    </comp>
+    <comp ref="D9">
+      <value>1N5819</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="D" description="Diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="diode"/>
+      <property name="ki_fp_filters" value="TO-???* *_Diode_* *SingleDiode* D_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>6c964fc6-434b-5925-9a3a-cd0daaca31f3</tstamps>
+    </comp>
+    <comp ref="IR_STATION">
+      <value>E18-D80NK</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x03" description="Generic connector, single row, 01x03, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="connector"/>
+      <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>bcec293b-eb3b-5d2e-baec-ceaf309db706</tstamps>
+    </comp>
+    <comp ref="IR_TRACE_L">
+      <value>TCRT5000</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x04" description="Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="connector"/>
+      <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>ed743c71-63a6-570c-b1d7-214efd44f827</tstamps>
+    </comp>
+    <comp ref="IR_TRACE_R">
+      <value>TCRT5000</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x04" description="Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="connector"/>
+      <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>c3cb5bc7-de3b-534b-9983-b9f17b9fa9eb</tstamps>
+    </comp>
+    <comp ref="KEY1">
+      <value>TS-KG09S</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Switch" part="SW_Push_Dual_x2" description="Push button switch, generic, separate symbols, four pins"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="switch normally-open pushbutton push-button"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>5441f25c-678d-52a7-83d8-86ef2cbbf805</tstamps>
+    </comp>
+    <comp ref="KEY2">
+      <value>TS-KG09S</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Switch" part="SW_Push_Dual_x2" description="Push button switch, generic, separate symbols, four pins"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="switch normally-open pushbutton push-button"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>32a43f32-42ab-5846-97a0-8bb960fa96ac</tstamps>
+    </comp>
+    <comp ref="KEY3">
+      <value>TS-KG09S</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Switch" part="SW_Push_Dual_x2" description="Push button switch, generic, separate symbols, four pins"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="switch normally-open pushbutton push-button"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>5ac64a04-a425-5425-a896-56e4b90a00d1</tstamps>
+    </comp>
+    <comp ref="KEY4">
+      <value>TS-KG09S</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Switch" part="SW_Push_Dual_x2" description="Push button switch, generic, separate symbols, four pins"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="switch normally-open pushbutton push-button"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>6ea7b165-9839-5417-99e9-7f5433d86ee2</tstamps>
+    </comp>
+    <comp ref="LED5">
+      <value>LED-Yellow</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <property name="ki_fp_filters" value="LED* LED_SMD:* LED_THT:*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>ca58225e-5ff5-5760-ac06-6139825ec83d</tstamps>
+    </comp>
+    <comp ref="LED6">
+      <value>LED-Blue</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <property name="ki_fp_filters" value="LED* LED_SMD:* LED_THT:*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>efdb6241-c182-5530-a998-e045f66b0a21</tstamps>
+    </comp>
+    <comp ref="OLED1">
+      <value>SSD1306-128x64</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x04" description="Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="connector"/>
+      <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>3e9edcaf-f4d5-5062-9855-ffe8a90eb610</tstamps>
+    </comp>
+    <comp ref="PH-00015_PRESS">
+      <value>3P</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x03" description="Generic connector, single row, 01x03, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="connector"/>
+      <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>f6537e3e-02df-5537-99b4-54af15672ccf</tstamps>
+    </comp>
+    <comp ref="PH-00015_SWD">
+      <value>2.54mm-4P</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x04" description="Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="connector"/>
+      <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>8daf2e46-b2d3-5e0f-a4c4-9be22809c767</tstamps>
+    </comp>
+    <comp ref="R3">
+      <value>100K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>3a476f19-750d-50c5-ac31-d3d0e67d9555</tstamps>
+    </comp>
+    <comp ref="R4">
+      <value>100K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>34b08b17-de89-5572-8827-97011006de51</tstamps>
+    </comp>
+    <comp ref="R5">
+      <value>10K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>ccade009-c200-5e53-966e-b956d782f1dd</tstamps>
+    </comp>
+    <comp ref="R20">
+      <value>470</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>f11de91d-4013-521c-80b4-42eaedc42dec</tstamps>
+    </comp>
+    <comp ref="R21">
+      <value>10K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>ab8baa18-c6f0-506e-8532-0be059062d7c</tstamps>
+    </comp>
+    <comp ref="R22">
+      <value>10K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>3cd13d9b-6301-56e8-b520-c284d78d5b0a</tstamps>
+    </comp>
+    <comp ref="R23">
+      <value>10K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>0c67e748-1963-5410-bbdf-044569832d4f</tstamps>
+    </comp>
+    <comp ref="R23B">
+      <value>10K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>fc48f588-5e4e-5ba4-837c-395a48bda430</tstamps>
+    </comp>
+    <comp ref="R23C">
+      <value>10K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>7b14b1dd-5f39-5004-a119-6b43379c40cf</tstamps>
+    </comp>
+    <comp ref="R23D">
+      <value>10K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>44f8e2ab-82ff-58be-bf6a-35ff40a3f319</tstamps>
+    </comp>
+    <comp ref="R25">
+      <value>4.7K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>5ec09332-5c51-5367-9439-b3d878eb034c</tstamps>
+    </comp>
+    <comp ref="R26">
+      <value>4.7K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>89dc9582-6586-50e2-91f0-7c0684cc5bcf</tstamps>
+    </comp>
+    <comp ref="R27">
+      <value>10K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>90e233f5-0503-55cc-b1f4-b41eda843b11</tstamps>
+    </comp>
+    <comp ref="R28">
+      <value>100K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>ead45865-adfb-591a-bc9d-8ef77441d960</tstamps>
+    </comp>
+    <comp ref="R29">
+      <value>2K</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="R res resistor"/>
+      <property name="ki_fp_filters" value="R_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>2882b264-4622-585f-9af0-dc0328049e47</tstamps>
+    </comp>
+    <comp ref="RESET1">
+      <value>TS-KG09S</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Switch" part="SW_Push_Dual_x2" description="Push button switch, generic, separate symbols, four pins"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="switch normally-open pushbutton push-button"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>e87a17d9-e1de-5a04-a39f-93d1352b6931</tstamps>
+    </comp>
+    <comp ref="U1">
+      <value>HC-SR04</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x04" description="Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="connector"/>
+      <property name="ki_fp_filters" value="Connector*:*_1x??_*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>44dc7344-d20c-572e-95c6-2fe48178dfc2</tstamps>
+    </comp>
+    <comp ref="U2">
+      <value>STM32G030K8T6</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="MCU_ST_STM32G0" part="STM32G030K_6-8_Tx" description="STMicroelectronics Arm Cortex-M0+ MCU, 32-64KB flash, 8KB RAM, 64 MHz, 2.0-3.6V, 29 GPIO, LQFP32"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="Arm Cortex-M0+ STM32G0 STM32G0x0 Value line"/>
+      <property name="ki_fp_filters" value="LQFP*7x7mm*P0.8mm*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>725cf533-276c-5612-a8a2-b49b66878f15</tstamps>
+    </comp>
+    <comp ref="U11">
+      <value>LR78M05D</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Regulator_Linear" part="LM78M05_TO252" description="Positive 500mA 35V Linear Regulator, Fixed Output 5V, TO-252 (D-PAK)"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="Voltage Regulator 500mA Positive"/>
+      <property name="ki_fp_filters" value="TO?252*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>9f96f7df-dc13-5401-8fd9-86cfc10033f7</tstamps>
+    </comp>
+    <comp ref="U12">
+      <value>AMS1117-3.3</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Regulator_Linear" part="AMS1117-3.3" description="1A Low Dropout regulator, positive, 3.3V fixed output, SOT-223"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="linear regulator ldo fixed positive"/>
+      <property name="ki_fp_filters" value="SOT?223*TabPin2*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>20411044-93b1-5326-816e-dc754a451455</tstamps>
+    </comp>
+    <comp ref="U14">
+      <value>L298N(XBLW)</value>
+      <fields>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="Driver_Motor" part="L298HN" description="Dual full bridge motor driver, up to 46V, 4A, Multiwatt15-H"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="warehouse_logistics_vehicle.kicad_sch"/>
+      <property name="ki_keywords" value="H-bridge motor driver"/>
+      <property name="ki_fp_filters" value="TO?220*StaggerOdd*TabDown*"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>8b4ceff3-fbb1-537f-b87a-a07e9b06bb7f</tstamps>
+    </comp>
+  </components>
+  <libparts>
+    <libpart lib="Connector_Generic" part="Conn_01x03">
+      <description>Generic connector, single row, 01x03, script generated (kicad-library-utils/schlib/autogen/connector/)</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>Connector*:*_1x??_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">J</field>
+        <field name="Value">Conn_01x03</field>
+        <field name="Footprint"/>
+        <field name="Datasheet">~</field>
+        <field name="Description">Generic connector, single row, 01x03, script generated (kicad-library-utils/schlib/autogen/connector/)</field>
+      </fields>
+      <pins>
+        <pin num="1" name="Pin_1" type="passive"/>
+        <pin num="2" name="Pin_2" type="passive"/>
+        <pin num="3" name="Pin_3" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Connector_Generic" part="Conn_01x04">
+      <description>Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>Connector*:*_1x??_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">J</field>
+        <field name="Value">Conn_01x04</field>
+        <field name="Footprint"/>
+        <field name="Datasheet">~</field>
+        <field name="Description">Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)</field>
+      </fields>
+      <pins>
+        <pin num="1" name="Pin_1" type="passive"/>
+        <pin num="2" name="Pin_2" type="passive"/>
+        <pin num="3" name="Pin_3" type="passive"/>
+        <pin num="4" name="Pin_4" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Connector_Generic" part="Conn_01x16">
+      <description>Generic connector, single row, 01x16, script generated (kicad-library-utils/schlib/autogen/connector/)</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>Connector*:*_1x??_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">J</field>
+        <field name="Value">Conn_01x16</field>
+        <field name="Footprint"/>
+        <field name="Datasheet">~</field>
+        <field name="Description">Generic connector, single row, 01x16, script generated (kicad-library-utils/schlib/autogen/connector/)</field>
+      </fields>
+      <pins>
+        <pin num="1" name="Pin_1" type="passive"/>
+        <pin num="2" name="Pin_2" type="passive"/>
+        <pin num="3" name="Pin_3" type="passive"/>
+        <pin num="4" name="Pin_4" type="passive"/>
+        <pin num="5" name="Pin_5" type="passive"/>
+        <pin num="6" name="Pin_6" type="passive"/>
+        <pin num="7" name="Pin_7" type="passive"/>
+        <pin num="8" name="Pin_8" type="passive"/>
+        <pin num="9" name="Pin_9" type="passive"/>
+        <pin num="10" name="Pin_10" type="passive"/>
+        <pin num="11" name="Pin_11" type="passive"/>
+        <pin num="12" name="Pin_12" type="passive"/>
+        <pin num="13" name="Pin_13" type="passive"/>
+        <pin num="14" name="Pin_14" type="passive"/>
+        <pin num="15" name="Pin_15" type="passive"/>
+        <pin num="16" name="Pin_16" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Device" part="C">
+      <description>Unpolarized capacitor</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>C_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">C</field>
+        <field name="Value">C</field>
+        <field name="Footprint"/>
+        <field name="Datasheet">~</field>
+        <field name="Description">Unpolarized capacitor</field>
+      </fields>
+      <pins>
+        <pin num="1" name="" type="passive"/>
+        <pin num="2" name="" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Device" part="D">
+      <description>Diode</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>TO-???*</fp>
+        <fp>*_Diode_*</fp>
+        <fp>*SingleDiode*</fp>
+        <fp>D_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">D</field>
+        <field name="Value">D</field>
+        <field name="Footprint"/>
+        <field name="Datasheet">~</field>
+        <field name="Description">Diode</field>
+        <field name="Sim.Device">D</field>
+        <field name="Sim.Pins">1=K 2=A</field>
+      </fields>
+      <pins>
+        <pin num="1" name="K" type="passive"/>
+        <pin num="2" name="A" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Device" part="LED">
+      <description>Light emitting diode</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>LED*</fp>
+        <fp>LED_SMD:*</fp>
+        <fp>LED_THT:*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">D</field>
+        <field name="Value">LED</field>
+        <field name="Footprint"/>
+        <field name="Datasheet">~</field>
+        <field name="Description">Light emitting diode</field>
+        <field name="Sim.Pins">1=K 2=A</field>
+      </fields>
+      <pins>
+        <pin num="1" name="K" type="passive"/>
+        <pin num="2" name="A" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Device" part="R">
+      <description>Resistor</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>R_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">R</field>
+        <field name="Value">R</field>
+        <field name="Footprint"/>
+        <field name="Datasheet">~</field>
+        <field name="Description">Resistor</field>
+      </fields>
+      <pins>
+        <pin num="1" name="" type="passive"/>
+        <pin num="2" name="" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Driver_Motor" part="L298HN">
+      <description>Dual full bridge motor driver, up to 46V, 4A, Multiwatt15-H</description>
+      <docs>http://www.st.com/st-web-ui/static/active/en/resource/technical/document/datasheet/CD00000240.pdf</docs>
+      <footprints>
+        <fp>TO?220*StaggerOdd*TabDown*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">U</field>
+        <field name="Value">L298HN</field>
+        <field name="Footprint">Package_TO_SOT_THT:TO-220-15_P2.54x2.54mm_StaggerOdd_Lead5.84mm_TabDown</field>
+        <field name="Datasheet">http://www.st.com/st-web-ui/static/active/en/resource/technical/document/datasheet/CD00000240.pdf</field>
+        <field name="Description">Dual full bridge motor driver, up to 46V, 4A, Multiwatt15-H</field>
+      </fields>
+      <pins>
+        <pin num="1" name="SENSE_A" type="input"/>
+        <pin num="2" name="OUT1" type="output"/>
+        <pin num="3" name="OUT2" type="output"/>
+        <pin num="4" name="Vs" type="power_in"/>
+        <pin num="5" name="IN1" type="input"/>
+        <pin num="6" name="EnA" type="input"/>
+        <pin num="7" name="IN2" type="input"/>
+        <pin num="8" name="GND" type="power_in"/>
+        <pin num="9" name="Vss" type="power_in"/>
+        <pin num="10" name="IN3" type="input"/>
+        <pin num="11" name="EnB" type="input"/>
+        <pin num="12" name="IN4" type="input"/>
+        <pin num="13" name="OUT3" type="output"/>
+        <pin num="14" name="OUT4" type="output"/>
+        <pin num="15" name="SENSE_B" type="input"/>
+      </pins>
+    </libpart>
+    <libpart lib="MCU_ST_STM32G0" part="STM32G030K_6-8_Tx">
+      <description>STMicroelectronics Arm Cortex-M0+ MCU, 32-64KB flash, 8KB RAM, 64 MHz, 2.0-3.6V, 29 GPIO, LQFP32</description>
+      <docs>https://www.st.com/resource/en/datasheet/stm32g030k6.pdf</docs>
+      <footprints>
+        <fp>LQFP*7x7mm*P0.8mm*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">U</field>
+        <field name="Value">STM32G030K_6-8_Tx</field>
+        <field name="Footprint">Package_QFP:LQFP-32_7x7mm_P0.8mm</field>
+        <field name="Datasheet">https://www.st.com/resource/en/datasheet/stm32g030k6.pdf</field>
+        <field name="Description">STMicroelectronics Arm Cortex-M0+ MCU, 32-64KB flash, 8KB RAM, 64 MHz, 2.0-3.6V, 29 GPIO, LQFP32</field>
+      </fields>
+      <pins>
+        <pin num="1" name="PB9" type="bidirectional"/>
+        <pin num="2" name="PC14" type="bidirectional"/>
+        <pin num="3" name="PC15" type="bidirectional"/>
+        <pin num="4" name="VDD" type="power_in"/>
+        <pin num="5" name="VSS" type="power_in"/>
+        <pin num="6" name="NRST" type="input"/>
+        <pin num="7" name="PA0" type="bidirectional"/>
+        <pin num="8" name="PA1" type="bidirectional"/>
+        <pin num="9" name="PA2" type="bidirectional"/>
+        <pin num="10" name="PA3" type="bidirectional"/>
+        <pin num="11" name="PA4" type="bidirectional"/>
+        <pin num="12" name="PA5" type="bidirectional"/>
+        <pin num="13" name="PA6" type="bidirectional"/>
+        <pin num="14" name="PA7" type="bidirectional"/>
+        <pin num="15" name="PB0" type="bidirectional"/>
+        <pin num="16" name="PB1" type="bidirectional"/>
+        <pin num="17" name="PB2" type="bidirectional"/>
+        <pin num="18" name="PA8" type="bidirectional"/>
+        <pin num="19" name="NC/PA9" type="no_connect"/>
+        <pin num="20" name="PC6" type="bidirectional"/>
+        <pin num="21" name="NC/PA10" type="no_connect"/>
+        <pin num="22" name="PA9/PA11" type="bidirectional"/>
+        <pin num="23" name="PA10/PA12" type="bidirectional"/>
+        <pin num="24" name="PA13" type="bidirectional"/>
+        <pin num="25" name="PA14" type="bidirectional"/>
+        <pin num="26" name="PA15" type="bidirectional"/>
+        <pin num="27" name="PB3" type="bidirectional"/>
+        <pin num="28" name="PB4" type="bidirectional"/>
+        <pin num="29" name="PB5" type="bidirectional"/>
+        <pin num="30" name="PB6" type="bidirectional"/>
+        <pin num="31" name="PB7" type="bidirectional"/>
+        <pin num="32" name="PB8" type="bidirectional"/>
+      </pins>
+    </libpart>
+    <libpart lib="Regulator_Linear" part="AMS1117-3.3">
+      <description>1A Low Dropout regulator, positive, 3.3V fixed output, SOT-223</description>
+      <docs>http://www.advanced-monolithic.com/pdf/ds1117.pdf</docs>
+      <footprints>
+        <fp>SOT?223*TabPin2*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">U</field>
+        <field name="Value">AMS1117-3.3</field>
+        <field name="Footprint">Package_TO_SOT_SMD:SOT-223-3_TabPin2</field>
+        <field name="Datasheet">http://www.advanced-monolithic.com/pdf/ds1117.pdf</field>
+        <field name="Description">1A Low Dropout regulator, positive, 3.3V fixed output, SOT-223</field>
+      </fields>
+      <pins>
+        <pin num="1" name="GND" type="power_in"/>
+        <pin num="2" name="VO" type="power_out"/>
+        <pin num="3" name="VI" type="power_in"/>
+      </pins>
+    </libpart>
+    <libpart lib="Regulator_Linear" part="LM78M05_TO252">
+      <description>Positive 500mA 35V Linear Regulator, Fixed Output 5V, TO-252 (D-PAK)</description>
+      <docs>https://www.onsemi.com/pub/Collateral/MC78M00-D.PDF</docs>
+      <footprints>
+        <fp>TO?252*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">U</field>
+        <field name="Value">LM78M05_TO252</field>
+        <field name="Footprint">Package_TO_SOT_SMD:TO-252-2</field>
+        <field name="Datasheet">https://www.onsemi.com/pub/Collateral/MC78M00-D.PDF</field>
+        <field name="Description">Positive 500mA 35V Linear Regulator, Fixed Output 5V, TO-252 (D-PAK)</field>
+      </fields>
+      <pins>
+        <pin num="1" name="VI" type="power_in"/>
+        <pin num="2" name="GND" type="power_in"/>
+        <pin num="3" name="VO" type="power_out"/>
+      </pins>
+    </libpart>
+    <libpart lib="Switch" part="SW_Push_Dual_x2">
+      <description>Push button switch, generic, separate symbols, four pins</description>
+      <docs>~</docs>
+      <fields>
+        <field name="Reference">SW</field>
+        <field name="Value">SW_Push_Dual_x2</field>
+        <field name="Footprint"/>
+        <field name="Datasheet">~</field>
+        <field name="Description">Push button switch, generic, separate symbols, four pins</field>
+      </fields>
+      <pins>
+        <pin num="1" name="C" type="passive"/>
+        <pin num="2" name="D" type="passive"/>
+        <pin num="3" name="C" type="passive"/>
+        <pin num="4" name="D" type="passive"/>
+      </pins>
+    </libpart>
+  </libparts>
+  <libraries>
+    <library logical="Connector_Generic">
+      <uri>D:\KICAD\share\kicad\symbols\/Connector_Generic.kicad_sym</uri>
+    </library>
+    <library logical="Device">
+      <uri>D:\KICAD\share\kicad\symbols\/Device.kicad_sym</uri>
+    </library>
+    <library logical="Driver_Motor">
+      <uri>D:\KICAD\share\kicad\symbols\/Driver_Motor.kicad_sym</uri>
+    </library>
+    <library logical="MCU_ST_STM32G0">
+      <uri>D:\KICAD\share\kicad\symbols\/MCU_ST_STM32G0.kicad_sym</uri>
+    </library>
+    <library logical="Regulator_Linear">
+      <uri>D:\KICAD\share\kicad\symbols\/Regulator_Linear.kicad_sym</uri>
+    </library>
+    <library logical="Switch">
+      <uri>D:\KICAD\share\kicad\symbols\/Switch.kicad_sym</uri>
+    </library>
+  </libraries>
+  <nets>
+    <net code="1" name="12V" class="Default">
+      <node ref="C20" pin="1" pintype="passive"/>
+      <node ref="U11" pin="1" pinfunction="VI" pintype="power_in"/>
+      <node ref="U14" pin="4" pinfunction="Vs" pintype="power_in"/>
+    </net>
+    <net code="2" name="BT_LED_STATUS" class="Default">
+      <node ref="BT1" pin="7" pinfunction="Pin_7" pintype="passive"/>
+      <node ref="LED5" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R20" pin="2" pintype="passive"/>
+    </net>
+    <net code="3" name="BT_UART_RX" class="Default">
+      <node ref="BT1" pin="5" pinfunction="Pin_5" pintype="passive"/>
+    </net>
+    <net code="4" name="BT_UART_TX" class="Default">
+      <node ref="BT1" pin="6" pinfunction="Pin_6" pintype="passive"/>
+      <node ref="U2" pin="20" pinfunction="PC6" pintype="bidirectional"/>
+    </net>
+    <net code="5" name="GND" class="Default">
+      <node ref="BT1" pin="12" pinfunction="Pin_12" pintype="passive"/>
+      <node ref="BT1" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="BT1" pin="9" pinfunction="Pin_9" pintype="passive"/>
+      <node ref="C20" pin="2" pintype="passive"/>
+      <node ref="C21" pin="2" pintype="passive"/>
+      <node ref="C22" pin="2" pintype="passive"/>
+      <node ref="C23" pin="2" pintype="passive"/>
+      <node ref="C24" pin="2" pintype="passive"/>
+      <node ref="C5" pin="2" pintype="passive"/>
+      <node ref="C6" pin="1" pintype="passive"/>
+      <node ref="D1" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="IR_STATION" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="IR_TRACE_L" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="IR_TRACE_R" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="KEY1" pin="2" pinfunction="D" pintype="passive"/>
+      <node ref="KEY2" pin="2" pinfunction="D" pintype="passive"/>
+      <node ref="KEY3" pin="2" pinfunction="D" pintype="passive"/>
+      <node ref="KEY4" pin="2" pinfunction="D" pintype="passive"/>
+      <node ref="LED5" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="LED6" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="OLED1" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="PH-00015_PRESS" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="PH-00015_SWD" pin="4" pinfunction="Pin_4" pintype="passive"/>
+      <node ref="R23" pin="2" pintype="passive"/>
+      <node ref="R23B" pin="2" pintype="passive"/>
+      <node ref="R23C" pin="2" pintype="passive"/>
+      <node ref="R23D" pin="2" pintype="passive"/>
+      <node ref="R27" pin="2" pintype="passive"/>
+      <node ref="R29" pin="2" pintype="passive"/>
+      <node ref="R3" pin="2" pintype="passive"/>
+      <node ref="R4" pin="2" pintype="passive"/>
+      <node ref="R5" pin="2" pintype="passive"/>
+      <node ref="RESET1" pin="1" pinfunction="C" pintype="passive"/>
+      <node ref="RESET1" pin="2" pinfunction="D" pintype="passive"/>
+      <node ref="U1" pin="4" pinfunction="Pin_4" pintype="passive"/>
+      <node ref="U11" pin="2" pinfunction="GND" pintype="power_in"/>
+      <node ref="U12" pin="1" pinfunction="GND" pintype="power_in"/>
+      <node ref="U14" pin="9" pinfunction="Vss" pintype="power_in"/>
+      <node ref="U2" pin="5" pinfunction="VSS" pintype="power_in"/>
+      <node ref="U2" pin="6" pinfunction="NRST" pintype="input"/>
+    </net>
+    <net code="6" name="I2C_SCL" class="Default">
+      <node ref="OLED1" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="R25" pin="2" pintype="passive"/>
+      <node ref="U2" pin="30" pinfunction="PB6" pintype="bidirectional"/>
+    </net>
+    <net code="7" name="I2C_SDA" class="Default">
+      <node ref="OLED1" pin="4" pinfunction="Pin_4" pintype="passive"/>
+      <node ref="R26" pin="2" pintype="passive"/>
+      <node ref="U2" pin="31" pinfunction="PB7" pintype="bidirectional"/>
+    </net>
+    <net code="8" name="IR_LEFT_DO" class="Default">
+      <node ref="IR_TRACE_L" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="U2" pin="13" pinfunction="PA6" pintype="bidirectional"/>
+    </net>
+    <net code="9" name="IR_RIGHT_DO" class="Default">
+      <node ref="IR_TRACE_R" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="U2" pin="14" pinfunction="PA7" pintype="bidirectional"/>
+    </net>
+    <net code="10" name="IR_STATION_DO" class="Default">
+      <node ref="IR_STATION" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="U2" pin="8" pinfunction="PA1" pintype="bidirectional"/>
+    </net>
+    <net code="11" name="KEY_1" class="Default">
+      <node ref="KEY1" pin="1" pinfunction="C" pintype="passive"/>
+      <node ref="R23" pin="1" pintype="passive"/>
+      <node ref="U2" pin="25" pinfunction="PA14" pintype="bidirectional"/>
+    </net>
+    <net code="12" name="KEY_2" class="Default">
+      <node ref="KEY2" pin="1" pinfunction="C" pintype="passive"/>
+      <node ref="R23B" pin="1" pintype="passive"/>
+    </net>
+    <net code="13" name="KEY_3" class="Default">
+      <node ref="KEY3" pin="1" pinfunction="C" pintype="passive"/>
+      <node ref="R23C" pin="1" pintype="passive"/>
+      <node ref="U2" pin="22" pinfunction="PA9/PA11" pintype="bidirectional"/>
+    </net>
+    <net code="14" name="KEY_4" class="Default">
+      <node ref="KEY4" pin="1" pinfunction="C" pintype="passive"/>
+      <node ref="R23D" pin="1" pintype="passive"/>
+      <node ref="U2" pin="32" pinfunction="PB8" pintype="bidirectional"/>
+    </net>
+    <net code="15" name="MOTOR_ENA" class="Default">
+      <node ref="U14" pin="6" pinfunction="EnA" pintype="input"/>
+      <node ref="U2" pin="16" pinfunction="PB1" pintype="bidirectional"/>
+    </net>
+    <net code="16" name="MOTOR_ENB" class="Default">
+      <node ref="U14" pin="11" pinfunction="EnB" pintype="input"/>
+      <node ref="U2" pin="27" pinfunction="PB3" pintype="bidirectional"/>
+    </net>
+    <net code="17" name="MOTOR_IN1" class="Default">
+      <node ref="U14" pin="5" pinfunction="IN1" pintype="input"/>
+      <node ref="U2" pin="17" pinfunction="PB2" pintype="bidirectional"/>
+    </net>
+    <net code="18" name="MOTOR_IN2" class="Default">
+      <node ref="U14" pin="7" pinfunction="IN2" pintype="input"/>
+      <node ref="U2" pin="26" pinfunction="PA15" pintype="bidirectional"/>
+    </net>
+    <net code="19" name="MOTOR_IN3" class="Default">
+      <node ref="U14" pin="10" pinfunction="IN3" pintype="input"/>
+      <node ref="U2" pin="28" pinfunction="PB4" pintype="bidirectional"/>
+    </net>
+    <net code="20" name="MOTOR_IN4" class="Default">
+      <node ref="U14" pin="12" pinfunction="IN4" pintype="input"/>
+      <node ref="U2" pin="29" pinfunction="PB5" pintype="bidirectional"/>
+    </net>
+    <net code="21" name="MOTOR_OUT1" class="Default">
+      <node ref="D2" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="D3" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="U14" pin="2" pinfunction="OUT1" pintype="output"/>
+    </net>
+    <net code="22" name="MOTOR_OUT2" class="Default">
+      <node ref="D4" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="D5" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="U14" pin="3" pinfunction="OUT2" pintype="output"/>
+    </net>
+    <net code="23" name="MOTOR_OUT3" class="Default">
+      <node ref="D6" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="D7" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="U14" pin="13" pinfunction="OUT3" pintype="output"/>
+    </net>
+    <net code="24" name="MOTOR_OUT4" class="Default">
+      <node ref="D8" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="D9" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="U14" pin="14" pinfunction="OUT4" pintype="output"/>
+    </net>
+    <net code="25" name="PRESSURE_AOUT" class="Default">
+      <node ref="PH-00015_PRESS" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="R27" pin="1" pintype="passive"/>
+      <node ref="U2" pin="9" pinfunction="PA2" pintype="bidirectional"/>
+    </net>
+    <net code="26" name="PWR_LED" class="Default">
+      <node ref="D1" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R21" pin="2" pintype="passive"/>
+    </net>
+    <net code="27" name="SWCLK" class="Default">
+      <node ref="PH-00015_SWD" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="R3" pin="1" pintype="passive"/>
+      <node ref="U2" pin="24" pinfunction="PA13" pintype="bidirectional"/>
+    </net>
+    <net code="28" name="SWDIO" class="Default">
+      <node ref="PH-00015_SWD" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="R4" pin="1" pintype="passive"/>
+      <node ref="U2" pin="23" pinfunction="PA10/PA12" pintype="bidirectional"/>
+    </net>
+    <net code="29" name="SYS_LED" class="Default">
+      <node ref="LED6" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R22" pin="2" pintype="passive"/>
+      <node ref="U2" pin="10" pinfunction="PA3" pintype="bidirectional"/>
+    </net>
+    <net code="30" name="US_ECHO" class="Default">
+      <node ref="U1" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="U2" pin="11" pinfunction="PA4" pintype="bidirectional"/>
+    </net>
+    <net code="31" name="US_TRIG" class="Default">
+      <node ref="U1" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="U2" pin="15" pinfunction="PB0" pintype="bidirectional"/>
+    </net>
+    <net code="32" name="VBAT_S" class="Default">
+      <node ref="R28" pin="2" pintype="passive"/>
+      <node ref="R29" pin="1" pintype="passive"/>
+      <node ref="U2" pin="7" pinfunction="PA0" pintype="bidirectional"/>
+    </net>
+    <net code="33" name="VCC_3V3" class="Default">
+      <node ref="BT1" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="BT1" pin="8" pinfunction="Pin_8" pintype="passive"/>
+      <node ref="C24" pin="1" pintype="passive"/>
+      <node ref="C5" pin="1" pintype="passive"/>
+      <node ref="C6" pin="2" pintype="passive"/>
+      <node ref="IR_TRACE_L" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="IR_TRACE_R" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="OLED1" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="PH-00015_PRESS" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="PH-00015_SWD" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="R20" pin="1" pintype="passive"/>
+      <node ref="R21" pin="1" pintype="passive"/>
+      <node ref="R22" pin="1" pintype="passive"/>
+      <node ref="R25" pin="1" pintype="passive"/>
+      <node ref="R26" pin="1" pintype="passive"/>
+      <node ref="R28" pin="1" pintype="passive"/>
+      <node ref="R5" pin="1" pintype="passive"/>
+      <node ref="U12" pin="2" pinfunction="VO" pintype="power_out"/>
+      <node ref="U2" pin="4" pinfunction="VDD" pintype="power_in"/>
+    </net>
+    <net code="34" name="VCC_5V" class="Default">
+      <node ref="C21" pin="1" pintype="passive"/>
+      <node ref="C22" pin="1" pintype="passive"/>
+      <node ref="IR_STATION" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="U1" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="U11" pin="3" pinfunction="VO" pintype="power_out"/>
+      <node ref="U12" pin="3" pinfunction="VI" pintype="power_in"/>
+      <node ref="U14" pin="8" pinfunction="GND" pintype="power_in"/>
+    </net>
+    <net code="35" name="unconnected-(BT1-Pin_1-Pad1)" class="Default">
+      <node ref="BT1" pin="1" pinfunction="Pin_1" pintype="passive+no_connect"/>
+    </net>
+    <net code="36" name="unconnected-(BT1-Pin_4-Pad4)" class="Default">
+      <node ref="BT1" pin="4" pinfunction="Pin_4" pintype="passive+no_connect"/>
+    </net>
+    <net code="37" name="unconnected-(BT1-Pin_10-Pad10)" class="Default">
+      <node ref="BT1" pin="10" pinfunction="Pin_10" pintype="passive+no_connect"/>
+    </net>
+    <net code="38" name="unconnected-(BT1-Pin_11-Pad11)" class="Default">
+      <node ref="BT1" pin="11" pinfunction="Pin_11" pintype="passive+no_connect"/>
+    </net>
+    <net code="39" name="unconnected-(BT1-Pin_13-Pad13)" class="Default">
+      <node ref="BT1" pin="13" pinfunction="Pin_13" pintype="passive+no_connect"/>
+    </net>
+    <net code="40" name="unconnected-(BT1-Pin_14-Pad14)" class="Default">
+      <node ref="BT1" pin="14" pinfunction="Pin_14" pintype="passive+no_connect"/>
+    </net>
+    <net code="41" name="unconnected-(BT1-Pin_15-Pad15)" class="Default">
+      <node ref="BT1" pin="15" pinfunction="Pin_15" pintype="passive+no_connect"/>
+    </net>
+    <net code="42" name="unconnected-(BT1-Pin_16-Pad16)" class="Default">
+      <node ref="BT1" pin="16" pinfunction="Pin_16" pintype="passive+no_connect"/>
+    </net>
+    <net code="43" name="unconnected-(C23-Pad1)" class="Default">
+      <node ref="C23" pin="1" pintype="passive+no_connect"/>
+    </net>
+    <net code="44" name="unconnected-(D2-K-Pad1)" class="Default">
+      <node ref="D2" pin="1" pinfunction="K" pintype="passive+no_connect"/>
+    </net>
+    <net code="45" name="unconnected-(D3-A-Pad2)" class="Default">
+      <node ref="D3" pin="2" pinfunction="A" pintype="passive+no_connect"/>
+    </net>
+    <net code="46" name="unconnected-(D4-K-Pad1)" class="Default">
+      <node ref="D4" pin="1" pinfunction="K" pintype="passive+no_connect"/>
+    </net>
+    <net code="47" name="unconnected-(D5-A-Pad2)" class="Default">
+      <node ref="D5" pin="2" pinfunction="A" pintype="passive+no_connect"/>
+    </net>
+    <net code="48" name="unconnected-(D6-K-Pad1)" class="Default">
+      <node ref="D6" pin="1" pinfunction="K" pintype="passive+no_connect"/>
+    </net>
+    <net code="49" name="unconnected-(D7-A-Pad2)" class="Default">
+      <node ref="D7" pin="2" pinfunction="A" pintype="passive+no_connect"/>
+    </net>
+    <net code="50" name="unconnected-(D8-K-Pad1)" class="Default">
+      <node ref="D8" pin="1" pinfunction="K" pintype="passive+no_connect"/>
+    </net>
+    <net code="51" name="unconnected-(D9-A-Pad2)" class="Default">
+      <node ref="D9" pin="2" pinfunction="A" pintype="passive+no_connect"/>
+    </net>
+    <net code="52" name="unconnected-(IR_TRACE_L-Pin_4-Pad4)" class="Default">
+      <node ref="IR_TRACE_L" pin="4" pinfunction="Pin_4" pintype="passive+no_connect"/>
+    </net>
+    <net code="53" name="unconnected-(IR_TRACE_R-Pin_4-Pad4)" class="Default">
+      <node ref="IR_TRACE_R" pin="4" pinfunction="Pin_4" pintype="passive+no_connect"/>
+    </net>
+    <net code="54" name="unconnected-(U2-NC/PA9-Pad19)" class="Default">
+      <node ref="U2" pin="19" pinfunction="NC/PA9" pintype="no_connect"/>
+    </net>
+    <net code="55" name="unconnected-(U2-NC/PA10-Pad21)" class="Default">
+      <node ref="U2" pin="21" pinfunction="NC/PA10" pintype="no_connect"/>
+    </net>
+    <net code="56" name="unconnected-(U2-PA5-Pad12)" class="Default">
+      <node ref="U2" pin="12" pinfunction="PA5" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="57" name="unconnected-(U2-PA8-Pad18)" class="Default">
+      <node ref="U2" pin="18" pinfunction="PA8" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="58" name="unconnected-(U2-PB9-Pad1)" class="Default">
+      <node ref="U2" pin="1" pinfunction="PB9" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="59" name="unconnected-(U2-PC14-Pad2)" class="Default">
+      <node ref="U2" pin="2" pinfunction="PC14" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="60" name="unconnected-(U2-PC15-Pad3)" class="Default">
+      <node ref="U2" pin="3" pinfunction="PC15" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="61" name="unconnected-(U14-SENSE_A-Pad1)" class="Default">
+      <node ref="U14" pin="1" pinfunction="SENSE_A" pintype="input+no_connect"/>
+    </net>
+    <net code="62" name="unconnected-(U14-SENSE_B-Pad15)" class="Default">
+      <node ref="U14" pin="15" pinfunction="SENSE_B" pintype="input+no_connect"/>
+    </net>
+  </nets>
+</export>

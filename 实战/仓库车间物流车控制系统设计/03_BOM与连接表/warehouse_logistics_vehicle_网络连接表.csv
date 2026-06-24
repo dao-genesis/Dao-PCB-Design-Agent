@@ -1,0 +1,41 @@
+﻿网络名,含义,连接节点,用途,设计注意事项,网络分类
+12V,12V 主电源 (锂电池),"U11-1, U14-4, C20-1",12V 主电源 (锂电池),"锂电池正极, 经 U11 分支至 5V 与 L298N 主电源","强电网络, 进线必须反接保护与自恢复保险丝"
+VCC_5V,5V 一级稳压,"U11-3, U12-3, U14-8, C21-1, C22-1, U1-1, IR_STATION-1",5V 一级稳压,"U11 输出, 给 AMS1117/L298N逻辑/HC-SR04/站点IR 供电",C21+C22 紧贴 U12 入口
+VCC_3V3,3.3V 主控/传感器电源,"U12-2, U2-4, C24-1, C5-1, C6-2, OLED1-1, BT1-3, BT1-8, IR_TRACE_L-1, IR_TRACE_R-1, PH-00015_PRESS-1, PH-00015_SWD-1, R5-1, R21-1, R22-1, R20-1, R25-1, R26-1, R28-1",3.3V 主控/传感器电源,MCU/OLED/蓝牙/红外/SWD 主电源,"走线宽 ≥0.4mm, 每分支去耦 100nF + 1uF"
+GND,系统地,"U11-2, U11-4, U12-1, U2-5, U14-9, C20-2, C21-2, C22-2, C23-2, C24-2, C5-2, C6-1, OLED1-2, BT1-2, BT1-9, BT1-12, U1-4, IR_TRACE_L-2, IR_TRACE_R-2, IR_STATION-2, PH-00015_PRESS-3, PH-00015_SWD-4, R29-2, R3-2, R4-2, R23-2, R23B-2, R23C-2, R23D-2, RESET1-2, RESET1-4, KEY1-2, KEY1-4, KEY2-2, KEY2-4, KEY3-2, KEY3-4, KEY4-2, KEY4-4, D1-2, LED5-2, LED6-2, R27-2",系统地,PGND 与 SGND 单点连接,"L298N 电源地与控制地分区, 走线靠 U14 散热焊盘"
+NRST,MCU 复位,"U2-6, RESET1-1, RESET1-3, R5-2, C6-1",MCU 复位,1NRST 按键 + R5 上拉 + C6 滤波,"走线短, 远离 PWM/晶振"
+VBAT_S,电池电压 ADC 采样,"U2-7, R28-2, R29-1",电池电压 ADC 采样,PA0 ADC IN0 — 电池电压分压采样 (1/51 衰减),"ADC 输入加 RC 滤波, 阻抗 ≤10K"
+VBAT,电池正极采样源,R28-1,电池正极采样源,12V 经 R28-R29 分压取样,"高阻分压, 远离 dv/dt 区域"
+PRESSURE_AOUT,压力模拟输出,"U2-9, PH-00015_PRESS-2, R27-1",压力模拟输出,PA2 ADC IN2 — 压力传感器模拟输出,"RC 滤波 R27 + 100nF, 抗干扰"
+MOTOR_ENA,左电机使能/PWM,"U2-16, U14-6",左电机使能/PWM,PB1 → ENABLE_A (TIM3_CH1 PWM @ 10kHz),PWM 频率避开 8kHz 音频带
+MOTOR_IN1,左电机方向控制1,"U2-17, U14-5",左电机方向控制1,PB2 → INPUT1,
+MOTOR_IN2,左电机方向控制2,"U2-26, U14-7",左电机方向控制2,PB3 → INPUT2,
+MOTOR_ENB,右电机使能/PWM,"U2-27, U14-11",右电机使能/PWM,PB4 → ENABLE_B (TIM3_CH2 PWM @ 10kHz),PWM 频率避开 8kHz 音频带
+MOTOR_IN3,右电机方向控制3,"U2-28, U14-10",右电机方向控制3,PB5 → INPUT3,
+MOTOR_IN4,右电机方向控制4,"U2-29, U14-12",右电机方向控制4,PB6 → INPUT4,
+MOTOR_OUT1,左电机输出1,"U14-2, D2-2, D3-1",左电机输出1,OUTPUT1 经续流二极管接左电机正端,"强电, 走线宽 ≥0.8mm"
+MOTOR_OUT2,左电机输出2,"U14-3, D4-2, D5-1",左电机输出2,OUTPUT2 经续流二极管接左电机负端,"强电, 走线宽 ≥0.8mm"
+MOTOR_OUT3,右电机输出3,"U14-13, D6-2, D7-1",右电机输出3,OUTPUT3 经续流二极管接右电机正端,"强电, 走线宽 ≥0.8mm"
+MOTOR_OUT4,右电机输出4,"U14-14, D8-2, D9-1",右电机输出4,OUTPUT4 经续流二极管接右电机负端,"强电, 走线宽 ≥0.8mm"
+MOTOR_CSA,左电机电流采样,U14-1,左电机电流采样,"经 0.5Ω 采样电阻接 GND, 反馈到 MCU ADC",可选: 接 PA3 进行电流监测
+MOTOR_CSB,右电机电流采样,U14-15,右电机电流采样,经 0.5Ω 采样电阻接 GND,可选: 接 PA4 进行电流监测
+US_TRIG,超声波触发,"U2-15, U1-2",超声波触发,PB0 → HC-SR04 Trig (10us 脉冲),
+US_ECHO,超声波回波,"U2-11, U1-3",超声波回波,PA4 ← HC-SR04 Echo (高电平时长 = 距离),"回波 5V 信号, 串联 10K 限流后接入"
+I2C_SCL,OLED I2C 时钟,"U2-30, OLED1-3, R25-2",OLED I2C 时钟,PB7 ← I2C1_SCL (400kHz),上拉 4.7K 至 3.3V
+I2C_SDA,OLED I2C 数据,"U2-31, OLED1-4, R26-2",OLED I2C 数据,PB8 ← I2C1_SDA,"上拉 4.7K 至 3.3V, 走线短"
+BT_UART_TX,蓝牙模块 → MCU (RX),"U2-20, BT1-6",蓝牙模块 → MCU (RX),"PA10 ← BT-TX (USART1_RX, 9600bps)",
+BT_UART_RX,MCU → 蓝牙模块 (TX),"U2-19, BT1-5",MCU → 蓝牙模块 (TX),PA9 → BT-RX (USART1_TX),
+BT_LED_STATUS,蓝牙连接指示,"BT1-7, LED5-1, R20-2",蓝牙连接指示,蓝牙 PIO_LED 状态 → LED5,
+KEY_1,按键1,"U2-25, KEY1-1, KEY1-3, R23-1",按键1,"PA15 ← KEY1, R23 下拉 10K",软件去抖 ≥20ms
+KEY_2,按键2,"U2-21, KEY2-1, KEY2-3, R23B-1",按键2,PA11_R(PA9) ← KEY2,软件去抖
+KEY_3,按键3,"U2-22, KEY3-1, KEY3-3, R23C-1",按键3,PA12_R(PA10) ← KEY3,软件去抖
+KEY_4,按键4,"U2-32, KEY4-1, KEY4-3, R23D-1",按键4,PB9 ← KEY4,软件去抖
+IR_LEFT_DO,左循迹数字输出,"U2-13, IR_TRACE_L-3",左循迹数字输出,PA6 ← TCRT5000 数字输出 (检测白线),可调电位器阈值
+IR_RIGHT_DO,右循迹数字输出,"U2-14, IR_TRACE_R-3",右循迹数字输出,PA7 ← TCRT5000 数字输出 (检测白线),
+IR_STATION_DO,站点红外检测,"U2-8, IR_STATION-3",站点红外检测,PA1 ← E18-D80NK 数字输出,"高电平有效, 软件计数站点"
+SYS_LED,系统状态 LED,"U2-10, LED6-1, R22-2",系统状态 LED,"PA3 → LED6 (心跳灯, 1Hz 闪烁)",
+SWCLK,SWD 时钟,"U2-24, PH-00015_SWD-2, R3-1",SWD 时钟,PA14-BOOT0 ↔ SWCLK (启动后 BOOT0 拉低),下拉 100K 防止误进 ISP
+SWDIO,SWD 数据,"U2-23, PH-00015_SWD-3, R4-1",SWD 数据,PA13 ↔ SWDIO,下拉 100K
+PC14_OSC32IN,RTC 晶振输入(预留),U2-2,RTC 晶振输入(预留),"PC14, 当前内部 LSI",可选挂 32.768kHz 晶振
+PC15_OSC32OUT,RTC 晶振输出(预留),U2-3,RTC 晶振输出(预留),PC15,可选
+PWR_LED,3.3V 电源指示,"D1-1, R21-2",3.3V 电源指示,VCC_3V3 经 R21 → D1,

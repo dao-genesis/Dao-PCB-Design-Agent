@@ -1,0 +1,128 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-04-28T23:40:42+0800",
+    "kicad_version": "9.0.4",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/28e24f75-c249-5fd0-a8f4-e56d66f5ee7f",
+            "violations": [
+                {
+                    "description": "GND 和 NRST 都连接到同一项上; 将使用 GND 作为网表中的网络名称",
+                    "items": [
+                        {
+                            "description": "全局标签 'GND'",
+                            "pos": {
+                                "x": 0.6096,
+                                "y": 0.9906
+                            },
+                            "uuid": "f5fd6f55-2d1e-5dd7-b2ef-3378b8eafa9b"
+                        },
+                        {
+                            "description": "全局标签 'NRST'",
+                            "pos": {
+                                "x": 0.4572,
+                                "y": 2.2606
+                            },
+                            "uuid": "75135407-1bc8-5a33-862f-653d1deafc8f"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "multiple_net_names"
+                },
+                {
+                    "description": "符号 RESET1 有未放置的单元 [ 单元 B ]",
+                    "items": [
+                        {
+                            "description": "符号 RESET1 [SW_Push_Dual_x2]",
+                            "pos": {
+                                "x": 0.4826,
+                                "y": 2.2606
+                            },
+                            "uuid": "e87a17d9-e1de-5a04-a39f-93d1352b6931"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "missing_unit"
+                },
+                {
+                    "description": "符号 KEY1 有未放置的单元 [ 单元 B ]",
+                    "items": [
+                        {
+                            "description": "符号 KEY1 [SW_Push_Dual_x2]",
+                            "pos": {
+                                "x": 4.7244,
+                                "y": 3.9116
+                            },
+                            "uuid": "5441f25c-678d-52a7-83d8-86ef2cbbf805"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "missing_unit"
+                },
+                {
+                    "description": "符号 KEY2 有未放置的单元 [ 单元 B ]",
+                    "items": [
+                        {
+                            "description": "符号 KEY2 [SW_Push_Dual_x2]",
+                            "pos": {
+                                "x": 5.0292,
+                                "y": 3.9116
+                            },
+                            "uuid": "32a43f32-42ab-5846-97a0-8bb960fa96ac"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "missing_unit"
+                },
+                {
+                    "description": "符号 KEY3 有未放置的单元 [ 单元 B ]",
+                    "items": [
+                        {
+                            "description": "符号 KEY3 [SW_Push_Dual_x2]",
+                            "pos": {
+                                "x": 5.334,
+                                "y": 3.9116
+                            },
+                            "uuid": "5ac64a04-a425-5425-a896-56e4b90a00d1"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "missing_unit"
+                },
+                {
+                    "description": "符号 KEY4 有未放置的单元 [ 单元 B ]",
+                    "items": [
+                        {
+                            "description": "符号 KEY4 [SW_Push_Dual_x2]",
+                            "pos": {
+                                "x": 5.6388,
+                                "y": 3.9116
+                            },
+                            "uuid": "6ea7b165-9839-5417-99e9-7f5433d86ee2"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "missing_unit"
+                },
+                {
+                    "description": "在原理图中的任何其他位置都未连接全局标签",
+                    "items": [
+                        {
+                            "description": "全局标签 'BT_UART_RX'",
+                            "pos": {
+                                "x": 7.1628,
+                                "y": 1.8034
+                            },
+                            "uuid": "1af50c21-121e-5f5d-ab14-9fa6d6849737"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                }
+            ]
+        }
+    ],
+    "source": "warehouse_logistics_vehicle.kicad_sch"
+}

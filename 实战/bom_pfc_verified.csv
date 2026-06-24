@@ -1,0 +1,18 @@
+﻿Ref,Name,Spec,Group,Found_Title,LCSC,Mfr_Part,Manufacturer,Package,Category,Description,Match_Query,UUID
+F1,保险丝,T25A/250VAC,输入保护,MST 10A 250V,C388809,MST 10A 250V,CONQUER(功得),2d1cd8587c144bf182611bdbe33276b0,,产品:微型保险丝（方型）;保险丝类型:延时熔断/慢速熔断;额定电流:10A;,MST 10A 250V,0712369a002146c98a7756b5be741b19
+MOV1,压敏电阻,470V (14D471K),输入保护,10D471K,C317795,10D471K,COV(德欣),bc1adec9045047c2aa213c818385a941,,最大工作电压(AC):300V;最大工作电压(DC):385V;压敏电压:423V~517V;钳位电压:775V;峰值浪涌电流:2.5kA;能量:67J;静态电,10D471K,1169f654ecd74879bfa93902af66860d
+NTC1,NTC 限流,5Ω/15A,输入保护,NTC 5D-9(弯脚),C3789,NTC 5D-9(弯脚),RUILON(瑞隆源),baf5799c190d44f3b675aaf2db44771c,,阻值(25℃):5Ω;电阻精度:-;B值精度:-;B值(25℃/50℃):-;功率:-;最大稳态电流(25℃):3A;B值(25℃/75℃):-;B值(25℃/,NTC 5,803b60a0113b43048fea462968a29029
+K1,继电器,250VAC/25A,输入保护,HK4100F-DC5V-SHG,C12072,HK4100F-DC5V-SHG,汇科,d6a154cd211944658b06a35c54da2bd8,,继电器类型:General Purpose;线圈类型:Non Latching;线圈电压:5VDC;触点形式:SPDT;触点的额定电流:3A;,继电器,012d0a25224f4b77adf1524967f589b0
+Lcm,共模电感,2x2mH/20A,EMI滤波,CYCIRI-5020-102,C238008,CYCIRI-5020-102,BC(台湾诚阳),79b89aeae36a464eb05477b41a1b4dff,,电感 @ 频率:-;阻抗 @ 频率:1kΩ @ 100MHz;直流额定电压（VDC）:50V;直流电阻（DCR）（最大）:24mΩ;滤波器类型:电源线;,共模电感,1079fb1c0ef144209061532aff089a45
+Cx,X2 安规电容,"0.47uF/275VAC X2 (lib无, 用 RS LCSC C-search)",EMI滤波,MPP404J2A07AJ225A0,C506857,MPP404J2A07AJ225A0,KNSCHA(科尼盛),5c591ccf4c714ee6ab8a3934233a4027,,容值:400nF;精度:±5%;额定电压:100V;工作温度:-40℃~+105℃;,CBB22,24e08dfbf4dd496485309eabd7e47b05
+Cy,Y1/Y2 安规电容,2.2nF Y1 (lib无),EMI滤波,TLP521-4GBSM,C191332,TLP521-4GBSM,ISOCOM(英国安数光),19b724db8a964166a218eab2bfa45ee5,,产品类型:-;输入类型:-;通道数目:-;隔离电压:-;,CD11,05ee2d4d2ff04057a94104d950745e99
+Q1/Q2,SiC MOSFET 高频,650V 40mΩ (lib缺 Wolfspeed/Rohm系列),主功率,0805W8F1201T5E,C17379,0805W8F1201T5E,UNI-ROYAL(厚声),6cfdf2d0c1ca4752bd1a0125f55b71e9,,,SiC,004ea932d4274bdd870fa2cc97a97505
+Q3/Q4,MOSFET 工频,"650V 工频, IRFP250M→可用",主功率,STFW3N150,C36207,STFW3N150,ST(意法半导体),27863c68a92e49d894dfd07fd1fc8c51,,"类型:N沟道;漏源电压(Vdss):1.5kV;连续漏极电流(Id):2.5A;功率(Pd):63W;导通电阻(RDS(on)@Vgs,Id):9Ω@10V,1",STFW3N150,1f236bae73a945dba05ddf8cb06c25c8
+L1,PFC 升压电感,~450uH 25A (建议定制/淘宝磁芯绕制),主功率,"(未找到, 需要外部 LCSC API)",,,,,,,,
+Cbus,母线电容 高压电解,"470uF/450V (lib缺, 用 LCSC online)",主功率,DBT10-7.62-2P-BK-P,C430662,DBT10-7.62-2P-BK-P,DIBO(地博电气),9b0d91c204a74042ac3bc6c17a2ee1d7,,隔板类型:两面;间距:7.62mm;每排PIN数:2;排数:1;安装方式:直针;引脚位置:边脚;额定电流:24A;额定电压:450V;线规 - AWG:14~2,450V,088784d085b4496e80a953e6d884441f
+Rbleed,泄放电阻,220K/2W,主功率,RS-05K2203FT,C139903,RS-05K2203FT,FH(风华),6cfdf2d0c1ca4752bd1a0125f55b71e9,,阻值:220kΩ;精度:±1%;功率:125mW;温度系数:±100ppm/℃;最大工作电压:150V;工作温度范围:-55℃~+155℃;,220K,104c3570306f47ad98416ccfc1f8641d
+CS1,电流采样,ACS712-30A 或 霍尔,主功率,ACS712ELCTR-30A-T,C9932,ACS712ELCTR-30A-T,ALLEGRO(美国埃戈罗),f7d15c2fdb6442c7924d73bb1cadcb47,,霍尔效应的线性电流传感器，工作电压：5V,ACS712,8c76778f3ef546ee96c6be3c29897a75
+U1/U2,隔离驱动,UCC27324 (双低端),驱动控制,UCC27324DR,C46427,UCC27324DR,TI(德州仪器),f7d15c2fdb6442c7924d73bb1cadcb47,,UCC27324 双 4A 峰值高速低侧电源 MOSFET 驱动器,UCC27324,2bab19d2a06e4d06bc4c8bcf625b7c99
+U5,PFC 控制器,L6562ADTR (单环 BCM),驱动控制,L6562ADTR,C11144,L6562ADTR,ST(意法半导体),f7d15c2fdb6442c7924d73bb1cadcb47,,L6562 Series 22.5 V 5 mA 4 Output Current Mode PFC Controller - SOIC-8,L6562,3b8f2fbeb962493c9a40bf528e9e92e2
+U6,辅助电源,VIPER22ADIP (反激),驱动控制,VIPER22ADIP-E,C5318,VIPER22ADIP-E,ST(意法半导体),911ac1aa89a0441ea4981f236c5db1ac,,,VIPER22,68819d0c6e0649c297c58c466a33a484
+NTC_T,温度 NTC,"10K B=3950 (lib小, 替代 5D-9)",保护,NTC 5D-9(弯脚),C3789,NTC 5D-9(弯脚),RUILON(瑞隆源),baf5799c190d44f3b675aaf2db44771c,,阻值(25℃):5Ω;电阻精度:-;B值精度:-;B值(25℃/50℃):-;功率:-;最大稳态电流(25℃):3A;B值(25℃/75℃):-;B值(25℃/,NTC 5D-9,803b60a0113b43048fea462968a29029

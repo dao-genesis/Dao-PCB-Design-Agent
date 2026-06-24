@@ -1,0 +1,12 @@
+Comment,Designator,Footprint,Quantity
+100nF,"C3,C4,C5",Capacitor_SMD:C_0402_1005Metric,3
+10uF,"C6,C7,C8",Capacitor_SMD:C_0805_2012Metric,3
+22pF,"C1,C2",Capacitor_SMD:C_0402_1005Metric,2
+DotMatrix_DATA,J3,Connector_PinHeader_2.54mm:PinHeader_2x08_P2.54mm_Vertical,1
+Power_5V,J4,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+SWD_Debug,J1,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,1
+USART1,J2,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,1
+10k,"R1,R2",Resistor_SMD:R_0402_1005Metric,2
+AMS1117-3.3,U2,Package_TO_SOT_SMD:SOT-223-3_TabPin2,1
+STM32F103C6T6,U1,Package_QFP:LQFP-48_7x7mm_P0.5mm,1
+8MHz,X1,Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm,1

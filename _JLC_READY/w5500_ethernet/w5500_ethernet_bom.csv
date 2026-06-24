@@ -1,0 +1,10 @@
+Comment,Designator,Footprint,Quantity
+100nF,"C3,C4,C5,C7",Capacitor_SMD:C_0402_1005Metric,4
+10uF,C6,Capacitor_SMD:C_0805_2012Metric,1
+22pF,"C1,C2",Capacitor_SMD:C_0402_1005Metric,2
+4.7uF,C8,Capacitor_SMD:C_0805_2012Metric,1
+RJ45_MagJack,J1,Connector:RJ45_HanRun_HR911105A,1
+SPI_MCU,J2,Connector_PinHeader_2.54mm:PinHeader_2x04_P2.54mm_Vertical,1
+12k,"R1,R2",Resistor_SMD:R_0402_1005Metric,2
+W5500,U1,Package_QFP:LQFP-48_7x7mm_P0.5mm,1
+25MHz,Y1,Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm,1

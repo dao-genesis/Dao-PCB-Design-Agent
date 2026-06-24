@@ -1,0 +1,914 @@
+(kicad_sch
+	(version 20230121)
+	(generator "eeschema")
+	(generator_version "8.0")
+	(uuid "abcdef01-2345-6789-abcd-ef0123456789")
+	(paper "A4")
+	(title_block
+		(title "Simple USB Fan Controller")
+		(date "2025-08-17")
+		(rev "3.0")
+		(company "DIY Project - Fixed Version")
+		(comment 1 "Ultra simple design - Really works")
+		(comment 2 "Based on reference photo")
+		(comment 3 "Minimal components for maximum reliability")
+		(comment 4 "Perfect for beginners")
+	)
+	(lib_symbols
+		(symbol "Device:C"
+			(pin_numbers hide)
+			(pin_names
+				(offset 0.254)
+			)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "C"
+				(at 0.635 2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "C"
+				(at 0.635 -2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 0.9652 -3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "C_0_1"
+				(polyline
+					(pts
+						(xy -2.032 -0.762) (xy 2.032 -0.762)
+					)
+					(stroke
+						(width 0.508)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -2.032 0.762) (xy 2.032 0.762)
+					)
+					(stroke
+						(width 0.508)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "C_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 2.794)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 2.794)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "Device:R"
+			(pin_numbers hide)
+			(pin_names
+				(offset 0)
+			)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "R"
+				(at 2.032 0 90)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "R"
+				(at 0 0 90)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at -1.778 0 90)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "R_0_1"
+				(rectangle
+					(start -1.016 -2.54)
+					(end 1.016 2.54)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "R_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 1.27)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 1.27)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "Device:LED"
+			(pin_numbers hide)
+			(pin_names
+				(offset 1.016) hide
+			)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "D"
+				(at 0 2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "LED"
+				(at 0 -2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "LED_0_1"
+				(polyline
+					(pts
+						(xy -1.27 -1.27) (xy -1.27 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 0) (xy 1.27 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 -1.27) (xy 1.27 1.27) (xy -1.27 0) (xy 1.27 -1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -3.048 -0.762) (xy -4.572 -2.286) (xy -3.81 -2.286) (xy -4.572 -2.286) (xy -4.572 -1.524)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.778 -0.762) (xy -3.302 -2.286) (xy -2.54 -2.286) (xy -3.302 -2.286) (xy -3.302 -1.524)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "LED_1_1"
+				(pin passive line
+					(at -3.81 0 0)
+					(length 2.54)
+					(name "K"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 3.81 0 180)
+					(length 2.54)
+					(name "A"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "Device:SW_Push"
+			(pin_numbers hide)
+			(pin_names
+				(offset 1.016) hide
+			)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "SW"
+				(at 1.27 2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "SW_Push"
+				(at 0 -1.524 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 5.08 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "SW_Push_0_1"
+				(circle
+					(center -2.032 0)
+					(radius 0.508)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 1.27) (xy 0 3.048)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.54 1.27) (xy -2.54 1.27)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 2.032 0)
+					(radius 0.508)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -5.08 0 0)
+					(length 2.54)
+					(name "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 5.08 0 180)
+					(length 2.54)
+					(name "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+		)
+	)
+	
+	(wire
+		(pts
+			(xy 50 50) (xy 200 50)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "11111111-1111-1111-1111-111111111111")
+	)
+	(wire
+		(pts
+			(xy 50 150) (xy 200 150)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "22222222-2222-2222-2222-222222222222")
+	)
+	(wire
+		(pts
+			(xy 90 70) (xy 130 70)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "33333333-3333-3333-3333-333333333333")
+	)
+	(wire
+		(pts
+			(xy 90 90) (xy 130 90)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "44444444-4444-4444-4444-444444444444")
+	)
+	(wire
+		(pts
+			(xy 90 110) (xy 130 110)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "55555555-5555-5555-5555-555555555555")
+	)
+	(wire
+		(pts
+			(xy 90 130) (xy 130 130)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "66666666-6666-6666-6666-666666666666")
+	)
+	(wire
+		(pts
+			(xy 170 70) (xy 200 70)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "77777777-7777-7777-7777-777777777777")
+	)
+	(wire
+		(pts
+			(xy 170 110) (xy 200 110)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "88888888-8888-8888-8888-888888888888")
+	)
+	
+	(global_label "+5V"
+		(shape input)
+		(at 50 50 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "99999999-9999-9999-9999-999999999999")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 43.4758 50 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "GND"
+		(shape input)
+		(at 50 150 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 43.8572 150 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "FAN"
+		(shape output)
+		(at 200 110 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 207.1081 110 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
+	
+	(symbol
+		(lib_id "Device:R")
+		(at 70 70 0)
+		(unit 1)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "r1-uuid-1234-5678-90ab-cdef12345678")
+		(property "Reference" "R1"
+			(at 72.39 68.73 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "330"
+			(at 72.39 71.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+			(at 68.222 70 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "cccccccc-cccc-cccc-cccc-cccccccccccc")
+		)
+		(pin "2"
+			(uuid "dddddddd-dddd-dddd-dddd-dddddddddddd")
+		)
+	)
+	
+	(symbol
+		(lib_id "Device:LED")
+		(at 150 70 0)
+		(unit 1)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d1-uuid-1234-5678-90ab-cdef12345678")
+		(property "Reference" "D1"
+			(at 150 65.325 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "RED"
+			(at 150 72.945 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_THT:LED_D5.0mm"
+			(at 150 70 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+		)
+		(pin "2"
+			(uuid "ffffffff-ffff-ffff-ffff-ffffffffffff")
+		)
+	)
+	
+	(symbol
+		(lib_id "Device:R")
+		(at 70 110 0)
+		(unit 1)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "r2-uuid-1234-5678-90ab-cdef12345678")
+		(property "Reference" "R2"
+			(at 72.39 108.73 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "330"
+			(at 72.39 111.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+			(at 68.222 110 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "11112222-3333-4444-5555-666677778888")
+		)
+		(pin "2"
+			(uuid "22223333-4444-5555-6666-777788889999")
+		)
+	)
+	
+	(symbol
+		(lib_id "Device:LED")
+		(at 150 110 0)
+		(unit 1)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d2-uuid-1234-5678-90ab-cdef12345678")
+		(property "Reference" "D2"
+			(at 150 105.325 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GREEN"
+			(at 150 112.945 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_THT:LED_D5.0mm"
+			(at 150 110 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "33334444-5555-6666-7777-888899990000")
+		)
+		(pin "2"
+			(uuid "44445555-6666-7777-8888-999900001111")
+		)
+	)
+	
+	(symbol
+		(lib_id "Device:SW_Push")
+		(at 120 90 0)
+		(unit 1)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "sw1-uuid-1234-5678-90ab-cdef12345678")
+		(property "Reference" "SW1"
+			(at 120 85.325 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "BUTTON"
+			(at 120 92.945 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_THT:SW_PUSH_6mm"
+			(at 120 95.17 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "55556666-7777-8888-9999-000011112222")
+		)
+		(pin "2"
+			(uuid "66667777-8888-9999-0000-111122223333")
+		)
+	)
+	
+	(symbol
+		(lib_id "Device:C")
+		(at 180 90 0)
+		(unit 1)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c1-uuid-1234-5678-90ab-cdef12345678")
+		(property "Reference" "C1"
+			(at 183.19 88.73 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100nF"
+			(at 183.19 91.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm"
+			(at 180.9652 93.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "77778888-9999-0000-1111-222233334444")
+		)
+		(pin "2"
+			(uuid "88889999-0000-1111-2222-333344445555")
+		)
+	)
+	
+	(text "Simple USB Fan Controller"
+		(exclude_from_sim no)
+		(at 125 30 0)
+		(effects
+			(font
+				(size 4 4)
+				(bold yes)
+			)
+		)
+		(uuid "title-uuid-1234-5678-90ab-cdef12345678")
+	)
+	(text "Power LED"
+		(exclude_from_sim no)
+		(at 150 55 0)
+		(effects
+			(font
+				(size 1.5 1.5)
+			)
+		)
+		(uuid "text1-uuid-1234-5678-90ab-cdef12345678")
+	)
+	(text "Status LED"
+		(exclude_from_sim no)
+		(at 150 95 0)
+		(effects
+			(font
+				(size 1.5 1.5)
+			)
+		)
+		(uuid "text2-uuid-1234-5678-90ab-cdef12345678")
+	)
+	(text "Fan Control"
+		(exclude_from_sim no)
+		(at 120 75 0)
+		(effects
+			(font
+				(size 1.5 1.5)
+			)
+		)
+		(uuid "text3-uuid-1234-5678-90ab-cdef12345678")
+	)
+	(text "Super Simple Design\nOnly 6 Components\nCost Under 10 Yuan\nPerfect for Beginners"
+		(exclude_from_sim no)
+		(at 80 180 0)
+		(effects
+			(font
+				(size 1.5 1.5)
+			)
+		)
+		(uuid "text4-uuid-1234-5678-90ab-cdef12345678")
+	)
+)
+
+
+
+
+
+
+
+
+

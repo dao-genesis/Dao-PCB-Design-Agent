@@ -1,0 +1,139 @@
+{
+  "timestamp": "2025-09-04T04:01:07.372272",
+  "pcb_file": "drone_pcb_project\\drone_flight_controller.kicad_pcb",
+  "net_classes": {
+    "Power": {
+      "description": "Power distribution nets (VBAT, 5V, 3V3)",
+      "track_width": 0.5,
+      "via_dia": 0.8,
+      "via_drill": 0.4,
+      "clearance": 0.2,
+      "nets": [
+        "VBAT",
+        "5V",
+        "3V3"
+      ]
+    },
+    "Ground": {
+      "description": "Ground connections",
+      "track_width": 0.5,
+      "via_dia": 0.8,
+      "via_drill": 0.4,
+      "clearance": 0.15,
+      "nets": [
+        "GND"
+      ]
+    },
+    "Motor_Control": {
+      "description": "High-current motor PWM signals",
+      "track_width": 0.3,
+      "via_dia": 0.6,
+      "via_drill": 0.3,
+      "clearance": 0.2,
+      "nets": [
+        "PWM1",
+        "PWM2",
+        "PWM3",
+        "PWM4"
+      ]
+    },
+    "High_Speed_Digital": {
+      "description": "High-speed digital signals (SPI, crystal)",
+      "track_width": 0.15,
+      "via_dia": 0.4,
+      "via_drill": 0.2,
+      "clearance": 0.15,
+      "nets": [
+        "I2C_SDA",
+        "I2C_SCL",
+        "SPI_MOSI",
+        "SPI_MISO",
+        "SPI_SCK"
+      ]
+    },
+    "Low_Speed_Digital": {
+      "description": "Low-speed digital signals (GPIO, UART)",
+      "track_width": 0.2,
+      "via_dia": 0.5,
+      "via_drill": 0.25,
+      "clearance": 0.15,
+      "nets": []
+    },
+    "Analog": {
+      "description": "Analog signals (ADC inputs, crystal)",
+      "track_width": 0.2,
+      "via_dia": 0.5,
+      "via_drill": 0.25,
+      "clearance": 0.2,
+      "nets": []
+    }
+  },
+  "design_rules": {
+    "track_widths": [
+      0.1,
+      0.15,
+      0.2,
+      0.25,
+      0.3,
+      0.4,
+      0.5,
+      0.8,
+      1.0
+    ],
+    "via_sizes": [
+      {
+        "diameter": 0.4,
+        "drill": 0.2
+      },
+      {
+        "diameter": 0.5,
+        "drill": 0.25
+      },
+      {
+        "diameter": 0.6,
+        "drill": 0.3
+      },
+      {
+        "diameter": 0.8,
+        "drill": 0.4
+      },
+      {
+        "diameter": 1.0,
+        "drill": 0.5
+      }
+    ],
+    "clearances": {
+      "track_to_track": 0.15,
+      "track_to_via": 0.15,
+      "track_to_pad": 0.15,
+      "via_to_via": 0.15,
+      "pad_to_pad": 0.15,
+      "hole_to_hole": 0.25,
+      "edge_clearance": 0.5
+    },
+    "manufacturing": {
+      "min_track_width": 0.1,
+      "min_via_diameter": 0.4,
+      "min_drill_size": 0.2,
+      "min_annular_ring": 0.05,
+      "solder_mask_clearance": 0.05,
+      "solder_paste_clearance": 0.0,
+      "copper_edge_clearance": 0.3
+    },
+    "electrical": {
+      "max_current_5v": 2.0,
+      "max_current_3v3": 1.0,
+      "max_current_motor": 0.5,
+      "impedance_50ohm": true,
+      "diff_pair_impedance": 100
+    }
+  },
+  "configuration_status": "COMPLETE",
+  "drone_optimizations": {
+    "power_distribution": "Optimized for 5V/3.3V rails",
+    "motor_control": "High-current PWM signal handling",
+    "high_speed_digital": "Controlled impedance for SPI/I2C",
+    "manufacturing": "Standard PCB fab capabilities",
+    "thermal": "Adequate copper pour for heat dissipation"
+  }
+}

@@ -1,0 +1,12 @@
+Comment,Designator,Footprint,Quantity
+100nF,"C3,C4",Capacitor_SMD:C_0402_1005Metric,2
+10uF,"C1,C2",Capacitor_SMD:C_0805_2012Metric,2
+GPIO_H,J3,Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical,1
+GPIO_L,J4,Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical,1
+PWR_IN,J5,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+SWD_DEBUG,J1,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,1
+USB_C,J2,Connector:USB_C_Receptacle_GCT_USB4135_Vertical,1
+10k,R1,Resistor_SMD:R_0402_1005Metric,1
+RESET,SW1,Button_SMD:SW_SPST_B3U-1000P,1
+AP2112K-3.3,U2,Package_TO_SOT_SMD:SOT-23-5,1
+E73-2G4M08S1C,U1,RF_Module:Ebyte_E73_SMD_18x11mm,1

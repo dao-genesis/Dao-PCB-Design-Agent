@@ -1,0 +1,286 @@
+{
+  "project": "1500W_TotemPole_Bridgeless_PFC",
+  "version": "1.0",
+  "purpose": "毕业设计工程资料源文件，供 EasyEDA/Altium/KiCad 继续绘制时参考",
+  "spec": {
+    "input": "85-265VAC, 50/60Hz",
+    "output": "400VDC",
+    "power": "1500W",
+    "topology": "Totem-pole bridgeless PFC",
+    "control": "Voltage outer loop + current inner loop"
+  },
+  "modules": [
+    {
+      "name": "Input_Protection_EMI",
+      "parts": [
+        "F1",
+        "MOV1",
+        "NTC1",
+        "K1",
+        "Lcm",
+        "Cx",
+        "Cy1",
+        "Cy2"
+      ],
+      "nets": [
+        "AC_L",
+        "AC_N",
+        "PE",
+        "L_FILT",
+        "N_FILT"
+      ]
+    },
+    {
+      "name": "Power_Stage",
+      "parts": [
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "L1",
+        "CS1",
+        "Cbus1",
+        "Cbus2",
+        "Rbleed"
+      ],
+      "nets": [
+        "L_FILT",
+        "N_FILT",
+        "SW_HF",
+        "SW_LF",
+        "HV_BUS+",
+        "PGND",
+        "IL_S"
+      ]
+    },
+    {
+      "name": "Gate_Driver",
+      "parts": [
+        "U1",
+        "U2",
+        "Rg1",
+        "Rg2",
+        "Rg3",
+        "Rg4"
+      ],
+      "nets": [
+        "GH",
+        "GL",
+        "GDH",
+        "GDL",
+        "+15V",
+        "PGND"
+      ]
+    },
+    {
+      "name": "Control_Sampling",
+      "parts": [
+        "U5",
+        "Rin1",
+        "Rin2",
+        "Rv1",
+        "Rv2",
+        "Rv3",
+        "U3",
+        "U4"
+      ],
+      "nets": [
+        "VIN_S",
+        "VBUS_S",
+        "IL_S",
+        "ZCD",
+        "FAULT",
+        "+5V",
+        "SGND"
+      ]
+    },
+    {
+      "name": "Protection_Aux",
+      "parts": [
+        "NTC_T",
+        "OCP_CMP",
+        "OVP_CMP",
+        "UVLO_CMP",
+        "U6"
+      ],
+      "nets": [
+        "UVLO",
+        "OVP",
+        "OCP",
+        "OTP",
+        "FAULT",
+        "+15V",
+        "+5V",
+        "+3V3"
+      ]
+    }
+  ],
+  "nets": [
+    "AC_L",
+    "AC_N",
+    "PE",
+    "L_FILT",
+    "N_FILT",
+    "SW_HF",
+    "SW_LF",
+    "HV_BUS+",
+    "PGND",
+    "VBUS_S",
+    "VIN_S",
+    "IL_S",
+    "ZCD",
+    "GH",
+    "GL",
+    "GDH",
+    "GDL",
+    "FAULT",
+    "+15V",
+    "+5V/+3V3"
+  ],
+  "bom": [
+    {
+      "ref": "F1",
+      "name": "保险丝",
+      "type": "慢断保险丝/熔断器",
+      "parameter": "T25A 250VAC，陶瓷管或板载保险丝",
+      "function": "输入过流与短路保护",
+      "note": "1500W@85VAC 输入电流约18A，工程阶段需按散热和浪涌校核"
+    },
+    {
+      "ref": "MOV1",
+      "name": "压敏电阻",
+      "type": "金属氧化物压敏电阻",
+      "parameter": "14D471K 或同等级 470V 压敏",
+      "function": "L-N 浪涌吸收",
+      "note": "并联在 L-N 之间，不得串联"
+    },
+    {
+      "ref": "NTC1",
+      "name": "软启动限流器件",
+      "type": "NTC 热敏电阻/限流电阻",
+      "parameter": "5Ω/15A 或更高等级",
+      "function": "限制母线电容上电冲击电流",
+      "note": "正常运行建议由继电器或 MOSFET 旁路"
+    },
+    {
+      "ref": "K1",
+      "name": "软启动旁路器件",
+      "type": "继电器/功率 MOSFET",
+      "parameter": "≥250VAC，≥25A",
+      "function": "母线建立后旁路 NTC/限流电阻",
+      "note": "降低稳态损耗"
+    },
+    {
+      "ref": "Lcm",
+      "name": "共模电感",
+      "type": "EMI 共模电感",
+      "parameter": "2×2mH，≥20A",
+      "function": "抑制共模干扰",
+      "note": "按传导 EMI 测试结果调整"
+    },
+    {
+      "ref": "Cx",
+      "name": "X 电容",
+      "type": "安规 X2 电容",
+      "parameter": "0.47µF/275VAC X2",
+      "function": "抑制差模噪声",
+      "note": "并联 L-N"
+    },
+    {
+      "ref": "Cy1/Cy2",
+      "name": "Y 电容",
+      "type": "安规 Y 电容",
+      "parameter": "2.2nF/Y1 或 Y2",
+      "function": "抑制共模噪声",
+      "note": "接 PE，注意漏电流"
+    },
+    {
+      "ref": "L1",
+      "name": "升压电感",
+      "type": "PFC 升压电感",
+      "parameter": "约 450µH，≥25A，低损耗磁芯",
+      "function": "储能、限制纹波、实现升压 PFC",
+      "note": "需后续按纹波、饱和电流、温升重新核算"
+    },
+    {
+      "ref": "Q1/Q2",
+      "name": "高频开关管",
+      "type": "SiC MOSFET",
+      "parameter": "650V/40mΩ 级，如 IMW120R045M1 或同等级",
+      "function": "高频升压调制",
+      "note": "高频桥臂，需驱动隔离和散热"
+    },
+    {
+      "ref": "Q3/Q4",
+      "name": "工频同步整流管",
+      "type": "SiC MOSFET/低阻 MOSFET",
+      "parameter": "650V/低 Rds(on)",
+      "function": "交流正负半周同步整流",
+      "note": "低频换向，降低导通损耗"
+    },
+    {
+      "ref": "Cbus1/Cbus2",
+      "name": "母线电容",
+      "type": "高压电解电容",
+      "parameter": "2×470µF/450V",
+      "function": "稳定 400V 母线、提供能量缓冲",
+      "note": "并联/串并联方式按耐压、纹波电流校核"
+    },
+    {
+      "ref": "Rbleed",
+      "name": "泄放电阻",
+      "type": "高压电阻",
+      "parameter": "220kΩ/2W",
+      "function": "掉电后释放母线残余电压",
+      "note": "注意功耗和耐压"
+    },
+    {
+      "ref": "CS1",
+      "name": "电流采样",
+      "type": "霍尔传感器/电流互感器/低阻采样",
+      "parameter": "≥25A，带宽满足控制要求",
+      "function": "电感电流反馈和过流检测",
+      "note": "1500W 低压输入不建议使用过大采样电阻"
+    },
+    {
+      "ref": "U1/U2",
+      "name": "隔离驱动器",
+      "type": "隔离栅极驱动芯片",
+      "parameter": "Si8233/ACPL-332J/UCC21520 等",
+      "function": "驱动 Q1~Q4",
+      "note": "工程阶段根据器件和隔离要求确定型号"
+    },
+    {
+      "ref": "U5",
+      "name": "PFC 控制器",
+      "type": "数字/专用 PFC 控制器",
+      "parameter": "TI UCC28070、DSP/MCU 或同等级",
+      "function": "实现电压外环、电流内环和保护逻辑",
+      "note": "若做数字控制需补 MCU 程序与采样接口"
+    },
+    {
+      "ref": "U6",
+      "name": "辅助电源",
+      "type": "反激式 DC-DC/辅助电源模块",
+      "parameter": "400VDC 输入，15V/5V 输出",
+      "function": "为控制器和驱动器供电",
+      "note": "需隔离与启动供电设计"
+    },
+    {
+      "ref": "Rva/Rvb/Rv1~Rv3",
+      "name": "采样电阻",
+      "type": "高压分压电阻",
+      "parameter": "MΩ 级串联分压",
+      "function": "输入电压和母线电压采样",
+      "note": "注意耐压、精度和功耗"
+    },
+    {
+      "ref": "NTC_T",
+      "name": "温度检测",
+      "type": "NTC 热敏电阻",
+      "parameter": "10kΩ B=3950 或同等级",
+      "function": "检测散热器/功率器件温度",
+      "note": "接入 OTP 保护"
+    }
+  ]
+}

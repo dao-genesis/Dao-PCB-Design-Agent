@@ -1,0 +1,49 @@
+{
+  "timestamp": "2025-09-04T04:01:07.488490",
+  "total_steps": 5,
+  "successful_steps": 0,
+  "success_rate": 0.0,
+  "overall_success": false,
+  "workflow_steps": [
+    {
+      "step": "1. Skidl Netlist Generation",
+      "script": "drone_netlist_generator.py",
+      "description": "Generate comprehensive netlist from Skidl circuit design",
+      "success": false,
+      "output": "Drone Flight Controller - Netlist Generation\n==================================================\nDefined 43 drone components\nCreated 145 electrical connections\nGenerated 38 electrical networks\nGenerated KiCad netlist: drone_pcb_project\\output\\drone_flight_controller.net\n\nNetlist generation completed!\nComponents: 43\nNetworks: 38\nConnections: 145\nOutput: drone_pcb_project\\output\\drone_flight_controller.net\n",
+      "error": "Traceback (most recent call last):\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\drone_netlist_generator.py\", line 508, in <module>\n    main()\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\drone_netlist_generator.py\", line 500, in main\n    print(\"\\n\\u2705 Drone netlist generation successful!\")\nUnicodeEncodeError: 'gbk' codec can't encode character '\\u2705' in position 2: illegal multibyte sequence\n"
+    },
+    {
+      "step": "2. KiCad API Integration",
+      "script": "kicad_api_drone_layout.py",
+      "description": "Create PCB layout using KiCad Python API with intelligent placement",
+      "success": false,
+      "output": "Drone Flight Controller - KiCad Python API Integration\n============================================================\n",
+      "error": "_api_integration_report.json\nINFO:__main__:\\u2705 KiCad API integration completed successfully!\nTraceback (most recent call last):\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\kicad_api_drone_layout.py\", line 635, in <module>\n    main()\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\kicad_api_drone_layout.py\", line 624, in main\n    print(\"\\n\\U0001f389 KiCad API integration successful!\")\nUnicodeEncodeError: 'gbk' codec can't encode character '\\U0001f389' in position 2: illegal multibyte sequence\n"
+    },
+    {
+      "step": "3. Pad-Net Integration",
+      "script": "drone_pad_net_integrator.py",
+      "description": "Establish electrical connectivity by assigning nets to pads",
+      "success": false,
+      "output": "Drone Flight Controller - Pad-Net Integration\n==================================================\n",
+      "error": "9/146 pads connected (74.7%)\nINFO:__main__:\\u2705 Pad-net integration completed successfully!\nTraceback (most recent call last):\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\drone_pad_net_integrator.py\", line 261, in <module>\n    main()\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\drone_pad_net_integrator.py\", line 250, in main\n    print(\"\\n\\U0001f389 Pad-net integration successful!\")\nUnicodeEncodeError: 'gbk' codec can't encode character '\\U0001f389' in position 2: illegal multibyte sequence\n"
+    },
+    {
+      "step": "4. Design Rules Configuration",
+      "script": "drone_design_rules_configurator.py",
+      "description": "Configure net classes and design rules for drone applications",
+      "success": false,
+      "output": "Drone Flight Controller - Design Rules Configuration\n=======================================================\n",
+      "error": "n_report.json\nINFO:__main__:\\u2705 Design rules configuration completed!\nTraceback (most recent call last):\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\drone_design_rules_configurator.py\", line 355, in <module>\n    main()\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\drone_design_rules_configurator.py\", line 343, in main\n    print(\"\\n\\U0001f389 Design rules configuration successful!\")\nUnicodeEncodeError: 'gbk' codec can't encode character '\\U0001f389' in position 2: illegal multibyte sequence\n"
+    },
+    {
+      "step": "5. Pre-routing Validation",
+      "script": "drone_pre_routing_validator.py",
+      "description": "Validate complete readiness for auto-routing tools",
+      "success": false,
+      "output": "Drone Flight Controller - Pre-routing Validation\n=======================================================\n",
+      "error": "-routing instructions saved: drone_pcb_project\\DRONE_AUTO_ROUTING_INSTRUCTIONS.md\nTraceback (most recent call last):\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\drone_pre_routing_validator.py\", line 528, in <module>\n    main()\n  File \"F:\\github\\AI _PCB\u8bbe\u8ba1\\drone_pcb_project\\drone_pre_routing_validator.py\", line 522, in main\n    print(\"\\n\\u26a0\\ufe0f Pre-routing validation: PARTIAL SUCCESS\")\nUnicodeEncodeError: 'gbk' codec can't encode character '\\u26a0' in position 2: illegal multibyte sequence\n"
+    }
+  ]
+}

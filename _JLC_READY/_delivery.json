@@ -1,0 +1,388 @@
+{
+  "generated_at": "2026-05-01 16:43:21",
+  "elapsed_seconds": 1.321,
+  "ok": 21,
+  "total": 21,
+  "total_zip_bytes": 537854,
+  "total_bom_components": 310,
+  "boards": [
+    {
+      "board": "ams1117_power",
+      "ok": true,
+      "zip": "ams1117_power_jlc.zip",
+      "zip_bytes": 12702,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "ams1117_power-pos.csv",
+        "preview_3d": "ams1117_power-3d.png",
+        "step": "ams1117_power.step",
+        "pdf": "ams1117_power.pdf",
+        "svg": "ams1117_power.svg"
+      },
+      "bom_unique": 3,
+      "bom_total": 4,
+      "bom_err": "",
+      "size_hint": "40.0 × 30.0 mm"
+    },
+    {
+      "board": "ch32v003_minimal",
+      "ok": true,
+      "zip": "ch32v003_minimal_jlc.zip",
+      "zip_bytes": 20751,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "ch32v003_minimal-pos.csv",
+        "preview_3d": "ch32v003_minimal-3d.png",
+        "step": "ch32v003_minimal.step",
+        "pdf": "ch32v003_minimal.pdf",
+        "svg": "ch32v003_minimal.svg"
+      },
+      "bom_unique": 10,
+      "bom_total": 12,
+      "bom_err": "",
+      "size_hint": "65.0 × 65.0 mm"
+    },
+    {
+      "board": "drone_aerial_h743",
+      "ok": true,
+      "zip": "drone_aerial_h743_jlc.zip",
+      "zip_bytes": 79672,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "drone_aerial_h743-pos.csv",
+        "preview_3d": "drone_aerial_h743-3d.png",
+        "step": "drone_aerial_h743.step",
+        "pdf": "drone_aerial_h743.pdf",
+        "svg": "drone_aerial_h743.svg"
+      },
+      "bom_unique": 43,
+      "bom_total": 68,
+      "bom_err": "",
+      "size_hint": "50.0 × 50.0 mm"
+    },
+    {
+      "board": "drone_flight_controller",
+      "ok": true,
+      "zip": "drone_flight_controller_jlc.zip",
+      "zip_bytes": 48512,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "drone_flight_controller-pos.csv",
+        "preview_3d": "drone_flight_controller-3d.png",
+        "step": "drone_flight_controller.step",
+        "pdf": "drone_flight_controller.pdf",
+        "svg": "drone_flight_controller.svg"
+      },
+      "bom_unique": 26,
+      "bom_total": 38,
+      "bom_err": "",
+      "size_hint": "100.0 × 90.0 mm"
+    },
+    {
+      "board": "esp32_servo_wifi",
+      "ok": true,
+      "zip": "esp32_servo_wifi_jlc.zip",
+      "zip_bytes": 24658,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "esp32_servo_wifi-pos.csv",
+        "preview_3d": "esp32_servo_wifi-3d.png",
+        "step": "esp32_servo_wifi.step",
+        "pdf": "esp32_servo_wifi.pdf",
+        "svg": "esp32_servo_wifi.svg"
+      },
+      "bom_unique": 14,
+      "bom_total": 16,
+      "bom_err": "",
+      "size_hint": "85.0 × 80.0 mm"
+    },
+    {
+      "board": "esp32s3_rs485_can",
+      "ok": true,
+      "zip": "esp32s3_rs485_can_jlc.zip",
+      "zip_bytes": 22910,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "esp32s3_rs485_can-pos.csv",
+        "preview_3d": "esp32s3_rs485_can-3d.png",
+        "step": "esp32s3_rs485_can.step",
+        "pdf": "esp32s3_rs485_can.pdf",
+        "svg": "esp32s3_rs485_can.svg"
+      },
+      "bom_unique": 0,
+      "bom_total": 0,
+      "bom_err": "",
+      "size_hint": "100.0 × 70.0 mm"
+    },
+    {
+      "board": "gd32f103_minimal",
+      "ok": true,
+      "zip": "gd32f103_minimal_jlc.zip",
+      "zip_bytes": 25533,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "gd32f103_minimal-pos.csv",
+        "preview_3d": "gd32f103_minimal-3d.png",
+        "step": "gd32f103_minimal.step",
+        "pdf": "gd32f103_minimal.pdf",
+        "svg": "gd32f103_minimal.svg"
+      },
+      "bom_unique": 13,
+      "bom_total": 18,
+      "bom_err": "",
+      "size_hint": "80.0 × 60.0 mm"
+    },
+    {
+      "board": "industrial_power",
+      "ok": true,
+      "zip": "industrial_power_jlc.zip",
+      "zip_bytes": 17984,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "industrial_power-pos.csv",
+        "preview_3d": "industrial_power-3d.png",
+        "step": "industrial_power.step",
+        "pdf": "industrial_power.pdf",
+        "svg": "industrial_power.svg"
+      },
+      "bom_unique": 0,
+      "bom_total": 0,
+      "bom_err": "",
+      "size_hint": "90.0 × 50.0 mm"
+    },
+    {
+      "board": "lcd_tft_43",
+      "ok": true,
+      "zip": "lcd_tft_43_jlc.zip",
+      "zip_bytes": 17047,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "lcd_tft_43-pos.csv",
+        "preview_3d": "lcd_tft_43-3d.png",
+        "step": "lcd_tft_43.step",
+        "pdf": "lcd_tft_43.pdf",
+        "svg": "lcd_tft_43.svg"
+      },
+      "bom_unique": 0,
+      "bom_total": 0,
+      "bom_err": "",
+      "size_hint": "80.0 × 60.0 mm"
+    },
+    {
+      "board": "led_indicator",
+      "ok": true,
+      "zip": "led_indicator_jlc.zip",
+      "zip_bytes": 15855,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "led_indicator-pos.csv",
+        "preview_3d": "led_indicator-3d.png",
+        "step": "led_indicator.step",
+        "pdf": "led_indicator.pdf",
+        "svg": "led_indicator.svg"
+      },
+      "bom_unique": 7,
+      "bom_total": 9,
+      "bom_err": "",
+      "size_hint": "45.0 × 50.0 mm"
+    },
+    {
+      "board": "lora_sx1276_gateway",
+      "ok": true,
+      "zip": "lora_sx1276_gateway_jlc.zip",
+      "zip_bytes": 19122,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "lora_sx1276_gateway-pos.csv",
+        "preview_3d": "lora_sx1276_gateway-3d.png",
+        "step": "lora_sx1276_gateway.step",
+        "pdf": "lora_sx1276_gateway.pdf",
+        "svg": "lora_sx1276_gateway.svg"
+      },
+      "bom_unique": 10,
+      "bom_total": 12,
+      "bom_err": "",
+      "size_hint": "70.0 × 65.0 mm"
+    },
+    {
+      "board": "motor_driver_dual",
+      "ok": true,
+      "zip": "motor_driver_dual_jlc.zip",
+      "zip_bytes": 18825,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "motor_driver_dual-pos.csv",
+        "preview_3d": "motor_driver_dual-3d.png",
+        "step": "motor_driver_dual.step",
+        "pdf": "motor_driver_dual.pdf",
+        "svg": "motor_driver_dual.svg"
+      },
+      "bom_unique": 8,
+      "bom_total": 10,
+      "bom_err": "",
+      "size_hint": "70.0 × 60.0 mm"
+    },
+    {
+      "board": "nrf52840_ble5",
+      "ok": true,
+      "zip": "nrf52840_ble5_jlc.zip",
+      "zip_bytes": 20419,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "nrf52840_ble5-pos.csv",
+        "preview_3d": "nrf52840_ble5-3d.png",
+        "step": "nrf52840_ble5.step",
+        "pdf": "nrf52840_ble5.pdf",
+        "svg": "nrf52840_ble5.svg"
+      },
+      "bom_unique": 11,
+      "bom_total": 13,
+      "bom_err": "",
+      "size_hint": "70.0 × 65.0 mm"
+    },
+    {
+      "board": "rp2040_minimal",
+      "ok": true,
+      "zip": "rp2040_minimal_jlc.zip",
+      "zip_bytes": 29448,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "rp2040_minimal-pos.csv",
+        "preview_3d": "rp2040_minimal-3d.png",
+        "step": "rp2040_minimal.step",
+        "pdf": "rp2040_minimal.pdf",
+        "svg": "rp2040_minimal.svg"
+      },
+      "bom_unique": 14,
+      "bom_total": 21,
+      "bom_err": "",
+      "size_hint": "90.0 × 85.0 mm"
+    },
+    {
+      "board": "safety_protection",
+      "ok": true,
+      "zip": "safety_protection_jlc.zip",
+      "zip_bytes": 19271,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "safety_protection-pos.csv",
+        "preview_3d": "safety_protection-3d.png",
+        "step": "safety_protection.step",
+        "pdf": "safety_protection.pdf",
+        "svg": "safety_protection.svg"
+      },
+      "bom_unique": 0,
+      "bom_total": 0,
+      "bom_err": "",
+      "size_hint": "70.0 × 55.0 mm"
+    },
+    {
+      "board": "smartwatch_core",
+      "ok": true,
+      "zip": "smartwatch_core_jlc.zip",
+      "zip_bytes": 35905,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "smartwatch_core-pos.csv",
+        "preview_3d": "smartwatch_core-3d.png",
+        "step": "smartwatch_core.step",
+        "pdf": "smartwatch_core.pdf",
+        "svg": "smartwatch_core.svg"
+      },
+      "bom_unique": 22,
+      "bom_total": 30,
+      "bom_err": "",
+      "size_hint": "40.0 × 45.0 mm"
+    },
+    {
+      "board": "stm32f103c6_dot_matrix",
+      "ok": true,
+      "zip": "stm32f103c6_dot_matrix_jlc.zip",
+      "zip_bytes": 26326,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "stm32f103c6_dot_matrix-pos.csv",
+        "preview_3d": "stm32f103c6_dot_matrix-3d.png",
+        "step": "stm32f103c6_dot_matrix.step",
+        "pdf": "stm32f103c6_dot_matrix.pdf",
+        "svg": "stm32f103c6_dot_matrix.svg"
+      },
+      "bom_unique": 11,
+      "bom_total": 17,
+      "bom_err": "",
+      "size_hint": "80.0 × 80.0 mm"
+    },
+    {
+      "board": "stm32g031_minimal",
+      "ok": true,
+      "zip": "stm32g031_minimal_jlc.zip",
+      "zip_bytes": 22628,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "stm32g031_minimal-pos.csv",
+        "preview_3d": "stm32g031_minimal-3d.png",
+        "step": "stm32g031_minimal.step",
+        "pdf": "stm32g031_minimal.pdf",
+        "svg": "stm32g031_minimal.svg"
+      },
+      "bom_unique": 12,
+      "bom_total": 15,
+      "bom_err": "",
+      "size_hint": "70.0 × 70.0 mm"
+    },
+    {
+      "board": "stm32h743_core",
+      "ok": true,
+      "zip": "stm32h743_core_jlc.zip",
+      "zip_bytes": 19747,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "stm32h743_core-pos.csv",
+        "preview_3d": "stm32h743_core-3d.png",
+        "step": "stm32h743_core.step",
+        "pdf": "stm32h743_core.pdf",
+        "svg": "stm32h743_core.svg"
+      },
+      "bom_unique": 0,
+      "bom_total": 0,
+      "bom_err": "",
+      "size_hint": "100.0 × 60.0 mm"
+    },
+    {
+      "board": "usb_c_pd_trigger",
+      "ok": true,
+      "zip": "usb_c_pd_trigger_jlc.zip",
+      "zip_bytes": 18971,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "usb_c_pd_trigger-pos.csv",
+        "preview_3d": "usb_c_pd_trigger-3d.png",
+        "step": "usb_c_pd_trigger.step",
+        "pdf": "usb_c_pd_trigger.pdf",
+        "svg": "usb_c_pd_trigger.svg"
+      },
+      "bom_unique": 10,
+      "bom_total": 13,
+      "bom_err": "",
+      "size_hint": "75.0 × 45.0 mm"
+    },
+    {
+      "board": "w5500_ethernet",
+      "ok": true,
+      "zip": "w5500_ethernet_jlc.zip",
+      "zip_bytes": 21568,
+      "n_gerber_files": 16,
+      "extras": {
+        "pos": "w5500_ethernet-pos.csv",
+        "preview_3d": "w5500_ethernet-3d.png",
+        "step": "w5500_ethernet.step",
+        "pdf": "w5500_ethernet.pdf",
+        "svg": "w5500_ethernet.svg"
+      },
+      "bom_unique": 9,
+      "bom_total": 14,
+      "bom_err": "",
+      "size_hint": "80.0 × 55.0 mm"
+    }
+  ]
+}

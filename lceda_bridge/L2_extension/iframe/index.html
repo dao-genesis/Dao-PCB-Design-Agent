@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>LCEDA Bridge 控制台</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    background: #1a1a2e; color: #e0e0e0;
+    padding: 16px; font-size: 13px;
+  }
+  h1 { font-size: 16px; color: #4fc3f7; margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .label { color: #999; min-width: 100px; }
+  .value { color: #e0e0e0; font-family: 'Cascadia Code', Consolas, monospace; word-break: break-all; }
+  .badge { padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+  .badge.on { background: #1b5e20; color: #c8e6c9; }
+  .badge.off { background: #7f0000; color: #ffcdd2; }
+  .btn-group { display: flex; gap: 8px; margin-top: 12px; }
+  button {
+    padding: 8px 16px; border: 1px solid #4fc3f7;
+    background: transparent; color: #4fc3f7;
+    border-radius: 4px; cursor: pointer; font-weight: 600;
+    transition: all 0.15s;
+  }
+  button:hover:not(:disabled) { background: #4fc3f7; color: #1a1a2e; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.danger { border-color: #ef5350; color: #ef5350; }
+  button.danger:hover:not(:disabled) { background: #ef5350; color: #fff; }
+  .log {
+    margin-top: 12px; padding: 8px; background: #0a0a18; border-radius: 4px;
+    height: 100px; overflow-y: auto; font-family: monospace; font-size: 11px;
+    border: 1px solid #333;
+  }
+  .log .line { color: #a0a0a0; padding: 1px 0; }
+  .log .line.event { color: #81c784; }
+  .log .line.error { color: #ef5350; }
+  .footer {
+    margin-top: 12px; padding-top: 8px; border-top: 1px solid #333;
+    color: #666; font-size: 11px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<h1>🌉 LCEDA Bridge — 道之直连</h1>
+
+<div class="row">
+  <span class="label">Python 桥</span>
+  <span class="value" id="bridgeUrl">http://127.0.0.1:9907</span>
+</div>
+<div class="row">
+  <span class="label">连接状态</span>
+  <span class="badge off" id="status">未连接</span>
+</div>
+<div class="row">
+  <span class="label">Session ID</span>
+  <span class="value" id="sessionId">—</span>
+</div>
+<div class="row">
+  <span class="label">已处理命令</span>
+  <span class="value" id="cmdCount">0</span>
+</div>
+<div class="row">
+  <span class="label">最近错误</span>
+  <span class="value" id="lastError" style="color:#ef5350">—</span>
+</div>
+
+<div class="btn-group">
+  <button id="btnStart">▶ 启动桥接</button>
+  <button id="btnStop" class="danger">■ 停止</button>
+  <button id="btnTest">🔬 测试 eda</button>
+  <button id="btnRefresh">🔄 刷新</button>
+</div>
+
+<div class="log" id="log"></div>
+
+<div class="footer">
+  反者道之动 · 道法自然 · 无为而无不为<br>
+  顶部菜单 LCEDA Bridge → 关于 查看更多
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const logEl = $('log');
+
+function append(msg, cls = '') {
+  const div = document.createElement('div');
+  div.className = 'line ' + cls;
+  const ts = new Date().toLocaleTimeString();
+  div.textContent = `[${ts}] ${msg}`;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.children.length > 100) logEl.removeChild(logEl.firstChild);
+}
+
+function setStatus(running, sessionId) {
+  const s = $('status');
+  if (running) { s.className = 'badge on'; s.textContent = '已连接'; }
+  else { s.className = 'badge off'; s.textContent = '未连接'; }
+  $('sessionId').textContent = sessionId ?? '—';
+  $('btnStart').disabled = running;
+  $('btnStop').disabled = !running;
+}
+
+// 向扩展主代码发消息
+function send(action, payload = {}) {
+  window.parent.postMessage({ source: 'lceda-bridge-iframe', action, ...payload }, '*');
+}
+
+// 接收扩展主代码消息
+window.addEventListener('message', (ev) => {
+  const d = ev?.data;
+  if (!d || d.source !== 'lceda-bridge-extension') return;
+
+  switch (d.event) {
+    case 'snapshot':
+      $('bridgeUrl').textContent = d.bridgeUrl ?? 'http://127.0.0.1:9907';
+      setStatus(d.running, d.sessionId);
+      $('cmdCount').textContent = d.cmdCount ?? 0;
+      $('lastError').textContent = d.lastError ?? '—';
+      append(`快照: 状态=${d.running ? '运行' : '停止'}, 命令数=${d.cmdCount}`, 'event');
+      break;
+    case 'connected':
+      setStatus(true, d.sessionId);
+      append(`✅ 已连接, sessionId=${d.sessionId}`, 'event');
+      break;
+    case 'disconnected':
+      append(`❌ 断开: ${d.error}`, 'error');
+      $('lastError').textContent = d.error ?? '?';
+      break;
+    case 'cmd':
+      append(`→ ${d.cmd?.path}`);
+      $('cmdCount').textContent = (parseInt($('cmdCount').textContent) + 1) || 1;
+      break;
+    case 'result':
+      append(`← #${d.cmdId} ${d.error ? '❌' : '✅'}`);
+      break;
+    case 'stopped':
+      setStatus(false, null);
+      append('桥接已停止', 'event');
+      break;
+    case 'execResult':
+      append(`exec→ ${d.error ?? JSON.stringify(d.result).slice(0, 80)}`);
+      break;
+  }
+});
+
+$('btnStart').addEventListener('click', () => { append('启动桥接...'); send('start'); });
+$('btnStop').addEventListener('click', () => { append('停止桥接...'); send('stop'); });
+$('btnRefresh').addEventListener('click', () => send('requestSnapshot'));
+$('btnTest').addEventListener('click', () => {
+  append('测试 eda.sys_Environment.getEditorVersion()...');
+  send('execEdaCall', { reqId: Date.now(), path: 'sys_Environment.getEditorVersion', args: [] });
+});
+
+// 初始请求快照
+append('iframe 已加载, 请求当前状态...');
+send('requestSnapshot');
+</script>
+</body>
+</html>

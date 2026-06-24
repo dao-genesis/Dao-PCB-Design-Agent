@@ -1,0 +1,15 @@
+Comment,Designator,Footprint,Quantity
+100nF,"C2,C4,C5",Capacitor_SMD:C_0402_1005Metric,3
+100uF,C1,Capacitor_SMD:C_1206_3216Metric,1
+10uF,C3,Capacitor_SMD:C_0805_2012Metric,1
+LED_G,D1,LED_SMD:LED_0603_1608Metric,1
+LED_Status,J3,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+Power_5V,J4,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+Servo_PWM,J2,Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical,1
+USB_UART,J1,Connector_USB:USB_Micro-B,1
+330,R1,Resistor_SMD:R_0402_1005Metric,1
+BOOT,SW1,Button_SMD:SW_SPST_B3U-1000P,1
+RESET,SW2,Button_SMD:SW_SPST_B3U-1000P,1
+AMS1117-3.3,U3,Package_TO_SOT_SMD:SOT-223-3_TabPin2,1
+CP2102,U2,Package_QFN:QFN-28_5x5mm_P0.5mm,1
+ESP32-WROOM-32,U1,RF_Module:ESP32-WROOM-32,1

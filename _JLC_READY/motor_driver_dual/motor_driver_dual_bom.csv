@@ -1,0 +1,9 @@
+Comment,Designator,Footprint,Quantity
+100nF,"C2,C4",Capacitor_SMD:C_0402_1005Metric,2
+100uF,"C1,C3",Capacitor_SMD:C_1206_3216Metric,2
+CTRL_AB,J5,Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical,1
+MOTOR_A,J1,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+MOTOR_B,J2,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+VCC_CTRL,J4,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+VM_POWER,J3,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+TB6612FNG,U1,Package_SO:SSOP-24_5.3x8.2mm_P0.65mm,1

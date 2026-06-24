@@ -1,0 +1,14 @@
+Comment,Designator,Footprint,Quantity
+100nF,"C3,C4,C6,C7",Capacitor_SMD:C_0402_1005Metric,4
+10uF,C5,Capacitor_SMD:C_0805_2012Metric,1
+22pF,"C1,C2",Capacitor_SMD:C_0402_1005Metric,2
+LED_BLUE,D1,LED_SMD:LED_0603_1608Metric,1
+GPIO_A,J3,Connector_PinHeader_2.54mm:PinHeader_2x08_P2.54mm_Vertical,1
+PWR_IN,J4,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+SWD,J1,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,1
+UART0,J2,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,1
+10k,"R1,R2",Resistor_SMD:R_0402_1005Metric,2
+1k,R3,Resistor_SMD:R_0402_1005Metric,1
+Reset,SW1,Button_Switch_SMD:SW_SPST_B3U-1000P,1
+GD32F103C8T6,U1,Package_QFP:LQFP-48_7x7mm_P0.5mm,1
+8MHz,Y1,Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm,1

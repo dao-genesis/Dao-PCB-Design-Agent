@@ -1,0 +1,11 @@
+Comment,Designator,Footprint,Quantity
+100nF,"C3,C4",Capacitor_SMD:C_0402_1005Metric,2
+10uF,"C1,C2",Capacitor_SMD:C_0805_2012Metric,2
+LED_B,D1,LED_SMD:LED_0603_1608Metric,1
+ANT_SMA,J2,Connector:SMA_THT_Vertical,1
+PWR_IN,J3,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+SPI_CTRL,J1,Connector_PinHeader_2.54mm:PinHeader_2x04_P2.54mm_Vertical,1
+10k,R1,Resistor_SMD:R_0402_1005Metric,1
+1k,R2,Resistor_SMD:R_0402_1005Metric,1
+AMS1117-3.3,U2,Package_TO_SOT_SMD:SOT-223-3_TabPin2,1
+Ra-02_LoRa,U1,RF_Module:Ai-Thinker_Ra-02_SMD_21x15.5mm,1

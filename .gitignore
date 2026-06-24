@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# Runtime
+pcb_brain/output/
+pcb_brain/jre/
+pcb_brain/freerouting.jar
+
+# Session/screencast (regenerable)
+_live_session/
+_screencast/
+_test_out/
+
+# Large binaries
+*.zip
+*.7z
+*.rar
+*.jar
+
+# OS junk
+Thumbs.db
+desktop.ini
+*.tmp
+~$*
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Backups
+*.backup_*

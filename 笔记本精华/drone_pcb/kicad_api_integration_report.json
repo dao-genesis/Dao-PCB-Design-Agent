@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-09-04T04:01:07.165270",
+  "api_available": false,
+  "netlist_file": "drone_pcb_project\\output\\drone_flight_controller.net",
+  "pcb_file": "drone_pcb_project\\drone_flight_controller.kicad_pcb",
+  "components_loaded": 43,
+  "nets_loaded": 38,
+  "components_placed": 41,
+  "integration_method": "Direct File",
+  "status": "SUCCESS"
+}

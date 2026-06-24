@@ -1,0 +1,8 @@
+Comment,Designator,Footprint,Quantity
+10uF,C1,Capacitor_SMD:C_0805_2012Metric,1
+LED_B,D3,LED_SMD:LED_0603_1608Metric,1
+LED_G,D2,LED_SMD:LED_0603_1608Metric,1
+LED_R,D1,LED_SMD:LED_0603_1608Metric,1
+CTRL_IN,J1,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,1
+PWR_IN,J2,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,1
+330,"R1,R2,R3",Resistor_SMD:R_0402_1005Metric,3

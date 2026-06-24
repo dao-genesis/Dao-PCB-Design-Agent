@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>1500W 图腾柱PFC — LCSC BOM搜索</title>
+<style>
+body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 20px; background: #0a0a0a; color: #e0e0e0; }
+h1 { color: #4fc3f7; border-bottom: 2px solid #4fc3f7; padding-bottom: 8px; }
+h2 { color: #81c784; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+th { background: #1a237e; color: #e8eaf6; padding: 10px 8px; text-align: left; position: sticky; top: 0; }
+td { border-bottom: 1px solid #333; padding: 8px; vertical-align: top; }
+tr:hover { background: #1a1a2e; }
+a { color: #64b5f6; text-decoration: none; }
+a:hover { text-decoration: underline; color: #90caf9; }
+code { background: #263238; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+.links { font-size: 0.85em; }
+.warn { color: #ffab40; font-weight: bold; }
+.safety { background: #b71c1c; color: #fff; padding: 16px; border-radius: 8px; margin: 16px 0; }
+.info { background: #1b5e20; color: #c8e6c9; padding: 12px; border-radius: 8px; margin: 8px 0; }
+</style>
+</head>
+<body>
+<h1>1500W 图腾柱无桥PFC — LCSC/嘉立创 BOM搜索报告</h1>
+<p>生成时间: 2026-04-28 00:51 | 器件数: 23 | 点击链接直达LCSC/嘉立创搜索</p>
+
+<div class="safety">
+⚠️ <b>安全警告</b>: 本项目涉及 400VDC 高压, 可致命!
+操作前必须确认母线电容已放电, 使用隔离变压器逐步升压调试。
+</div>
+
+<div class="info">
+💡 <b>省钱提示</b>: 在嘉立创PCBA中, Basic/Preferred器件免换料费(¥0), Extended器件每种收¥3。
+优先在嘉立创EDA器件库中搜索带 ⭐ 标记的Basic件。
+</div>
+
+<h2>BOM 器件搜索表</h2>
+<table>
+<tr>
+    <th>Ref</th><th>名称</th><th>规格</th><th>数量</th><th>模块</th>
+    <th>LCSC搜索</th><th>嘉立创搜索</th><th>备注</th>
+</tr>
+
+        <tr>
+            <td><b>F1</b></td>
+            <td>保险丝</td>
+            <td><code>T25A 250VAC 慢断 陶瓷管</code></td>
+            <td>1</td>
+            <td>输入保护</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=fuse%2025A%20250V%20slow%20blow" target="_blank">fuse 25A 250V slow blow</a> | <a href="https://www.lcsc.com/search?q=%E4%BF%9D%E9%99%A9%E4%B8%9D%2025A" target="_blank">保险丝 25A</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E4%BF%9D%E9%99%A9%E4%B8%9D%2025A%20250V" target="_blank">保险丝 25A 250V</a></td>
+            <td class="">1500W@85VAC≈18A, 需25A额定</td>
+        </tr>
+        <tr>
+            <td><b>MOV1</b></td>
+            <td>压敏电阻</td>
+            <td><code>14D471K 470V</code></td>
+            <td>1</td>
+            <td>输入保护</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=varistor%20471K" target="_blank">varistor 471K</a> | <a href="https://www.lcsc.com/search?q=%E5%8E%8B%E6%95%8F%E7%94%B5%E9%98%BB%20471" target="_blank">压敏电阻 471</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E5%8E%8B%E6%95%8F%E7%94%B5%E9%98%BB%20471" target="_blank">压敏电阻 471</a></td>
+            <td class="">并联L-N, 浪涌吸收</td>
+        </tr>
+        <tr>
+            <td><b>NTC1</b></td>
+            <td>NTC热敏电阻</td>
+            <td><code>5Ω 15A 浪涌限流</code></td>
+            <td>1</td>
+            <td>输入保护</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=NTC%205R%2015A%20inrush" target="_blank">NTC 5R 15A inrush</a> | <a href="https://www.lcsc.com/search?q=NTC%20inrush%20current%20limiter" target="_blank">NTC inrush current limiter</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=NTC%205%E6%AC%A7%2015A" target="_blank">NTC 5欧 15A</a></td>
+            <td class="">稳态需继电器旁路</td>
+        </tr>
+        <tr>
+            <td><b>K1</b></td>
+            <td>继电器</td>
+            <td><code>≥250VAC ≥25A PCB继电器</code></td>
+            <td>1</td>
+            <td>输入保护</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=relay%20250VAC%2025A%20PCB" target="_blank">relay 250VAC 25A PCB</a> | <a href="https://www.lcsc.com/search?q=power%20relay%2025A" target="_blank">power relay 25A</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E7%BB%A7%E7%94%B5%E5%99%A8%2025A%20250V" target="_blank">继电器 25A 250V</a></td>
+            <td class="">NTC旁路, 降稳态损耗</td>
+        </tr>
+        <tr>
+            <td><b>Lcm</b></td>
+            <td>共模电感</td>
+            <td><code>2×2mH ≥20A</code></td>
+            <td>1</td>
+            <td>EMI滤波</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=common%20mode%20choke%202mH%2020A" target="_blank">common mode choke 2mH 20A</a> | <a href="https://www.lcsc.com/search?q=EMI%20filter%20choke" target="_blank">EMI filter choke</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E5%85%B1%E6%A8%A1%E7%94%B5%E6%84%9F%202mH%2020A" target="_blank">共模电感 2mH 20A</a></td>
+            <td class="">按传导EMI测试调整</td>
+        </tr>
+        <tr>
+            <td><b>Cx</b></td>
+            <td>X电容</td>
+            <td><code>0.47µF/275VAC X2 安规</code></td>
+            <td>1</td>
+            <td>EMI滤波</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=X2%20capacitor%200.47uF%20275V" target="_blank">X2 capacitor 0.47uF 275V</a> | <a href="https://www.lcsc.com/search?q=safety%20capacitor%20X2" target="_blank">safety capacitor X2</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=X2%E7%94%B5%E5%AE%B9%200.47uF" target="_blank">X2电容 0.47uF</a></td>
+            <td class="">并联L-N</td>
+        </tr>
+        <tr>
+            <td><b>Cy1</b></td>
+            <td>Y电容</td>
+            <td><code>2.2nF Y1/Y2 安规</code></td>
+            <td>1</td>
+            <td>EMI滤波</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=Y%20capacitor%202.2nF%20Y1" target="_blank">Y capacitor 2.2nF Y1</a> | <a href="https://www.lcsc.com/search?q=Y1%20safety%20capacitor" target="_blank">Y1 safety capacitor</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=Y%E7%94%B5%E5%AE%B9%202.2nF" target="_blank">Y电容 2.2nF</a></td>
+            <td class="">接PE, 注意漏电流</td>
+        </tr>
+        <tr>
+            <td><b>Cy2</b></td>
+            <td>Y电容</td>
+            <td><code>2.2nF Y1/Y2 安规</code></td>
+            <td>1</td>
+            <td>EMI滤波</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=Y%20capacitor%202.2nF%20Y1" target="_blank">Y capacitor 2.2nF Y1</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=Y%E7%94%B5%E5%AE%B9%202.2nF" target="_blank">Y电容 2.2nF</a></td>
+            <td class="">接PE</td>
+        </tr>
+        <tr>
+            <td><b>Q1</b></td>
+            <td>SiC MOSFET (高频上管)</td>
+            <td><code>650V ≤40mΩ TO-247</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=SiC%20MOSFET%20650V%2040mohm%20TO-247" target="_blank">SiC MOSFET 650V 40mohm TO-247</a> | <a href="https://www.lcsc.com/search?q=C3M0040120K" target="_blank">C3M0040120K</a> | <a href="https://www.lcsc.com/search?q=IMW120R045M1" target="_blank">IMW120R045M1</a> | <a href="https://www.lcsc.com/search?q=SCT3040KL" target="_blank">SCT3040KL</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E7%A2%B3%E5%8C%96%E7%A1%85%20650V%20MOSFET" target="_blank">碳化硅 650V MOSFET</a></td>
+            <td class="warn">⚡关键器件: 高频桥臂, 需隔离驱动+散热</td>
+        </tr>
+        <tr>
+            <td><b>Q2</b></td>
+            <td>SiC MOSFET (高频下管)</td>
+            <td><code>650V ≤40mΩ TO-247</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=SiC%20MOSFET%20650V%20TO-247" target="_blank">SiC MOSFET 650V TO-247</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E7%A2%B3%E5%8C%96%E7%A1%85%20650V%20MOSFET" target="_blank">碳化硅 650V MOSFET</a></td>
+            <td class="">与Q1同型号</td>
+        </tr>
+        <tr>
+            <td><b>Q3</b></td>
+            <td>SiC/Si MOSFET (工频上管)</td>
+            <td><code>650V 低Rds(on) TO-247</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=MOSFET%20650V%20TO-247%20low%20Rdson" target="_blank">MOSFET 650V TO-247 low Rdson</a> | <a href="https://www.lcsc.com/search?q=SiC%20MOSFET%20650V" target="_blank">SiC MOSFET 650V</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=MOSFET%20650V%20%E4%BD%8E%E5%AF%BC%E9%80%9A" target="_blank">MOSFET 650V 低导通</a></td>
+            <td class="">工频换向, Si超结MOS也可</td>
+        </tr>
+        <tr>
+            <td><b>Q4</b></td>
+            <td>SiC/Si MOSFET (工频下管)</td>
+            <td><code>650V 低Rds(on) TO-247</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=MOSFET%20650V%20TO-247" target="_blank">MOSFET 650V TO-247</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=MOSFET%20650V" target="_blank">MOSFET 650V</a></td>
+            <td class="">与Q3同型号</td>
+        </tr>
+        <tr>
+            <td><b>L1</b></td>
+            <td>PFC升压电感</td>
+            <td><code>~450µH ≥25A 低损耗磁芯</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=PFC%20inductor%20450uH" target="_blank">PFC inductor 450uH</a> | <a href="https://www.lcsc.com/search?q=boost%20inductor" target="_blank">boost inductor</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=PFC%E7%94%B5%E6%84%9F" target="_blank">PFC电感</a></td>
+            <td class="warn">⚠️通常需定制, 铁硅铝或铁氧体磁芯绕制</td>
+        </tr>
+        <tr>
+            <td><b>Cbus1</b></td>
+            <td>母线电容</td>
+            <td><code>470µF/450V 电解</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=electrolytic%20capacitor%20470uF%20450V" target="_blank">electrolytic capacitor 470uF 450V</a> | <a href="https://www.lcsc.com/search?q=aluminum%20470uF%20450V" target="_blank">aluminum 470uF 450V</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E7%94%B5%E8%A7%A3%E7%94%B5%E5%AE%B9%20470uF%20450V" target="_blank">电解电容 470uF 450V</a></td>
+            <td class="">注意纹波电流额定</td>
+        </tr>
+        <tr>
+            <td><b>Cbus2</b></td>
+            <td>母线电容</td>
+            <td><code>470µF/450V 电解</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=electrolytic%20capacitor%20470uF%20450V" target="_blank">electrolytic capacitor 470uF 450V</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E7%94%B5%E8%A7%A3%E7%94%B5%E5%AE%B9%20470uF%20450V" target="_blank">电解电容 470uF 450V</a></td>
+            <td class="">与Cbus1并联</td>
+        </tr>
+        <tr>
+            <td><b>Rbleed</b></td>
+            <td>泄放电阻</td>
+            <td><code>220kΩ/2W</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=resistor%20220K%202W" target="_blank">resistor 220K 2W</a> | <a href="https://www.lcsc.com/search?q=metal%20film%20220K%202W" target="_blank">metal film 220K 2W</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E7%94%B5%E9%98%BB%20220K%202W" target="_blank">电阻 220K 2W</a></td>
+            <td class="warn">⚠️安全件: 掉电放电</td>
+        </tr>
+        <tr>
+            <td><b>CS1</b></td>
+            <td>电流采样</td>
+            <td><code>≥25A 霍尔/互感器</code></td>
+            <td>1</td>
+            <td>主功率</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=hall%20effect%20sensor%2025A" target="_blank">hall effect sensor 25A</a> | <a href="https://www.lcsc.com/search?q=current%20transformer%2025A" target="_blank">current transformer 25A</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E9%9C%8D%E5%B0%94%E4%BC%A0%E6%84%9F%E5%99%A8%2025A" target="_blank">霍尔传感器 25A</a> | <a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E7%94%B5%E6%B5%81%E4%BA%92%E6%84%9F%E5%99%A8" target="_blank">电流互感器</a></td>
+            <td class="">电感电流反馈+OCP</td>
+        </tr>
+        <tr>
+            <td><b>U1</b></td>
+            <td>隔离栅极驱动器 (高频臂)</td>
+            <td><code>高速隔离, 峰值电流≥4A</code></td>
+            <td>1</td>
+            <td>驱动</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=UCC21520%20isolated%20gate%20driver" target="_blank">UCC21520 isolated gate driver</a> | <a href="https://www.lcsc.com/search?q=Si8233" target="_blank">Si8233</a> | <a href="https://www.lcsc.com/search?q=ACPL-332J" target="_blank">ACPL-332J</a> | <a href="https://www.lcsc.com/search?q=isolated%20half%20bridge%20driver" target="_blank">isolated half bridge driver</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E9%9A%94%E7%A6%BB%E9%A9%B1%E5%8A%A8%20UCC21520" target="_blank">隔离驱动 UCC21520</a> | <a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E9%9A%94%E7%A6%BB%E6%A0%85%E6%9E%81%E9%A9%B1%E5%8A%A8" target="_blank">隔离栅极驱动</a></td>
+            <td class="">驱动Q1/Q2 SiC</td>
+        </tr>
+        <tr>
+            <td><b>U2</b></td>
+            <td>隔离栅极驱动器 (工频臂)</td>
+            <td><code>隔离, 可低速</code></td>
+            <td>1</td>
+            <td>驱动</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=isolated%20gate%20driver" target="_blank">isolated gate driver</a> | <a href="https://www.lcsc.com/search?q=half%20bridge%20driver" target="_blank">half bridge driver</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E9%9A%94%E7%A6%BB%E6%A0%85%E6%9E%81%E9%A9%B1%E5%8A%A8" target="_blank">隔离栅极驱动</a></td>
+            <td class="">驱动Q3/Q4</td>
+        </tr>
+        <tr>
+            <td><b>U5</b></td>
+            <td>PFC控制器</td>
+            <td><code>电压外环+电流内环</code></td>
+            <td>1</td>
+            <td>控制</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=UCC28070%20PFC%20controller" target="_blank">UCC28070 PFC controller</a> | <a href="https://www.lcsc.com/search?q=NCP1654" target="_blank">NCP1654</a> | <a href="https://www.lcsc.com/search?q=L6562" target="_blank">L6562</a> | <a href="https://www.lcsc.com/search?q=STM32G431" target="_blank">STM32G431</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=PFC%E6%8E%A7%E5%88%B6%E5%99%A8" target="_blank">PFC控制器</a> | <a href="https://jlcpcb.com/parts/componentSearch?searchTxt=UCC28070" target="_blank">UCC28070</a></td>
+            <td class="">模拟: UCC28070; 数字: STM32G4/TMS320</td>
+        </tr>
+        <tr>
+            <td><b>U6</b></td>
+            <td>辅助电源控制器</td>
+            <td><code>400VDC输入→15V/5V输出</code></td>
+            <td>1</td>
+            <td>辅助电源</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=VIPer22A%20flyback" target="_blank">VIPer22A flyback</a> | <a href="https://www.lcsc.com/search?q=TNY290PG" target="_blank">TNY290PG</a> | <a href="https://www.lcsc.com/search?q=auxiliary%20power%20supply" target="_blank">auxiliary power supply</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E8%BE%85%E5%8A%A9%E7%94%B5%E6%BA%90%20%E5%8F%8D%E6%BF%80" target="_blank">辅助电源 反激</a></td>
+            <td class="">需配变压器+光耦</td>
+        </tr>
+        <tr>
+            <td><b>Rv1/Rv2/Rv3</b></td>
+            <td>高压分压电阻</td>
+            <td><code>1MΩ 1% 1206</code></td>
+            <td>3</td>
+            <td>采样</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=resistor%201M%201%25%201206%20high%20voltage" target="_blank">resistor 1M 1% 1206 high voltage</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=%E7%94%B5%E9%98%BB%201M%201206" target="_blank">电阻 1M 1206</a></td>
+            <td class="">母线电压采样, 多颗串联分耐压</td>
+        </tr>
+        <tr>
+            <td><b>NTC_T</b></td>
+            <td>温度检测NTC</td>
+            <td><code>10kΩ B=3950</code></td>
+            <td>1</td>
+            <td>保护</td>
+            <td class="links"><a href="https://www.lcsc.com/search?q=NTC%20thermistor%2010K%203950" target="_blank">NTC thermistor 10K 3950</a></td>
+            <td class="links"><a href="https://jlcpcb.com/parts/componentSearch?searchTxt=NTC%2010K%203950" target="_blank">NTC 10K 3950</a></td>
+            <td class="">OTP温度保护</td>
+        </tr>
+</table>
+
+<h2>快速采购路径</h2>
+<ol>
+<li><b>嘉立创EDA内直接搜索</b> → 器件自带LCSC料号, 导入PCB后自动关联BOM</li>
+<li><b>LCSC批量购买</b> → <a href="https://www.lcsc.com/bom" target="_blank">BOM Tool</a> 上传Excel一键匹配</li>
+<li><b>嘉立创PCBA</b> → <a href="https://smt.jlc.com" target="_blank">SMT贴片</a> 上传BOM+CPL自动匹配库存</li>
+<li><b>定制件</b> (升压电感L1) → 淘宝搜 "PFC电感 定制" 或联系磁芯厂商</li>
+</ol>
+
+<h2>oshwhub 开源参考</h2>
+<ul>
+<li><a href="https://oshwhub.com/leichaolin/3kw-totem-pole-pfc-with-silicon-" target="_blank">
+    ⭐ 3KW碳化硅图腾柱PFC (完整工程, GPL3.0, 可直接克隆)</a></li>
+<li><a href="https://oshwhub.com/monnina/san-xiang-shuang-xiang-SiCwu-qia" target="_blank">
+    三相双向SiC无桥图腾柱 (研究级)</a></li>
+</ul>
+
+</body>
+</html>

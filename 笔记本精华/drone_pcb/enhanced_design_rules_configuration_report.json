@@ -1,0 +1,147 @@
+{
+  "timestamp": "2025-09-04T09:48:28.866163",
+  "pcb_file": "drone_pcb_project\\enhanced_drone_flight_controller.kicad_pcb",
+  "enhanced_net_classes": 9,
+  "net_class_details": {
+    "Power_High": {
+      "description": "High current power nets (VBAT, 5V)",
+      "track_width": 1.0,
+      "clearance": 0.3,
+      "via_diameter": 1.2,
+      "via_drill": 0.6,
+      "nets": [
+        "VBAT",
+        "VBAT_FUSED",
+        "5V"
+      ]
+    },
+    "Power_Low": {
+      "description": "Low current power nets (3V3)",
+      "track_width": 0.5,
+      "clearance": 0.2,
+      "via_diameter": 0.8,
+      "via_drill": 0.4,
+      "nets": [
+        "3V3"
+      ]
+    },
+    "Ground": {
+      "description": "Ground connections",
+      "track_width": 0.8,
+      "clearance": 0.2,
+      "via_diameter": 1.0,
+      "via_drill": 0.5,
+      "nets": [
+        "GND"
+      ]
+    },
+    "Motor_Control": {
+      "description": "Motor PWM control signals",
+      "track_width": 0.4,
+      "clearance": 0.2,
+      "via_diameter": 0.8,
+      "via_drill": 0.4,
+      "nets": [
+        "PWM1",
+        "PWM2",
+        "PWM3",
+        "PWM4"
+      ]
+    },
+    "High_Speed_Digital": {
+      "description": "High-speed digital signals (SPI, crystal)",
+      "track_width": 0.2,
+      "clearance": 0.15,
+      "via_diameter": 0.6,
+      "via_drill": 0.3,
+      "nets": [
+        "SPI_SCK",
+        "SPI_MISO",
+        "SPI_MOSI",
+        "SPI_CS",
+        "XTAL1",
+        "XTAL2"
+      ]
+    },
+    "Communication": {
+      "description": "Communication interfaces (UART, I2C)",
+      "track_width": 0.25,
+      "clearance": 0.15,
+      "via_diameter": 0.6,
+      "via_drill": 0.3,
+      "nets": [
+        "I2C_SDA",
+        "I2C_SCL",
+        "GPS_TX",
+        "GPS_RX",
+        "TELEM_TX",
+        "TELEM_RX"
+      ]
+    },
+    "Control_Signals": {
+      "description": "Control and status signals",
+      "track_width": 0.2,
+      "clearance": 0.15,
+      "via_diameter": 0.6,
+      "via_drill": 0.3,
+      "nets": [
+        "MCU_RESET",
+        "MCU_BOOT0",
+        "SWD_DIO",
+        "SWD_CLK",
+        "IMU_INT",
+        "MAG_DRDY"
+      ]
+    },
+    "Analog_Signals": {
+      "description": "Analog and sensitive signals",
+      "track_width": 0.25,
+      "clearance": 0.2,
+      "via_diameter": 0.6,
+      "via_drill": 0.3,
+      "nets": [
+        "VBAT_SENSE",
+        "USB_DP",
+        "USB_DM"
+      ]
+    },
+    "Default": {
+      "description": "Default net class for unassigned nets",
+      "track_width": 0.2,
+      "clearance": 0.15,
+      "via_diameter": 0.6,
+      "via_drill": 0.3,
+      "nets": []
+    }
+  },
+  "enhanced_design_rules": {
+    "minimum_track_width": 0.1,
+    "minimum_via_diameter": 0.4,
+    "minimum_via_drill": 0.2,
+    "minimum_clearance": 0.1,
+    "solder_mask_clearance": 0.05,
+    "solder_paste_margin": 0.0,
+    "copper_edge_clearance": 0.3,
+    "hole_to_hole_clearance": 0.5,
+    "track_to_track_clearance": 0.15,
+    "via_to_via_clearance": 0.2,
+    "differential_pair_gap": 0.2,
+    "differential_pair_width": 0.15
+  },
+  "drone_optimizations": {
+    "high_current_power": "Optimized for battery and motor power",
+    "high_speed_digital": "Controlled impedance for SPI and crystal",
+    "motor_control": "Robust PWM signal routing",
+    "communication": "Clean UART and I2C signals",
+    "analog_isolation": "Protected analog and USB signals",
+    "manufacturing_ready": "Complete production specifications"
+  },
+  "auto_routing_benefits": {
+    "track_width_optimization": "Automatic width selection per signal type",
+    "clearance_management": "Proper spacing for signal integrity",
+    "via_optimization": "Size-appropriate vias for each net class",
+    "differential_pairs": "USB and high-speed signal support",
+    "manufacturing_compliance": "DRC-compliant routing"
+  },
+  "status": "SUCCESS"
+}

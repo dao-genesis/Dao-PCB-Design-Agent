@@ -1,0 +1,277 @@
+{
+  "timestamp": "2025-09-04T04:01:07.478443",
+  "pcb_file": "drone_pcb_project\\drone_flight_controller.kicad_pcb",
+  "netlist_file": "drone_pcb_project\\output\\drone_flight_controller.net",
+  "validation_results": {
+    "component_integration": {
+      "status": "FAIL",
+      "total_components": 41,
+      "components_with_pads": 41,
+      "total_pads": 146,
+      "connected_pads": 109,
+      "connection_ratio": 0.7465753424657534,
+      "meets_drone_requirements": false
+    },
+    "electrical_connectivity": {
+      "status": "FAIL",
+      "total_nets": 38,
+      "nets_with_connections": 16,
+      "connectivity_ratio": 0.42105263157894735,
+      "essential_nets_found": {
+        "power": 4,
+        "motor": 4,
+        "communication": 2,
+        "safety": 0
+      },
+      "meets_drone_requirements": false
+    },
+    "auto_routing_readiness": {
+      "status": "PASS",
+      "net_classes": 7,
+      "track_widths": 7,
+      "via_specs": 7,
+      "clearances": 7,
+      "board_outline": true,
+      "placement_quality": true,
+      "x_spread": 92.5,
+      "y_spread": 77.5,
+      "ready_for_auto_routing": true
+    },
+    "manufacturing_readiness": {
+      "status": "FAIL",
+      "stackup_present": true,
+      "layers_present": true,
+      "solder_mask_configured": true,
+      "drill_specifications": 76,
+      "file_size": 46712,
+      "manufacturing_ready": false
+    },
+    "overall": {
+      "status": "PARTIAL",
+      "tests_passed": 1,
+      "total_tests": 4,
+      "success_rate": 25.0,
+      "ready_for_auto_routing": false
+    }
+  },
+  "components_analyzed": {
+    "J1": {
+      "footprint": "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "U1": {
+      "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
+      "total_pads": 3,
+      "connected_pads": 3
+    },
+    "U2": {
+      "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
+      "total_pads": 3,
+      "connected_pads": 3
+    },
+    "U3": {
+      "footprint": "Package_QFP:LQFP-64_10x10mm_P0.5mm",
+      "total_pads": 64,
+      "connected_pads": 37
+    },
+    "U4": {
+      "footprint": "Sensor_Motion:InvenSense_QFN-24_4x4mm_P0.5mm",
+      "total_pads": 2,
+      "connected_pads": 0
+    },
+    "U5": {
+      "footprint": "Package_LGA:LGA-16_3x3mm_P0.5mm",
+      "total_pads": 2,
+      "connected_pads": 0
+    },
+    "J3": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J4": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J5": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J6": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J7": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J8": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J9": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J10": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J11": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "D1": {
+      "footprint": "LED_SMD:LED_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "D2": {
+      "footprint": "LED_SMD:LED_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "D3": {
+      "footprint": "LED_SMD:LED_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R1": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R2": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R3": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R4": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R5": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R6": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R7": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R8": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "R9": {
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "C1": {
+      "footprint": "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "C2": {
+      "footprint": "Capacitor_SMD:C_1206_3216Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "C3": {
+      "footprint": "Capacitor_SMD:C_1206_3216Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "C4": {
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "C5": {
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "C6": {
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "C7": {
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 0
+    },
+    "C9": {
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "C10": {
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "Y1": {
+      "footprint": "Crystal:Crystal_HC49-4H_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "J12": {
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+      "total_pads": 2,
+      "connected_pads": 2
+    },
+    "BZ1": {
+      "footprint": "Buzzer_Beeper:Buzzer_12x9.5RM7.6",
+      "total_pads": 2,
+      "connected_pads": 0
+    },
+    "Q1": {
+      "footprint": "Package_TO_SOT_THT:TO-92_Inline",
+      "total_pads": 2,
+      "connected_pads": 0
+    },
+    "SW1": {
+      "footprint": "Button_Switch_THT:SW_PUSH_6mm",
+      "total_pads": 2,
+      "connected_pads": 2
+    }
+  },
+  "drone_specific_validation": {
+    "flight_controller_present": true,
+    "motor_connectors": 4,
+    "power_management": 2,
+    "sensor_integration": 2,
+    "communication_interfaces": 3
+  },
+  "auto_routing_compatibility": {
+    "kicad_native": true,
+    "freerouting": true,
+    "altium_autorouter": true,
+    "external_tools": true
+  }
+}

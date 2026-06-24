@@ -1,0 +1,15 @@
+Comment,Designator,Footprint,Quantity
+100nF,"C3,C4,C5,C7",Capacitor_SMD:C_0402_1005Metric,4
+10uF,"C6,C8,C9",Capacitor_SMD:C_0805_2012Metric,3
+15pF,"C1,C2",Capacitor_SMD:C_0402_1005Metric,2
+LED_G,D1,LED_SMD:LED_0603_1608Metric,1
+GPIO_HEADER,J2,Connector_PinHeader_2.54mm:PinHeader_2x20_P2.54mm_Vertical,1
+USB_C,J1,Connector_USB:USB_C_Receptacle_Palconn_UTC16-G,1
+1k,R3,Resistor_SMD:R_0402_1005Metric,1
+27,"R1,R2",Resistor_SMD:R_0402_1005Metric,2
+BOOTSEL,SW1,Button_SMD:SW_SPST_B3U-1000P,1
+RUN,SW2,Button_SMD:SW_SPST_B3U-1000P,1
+AP2112K-3.3,U3,Package_TO_SOT_SMD:SOT-23-5,1
+RP2040,U1,Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm,1
+W25Q16JVSSIQ,U2,Package_SO:SOIC-8_3.9x4.9mm_P1.27mm,1
+12MHz,X1,Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm,1

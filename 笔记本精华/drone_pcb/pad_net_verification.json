@@ -1,0 +1,9 @@
+{
+  "total_pads": 146,
+  "assigned_pads": 146,
+  "connected_pads": 109,
+  "assignment_ratio": 1.0,
+  "connection_ratio": 0.7465753424657534,
+  "unique_nets": 37,
+  "success": true
+}

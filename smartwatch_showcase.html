@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>智能手表芯片 · AI全链路PCB设计成果</title>
+<style>
+:root{--bg:#040810;--bg2:#080f1e;--bg3:#0d1829;--card:#0e1f38;--border:#1a3a5c;--c1:#00d4ff;--c2:#00ff88;--c3:#ff6b35;--c4:#a855f7;--c5:#fbbf24;--c6:#ec4899;--tx:#e2eaf5;--tx2:#8ba3bf;}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);}
+canvas{position:fixed;inset:0;z-index:0;opacity:.4;}
+.deck{position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column;}
+.pbar{height:2px;background:rgba(255,255,255,.05);}
+.pfill{height:100%;background:linear-gradient(90deg,var(--c1),var(--c2));transition:width .4s ease;}
+.slides{flex:1;position:relative;overflow:hidden;}
+.slide{position:absolute;inset:0;padding:36px 52px 24px;opacity:0;pointer-events:none;transform:translateX(50px);transition:opacity .4s ease,transform .4s ease;display:flex;flex-direction:column;}
+.slide.active{opacity:1;pointer-events:auto;transform:none;}
+.slide.prev{opacity:0;transform:translateX(-50px);}
+.stag{display:inline-flex;align-items:center;gap:5px;font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--c1);border:1px solid rgba(0,212,255,.3);padding:3px 10px;border-radius:20px;margin-bottom:12px;width:fit-content;}
+.stag::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--c1);animation:pulse 2s infinite;}
+h2{font-size:1.75rem;font-weight:800;color:#fff;margin-bottom:4px;}
+h2 em{color:var(--c1);font-style:normal;}
+.sub{color:var(--tx2);font-size:.85rem;margin-bottom:18px;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:border-color .25s;}
+.card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,212,255,.04),transparent 60%);pointer-events:none;}
+.card:hover{border-color:rgba(0,212,255,.4);}
+.clb{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--tx2);margin-bottom:5px;}
+.cv{font-size:1.45rem;font-weight:800;color:var(--c1);}
+.cs{font-size:.7rem;color:var(--tx2);margin-top:3px;}
+.ci{font-size:1.6rem;margin-bottom:8px;}
+.nav{display:flex;align-items:center;justify-content:center;gap:7px;padding:10px;}
+.ndot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.2);border:none;cursor:pointer;transition:all .25s;padding:0;}
+.ndot.on{background:var(--c1);width:18px;border-radius:3px;}
+.narr{position:fixed;bottom:44px;right:36px;display:flex;gap:8px;z-index:20;}
+.nbtn{width:38px;height:38px;border-radius:9px;background:rgba(14,31,56,.9);border:1px solid var(--border);color:var(--tx2);cursor:pointer;font-size:.9rem;display:grid;place-items:center;transition:all .2s;backdrop-filter:blur(8px);}
+.nbtn:hover{border-color:var(--c1);color:var(--c1);}
+.snum{position:fixed;top:14px;right:20px;font-size:.62rem;color:var(--tx2);z-index:20;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.slide.active .card,.slide.active .sc,.slide.active .row,.slide.active .fc{animation:fadeUp .45s ease both;}
+.slide.active .card:nth-child(1),.slide.active .sc:nth-child(1),.slide.active .fc:nth-child(1){animation-delay:.04s}
+.slide.active .card:nth-child(2),.slide.active .sc:nth-child(2),.slide.active .fc:nth-child(2){animation-delay:.09s}
+.slide.active .card:nth-child(3),.slide.active .sc:nth-child(3),.slide.active .fc:nth-child(3){animation-delay:.14s}
+.slide.active .card:nth-child(4),.slide.active .sc:nth-child(4),.slide.active .fc:nth-child(4){animation-delay:.19s}
+.sc{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;}
+.sbadge{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:10px;margin-bottom:7px;}
+.sname{font-size:.95rem;font-weight:800;color:#fff;margin-bottom:3px;}
+.sfunc{font-size:.68rem;color:var(--tx2);margin-bottom:8px;}
+.sspec{font-size:.62rem;color:var(--tx2);line-height:1.7;}
+.slcsc{font-size:.6rem;color:var(--c1);margin-top:6px;font-weight:700;}
+.row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;}
+.ric{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:.68rem;font-weight:800;flex-shrink:0;}
+.rname{font-size:.8rem;font-weight:700;color:#fff;margin-bottom:1px;}
+.rdesc{font-size:.62rem;color:var(--tx2);}
+.rtag{margin-left:auto;font-size:.58rem;font-weight:700;white-space:nowrap;color:var(--c1);}
+.pnode{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 14px;text-align:center;}
+.pvl{font-size:.6rem;color:var(--tx2);text-transform:uppercase;}
+.pval{font-size:1.05rem;font-weight:800;}
+.pic{font-size:.62rem;color:var(--tx2);margin-top:2px;}
+.arr{color:var(--tx2);font-size:1.2rem;flex-shrink:0;}
+.fc{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 14px;}
+.fic{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;font-size:1rem;flex-shrink:0;}
+.fn{font-size:.75rem;font-weight:700;color:#fff;margin-bottom:2px;}
+.fd{font-size:.62rem;color:var(--tx2);}
+.fsz{font-size:.6rem;color:var(--c1);font-weight:700;margin-left:auto;flex-shrink:0;}
+table{width:100%;border-collapse:collapse;font-size:.67rem;}
+th{background:rgba(0,212,255,.07);color:var(--c1);font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid var(--border);text-align:left;}
+td{padding:5px 9px;border-bottom:1px solid rgba(26,58,92,.4);color:var(--tx);}
+tr:hover td{background:rgba(0,212,255,.02);}
+.lc{display:inline-block;background:rgba(0,212,255,.1);color:var(--c1);border-radius:4px;padding:1px 5px;font-size:.56rem;font-weight:700;}
+.gline{height:1px;background:linear-gradient(90deg,transparent,var(--c1),transparent);opacity:.3;margin:10px 0;}
+.pill{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border);padding:9px 14px;border-radius:36px;font-size:.75rem;font-weight:600;}
+.dot8{width:7px;height:7px;border-radius:50%;}
+.tl{display:flex;gap:12px;align-items:flex-start;padding-bottom:13px;position:relative;}
+.tl::before{content:'';position:absolute;left:12px;top:26px;bottom:-2px;width:1px;background:linear-gradient(180deg,var(--c1),transparent);}
+.tl:last-child::before{display:none;}
+.tdot{width:26px;height:26px;border-radius:50%;border:2px solid var(--c1);display:grid;place-items:center;flex-shrink:0;font-size:.62rem;font-weight:800;color:var(--c1);background:var(--bg3);}
+.ttit{font-size:.78rem;font-weight:700;color:#fff;margin-bottom:2px;}
+.tdsc{font-size:.63rem;color:var(--tx2);line-height:1.55;}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div class="deck">
+  <div class="pbar"><div class="pfill" id="pf" style="width:10%"></div></div>
+  <div class="slides" id="sl">
+
+<!-- ① TITLE -->
+<div class="slide active" data-i="0">
+  <div style="display:flex;flex:1;gap:40px;align-items:center;">
+    <div style="flex:1.3;">
+      <div class="stag">⚡ PCBBrain v11 · 2026-02-26</div>
+      <h1 style="font-size:3rem;font-weight:900;line-height:1.15;background:linear-gradient(135deg,#fff 0%,var(--c1) 45%,var(--c2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px;">智能手表芯片<br>全链路AI设计</h1>
+      <p style="color:var(--tx2);font-size:.9rem;line-height:1.7;max-width:460px;">从零到可打样：AI自动完成电路DNA设计、KiCad PCB生成、DRC修复、Gerber导出、BOM成本核算的完整闭环。</p>
+      <div style="display:flex;gap:24px;margin-top:24px;">
+        <div><div style="font-size:2.2rem;font-weight:800;color:var(--c1);line-height:1;">28<span style="font-size:.9rem;">个</span></div><div style="font-size:.7rem;color:var(--tx2);">元器件</div></div>
+        <div style="width:1px;background:var(--border);"></div>
+        <div><div style="font-size:2.2rem;font-weight:800;color:var(--c2);line-height:1;">40<span style="font-size:.9rem;">×45</span></div><div style="font-size:.7rem;color:var(--tx2);">mm 板型</div></div>
+        <div style="width:1px;background:var(--border);"></div>
+        <div><div style="font-size:2.2rem;font-weight:800;color:var(--c5);line-height:1;">¥187</div><div style="font-size:.7rem;color:var(--tx2);">5片打样</div></div>
+        <div style="width:1px;background:var(--border);"></div>
+        <div><div style="font-size:2.2rem;font-weight:800;color:var(--c3);line-height:1;">&gt;48<span style="font-size:.9rem;">h</span></div><div style="font-size:.7rem;color:var(--tx2);">续航</div></div>
+      </div>
+    </div>
+    <div style="flex:.75;display:flex;flex-direction:column;gap:10px;">
+      <div class="pill"><div class="dot8" style="background:var(--c1);"></div>nRF52840 · BLE 5.0 / Zigbee / Thread</div>
+      <div class="pill"><div class="dot8" style="background:var(--c6);"></div>MAX30102 · 心率 / 血氧 SpO2</div>
+      <div class="pill"><div class="dot8" style="background:var(--c1);"></div>QMI8658C · 六轴 IMU（加速度+陀螺仪）</div>
+      <div class="pill"><div class="dot8" style="background:var(--c4);"></div>PCF8563T · RTC 实时时钟 + 闹钟</div>
+      <div class="pill"><div class="dot8" style="background:var(--c5);"></div>TP4056 · LiPo 充电 + DW01A 电池保护</div>
+      <div class="pill"><div class="dot8" style="background:var(--c3);"></div>USB-C + OLED FPC + 振动马达 + 侧键</div>
+      <div style="margin-top:6px;font-size:.67rem;color:var(--tx2);text-align:right;border-top:1px solid var(--border);padding-top:10px;">PCBBrain DNA库 <strong style="color:var(--c1);">18 → 19</strong> 个模板 · 新增 <strong style="color:var(--c2);">smartwatch_core</strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- ② PCBBrain架构 -->
+<div class="slide" data-i="1">
+  <div class="stag">系统架构</div>
+  <h2>PCBBrain <em>全链路</em>设计系统</h2>
+  <p class="sub">从自然语言意图到可打样Gerber的8层闭环 · MCP直控Windsurf · 19个DNA模板</p>
+  <div style="display:flex;gap:18px;flex:1;">
+    <div style="flex:1.2;display:flex;flex-direction:column;gap:8px;">
+      <div class="row"><div class="ric" style="background:rgba(0,212,255,.15);color:var(--c1);">①</div><div><div class="rname">circuit_dna.py</div><div class="rdesc">19个DNA模板 · 自然语言匹配 · 新增smartwatch_core</div></div><div class="rtag">wearable NEW</div></div>
+      <div class="row"><div class="ric" style="background:rgba(0,255,136,.15);color:var(--c2);">②</div><div><div class="rname">kicad_arm.py</div><div class="rdesc">PCB直写生成 · KiCad CLI · freerouting双引擎布线</div></div><div class="rtag">.kicad_pcb</div></div>
+      <div class="row"><div class="ric" style="background:rgba(251,191,36,.15);color:var(--c5);">③</div><div><div class="rname">pcb_eye.py</div><div class="rdesc">五感感知 · DRC鼻/BOM舌/Gerber视/截图眼</div></div><div class="rtag">DRC报告</div></div>
+      <div class="row"><div class="ric" style="background:rgba(168,85,247,.15);color:var(--c4);">④</div><div><div class="rname">pcb_jlcpcb.py</div><div class="rdesc">LCSC料号80+ · BOM/CPL导出 · 成本核算 · 国产替代</div></div><div class="rtag">BOM.csv</div></div>
+      <div class="row"><div class="ric" style="background:rgba(236,72,153,.15);color:var(--c6);">⑤</div><div><div class="rname">pcb_ibom.py</div><div class="rdesc">交互式HTML BOM · 焊接追踪 · LCSC直链</div></div><div class="rtag">ibom.html</div></div>
+      <div class="row"><div class="ric" style="background:rgba(255,107,53,.15);color:var(--c3);">⑥</div><div><div class="rname">pcb_mcp.py</div><div class="rdesc">Windsurf MCP · 10工具 · JSON-RPC stdio直连</div></div><div class="rtag">MCP已注册</div></div>
+    </div>
+    <div style="flex:.6;display:flex;flex-direction:column;gap:10px;">
+      <div class="card" style="flex:1;">
+        <div class="clb">19个DNA模板分类</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px;">
+          <div style="font-size:.62rem;padding:4px 7px;background:rgba(0,212,255,.07);border-radius:5px;color:var(--c1);">STM32 ×3</div>
+          <div style="font-size:.62rem;padding:4px 7px;background:rgba(0,255,136,.07);border-radius:5px;color:var(--c2);">ESP32 ×2</div>
+          <div style="font-size:.62rem;padding:4px 7px;background:rgba(251,191,36,.07);border-radius:5px;color:var(--c5);">Power ×4</div>
+          <div style="font-size:.62rem;padding:4px 7px;background:rgba(168,85,247,.07);border-radius:5px;color:var(--c4);">Wireless ×3</div>
+          <div style="font-size:.62rem;padding:4px 7px;background:rgba(255,107,53,.07);border-radius:5px;color:var(--c3);">Wearable ×1🆕</div>
+          <div style="font-size:.62rem;padding:4px 7px;background:rgba(255,255,255,.05);border-radius:5px;color:var(--tx2);">其他 ×6</div>
+        </div>
+      </div>
+      <div class="card" style="flex:.8;">
+        <div class="clb">MCP 10个工具</div>
+        <div style="font-size:.62rem;color:var(--tx2);line-height:1.9;margin-top:6px;">list_templates · design_pcb · get_bom<br>run_drc · export_gerber · pcb_sense<br>generate_ibom · run_pipeline<br>find_alternative · estimate_cost</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ③ 芯片全貌 -->
+<div class="slide" data-i="2">
+  <div class="stag">设计成果</div>
+  <h2><em>smartwatch_core</em> 芯片全貌</h2>
+  <p class="sub">40×45mm 可穿戴核心 · 28元件 · 4层板建议 · nRF52840 BLE5超低功耗</p>
+  <div class="g4" style="margin-bottom:14px;">
+    <div class="card"><div class="ci">🧠</div><div class="clb">主控芯片</div><div class="cv" style="font-size:1rem;">nRF52840</div><div class="cs">BLE5/Zigbee/Thread · 1MB+256KB</div></div>
+    <div class="card"><div class="ci">❤️</div><div class="clb">生物传感</div><div class="cv" style="font-size:1rem;">MAX30102</div><div class="cs">心率 + 血氧SpO2 · 红光/红外LED</div></div>
+    <div class="card"><div class="ci">📐</div><div class="clb">运动传感</div><div class="cv" style="font-size:1rem;">QMI8658C</div><div class="cs">±16g + ±2000dps · 可穿戴专用</div></div>
+    <div class="card"><div class="ci">⏰</div><div class="clb">实时时钟</div><div class="cv" style="font-size:1rem;">PCF8563</div><div class="cs">I²C RTC · 32.768kHz · 闹钟中断</div></div>
+  </div>
+  <div class="g4">
+    <div class="card"><div class="ci">🔋</div><div class="clb">充电管理</div><div class="cv" style="font-size:1rem;">TP4056</div><div class="cs">500mA线性充电 · R3=1.2kΩ→100mA</div></div>
+    <div class="card"><div class="ci">🛡️</div><div class="clb">电池保护</div><div class="cv" style="font-size:1rem;">DW01A</div><div class="cs">过充4.25V/过放2.4V/过流3A</div></div>
+    <div class="card"><div class="ci">📺</div><div class="clb">显示接口</div><div class="cv" style="font-size:1rem;">OLED FPC</div><div class="cs">1.54寸 · 12Pin 0.5mm · SPI五线</div></div>
+    <div class="card"><div class="ci">📡</div><div class="clb">无线连接</div><div class="cv" style="font-size:1rem;">BLE 5.0</div><div class="cs">EBYTE E73模组 · CE/FCC认证</div></div>
+  </div>
+</div>
+
+<!-- ④ 传感器 -->
+<div class="slide" data-i="3">
+  <div class="stag">传感器矩阵</div>
+  <h2>三大传感器 <em>全面感知人体状态</em></h2>
+  <p class="sub">共享 I²C 总线 (P0.26/27) · 4.7kΩ上拉 · 各自独立中断引脚</p>
+  <div class="g3" style="margin-bottom:14px;">
+    <div class="sc">
+      <div class="sbadge" style="background:rgba(236,72,153,.12);color:var(--c6);">心率 · SpO2</div>
+      <div class="sname">MAX30102EFD+T</div>
+      <div class="sfunc">光学心率 / 血氧传感器</div>
+      <div class="sspec">红光660nm + 红外880nm LED<br>18位ADC · I²C地址 0x57<br>中断引脚 → P0.03<br>工作电流 ~0.7mA · QFN-14</div>
+      <div class="slcsc">LCSC C124499 · ~¥12.0</div>
+    </div>
+    <div class="sc">
+      <div class="sbadge" style="background:rgba(0,212,255,.12);color:var(--c1);">加速度 · 陀螺仪</div>
+      <div class="sname">QMI8658C</div>
+      <div class="sfunc">六轴惯性测量单元 IMU</div>
+      <div class="sspec">加速度 ±2/4/8/16g 可配置<br>陀螺仪 ±16…2048dps<br>I²C地址 0x6A/0x6B<br>中断 INT1 → P0.04 · LGA-12</div>
+      <div class="slcsc">LCSC C3002720 · ~¥5.0</div>
+    </div>
+    <div class="sc">
+      <div class="sbadge" style="background:rgba(168,85,247,.12);color:var(--c4);">实时时钟</div>
+      <div class="sname">PCF8563T/5</div>
+      <div class="sfunc">I²C实时时钟 + 日历 + 闹钟</div>
+      <div class="sspec">年月日时分秒 + 定时 · 0x51<br>32.768kHz (E73模组内置晶振)<br>INT中断 → P0.05<br>IO 1.8V~5.5V · SOIC-8</div>
+      <div class="slcsc">LCSC C9794 · ~¥1.5</div>
+    </div>
+  </div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:11px;padding:14px 18px;">
+    <div style="font-size:.65rem;font-weight:700;color:var(--tx2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em;">I²C 总线拓扑 (共享) · SDA=P0.26 · SCL=P0.27</div>
+    <div style="display:flex;align-items:center;gap:0;overflow:hidden;">
+      <div style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);border-radius:7px;padding:5px 11px;font-size:.65rem;font-weight:700;color:var(--c1);flex-shrink:0;">nRF52840<br><span style="font-weight:400;color:var(--tx2);">Master</span></div>
+      <div style="flex:1;height:2px;background:linear-gradient(90deg,var(--c1),var(--c2));"></div>
+      <div style="background:rgba(236,72,153,.1);border:1px solid rgba(236,72,153,.3);border-radius:7px;padding:5px 10px;font-size:.62rem;font-weight:700;color:var(--c6);text-align:center;">MAX30102<br><span style="color:var(--tx2);font-weight:400;">0x57</span></div>
+      <div style="flex:1;height:2px;background:linear-gradient(90deg,var(--c1),var(--c2));"></div>
+      <div style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);border-radius:7px;padding:5px 10px;font-size:.62rem;font-weight:700;color:var(--c1);text-align:center;">QMI8658<br><span style="color:var(--tx2);font-weight:400;">0x6B</span></div>
+      <div style="flex:1;height:2px;background:linear-gradient(90deg,var(--c1),var(--c2));"></div>
+      <div style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:7px;padding:5px 10px;font-size:.62rem;font-weight:700;color:var(--c4);text-align:center;">PCF8563<br><span style="color:var(--tx2);font-weight:400;">0x51</span></div>
+      <div style="flex:1;height:2px;background:linear-gradient(90deg,var(--c1),var(--c2));"></div>
+      <div style="background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.3);border-radius:7px;padding:5px 10px;font-size:.62rem;font-weight:700;color:var(--c3);text-align:center;">OLED<br><span style="color:var(--tx2);font-weight:400;">FPC</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑤ 电源架构 -->
+<div class="slide" data-i="4">
+  <div class="stag">电源架构</div>
+  <h2><em>四级电源树</em> · LiPo充电保护全链路</h2>
+  <p class="sub">USB-C 5V → TP4056充电 → DW01A三重保护 → AP2112K 3.3V射频专用LDO</p>
+  <div style="display:flex;gap:18px;flex:1;align-items:center;">
+    <div style="flex:1.3;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div class="pnode" style="flex:1;border-color:rgba(0,212,255,.4);"><div class="pvl">输入</div><div class="pval" style="color:var(--c1);">USB-C 5V</div><div class="pic">GCT USB4135 · C165948</div></div>
+        <div class="arr">→</div>
+        <div class="pnode" style="flex:1;border-color:rgba(251,191,36,.4);"><div class="pvl">充电管理</div><div class="pval" style="color:var(--c5);">TP4056</div><div class="pic">100mA(R3=1.2kΩ) · C16581</div></div>
+        <div class="arr">→</div>
+        <div class="pnode" style="flex:1;border-color:rgba(255,107,53,.4);"><div class="pvl">电池</div><div class="pval" style="color:var(--c3);">3.7V LiPo</div><div class="pic">JST-PH 2P · 推荐300mAh</div></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;padding-right:30%;color:var(--tx2);">↓</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;justify-content:flex-end;">
+        <div class="pnode" style="flex:0 0 32%;border-color:rgba(255,107,53,.4);"><div class="pvl">电池保护</div><div class="pval" style="color:var(--c3);">DW01A</div><div class="pic">过充4.25V/过放2.4V/过流3A</div></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;padding-right:30%;color:var(--tx2);">↓</div>
+      <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+        <div class="pnode" style="flex:0 0 32%;border-color:rgba(0,255,136,.4);"><div class="pvl">LDO稳压</div><div class="pval" style="color:var(--c2);">AP2112K 3.3V</div><div class="pic">600mA · 50μVrms超低噪声</div></div>
+        <div class="arr">→</div>
+        <div class="pnode" style="flex:0 0 32%;border-color:rgba(0,255,136,.4);"><div class="pvl">系统总线</div><div class="pval" style="color:var(--c2);">VCC 3.3V</div><div class="pic">nRF · 所有传感器 · OLED</div></div>
+      </div>
+    </div>
+    <div style="flex:.6;display:flex;flex-direction:column;gap:10px;">
+      <div class="card">
+        <div class="clb">AO8205 双N-MOS保护</div>
+        <div style="font-size:.67rem;color:var(--tx2);margin-top:7px;line-height:1.7;">DW01A的CS/DO控制两个MOS门极<br>实现充放电通道独立切断<br>SOIC-8 · LCSC C77999</div>
+      </div>
+      <div class="card">
+        <div class="clb">功耗预算</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:8px;font-size:.63rem;">
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">系统深度关机</span><span style="color:var(--c2);font-weight:700;">0.6 μA</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">BLE广播</span><span style="color:var(--c2);font-weight:700;">15 μA</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">全功能运行</span><span style="color:var(--c3);font-weight:700;">~5 mA</span></div>
+          <div class="gline"></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#fff;font-weight:700;">300mAh续航</span><span style="color:var(--c1);font-weight:800;">&gt;48 小时</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="clb">充电电流</div>
+        <div style="font-size:.9rem;color:#fff;font-weight:700;margin-top:6px;">I = 1200 / R3</div>
+        <div style="font-size:.65rem;color:var(--tx2);margin-top:4px;">1.2kΩ → 100mA · 适配300mAh<br>完全充电约 3 小时</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑥ BOM -->
+<div class="slide" data-i="5">
+  <div class="stag">物料清单</div>
+  <h2>完整 <em>BOM 28元件</em> · 立创商城LCSC料号</h2>
+  <p class="sub">所有元件均有真实LCSC料号 · 一键生成JLCPCB SMT贴片订单</p>
+  <div style="flex:1;overflow:auto;">
+    <table>
+      <thead><tr><th>位号</th><th>器件型号</th><th>描述</th><th>LCSC</th><th>单价</th></tr></thead>
+      <tbody>
+        <tr><td style="color:var(--c1);">U1</td><td>E73-2G4M08S1C</td><td>nRF52840 BLE5/Zigbee/Thread模组</td><td><span class="lc">C2681571</span></td><td style="color:var(--c1);">¥25.0</td></tr>
+        <tr><td style="color:var(--c6);">U5</td><td>MAX30102EFD+T</td><td>心率/血氧SpO2光学传感器 QFN-14</td><td><span class="lc">C124499</span></td><td>¥12.0</td></tr>
+        <tr><td style="color:var(--c6);">U6</td><td>QMI8658C</td><td>六轴IMU加速度计+陀螺仪 LGA-12</td><td><span class="lc">C3002720</span></td><td>¥5.0</td></tr>
+        <tr><td style="color:var(--c6);">U7</td><td>PCF8563T/5</td><td>I²C实时时钟RTC带闹钟 SOIC-8</td><td><span class="lc">C9794</span></td><td>¥1.5</td></tr>
+        <tr><td style="color:var(--c5);">U2</td><td>AP2112K-3.3</td><td>3.3V 600mA超低噪声LDO SOT-23-5</td><td><span class="lc">C51118</span></td><td>¥0.5</td></tr>
+        <tr><td style="color:var(--c5);">U3</td><td>TP4056</td><td>500mA LiPo线性充电管理 SOP-8</td><td><span class="lc">C16581</span></td><td>¥0.5</td></tr>
+        <tr><td style="color:var(--c5);">U4</td><td>DW01A</td><td>LiPo电池保护IC SOT-23-6</td><td><span class="lc">C351410</span></td><td>¥0.3</td></tr>
+        <tr><td style="color:var(--c5);">Q1</td><td>AO8205</td><td>双N-MOS电池保护开关 SOIC-8</td><td><span class="lc">C77999</span></td><td>¥0.5</td></tr>
+        <tr><td style="color:var(--c4);">J1</td><td>USB_C_CHG</td><td>USB Type-C母座充电/供电 立式</td><td><span class="lc">C165948</span></td><td>¥1.5</td></tr>
+        <tr><td style="color:var(--c4);">J2</td><td>OLED_FPC_12P</td><td>1.54寸OLED FPC 12Pin 0.5mm</td><td><span class="lc">C262266</span></td><td>¥1.0</td></tr>
+        <tr><td style="color:var(--c4);">J3</td><td>BATTERY_JST</td><td>LiPo电池JST-PH 2Pin 2.0mm</td><td><span class="lc">C295747</span></td><td>¥0.5</td></tr>
+        <tr><td style="color:var(--c4);">J4/SW1</td><td>SWD + SIDE_BTN</td><td>SWD调试口 + 侧边功能按键 SMD</td><td><span class="lc">C124378</span></td><td>¥0.3</td></tr>
+        <tr><td style="color:var(--c3);">Q2/D1</td><td>S8050 + 1N4148W</td><td>振动马达NPN驱动 + 续流二极管</td><td><span class="lc">C31012</span></td><td>¥0.07</td></tr>
+        <tr><td style="color:var(--tx2);">C1-C8</td><td>100nF/10uF/4.7uF</td><td>去耦滤波电容 0402/0805 ×8</td><td><span class="lc">C14663…</span></td><td>¥0.14</td></tr>
+        <tr><td style="color:var(--tx2);">R1-R5</td><td>4.7k/1.2k/100/100k</td><td>I²C上拉/充电限流/基极限流 0402 ×5</td><td><span class="lc">C25900…</span></td><td>¥0.05</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div style="display:flex;gap:12px;margin-top:10px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:9px;padding:9px 14px;display:flex;gap:16px;align-items:center;flex:1;">
+      <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:var(--c1);">¥33.3</div><div style="font-size:.6rem;color:var(--tx2);">单板BOM</div></div>
+      <div style="width:1px;background:var(--border);align-self:stretch;"></div>
+      <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:var(--c5);">¥187</div><div style="font-size:.6rem;color:var(--tx2);">5片打样含SMT</div></div>
+      <div style="width:1px;background:var(--border);align-self:stretch;"></div>
+      <div style="font-size:.65rem;color:var(--tx2);line-height:1.7;flex:1;">PCB ¥28 + 元件 ¥166.5<br>2层FR4/1.6mm/绿油/HASL</div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑦ 生产文件 -->
+<div class="slide" data-i="6">
+  <div class="stag">生产文件</div>
+  <h2>全链路输出 · <em>可直接打样</em></h2>
+  <p class="sub">KiCad PCB + 16个Gerber文件 + iBoM + BOM/CPL · 全部自动生成</p>
+  <div class="g2" style="flex:1;align-content:start;">
+    <div class="fc"><div class="fic" style="background:rgba(0,212,255,.12);color:var(--c1);">🔷</div><div><div class="fn">smartwatch_core.kicad_pcb</div><div class="fd">KiCad 8.0 PCB · 真实封装+网络+BFS布线</div></div><div class="fsz">39KB</div></div>
+    <div class="fc"><div class="fic" style="background:rgba(0,255,136,.12);color:var(--c2);">📦</div><div><div class="fn">smartwatch_core_Gerber_*.zip</div><div class="fd">16个Gerber文件 · 直接上传JLCPCB下单</div></div><div class="fsz">26KB</div></div>
+    <div class="fc"><div class="fic" style="background:rgba(168,85,247,.12);color:var(--c4);">🌐</div><div><div class="fn">smartwatch_core_ibom.html</div><div class="fd">交互式HTML BOM · 焊接状态追踪 · LCSC直链</div></div><div class="fsz">32KB</div></div>
+    <div class="fc"><div class="fic" style="background:rgba(251,191,36,.12);color:var(--c5);">📊</div><div><div class="fn">smartwatch_core_BOM.csv</div><div class="fd">JLCPCB SMT标准BOM · Designator/Comment/LCSC</div></div><div class="fsz">2.1KB</div></div>
+    <div class="fc"><div class="fic" style="background:rgba(255,107,53,.12);color:var(--c3);">📍</div><div><div class="fn">smartwatch_core_CPL.csv</div><div class="fd">元件坐标文件 · SMT贴片机定位</div></div><div class="fsz">1.8KB</div></div>
+    <div class="fc"><div class="fic" style="background:rgba(236,72,153,.12);color:var(--c6);">🔬</div><div><div class="fn">_drc_report.json</div><div class="fd">DRC完整报告 · 217违规/10未连接 (BFS限制)</div></div><div class="fsz">171KB</div></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:10px;">
+    <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:9px;padding:10px 14px;">
+      <div style="font-size:.62rem;font-weight:700;color:var(--tx2);margin-bottom:7px;text-transform:uppercase;letter-spacing:.07em;">Gerber 16文件</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;font-size:.58rem;color:var(--tx2);">
+        <div>F.Cu.gtl · 前铜层</div><div>B.Cu.gbl · 后铜层</div>
+        <div>F.Mask.gts · 阻焊</div><div>F.Paste.gtp · 钢网</div>
+        <div>F.Silkscreen.gto · 丝印</div><div>Edge_Cuts.gm1 · 板框</div>
+        <div>F.Fab.gbr · Fab层</div><div>*.drl · 钻孔文件</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px;flex:0.55;">
+      <div style="background:var(--card);border:1px solid rgba(0,255,136,.25);border-radius:9px;padding:8px 12px;display:flex;align-items:center;gap:7px;">
+        <span>✅</span><div><div style="font-size:.7rem;font-weight:700;color:var(--c2);">Gerber完整</div><div style="font-size:.6rem;color:var(--tx2);">可直接上传 jlcpcb.com</div></div>
+      </div>
+      <div style="background:var(--card);border:1px solid rgba(251,191,36,.25);border-radius:9px;padding:8px 12px;display:flex;align-items:center;gap:7px;">
+        <span>⚠️</span><div><div style="font-size:.7rem;font-weight:700;color:var(--c5);">DRC路由优化</div><div style="font-size:.6rem;color:var(--tx2);">安装freerouting.jar可修复</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑧ DRC修复 -->
+<div class="slide" data-i="7">
+  <div class="stag">质量验证</div>
+  <h2>DRC <em>检查 + Bug修复</em>记录</h2>
+  <p class="sub">发现并修复 KiCad 封装引脚名映射Bug · DRC违规 231 → 217</p>
+  <div style="display:flex;gap:18px;flex:1;">
+    <div style="flex:1;display:flex;flex-direction:column;gap:10px;">
+      <div class="g3">
+        <div class="card" style="text-align:center;"><div style="font-size:1.8rem;font-weight:800;color:var(--c2);">217</div><div style="font-size:.65rem;color:var(--tx2);">布局间距违规</div><div style="font-size:.56rem;color:var(--tx2);margin-top:3px;">BFS紧凑排列</div></div>
+        <div class="card" style="text-align:center;"><div style="font-size:1.8rem;font-weight:800;color:var(--c5);">10</div><div style="font-size:.65rem;color:var(--tx2);">未完成路由</div><div style="font-size:.56rem;color:var(--tx2);margin-top:3px;">freerouting可修</div></div>
+        <div class="card" style="text-align:center;"><div style="font-size:1.8rem;font-weight:800;color:var(--c2);">✅</div><div style="font-size:.65rem;color:var(--tx2);">Gerber完整</div><div style="font-size:.56rem;color:var(--tx2);margin-top:3px;">16文件可打样</div></div>
+      </div>
+      <div class="card">
+        <div class="clb">根因 · kicad_arm.py line 344</div>
+        <div style="background:rgba(0,0,0,.3);border-radius:7px;padding:9px 12px;font-family:monospace;font-size:.63rem;color:var(--tx2);margin:8px 0;">
+          <span style="color:#666;">// pad名字匹配网络分配</span><br>
+          net_info = pad_net.get((<span style="color:var(--c1);">ref</span>, str(<span style="color:var(--c2);">pad["num"]</span>)))
+        </div>
+        <div style="font-size:.65rem;color:var(--tx2);">KiCad标准封装使用<strong style="color:#fff;">数字引脚名</strong>，原DNA用符号名 → 引脚无网络 → 短路/悬空DRC报错</div>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:flex-start;">
+      <div style="font-size:.65rem;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">修复的4个器件引脚名映射</div>
+      <div class="tl">
+        <div class="tdot">Q2</div>
+        <div><div class="ttit">S8050 NPN · SOT-23 封装</div><div class="tdsc"><span style="color:var(--c3);">B/E/C</span> → <span style="color:var(--c2);">1/2/3</span> · 影响 MOTOR_BASE · GND · MOTOR_LOAD</div></div>
+      </div>
+      <div class="tl">
+        <div class="tdot">D1</div>
+        <div><div class="ttit">1N4148W · D_SOD-123 封装</div><div class="tdsc"><span style="color:var(--c3);">A/K</span> → <span style="color:var(--c2);">1/2</span> · 影响 VCC_3V3(续流阳极) · MOTOR_LOAD(阴极)</div></div>
+      </div>
+      <div class="tl">
+        <div class="tdot">U7</div>
+        <div><div class="ttit">PCF8563T · SOIC-8 封装</div><div class="tdsc"><span style="color:var(--c3);">VDD/GND/SDA/SCL/INT</span> → <span style="color:var(--c2);">8/4/5/6/3</span> · 全面修复I²C+RTC引脚</div></div>
+      </div>
+      <div class="tl" style="padding-bottom:0;">
+        <div class="tdot">U2</div>
+        <div><div class="ttit">AP2112K-3.3 · SOT-23-5 封装</div><div class="tdsc"><span style="color:var(--c3);">VIN/VOUT/GND</span> → <span style="color:var(--c2);">5/2/1</span> · 补充 EN(4)→VCC_3V3 · GND(3)→GND</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑨ GPIO分配 -->
+<div class="slide" data-i="8">
+  <div class="stag">引脚分配</div>
+  <h2>nRF52840 <em>GPIO 完整分配</em></h2>
+  <p class="sub">P0.00~P1.15 共48个IO · 智能手表功能全覆盖</p>
+  <div style="display:flex;gap:16px;flex:1;">
+    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+      <div style="font-size:.65rem;font-weight:700;color:var(--c1);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">传感器 & 中断</div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c1);">P0.03</div><div><div class="rname" style="font-size:.75rem;">MAX30102 HR_INT</div><div class="rdesc">心率/SpO2传感器中断 (下降沿)</div></div></div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c2);">P0.04</div><div><div class="rname" style="font-size:.75rem;">QMI8658 IMU_INT1</div><div class="rdesc">六轴IMU运动中断 (数据就绪)</div></div></div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c4);">P0.05</div><div><div class="rname" style="font-size:.75rem;">PCF8563 RTC_INT</div><div class="rdesc">实时时钟闹钟中断</div></div></div>
+      <div style="font-size:.65rem;font-weight:700;color:var(--c5);text-transform:uppercase;letter-spacing:.08em;margin:6px 0 2px;">控制输出</div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c3);">P0.06</div><div><div class="rname" style="font-size:.75rem;">MOTOR_EN (PWM)</div><div class="rdesc">振动马达强度控制 · S8050 NPN</div></div></div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c5);">P0.07</div><div><div class="rname" style="font-size:.75rem;">CHRG_STATUS</div><div class="rdesc">TP4056充电状态监测</div></div></div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c2);">P0.02</div><div><div class="rname" style="font-size:.75rem;">BTN_SIDE</div><div class="rdesc">侧边功能按键 (100kΩ上拉)</div></div></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+      <div style="font-size:.65rem;font-weight:700;color:var(--c6);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">OLED 显示 (SPI)</div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c6);">P0.08</div><div><div class="rname" style="font-size:.75rem;">DISP_RST</div><div class="rdesc">OLED复位引脚</div></div></div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c6);">P0.09</div><div><div class="rname" style="font-size:.75rem;">DISP_DC</div><div class="rdesc">数据/命令选择</div></div></div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c6);">P0.10</div><div><div class="rname" style="font-size:.75rem;">DISP_CS</div><div class="rdesc">SPI片选</div></div></div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c6);">P0.14/15</div><div><div class="rname" style="font-size:.75rem;">DISP_CLK/MOSI</div><div class="rdesc">SPI时钟/数据</div></div></div>
+      <div style="font-size:.65rem;font-weight:700;color:var(--c1);text-transform:uppercase;letter-spacing:.08em;margin:6px 0 2px;">I²C 总线</div>
+      <div class="row"><div style="width:70px;font-size:.65rem;font-weight:700;color:var(--c1);">P0.26/27</div><div><div class="rname" style="font-size:.75rem;">I2C_SDA / SCL</div><div class="rdesc">4.7kΩ上拉 · 共享 MAX30102+QMI8658+RTC+OLED</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑩ 总结 -->
+<div class="slide" data-i="9">
+  <div class="stag">成果总结</div>
+  <h2>全链路<em>完成</em> · 下一步行动</h2>
+  <p class="sub">智能手表芯片 · AI代码化PCB · 一次会话从零到可打样</p>
+  <div class="g2" style="flex:1;">
+    <div class="card" style="border-color:rgba(0,255,136,.25);">
+      <div style="font-size:1rem;color:var(--c2);font-weight:800;margin-bottom:12px;">✅ 已完成成果</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:.7rem;color:var(--tx2);">
+        <div style="display:flex;gap:8px;"><span style="color:var(--c2);font-weight:700;">→</span>新增 smartwatch_core DNA模板 (circuit_dna.py 18→19个)</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c2);font-weight:700;">→</span>添加18个智能手表专用LCSC料号</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c2);font-weight:700;">→</span>生成 smartwatch_core.kicad_pcb (39KB)</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c2);font-weight:700;">→</span>导出Gerber ZIP (16文件，可打样)</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c2);font-weight:700;">→</span>生成交互式iBoM + BOM.csv + CPL.csv</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c2);font-weight:700;">→</span>修复4器件KiCad引脚名映射Bug</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c2);font-weight:700;">→</span>更新 _INDEX.md v11 完成记录</div>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(0,212,255,.25);">
+      <div style="font-size:1rem;color:var(--c1);font-weight:800;margin-bottom:12px;">🚀 下一步优化</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:.7rem;color:var(--tx2);">
+        <div style="display:flex;gap:8px;"><span style="color:var(--c1);font-weight:700;">P0</span>安装 freerouting.jar → 消除10条未连接路由</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c1);font-weight:700;">P1</span>升级为4层板 → 改善信号完整性 + BLE射频</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c1);font-weight:700;">P1</span>JLCPCB下单打样 → 5片约¥187</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c1);font-weight:700;">P2</span>在KiCad中手动优化布局密度</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c1);font-weight:700;">P2</span>开发 Zephyr/InfiniTime 固件移植</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c1);font-weight:700;">P3</span>添加GPS模块 (L76K) 扩展定位功能</div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--c1);font-weight:700;">P3</span>MCP server重启后可直调 smartwatch_core</div>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(251,191,36,.2);">
+      <div style="font-size:.9rem;color:var(--c5);font-weight:800;margin-bottom:10px;">📊 技术规格速查</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:.65rem;">
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">板尺寸</span><span>40 × 45 mm</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">层数</span><span>2层 (建议4层)</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">MCU频率</span><span>64 MHz Cortex-M4F</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">BLE版本</span><span>5.0 / Zigbee / Thread</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">推荐电池</span><span>3.7V 300mAh LiPo</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">续航</span><span style="color:var(--c2);">&gt; 48 小时</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--tx2);">工作电压</span><span>3.3V (AP2112K)</span></div>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(168,85,247,.2);">
+      <div style="font-size:.9rem;color:var(--c4);font-weight:800;margin-bottom:10px;">🛠 推荐SDK & 工具</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.65rem;color:var(--tx2);">
+        <div style="display:flex;gap:7px;"><span style="color:var(--c4);">固件</span>Nordic nRF5 SDK 17.1 / Zephyr RTOS 3.x</div>
+        <div style="display:flex;gap:7px;"><span style="color:var(--c4);">参考</span>InfiniTime (PineTime开源手表固件)</div>
+        <div style="display:flex;gap:7px;"><span style="color:var(--c4);">IDE</span>nRF Connect for VS Code</div>
+        <div style="display:flex;gap:7px;"><span style="color:var(--c4);">调试</span>J-Link / DAPLink via SWD</div>
+        <div style="display:flex;gap:7px;"><span style="color:var(--c4);">路由</span>freerouting.jar (世界级PCB自动布线)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div><!-- /slides -->
+
+  <div class="nav" id="nav"></div>
+</div>
+
+<div class="narr">
+  <button class="nbtn" id="prev">←</button>
+  <button class="nbtn" id="next">→</button>
+</div>
+<div class="snum" id="snum"></div>
+
+<script>
+// ── particle bg ──
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W,H,pts=[];
+function resize(){W=cv.width=innerWidth;H=cv.height=innerHeight;pts=Array.from({length:60},()=>({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,r:Math.random()*1.5+.5}));}
+resize();window.addEventListener('resize',resize);
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(0,180,220,.5)';ctx.fill();
+  });
+  for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+    const d=Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y);
+    if(d<120){ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);
+    ctx.strokeStyle=`rgba(0,180,220,${.12*(1-d/120)})`;ctx.lineWidth=.8;ctx.stroke();}
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+
+// ── slides ──
+const slides=[...document.querySelectorAll('.slide')];
+const nav=document.getElementById('nav');
+const pf=document.getElementById('pf');
+const snum=document.getElementById('snum');
+const N=slides.length;
+let cur=0;
+
+slides.forEach((_,i)=>{const b=document.createElement('button');b.className='ndot'+(i===0?' on':'');b.onclick=()=>go(i);nav.appendChild(b);});
+
+function go(n){
+  if(n===cur)return;
+  slides[cur].classList.remove('active');slides[cur].classList.add('prev');
+  setTimeout(()=>slides[cur].classList.remove('prev'),460);
+  cur=n;
+  slides[cur].classList.add('active');
+  [...nav.querySelectorAll('.ndot')].forEach((b,i)=>b.classList.toggle('on',i===cur));
+  pf.style.width=((cur+1)/N*100)+'%';
+  snum.textContent=(cur+1)+' / '+N;
+}
+
+document.getElementById('next').onclick=()=>go(Math.min(cur+1,N-1));
+document.getElementById('prev').onclick=()=>go(Math.max(cur-1,0));
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' ')go(Math.min(cur+1,N-1));
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp')go(Math.max(cur-1,0));
+});
+snum.textContent='1 / '+N;
+
+// touch swipe
+let tx=0;
+document.addEventListener('touchstart',e=>tx=e.touches[0].clientX);
+document.addEventListener('touchend',e=>{const d=tx-e.changedTouches[0].clientX;if(Math.abs(d)>50){if(d>0)go(Math.min(cur+1,N-1));else go(Math.max(cur-1,0));}});
+</script>
+</body>
+</html>

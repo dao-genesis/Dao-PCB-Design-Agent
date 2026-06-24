@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1800" height="1180" viewBox="0 0 1800 1180" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+.title{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:34px;font-weight:700;fill:#111;}
+.h{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:20px;font-weight:700;fill:#111;}
+.t{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:15px;fill:#111;}
+.small{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:13px;fill:#111;}
+.tiny{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:11px;fill:#333;}
+.netlbl{font-family:Consolas,"Courier New",monospace;font-size:12px;fill:#1463d8;}
+.wire{stroke:#111;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.sig{stroke:#6a35b1;stroke-width:2.0;fill:none;stroke-dasharray:7 6;stroke-linecap:round;}
+.drv{stroke:#1463d8;stroke-width:2.0;fill:none;stroke-dasharray:8 6;stroke-linecap:round;}
+.bus{stroke:#148447;stroke-width:3.2;fill:none;stroke-linecap:round;}
+.box{fill:#fafafa;stroke:#111;stroke-width:1.8;rx:10;ry:10;}
+.soft{fill:#fbfbfb;stroke:#777;stroke-width:1.4;stroke-dasharray:6 4;rx:10;ry:10;}
+.redbox{fill:#fff5f5;stroke:#d92525;stroke-width:1.8;stroke-dasharray:6 4;rx:10;ry:10;}
+.bluebox{fill:#f3f7ff;stroke:#1463d8;stroke-width:1.8;stroke-dasharray:6 4;rx:10;ry:10;}
+.greenbox{fill:#f3fbf5;stroke:#148447;stroke-width:1.8;stroke-dasharray:6 4;rx:10;ry:10;}
+.purplebox{fill:#f8f3fc;stroke:#6a35b1;stroke-width:1.8;stroke-dasharray:6 4;rx:10;ry:10;}
+.orangebox{fill:#fff8ee;stroke:#e57200;stroke-width:1.8;stroke-dasharray:6 4;rx:10;ry:10;}
+.tealbox{fill:#f0f9f9;stroke:#0a8a8a;stroke-width:1.8;stroke-dasharray:6 4;rx:10;ry:10;}
+.brownbox{fill:#faf5ef;stroke:#8b4513;stroke-width:1.8;stroke-dasharray:6 4;rx:10;ry:10;}
+.label{font-family:"Noto Sans CJK SC","Microsoft YaHei","SimSun",Arial,sans-serif;font-size:14px;font-weight:700;}
+.frame{fill:none;stroke:#111;stroke-width:1.8;}
+.titleblock{fill:#fafafa;stroke:#111;stroke-width:1.4;}
+</style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3 L0,6 Z" fill="#111"/></marker>
+    <marker id="arrowB" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3 L0,6 Z" fill="#1463d8"/></marker>
+    <marker id="arrowP" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3 L0,6 Z" fill="#6a35b1"/></marker>
+    <marker id="arrowG" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3 L0,6 Z" fill="#148447"/></marker>
+  </defs>
+  <rect x="6" y="6" width="1788" height="1168" class="frame"/>
+  <text x="900" y="46" text-anchor="middle" class="title">仓库车间物流车控制系统设计</text>
+  <text x="900" y="74" text-anchor="middle" class="small">电源输入: 12V DC (锂电池供电)  |  主控: STM32G030K8T6 (LQFP-32, ARM Cortex-M0+ @ 64MHz)  |  电机驱动: L298N(XBLW) 双H桥, 2A/通道  |  无线通信: 蓝牙 UART (HC-05/HC-04)  |  显示: OLED 0.96" I2C (SSD1306)  |  传感器: HC-SR04 超声波 + 红外循迹×2 + 站点红外 + 压力  |  电池监测: ADC 分压采样 (R28 100K / R29 2K)  |  调试: SWD (PA13/PA14) + 5V 程序下载  |  外形: PCB 双面板 100×80mm (建议)</text>
+  <rect x="240" y="100" width="460" height="170" class="bluebox"/>
+  <text x="470" y="126" text-anchor="middle" class="label" fill="#1463d8">12V转5V转3.3V稳压电路</text>
+  <text x="690" y="118" text-anchor="end" class="tiny">U11  U12  C20  C21  C22  C23 ... (共9)</text>
+  <text x="254" y="150" class="small">U11 LR78M05D: 12V → 5V/0.5A (TO-252)</text>
+  <text x="254" y="169" class="small">U12 AMS1117-3.3: 5V → 3.3V/1A (SOT-223)</text>
+  <text x="254" y="188" class="small">去耦: C20=100uF, C21/C24=10uF, C22/C23=0.1uF</text>
+  <text x="254" y="207" class="small">D1 绿色LED + R21=10K — 3.3V 电源指示</text>
+  <text x="254" y="260" class="netlbl">⟨12V  VCC_5V  VCC_3V3  GND⟩</text>
+  <rect x="20" y="100" width="200" height="170" class="greenbox"/>
+  <text x="120" y="126" text-anchor="middle" class="label" fill="#148447">电池电压ADC采集</text>
+  <text x="210" y="118" text-anchor="end" class="tiny">R28  R29</text>
+  <text x="34" y="150" class="small">R28=100K  R29=2K</text>
+  <text x="34" y="169" class="small">比例 1/51, 12V→235mV</text>
+  <text x="34" y="188" class="small">ADC 通道: PA0</text>
+  <text x="34" y="207" class="small">建议加 100nF 滤波</text>
+  <text x="34" y="260" class="netlbl">⟨VBAT  VBAT_S  GND⟩</text>
+  <rect x="720" y="100" width="300" height="170" class="tealbox"/>
+  <text x="870" y="126" text-anchor="middle" class="label" fill="#0a8a8a">超声波传感器接口</text>
+  <text x="1010" y="118" text-anchor="end" class="tiny">U1</text>
+  <text x="734" y="150" class="small">U1 HC-SR04 (5V 供电)</text>
+  <text x="734" y="169" class="small">Trig: PB0 (10us 脉冲)</text>
+  <text x="734" y="188" class="small">Echo: PA4 (高电平时长 → 距离)</text>
+  <text x="734" y="207" class="small">测距 2cm~400cm, 精度 ±3mm</text>
+  <text x="734" y="260" class="netlbl">⟨VCC_5V  GND  US_TRIG  US_ECHO⟩</text>
+  <rect x="1040" y="100" width="320" height="170" class="purplebox"/>
+  <text x="1200" y="126" text-anchor="middle" class="label" fill="#6a35b1">OLED显示屏接口</text>
+  <text x="1350" y="118" text-anchor="end" class="tiny">OLED1  R25  R26</text>
+  <text x="1054" y="150" class="small">OLED1 SSD1306 128×64</text>
+  <text x="1054" y="169" class="small">I2C: SCL=PB7, SDA=PB8</text>
+  <text x="1054" y="188" class="small">上拉 R25/R26 = 4.7K</text>
+  <text x="1054" y="207" class="small">刷新 ≤30Hz, 显示状态/电池/距离</text>
+  <text x="1054" y="260" class="netlbl">⟨VCC_3V3  GND  I2C_SCL  I2C_SDA⟩</text>
+  <rect x="20" y="290" width="200" height="180" class="redbox"/>
+  <text x="120" y="316" text-anchor="middle" class="label" fill="#d92525">复位单片机复位电路</text>
+  <text x="210" y="308" text-anchor="end" class="tiny">RESET1  R5  C5  C6</text>
+  <text x="34" y="340" class="small">1NRST 按键 (TS-KG09S)</text>
+  <text x="34" y="359" class="small">R5=10K 上拉 NRST</text>
+  <text x="34" y="378" class="small">C5=100nF MCU 去耦</text>
+  <text x="34" y="397" class="small">C6=1uF NRST 滤波</text>
+  <text x="34" y="460" class="netlbl">⟨NRST  VCC_3V3  GND⟩</text>
+  <rect x="240" y="290" width="460" height="320" class="box"/>
+  <text x="470" y="316" text-anchor="middle" class="label" fill="#111">单片机引脚分配电路</text>
+  <text x="690" y="308" text-anchor="end" class="tiny">U2</text>
+  <text x="254" y="340" class="small">U2 STM32G030K8T6 (LQFP-32, M0+ @ 64MHz)</text>
+  <text x="254" y="359" class="small">电源: VDD/VDDA = 3.3V, 引脚 4/5</text>
+  <text x="254" y="378" class="small">SWD: PA13(SWDIO) / PA14(SWCLK/BOOT0)</text>
+  <text x="254" y="397" class="small">ADC: PA0(VBAT), PA2(压力)</text>
+  <text x="254" y="416" class="small">PWM: PB1(ENA), PB4(ENB) — TIM3</text>
+  <text x="254" y="435" class="small">电机方向: PB2/3/5/6 → IN1/2/3/4</text>
+  <text x="254" y="454" class="small">I2C: PB7(SCL), PB8(SDA) — OLED</text>
+  <text x="254" y="473" class="small">USART: PA9(TX), PA10(RX) — 蓝牙</text>
+  <text x="254" y="492" class="small">超声波: PB0(Trig), PA4(Echo)</text>
+  <text x="254" y="511" class="small">循迹: PA6/PA7, 站点: PA1, LED: PA3</text>
+  <text x="254" y="600" class="netlbl">⟨VCC_3V3  GND  NRST  SWCLK  SWDIO⟩</text>
+  <rect x="720" y="290" width="640" height="320" class="orangebox"/>
+  <text x="1040" y="316" text-anchor="middle" class="label" fill="#e57200">L298N电机驱动电路</text>
+  <text x="1350" y="308" text-anchor="end" class="tiny">U14  D2  D3  D4  D5  D6 ... (共9)</text>
+  <text x="734" y="340" class="small">U14 L298N(XBLW) HSOP-20</text>
+  <text x="734" y="359" class="small">VS=12V (主电源), VSS=5V (逻辑)</text>
+  <text x="734" y="378" class="small">ENA/ENB: PWM 调速 (10kHz)</text>
+  <text x="734" y="397" class="small">IN1/2 — 左电机方向, IN3/4 — 右电机方向</text>
+  <text x="734" y="416" class="small">OUT1/2 — 左电机, OUT3/4 — 右电机</text>
+  <text x="734" y="435" class="small">D2~D9: 1N5819 续流二极管 (必装)</text>
+  <text x="734" y="454" class="small">需散热片, 长时间满载加风扇</text>
+  <text x="734" y="600" class="netlbl">⟨12V  VCC_5V  GND  MOTOR_ENA  MOTOR_IN1 ... +8⟩</text>
+  <rect x="20" y="490" width="200" height="140" class="bluebox"/>
+  <text x="120" y="516" text-anchor="middle" class="label" fill="#1463d8">程序下载电路</text>
+  <text x="210" y="508" text-anchor="end" class="tiny">PH-00015_SWD  R3  R4</text>
+  <text x="34" y="540" class="small">PH-00015 4P 排针</text>
+  <text x="34" y="559" class="small">R3/R4=100K 下拉</text>
+  <text x="34" y="578" class="small">走线 &lt; 100mm</text>
+  <text x="34" y="597" class="small">兼容 ST-Link / DAP-Link</text>
+  <text x="34" y="620" class="netlbl">⟨VCC_3V3  GND  SWCLK  SWDIO⟩</text>
+  <rect x="1380" y="290" width="200" height="140" class="greenbox"/>
+  <text x="1480" y="316" text-anchor="middle" class="label" fill="#148447">系统指示灯电路</text>
+  <text x="1570" y="308" text-anchor="end" class="tiny">LED6  R22</text>
+  <text x="1394" y="340" class="small">LED6 蓝色, R22=10K 限流</text>
+  <text x="1394" y="359" class="small">PA3 → LED6 → GND</text>
+  <text x="1394" y="378" class="small">1Hz 心跳, 故障时 5Hz</text>
+  <text x="1394" y="420" class="netlbl">⟨VCC_3V3  GND  SYS_LED⟩</text>
+  <rect x="1040" y="640" width="320" height="170" class="bluebox"/>
+  <text x="1200" y="666" text-anchor="middle" class="label" fill="#1463d8">蓝牙模块驱动电路</text>
+  <text x="1350" y="658" text-anchor="end" class="tiny">BT1  LED5  R20</text>
+  <text x="1054" y="690" class="small">BT1 HC-05 蓝牙2.0+EDR</text>
+  <text x="1054" y="709" class="small">TX → PA10, RX ← PA9 (USART1)</text>
+  <text x="1054" y="728" class="small">默认 9600bps, AT 命令配置</text>
+  <text x="1054" y="747" class="small">LED5 蓝牙状态指示, R20=470Ω</text>
+  <text x="1054" y="766" class="small">天线区净空 ≥10mm</text>
+  <text x="1054" y="800" class="netlbl">⟨VCC_3V3  GND  BT_UART_TX  BT_UART_RX  BT_LED_STATUS⟩</text>
+  <rect x="20" y="650" width="200" height="180" class="brownbox"/>
+  <text x="120" y="676" text-anchor="middle" class="label" fill="#8b4513">按键控制电路</text>
+  <text x="210" y="668" text-anchor="end" class="tiny">KEY1  KEY2  KEY3  KEY4  R23  R23B ... (共8)</text>
+  <text x="34" y="700" class="small">KEY1: PA15 (启停)</text>
+  <text x="34" y="719" class="small">KEY2: PA9 (速度+)</text>
+  <text x="34" y="738" class="small">KEY3: PA10 (速度-)</text>
+  <text x="34" y="757" class="small">KEY4: PB9 (模式)</text>
+  <text x="34" y="776" class="small">R23×4 = 10K 下拉</text>
+  <text x="34" y="820" class="netlbl">⟨VCC_3V3  GND  KEY_1  KEY_2  KEY_3 ... +1⟩</text>
+  <rect x="240" y="640" width="200" height="170" class="tealbox"/>
+  <text x="340" y="666" text-anchor="middle" class="label" fill="#0a8a8a">压力采集接口</text>
+  <text x="430" y="658" text-anchor="end" class="tiny">PH-00015_PRESS  R27</text>
+  <text x="254" y="690" class="small">3P 排针: VCC_3V3/AOUT/GND</text>
+  <text x="254" y="709" class="small">AOUT → PA2 (ADC IN2)</text>
+  <text x="254" y="728" class="small">R27=10K 阻抗匹配</text>
+  <text x="254" y="747" class="small">建议加 100nF RC 滤波</text>
+  <text x="254" y="800" class="netlbl">⟨VCC_3V3  GND  PRESSURE_AOUT⟩</text>
+  <rect x="460" y="640" width="280" height="170" class="greenbox"/>
+  <text x="600" y="666" text-anchor="middle" class="label" fill="#148447">红外循迹模块</text>
+  <text x="730" y="658" text-anchor="end" class="tiny">IR_TRACE_L  IR_TRACE_R</text>
+  <text x="474" y="690" class="small">IR_TRACE_L (左) → PA6</text>
+  <text x="474" y="709" class="small">IR_TRACE_R (右) → PA7</text>
+  <text x="474" y="728" class="small">TCRT5000 数字阈值可调</text>
+  <text x="474" y="747" class="small">环境光强时建议加挡光罩</text>
+  <text x="474" y="800" class="netlbl">⟨VCC_3V3  GND  IR_LEFT_DO  IR_RIGHT_DO⟩</text>
+  <rect x="760" y="640" width="260" height="170" class="redbox"/>
+  <text x="890" y="666" text-anchor="middle" class="label" fill="#d92525">站点红外探头接口</text>
+  <text x="1010" y="658" text-anchor="end" class="tiny">IR_STATION</text>
+  <text x="774" y="690" class="small">IR_STATION E18-D80NK</text>
+  <text x="774" y="709" class="small">5V 供电, 检测距离 3~80cm</text>
+  <text x="774" y="728" class="small">DO → PA1, 高电平有效</text>
+  <text x="774" y="747" class="small">软件计数 + 滤抖</text>
+  <text x="774" y="800" class="netlbl">⟨VCC_5V  GND  IR_STATION_DO⟩</text>
+  <path d="M470,270 V290" class="bus" marker-end="url(#arrowG)"/>
+  <rect x="444" y="262" width="52" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="470" y="274" text-anchor="middle" class="netlbl">+3.3V</text>
+  <path d="M700,185 H720 V450" class="bus" marker-end="url(#arrowG)"/>
+  <rect x="672" y="299" width="76" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="710" y="311" text-anchor="middle" class="netlbl">+12V/+5V</text>
+  <path d="M700,185 H720" class="wire" marker-end="url(#arrow)"/>
+  <rect x="692" y="167" width="36" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="710" y="179" text-anchor="middle" class="netlbl">+5V</text>
+  <path d="M700,185 H1040" class="wire" marker-end="url(#arrow)"/>
+  <rect x="844" y="167" width="52" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="870" y="179" text-anchor="middle" class="netlbl">+3.3V</text>
+  <path d="M700,185 H1040 V725" class="wire" marker-end="url(#arrow)"/>
+  <rect x="844" y="437" width="52" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="870" y="449" text-anchor="middle" class="netlbl">+3.3V</text>
+  <path d="M220,185 H240 V450" class="sig" marker-end="url(#arrowP)"/>
+  <rect x="200" y="299" width="60" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="230" y="311" text-anchor="middle" class="netlbl">VBAT_S</text>
+  <path d="M220,380 H240 V450" class="sig" marker-end="url(#arrowP)"/>
+  <rect x="208" y="397" width="44" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="230" y="409" text-anchor="middle" class="netlbl">NRST</text>
+  <path d="M700,450 H720" class="drv" marker-end="url(#arrowB)"/>
+  <rect x="672" y="432" width="76" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="710" y="444" text-anchor="middle" class="netlbl">PWM/IN×6</text>
+  <path d="M720,185 H700 V450" class="sig" marker-end="url(#arrowP)"/>
+  <rect x="668" y="299" width="84" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="710" y="311" text-anchor="middle" class="netlbl">Trig/Echo</text>
+  <path d="M700,450 H1040 V185" class="drv" marker-end="url(#arrowB)"/>
+  <rect x="852" y="299" width="36" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="870" y="311" text-anchor="middle" class="netlbl">I2C</text>
+  <path d="M1040,725 H700 V450" class="drv" marker-end="url(#arrowB)"/>
+  <rect x="840" y="569" width="60" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="870" y="581" text-anchor="middle" class="netlbl">USART1</text>
+  <path d="M220,740 H240 V450" class="sig" marker-end="url(#arrowP)"/>
+  <rect x="200" y="577" width="60" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="230" y="589" text-anchor="middle" class="netlbl">KEY1~4</text>
+  <path d="M340,640 H470 V610" class="sig" marker-end="url(#arrowP)"/>
+  <rect x="383" y="607" width="44" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="405" y="619" text-anchor="middle" class="netlbl">AOUT</text>
+  <path d="M600,640 H470 V610" class="sig" marker-end="url(#arrowP)"/>
+  <rect x="493" y="607" width="84" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="535" y="619" text-anchor="middle" class="netlbl">DO_L/DO_R</text>
+  <path d="M760,725 H700 V450" class="sig" marker-end="url(#arrowP)"/>
+  <rect x="700" y="569" width="60" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="730" y="581" text-anchor="middle" class="netlbl">DO_STA</text>
+  <path d="M220,560 H240 V450" class="drv" marker-end="url(#arrowB)"/>
+  <rect x="212" y="487" width="36" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="230" y="499" text-anchor="middle" class="netlbl">SWD</text>
+  <path d="M700,450 H1380 V360" class="wire" marker-end="url(#arrow)"/>
+  <rect x="1022" y="387" width="36" height="16" fill="#fff" stroke="#aaa" stroke-width="0.7" rx="3"/>
+  <text x="1040" y="399" text-anchor="middle" class="netlbl">PA3</text>
+  <rect x="1314" y="1054" width="470" height="110" class="titleblock"/>
+  <line x1="1314" y1="1076" x2="1784" y2="1076" stroke="#111" stroke-width="0.8"/>
+  <line x1="1314" y1="1098" x2="1784" y2="1098" stroke="#111" stroke-width="0.8"/>
+  <line x1="1314" y1="1120" x2="1784" y2="1120" stroke="#111" stroke-width="0.8"/>
+  <line x1="1314" y1="1142" x2="1784" y2="1142" stroke="#111" stroke-width="0.8"/>
+  <line x1="1414" y1="1054" x2="1414" y2="1164" stroke="#111" stroke-width="0.8"/>
+  <line x1="1554" y1="1054" x2="1554" y2="1164" stroke="#111" stroke-width="0.8"/>
+  <text x="1322" y="1068" class="small" font-weight="700">原理图</text>
+  <text x="1422" y="1068" class="small">仓库车间物流车控制系统设计</text>
+  <text x="1562" y="1068" class="small" font-weight="700">更新日期</text>
+  <text x="1654" y="1068" class="small">2026-04-27</text>
+  <text x="1322" y="1090" class="small" font-weight="700">图页</text>
+  <text x="1422" y="1090" class="small">1/1</text>
+  <text x="1562" y="1090" class="small" font-weight="700">创建日期</text>
+  <text x="1654" y="1090" class="small">2024-06-13</text>
+  <text x="1322" y="1112" class="small" font-weight="700">绘制</text>
+  <text x="1422" y="1112" class="small">schematic_dao</text>
+  <text x="1562" y="1112" class="small" font-weight="700">版本</text>
+  <text x="1654" y="1112" class="small">v1.0</text>
+  <text x="1322" y="1134" class="small" font-weight="700">公司</text>
+  <text x="1422" y="1134" class="small">schematic_dao 自动生成 (基于嘉立创EDA原理图)</text>
+  <text x="1562" y="1134" class="small" font-weight="700">尺寸</text>
+  <text x="1654" y="1134" class="small">A3</text>
+  <text x="1322" y="1156" class="small" font-weight="700">项目</text>
+  <text x="1422" y="1156" class="small">warehouse_logistics_vehicle</text>
+  <text x="1562" y="1156" class="small" font-weight="700">英文名</text>
+  <text x="1654" y="1156" class="small">Warehouse Workshop Logistics Vehicle Control System</text>
+  <rect x="16" y="1054" width="600" height="110" class="box"/>
+  <text x="30" y="1078" class="h">图纸说明</text>
+  <text x="30" y="1100" class="small">1. Q1/Q2 (实为 L298N 内部) 为 PWM 驱动桥臂, 频率建议 10~20kHz, 远离音频带</text>
+  <text x="30" y="1118" class="small">2. OLED 与 EEPROM 等 I2C 设备共用 PB6/PB7, 上拉电阻 4.7K 已配置</text>
+  <text x="30" y="1136" class="small">3. 电机驱动 12V 强电与 3.3V 控制信号必须分区铺地, 单点连 PGND ↔ SGND</text>
+  <text x="30" y="1154" class="small">4. 蓝牙天线区域板内净空 ≥10mm, 不可铺铜, 不可走信号线</text>
+</svg>

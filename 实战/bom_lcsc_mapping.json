@@ -1,0 +1,351 @@
+[
+  {
+    "ref": "F1",
+    "name": "保险丝",
+    "spec": "T25A 250VAC 慢断 陶瓷管",
+    "lcsc_keywords": [
+      "fuse 25A 250V slow blow",
+      "保险丝 25A"
+    ],
+    "jlc_keywords": [
+      "保险丝 25A 250V"
+    ],
+    "qty": 1,
+    "module": "输入保护",
+    "notes": "1500W@85VAC≈18A, 需25A额定"
+  },
+  {
+    "ref": "MOV1",
+    "name": "压敏电阻",
+    "spec": "14D471K 470V",
+    "lcsc_keywords": [
+      "varistor 471K",
+      "压敏电阻 471"
+    ],
+    "jlc_keywords": [
+      "压敏电阻 471"
+    ],
+    "qty": 1,
+    "module": "输入保护",
+    "notes": "并联L-N, 浪涌吸收"
+  },
+  {
+    "ref": "NTC1",
+    "name": "NTC热敏电阻",
+    "spec": "5Ω 15A 浪涌限流",
+    "lcsc_keywords": [
+      "NTC 5R 15A inrush",
+      "NTC inrush current limiter"
+    ],
+    "jlc_keywords": [
+      "NTC 5欧 15A"
+    ],
+    "qty": 1,
+    "module": "输入保护",
+    "notes": "稳态需继电器旁路"
+  },
+  {
+    "ref": "K1",
+    "name": "继电器",
+    "spec": "≥250VAC ≥25A PCB继电器",
+    "lcsc_keywords": [
+      "relay 250VAC 25A PCB",
+      "power relay 25A"
+    ],
+    "jlc_keywords": [
+      "继电器 25A 250V"
+    ],
+    "qty": 1,
+    "module": "输入保护",
+    "notes": "NTC旁路, 降稳态损耗"
+  },
+  {
+    "ref": "Lcm",
+    "name": "共模电感",
+    "spec": "2×2mH ≥20A",
+    "lcsc_keywords": [
+      "common mode choke 2mH 20A",
+      "EMI filter choke"
+    ],
+    "jlc_keywords": [
+      "共模电感 2mH 20A"
+    ],
+    "qty": 1,
+    "module": "EMI滤波",
+    "notes": "按传导EMI测试调整"
+  },
+  {
+    "ref": "Cx",
+    "name": "X电容",
+    "spec": "0.47µF/275VAC X2 安规",
+    "lcsc_keywords": [
+      "X2 capacitor 0.47uF 275V",
+      "safety capacitor X2"
+    ],
+    "jlc_keywords": [
+      "X2电容 0.47uF"
+    ],
+    "qty": 1,
+    "module": "EMI滤波",
+    "notes": "并联L-N"
+  },
+  {
+    "ref": "Cy1",
+    "name": "Y电容",
+    "spec": "2.2nF Y1/Y2 安规",
+    "lcsc_keywords": [
+      "Y capacitor 2.2nF Y1",
+      "Y1 safety capacitor"
+    ],
+    "jlc_keywords": [
+      "Y电容 2.2nF"
+    ],
+    "qty": 1,
+    "module": "EMI滤波",
+    "notes": "接PE, 注意漏电流"
+  },
+  {
+    "ref": "Cy2",
+    "name": "Y电容",
+    "spec": "2.2nF Y1/Y2 安规",
+    "lcsc_keywords": [
+      "Y capacitor 2.2nF Y1"
+    ],
+    "jlc_keywords": [
+      "Y电容 2.2nF"
+    ],
+    "qty": 1,
+    "module": "EMI滤波",
+    "notes": "接PE"
+  },
+  {
+    "ref": "Q1",
+    "name": "SiC MOSFET (高频上管)",
+    "spec": "650V ≤40mΩ TO-247",
+    "lcsc_keywords": [
+      "SiC MOSFET 650V 40mohm TO-247",
+      "C3M0040120K",
+      "IMW120R045M1",
+      "SCT3040KL"
+    ],
+    "jlc_keywords": [
+      "碳化硅 650V MOSFET"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "⚡关键器件: 高频桥臂, 需隔离驱动+散热"
+  },
+  {
+    "ref": "Q2",
+    "name": "SiC MOSFET (高频下管)",
+    "spec": "650V ≤40mΩ TO-247",
+    "lcsc_keywords": [
+      "SiC MOSFET 650V TO-247"
+    ],
+    "jlc_keywords": [
+      "碳化硅 650V MOSFET"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "与Q1同型号"
+  },
+  {
+    "ref": "Q3",
+    "name": "SiC/Si MOSFET (工频上管)",
+    "spec": "650V 低Rds(on) TO-247",
+    "lcsc_keywords": [
+      "MOSFET 650V TO-247 low Rdson",
+      "SiC MOSFET 650V"
+    ],
+    "jlc_keywords": [
+      "MOSFET 650V 低导通"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "工频换向, Si超结MOS也可"
+  },
+  {
+    "ref": "Q4",
+    "name": "SiC/Si MOSFET (工频下管)",
+    "spec": "650V 低Rds(on) TO-247",
+    "lcsc_keywords": [
+      "MOSFET 650V TO-247"
+    ],
+    "jlc_keywords": [
+      "MOSFET 650V"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "与Q3同型号"
+  },
+  {
+    "ref": "L1",
+    "name": "PFC升压电感",
+    "spec": "~450µH ≥25A 低损耗磁芯",
+    "lcsc_keywords": [
+      "PFC inductor 450uH",
+      "boost inductor"
+    ],
+    "jlc_keywords": [
+      "PFC电感"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "⚠️通常需定制, 铁硅铝或铁氧体磁芯绕制"
+  },
+  {
+    "ref": "Cbus1",
+    "name": "母线电容",
+    "spec": "470µF/450V 电解",
+    "lcsc_keywords": [
+      "electrolytic capacitor 470uF 450V",
+      "aluminum 470uF 450V"
+    ],
+    "jlc_keywords": [
+      "电解电容 470uF 450V"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "注意纹波电流额定"
+  },
+  {
+    "ref": "Cbus2",
+    "name": "母线电容",
+    "spec": "470µF/450V 电解",
+    "lcsc_keywords": [
+      "electrolytic capacitor 470uF 450V"
+    ],
+    "jlc_keywords": [
+      "电解电容 470uF 450V"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "与Cbus1并联"
+  },
+  {
+    "ref": "Rbleed",
+    "name": "泄放电阻",
+    "spec": "220kΩ/2W",
+    "lcsc_keywords": [
+      "resistor 220K 2W",
+      "metal film 220K 2W"
+    ],
+    "jlc_keywords": [
+      "电阻 220K 2W"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "⚠️安全件: 掉电放电"
+  },
+  {
+    "ref": "CS1",
+    "name": "电流采样",
+    "spec": "≥25A 霍尔/互感器",
+    "lcsc_keywords": [
+      "hall effect sensor 25A",
+      "current transformer 25A"
+    ],
+    "jlc_keywords": [
+      "霍尔传感器 25A",
+      "电流互感器"
+    ],
+    "qty": 1,
+    "module": "主功率",
+    "notes": "电感电流反馈+OCP"
+  },
+  {
+    "ref": "U1",
+    "name": "隔离栅极驱动器 (高频臂)",
+    "spec": "高速隔离, 峰值电流≥4A",
+    "lcsc_keywords": [
+      "UCC21520 isolated gate driver",
+      "Si8233",
+      "ACPL-332J",
+      "isolated half bridge driver"
+    ],
+    "jlc_keywords": [
+      "隔离驱动 UCC21520",
+      "隔离栅极驱动"
+    ],
+    "qty": 1,
+    "module": "驱动",
+    "notes": "驱动Q1/Q2 SiC"
+  },
+  {
+    "ref": "U2",
+    "name": "隔离栅极驱动器 (工频臂)",
+    "spec": "隔离, 可低速",
+    "lcsc_keywords": [
+      "isolated gate driver",
+      "half bridge driver"
+    ],
+    "jlc_keywords": [
+      "隔离栅极驱动"
+    ],
+    "qty": 1,
+    "module": "驱动",
+    "notes": "驱动Q3/Q4"
+  },
+  {
+    "ref": "U5",
+    "name": "PFC控制器",
+    "spec": "电压外环+电流内环",
+    "lcsc_keywords": [
+      "UCC28070 PFC controller",
+      "NCP1654",
+      "L6562",
+      "STM32G431"
+    ],
+    "jlc_keywords": [
+      "PFC控制器",
+      "UCC28070"
+    ],
+    "qty": 1,
+    "module": "控制",
+    "notes": "模拟: UCC28070; 数字: STM32G4/TMS320"
+  },
+  {
+    "ref": "U6",
+    "name": "辅助电源控制器",
+    "spec": "400VDC输入→15V/5V输出",
+    "lcsc_keywords": [
+      "VIPer22A flyback",
+      "TNY290PG",
+      "auxiliary power supply"
+    ],
+    "jlc_keywords": [
+      "辅助电源 反激"
+    ],
+    "qty": 1,
+    "module": "辅助电源",
+    "notes": "需配变压器+光耦"
+  },
+  {
+    "ref": "Rv1/Rv2/Rv3",
+    "name": "高压分压电阻",
+    "spec": "1MΩ 1% 1206",
+    "lcsc_keywords": [
+      "resistor 1M 1% 1206 high voltage"
+    ],
+    "jlc_keywords": [
+      "电阻 1M 1206"
+    ],
+    "qty": 3,
+    "module": "采样",
+    "notes": "母线电压采样, 多颗串联分耐压"
+  },
+  {
+    "ref": "NTC_T",
+    "name": "温度检测NTC",
+    "spec": "10kΩ B=3950",
+    "lcsc_keywords": [
+      "NTC thermistor 10K 3950"
+    ],
+    "jlc_keywords": [
+      "NTC 10K 3950"
+    ],
+    "qty": 1,
+    "module": "保护",
+    "notes": "OTP温度保护"
+  }
+]
