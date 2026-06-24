@@ -80,24 +80,47 @@ class KiCadArm:
     """KiCad多层控制臂"""
 
     def __init__(self):
-        self.kicad_dir = _find_dir(KICAD_SEARCH_PATHS)
-        self.lceda_dir = _find_dir(LCEDA_SEARCH_PATHS)
-        self.cli_path  = self._find_cli()
-        self.fp_dir    = self._find_footprints()
-        self._pcbnew   = None  # 懒加载
+        # 万法归宗: 工具链探测统一委托 _pcb_bootstrap.detect_env()
+        # (glob 自动发现任意 KiCad/Java 版本), 避免本模块各写一份硬编码路径而版本漂移。
+        # cli_path 为准, kicad_dir 由 cli 反推 (…\bin\kicad-cli.exe → …\<version>)。
+        env = {}
+        try:
+            from _pcb_bootstrap import detect_env
+            env = detect_env()
+        except Exception as e:
+            log.warning(f"bootstrap detect_env 不可用，退回本地探测: {e}")
+
+        self.cli_path     = env.get("kicad_cli") or self._find_cli_fallback()
+        self.freerouting  = env.get("freerouting")
+        self.java_path    = env.get("java")
+        self.kicad_dir    = self._derive_kicad_dir(self.cli_path)
+        self.lceda_dir    = _find_dir(LCEDA_SEARCH_PATHS)
+        self.fp_dir       = self._find_footprints()
+        self._pcbnew      = None  # 懒加载
 
         log.info(f"KiCad目录: {self.kicad_dir}")
         log.info(f"KiCad CLI: {self.cli_path}")
         log.info(f"封装库:    {self.fp_dir}")
+        log.info(f"freerouting: {self.freerouting} | java: {self.java_path}")
         log.info(f"嘉立创EDA: {self.lceda_dir}")
 
-    def _find_cli(self) -> Optional[str]:
-        if self.kicad_dir:
-            cli = self.kicad_dir / "bin" / "kicad-cli.exe"
+    @staticmethod
+    def _derive_kicad_dir(cli_path: Optional[str]) -> Optional[Path]:
+        # …\<version>\bin\kicad-cli.exe → …\<version>
+        if cli_path:
+            p = Path(cli_path)
+            if p.parent.name.lower() == "bin":
+                return p.parent.parent
+            return p.parent
+        return _find_dir(KICAD_SEARCH_PATHS)
+
+    def _find_cli_fallback(self) -> Optional[str]:
+        d = _find_dir(KICAD_SEARCH_PATHS)
+        if d:
+            cli = d / "bin" / "kicad-cli.exe"
             if cli.exists():
                 return str(cli)
-        cli_sys = shutil.which("kicad-cli")
-        return cli_sys
+        return shutil.which("kicad-cli")
 
     def _find_footprints(self) -> Optional[Path]:
         if self.kicad_dir:
@@ -255,6 +278,33 @@ class KiCadArm:
             i = j
         return pads
 
+    def _synth_pads(self, pins: List[str]) -> List[Dict]:
+        """道法自然·因连接生形: 当封装库无法解析出真实焊盘时(模板未指定/未找到),
+        依据该元件在网表中实际引用的引脚名, 合成一个通用双列贴片焊盘图形。
+        保证每个被网表引用的引脚(数字或命名)都有对应铜焊盘 → 可布线、可制造、可出 Gerber。
+        这是兜底的通用焊盘(而非特定器件精确 land pattern), 让 0 焊盘的板也能闭环。
+        """
+        pads: List[Dict] = []
+        if not pins:
+            return pads
+        pitch, col_dx = 1.27, 3.0
+        n = len(pins)
+        half = (n + 1) // 2
+        for i, pin in enumerate(pins):
+            col, row = (-1, i) if i < half else (1, i - half)
+            x = col * col_dx
+            y = (row - (half - 1) / 2.0) * pitch
+            pads.append({
+                "num":   str(pin),
+                "type":  "smd",
+                "shape": "roundrect",
+                "at":    (round(x, 3), round(y, 3)),
+                "size":  (1.0, 0.6),
+                "layers": ["F.Cu", "F.Mask", "F.Paste"],
+                "rratio": 0.25,
+            })
+        return pads
+
     def _parse_pad_block(self, block: str) -> Optional[Dict]:
         """解析单个 (pad ...) 块，返回结构化焊盘数据"""
         m = re.match(r'\(pad\s+"([^"]+)"\s+(\w+)\s+(\w+)', block)
@@ -296,10 +346,14 @@ class KiCadArm:
         # ── 构建 (ref, pin_str) → (net_idx, net_name) 反向映射 ──
         net_index = {name: i for i, name in enumerate(dna.nets.keys(), 1)}
         pad_net: Dict[tuple, tuple] = {}
+        comp_pins: Dict[str, List[str]] = {}  # ref → 网表引用的引脚(保持首现顺序)
         for net_name, conns in dna.nets.items():
             idx = net_index[net_name]
             for ref, pin in conns:
                 pad_net[(ref, str(pin))] = (idx, net_name)
+                lst = comp_pins.setdefault(ref, [])
+                if str(pin) not in lst:
+                    lst.append(str(pin))
 
         lines = [
             "(kicad_pcb",
@@ -346,12 +400,25 @@ class KiCadArm:
 
         # ── 元件 + 真实焊盘 ───────────────────────────────────
         fp_pad_counts = {}
+        synth_refs = []
         for comp in dna.components:
             x, y = comp.pos
             fp_pads = self._parse_fp_pads(comp.fp_lib, comp.fp_name)
+            if not fp_pads:
+                # 封装库无对应焊盘(模板未指定/未找到) → 依网表连接合成通用焊盘
+                fp_pads = self._synth_pads(comp_pins.get(comp.ref, []))
+                if fp_pads:
+                    synth_refs.append(comp.ref)
             fp_pad_counts[comp.ref] = len(fp_pads)
 
-            lines.append(f'  (footprint "{comp.fp_lib}:{comp.fp_name}"')
+            # 封装标识必须是合法字符串; 模板把坐标元组误放进 fp_name 时(或合成焊盘时)
+            # 退回通用标识, 避免把 "power:(60.0, 35.0)" 写进 .kicad_pcb 导致解析失败。
+            fp_lib_s, fp_name_s = str(comp.fp_lib), str(comp.fp_name)
+            if (comp.ref in synth_refs) or any(c in fp_name_s for c in "(),"):
+                fp_id = f"pcbbrain:GENERIC_{comp.ref}"
+            else:
+                fp_id = f"{fp_lib_s}:{fp_name_s}"
+            lines.append(f'  (footprint "{fp_id}"')
             lines.append(f'    (layer "F.Cu")')
             lines.append(f'    (uuid "{uid()}")')
             lines.append(f'    (at {x} {y})')
@@ -417,6 +484,8 @@ class KiCadArm:
         found = sum(1 for v in fp_pad_counts.values() if v > 0)
         log.info(f"✅ PCB文件(KiCad8+真实焊盘)已写入: {output_path}")
         log.info(f"   封装: {found}/{len(dna.components)}个有焊盘数据, 共{total_pads}个焊盘")
+        if synth_refs:
+            log.info(f"   合成通用焊盘(模板未指定封装): {len(synth_refs)}个 → {synth_refs}")
         return True
 
     # ─────────────────────────────────────────────────────────
@@ -573,8 +642,9 @@ class KiCadArm:
         3. kicad-cli pcb import specctra → SES写回PCB
         返回: {"ok": bool, "engine": "freerouting"|"bfs", "routed": N, ...}
         """
-        jar = self._find_freerouting_jar()
-        java = shutil.which("java")
+        # 统一用 bootstrap 探测结果 (glob 发现的任意版本 jar/java), 退回本地查找
+        jar = self.freerouting or self._find_freerouting_jar()
+        java = self.java_path or shutil.which("java")
         if not java:
             # 搜索本地便携JRE (由 pcb_pipeline.py --setup 下载)
             local_jre = Path(__file__).parent / "jre" / "bin" / "java.exe"
@@ -622,13 +692,21 @@ class KiCadArm:
             return bfs
 
         # ② 运行 freerouting
+        # 知其雄守其雌: 布线超时不应炸掉整条流水线 (上游会用占位符覆盖已生成的板),
+        # 故捕获 TimeoutExpired 优雅降级 BFS, 让已摆好的板继续走 DRC/Gerber。
         log.info(f"freerouting: 运行布线 (max_passes={max_passes}, timeout={timeout}s)...")
-        r2 = subprocess.run(
-            [java, "-Djava.awt.headless=true", "-jar", jar,
-             "-de", dsn_path, "-do", ses_path,
-             "-mp", str(max_passes), "-us", "false"],
-            capture_output=True, text=True, timeout=timeout
-        )
+        try:
+            r2 = subprocess.run(
+                [java, "-Djava.awt.headless=true", "-jar", jar,
+                 "-de", dsn_path, "-do", ses_path,
+                 "-mp", str(max_passes), "-us", "false"],
+                capture_output=True, text=True, timeout=timeout
+            )
+        except subprocess.TimeoutExpired:
+            log.warning(f"freerouting超时({timeout}s)，降级BFS (密板可调大 timeout/max_passes)")
+            bfs = self.auto_route_simple(pcb_path)
+            bfs["engine"] = "bfs_fallback_timeout"
+            return bfs
         if not Path(ses_path).exists():
             log.warning(f"freerouting未生成SES({r2.returncode})，降级BFS: {r2.stderr[:200]}")
             bfs = self.auto_route_simple(pcb_path)
@@ -653,7 +731,9 @@ class KiCadArm:
         if ses_ok:
             try:
                 ses_text = Path(ses_path).read_text(encoding="utf-8", errors="ignore")
-                routed = ses_text.count("(wire ")
+                # SES 格式为 "(wire\n  (path ...)"，旧代码用 "(wire " (带空格) 恒为0。
+                # 改用 "(path " 统计实际走线条数。
+                routed = ses_text.count("(path ")
                 log.info(f"✅ freerouting布线完成: {routed}条走线写入")
                 return {"ok": True, "engine": "freerouting",
                         "routed": routed, "unrouted": 0, "segments": routed}
@@ -827,9 +907,23 @@ class KiCadArm:
             result["engine"] = "bfs"
             return result
 
-        # 优先本地freerouting (Java)
-        jar = self._find_freerouting_jar()
-        java = shutil.which("java")
+        # 因材施教: 按板复杂度(焊盘数)放大 freerouting 超时与passes,
+        # 否则密板 30s 必超时→降级BFS(易产生clearance违规)。默认值随复杂度自适应。
+        try:
+            pads = Path(pcb_path).read_text(encoding="utf-8", errors="ignore").count("(pad ")
+            if pads > 60:
+                timeout = max(timeout, 240); max_passes = max(max_passes, 100)
+            elif pads > 30:
+                timeout = max(timeout, 120); max_passes = max(max_passes, 50)
+            elif pads > 15:
+                timeout = max(timeout, 60);  max_passes = max(max_passes, 20)
+            log.info(f"布线复杂度: {pads}焊盘 → timeout={timeout}s, max_passes={max_passes}")
+        except Exception:
+            pass
+
+        # 优先本地freerouting (Java) — 统一用 bootstrap 探测结果
+        jar = self.freerouting or self._find_freerouting_jar()
+        java = self.java_path or shutil.which("java")
         if not java:
             local_jre = Path(__file__).parent / "jre" / "bin" / "java.exe"
             if local_jre.exists():

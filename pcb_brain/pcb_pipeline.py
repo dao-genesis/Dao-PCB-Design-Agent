@@ -64,7 +64,29 @@ _DEFAULT_OUT = _HERE / "output"
 # ─────────────────────────────────────────────────────────────
 
 def _check_environment() -> Dict[str, Any]:
-    """检查所有工具链状态"""
+    """检查所有工具链状态。
+
+    万法归宗: 统一委托给 _pcb_bootstrap.detect_env() (glob 自动发现任意 KiCad 版本),
+    避免各模块各写一份探测逻辑而产生版本漂移。bootstrap 不可用时退回本地探测。
+    """
+    try:
+        from _pcb_bootstrap import detect_env
+        e = detect_env()
+        return {
+            "kicad_cli": bool(e.get("kicad_cli")),
+            "kicad_cli_path": e.get("kicad_cli") or "",
+            "kicad_version": e.get("kicad_version", ""),
+            "freerouting": bool(e.get("freerouting")),
+            "freerouting_path": e.get("freerouting") or "",
+            "java": bool(e.get("java")),
+            "java_path": e.get("java") or "",
+            "kicad_pcbnew": bool(e.get("pcbnew_api")),
+            "python_ok": True,
+        }
+    except Exception:
+        pass
+
+    # ── 退回: 本地探测 (bootstrap 不可用时) ──
     env = {
         "kicad_cli": False, "kicad_cli_path": "",
         "freerouting": False, "freerouting_path": "",
@@ -72,15 +94,18 @@ def _check_environment() -> Dict[str, Any]:
         "kicad_pcbnew": False,
         "python_ok": True,
     }
-    cli_candidates = [
+    import glob as _glob
+    cli_candidates = sorted(
+        _glob.glob(r"C:\Program Files\KiCad\*\bin\kicad-cli.exe"), reverse=True
+    ) + [
         r"D:\KICAD\bin\kicad-cli.exe",
-        r"C:\Program Files\KiCad\8.0\bin\kicad-cli.exe",
         r"C:\Program Files\KiCad\9.0\bin\kicad-cli.exe",
+        r"C:\Program Files\KiCad\8.0\bin\kicad-cli.exe",
         "kicad-cli",
     ]
     for c in cli_candidates:
         try:
-            r = subprocess.run([c, "--version"], capture_output=True, timeout=5)
+            r = subprocess.run([c, "version"], capture_output=True, timeout=5)
             if r.returncode == 0:
                 env["kicad_cli"] = True
                 env["kicad_cli_path"] = c
@@ -355,14 +380,19 @@ class PCBPipeline:
             if not ok:
                 raise RuntimeError("create_pcb_from_dna 返回 False")
             print(f"   → {pcb_path}")
-            # 自动布线 (优先本地freerouting→Cloud→BFS)
-            route = arm.auto_route(pcb_path)
-            print(f"   → 布线引擎={route.get('engine','?')} 已路由={route.get('routed',0)}")
-            return pcb_path
         except Exception as e:
+            # 板生成本身失败才退化占位符
             log.warning(f"PCB生成失败: {e}，返回虚拟路径")
             Path(pcb_path).write_text("# PCB placeholder", encoding="utf-8")
             return pcb_path
+        # 布线独立 try: 布线失败/超时不得覆盖已生成的真实板,
+        # 否则下游 DRC/Gerber 会 "Failed to load board"。
+        try:
+            route = arm.auto_route(pcb_path)
+            print(f"   → 布线引擎={route.get('engine','?')} 已路由={route.get('routed',0)}")
+        except Exception as e:
+            log.warning(f"自动布线失败(保留未布线板继续生产): {e}")
+        return pcb_path
 
     def _stage_drc(self, pcb_path: Optional[str]) -> Dict:
         if not pcb_path or not Path(pcb_path).exists():
@@ -396,7 +426,13 @@ class PCBPipeline:
         try:
             arm.export_gerbers(pcb_path, gerber_dir)
             arm.export_drill(pcb_path, gerber_dir)
-            gerbers = list(Path(gerber_dir).glob("*.gbr")) + list(Path(gerber_dir).glob("*.drl"))
+            # KiCad 导出 Protel 扩展名 (.gtl/.gbl/.gts/.gto/.gm1…) 而非统一 .gbr,
+            # 旧 glob 只数 *.gbr+*.drl 漏算; 改为统计全部 Gerber/钻孔扩展名。
+            GERBER_EXT = {".gbr", ".gtl", ".gbl", ".gts", ".gbs", ".gto", ".gbo",
+                          ".gtp", ".gbp", ".gm1", ".gko", ".drl", ".g2", ".g3",
+                          ".gbrjob"}
+            gerbers = [p for p in Path(gerber_dir).iterdir()
+                       if p.suffix.lower() in GERBER_EXT]
             print(f"   → Gerber: {len(gerbers)}文件 → {gerber_dir}")
             return {"status": "ok", "gerber_dir": gerber_dir, "file_count": len(gerbers)}
         except Exception as e:

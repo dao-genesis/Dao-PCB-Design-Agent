@@ -99,7 +99,17 @@ def get_logger(name: str) -> logging.Logger:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # KiCad CLI 搜索路径
-_KICAD_CLI_CANDIDATES = [
+# 反者道之动: 不写死版本号, 用 glob 自动发现任意已装版本 (10.0/9.0/8.0...), 高版本优先
+def _glob_kicad_clis() -> List[str]:
+    import glob as _glob
+    found: List[str] = []
+    for root in (r"C:\Program Files\KiCad", r"C:\Program Files (x86)\KiCad"):
+        found += _glob.glob(root + r"\*\bin\kicad-cli.exe")
+    # 版本号降序 (字符串内嵌数字, 用自然序近似: 按目录名逆序)
+    found.sort(reverse=True)
+    return found
+
+_KICAD_CLI_CANDIDATES = _glob_kicad_clis() + [
     r"C:\Program Files\KiCad\9.0\bin\kicad-cli.exe",
     r"C:\Program Files\KiCad\8.0\bin\kicad-cli.exe",
     r"D:\KICAD\bin\kicad-cli.exe",
@@ -114,10 +124,24 @@ _FREEROUTING_CANDIDATES = [
 ]
 
 # Java 搜索路径
+# freerouting 2.x 需要较新的 JDK (2.2.4 需 Java 25), 故 glob 发现系统 JDK 并按版本降序优先
+def _glob_javas() -> List[str]:
+    import glob as _glob
+    found: List[str] = []
+    for pat in (
+        r"C:\Program Files\Microsoft\jdk-*\bin\java.exe",
+        r"C:\Program Files\Eclipse Adoptium\jdk-*\bin\java.exe",
+        r"C:\Program Files\Java\jdk-*\bin\java.exe",
+        r"C:\Program Files\Java\jre-*\bin\java.exe",
+    ):
+        found += _glob.glob(pat)
+    found.sort(reverse=True)  # 高版本优先 (jdk-25 > jdk-17)
+    return found
+
 _JAVA_CANDIDATES = [
     PCB_ROOT / "jre" / "bin" / "java.exe",
     PCB_ROOT / "jre" / "bin" / "java",
-]
+] + _glob_javas()
 
 
 def _find_executable(name: str, candidates: List, check_cmd: List[str] = None) -> Optional[str]:
