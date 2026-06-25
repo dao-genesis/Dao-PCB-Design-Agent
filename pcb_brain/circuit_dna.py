@@ -35,7 +35,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 import math
 
 
@@ -80,38 +80,73 @@ class CircuitDNA:
     def list_all(cls) -> List[str]:
         return list(cls._registry.keys())
 
+    # 念头→DNA 关键词库 (模板名 → 触发词)。每个词命中按词长加权,
+    # 长词(如 "stm32f103")比短词(如 "led")更具区分度。
+    _MATCH_KEYWORDS: Dict[str, List[str]] = {
+        "stm32f103c6_dot_matrix":  ["stm32f103", "f103c6", "点阵", "串口", "stm32f1"],
+        "esp32_servo_wifi":        ["esp32", "wifi", "舵机", "servo", "http", "无线控制"],
+        "ams1117_power":           ["ams1117", "稳压", "ldo", "电源模块", "线性稳压"],
+        "drone_flight_controller": ["drone", "无人机", "飞控", "mpu6050", "f405", "esc", "飞行控制"],
+        "drone_aerial_h743":       ["航拍", "aerial", "h743", "ardupilot", "icm42688", "ms5611", "ina226", "生产级飞控", "双imu"],
+        "led_indicator":           ["led指示", "三色led", "indicator", "状态灯", "指示灯模块"],
+        "rp2040_minimal":          ["rp2040", "pico", "树莓派", "raspberry", "raspberrypico"],
+        "stm32g031_minimal":       ["stm32g", "g031", "g0系列", "stm32g0", "现代stm32", "g031g8"],
+        "stm32h743_core":          ["stm32h7", "h743", "h7系列", "480mhz", "cortex-m7", "高性能stm32"],
+        "esp32s3_rs485_can":       ["esp32s3", "rs485", "can总线", "can bus", "隔离通信", "工业通信", "modbus"],
+        "safety_protection":       ["tvs", "esd保护", "看门狗", "保险丝", "安全保护", "过压保护", "浪涌"],
+        "industrial_power":        ["12v工业", "dc-dc", "降压buck", "mp2307", "工业电源", "多路电源"],
+        "lcd_tft_43":              ["lcd", "tft显示", "gt911", "触摸屏", "rgb接口", "dvp摄像头"],
+        "ch32v003_minimal":        ["ch32v003", "ch32v", "risc-v", "riscv", "国产单片机", "wch", "青稲"],
+        "w5500_ethernet":          ["w5500", "以太网", "ethernet", "有线网络", "lan", "rj45", "tcp/ip"],
+        "motor_driver_dual":       ["tb6612", "电机驱动", "直流电机", "h桥", "小车", "机器人驱动", "motor"],
+        "usb_c_pd_trigger":        ["ch224k", "usb-c pd", "usb pd", "pd协议", "取电", "快充", "type-c"],
+        "lora_sx1276_gateway":     ["lora", "sx1276", "ra-02", "433mhz", "lorawan", "远距离无线"],
+        "nrf52840_ble5":           ["nrf52840", "ble5", "蓝牙5", "bluetooth", "nordic", "低功耗蓝牙", "zigbee"],
+        "smartwatch_core":         ["smartwatch", "智能手表", "手表", "可穿戴", "wearable", "心率", "血氧", "运动手环", "手腕", "腕表"],
+    }
+
     @classmethod
-    def from_description(cls, desc: str) -> Optional[DNA]:
-        """根据描述关键字匹配最近模板"""
-        keywords = {
-            "stm32f103c6_dot_matrix":  ["stm32f103", "f103c6", "点阵", "串口", "stm32f1"],
-            "esp32_servo_wifi":        ["esp32", "wifi", "舵机", "servo", "http", "无线控制"],
-            "ams1117_power":           ["ams1117", "稳压", "ldo", "电源模块", "线性稳压"],
-            "drone_flight_controller": ["drone", "无人机", "飞控", "mpu6050", "f405", "esc", "飞行控制"],
-            "drone_aerial_h743":       ["航拍", "aerial", "h743", "ardupilot", "icm42688", "ms5611", "ina226", "生产级飞控", "双imu"],
-            "led_indicator":           ["led指示", "三色led", "indicator", "状态灯", "指示灯模块"],
-            "rp2040_minimal":          ["rp2040", "pico", "树莓派", "raspberry", "raspberrypico"],
-            "stm32g031_minimal":       ["stm32g", "g031", "g0系列", "stm32g0", "现代stm32", "g031g8"],
-            "stm32h743_core":          ["stm32h7", "h743", "h7系列", "480mhz", "cortex-m7", "高性能stm32"],
-            "esp32s3_rs485_can":       ["esp32s3", "rs485", "can总线", "can bus", "隔离通信", "工业通信", "modbus"],
-            "safety_protection":       ["tvs", "esd保护", "看门狗", "保险丝", "安全保护", "过压保护", "浪涌"],
-            "industrial_power":        ["12v工业", "dc-dc", "降压buck", "mp2307", "工业电源", "多路电源"],
-            "lcd_tft_43":              ["lcd", "tft显示", "gt911", "触摸屏", "rgb接口", "dvp摄像头"],
-            "ch32v003_minimal":        ["ch32v003", "ch32v", "risc-v", "riscv", "国产单片机", "wch", "青稲"],
-            "w5500_ethernet":          ["w5500", "以太网", "ethernet", "有线网络", "lan", "rj45", "tcp/ip"],
-            "motor_driver_dual":       ["tb6612", "电机驱动", "直流电机", "h桥", "小车", "机器人驱动", "motor"],
-            "usb_c_pd_trigger":        ["ch224k", "usb-c pd", "usb pd", "pd协议", "取电", "快充", "type-c"],
-            "lora_sx1276_gateway":     ["lora", "sx1276", "ra-02", "433mhz", "lorawan", "远距离无线"],
-            "nrf52840_ble5":           ["nrf52840", "ble5", "蓝牙5", "bluetooth", "nordic", "低功耗蓝牙", "zigbee"],
-            "smartwatch_core":         ["smartwatch", "智能手表", "手表", "可穿戴", "wearable", "心率", "血氧", "运动手环", "手腕", "腕表"],
-        }
+    def advise(cls, desc: str, top_n: int = 3) -> List[Dict[str, Any]]:
+        """念头→DNA 顾问: 返回按匹配度排序的候选 (透明可解释)。
+
+        每个候选: {name, score, matched, description, category}。
+        score = Σ 命中词长度 (长词更具区分度); matched = 命中的触发词。
+        空输入返回 []; 有输入但零命中则返回 [] (由 from_description 兜底)。"""
+        if not desc or not desc.strip():
+            return []
         desc_lower = desc.lower()
-        best, best_score = None, 0
-        for dna_name, kws in keywords.items():
-            score = sum(1 for kw in kws if kw in desc_lower)
-            if score > best_score:
-                best, best_score = dna_name, score
-        return cls.get(best) if best else None
+        ranked: List[Dict[str, Any]] = []
+        for dna_name, kws in cls._MATCH_KEYWORDS.items():
+            hits = [kw for kw in kws if kw.lower() in desc_lower]
+            if not hits:
+                continue
+            score = sum(len(kw) for kw in hits)
+            dna = cls.get(dna_name)
+            ranked.append({
+                "name": dna_name,
+                "score": score,
+                "matched": hits,
+                "description": dna.description if dna else "",
+                "category": dna.category if dna else "general",
+            })
+        ranked.sort(key=lambda r: (-r["score"], -len(r["matched"]), r["name"]))
+        return ranked[:top_n]
+
+    @classmethod
+    def from_description(cls, desc: str,
+                         fallback: bool = False) -> Optional[DNA]:
+        """根据描述匹配最近模板。fallback=True 时即使零命中也给出
+        最简 MCU 兜底模板(念头→板永不空手而归), 否则零命中返回 None。"""
+        ranked = cls.advise(desc, top_n=1)
+        if ranked:
+            return cls.get(ranked[0]["name"])
+        if fallback:
+            for cand in ("rp2040_minimal", "stm32g031_minimal",
+                         "ams1117_power"):
+                dna = cls.get(cand)
+                if dna:
+                    return dna
+        return None
 
 
 # ─────────────────────────────────────────────────────────────

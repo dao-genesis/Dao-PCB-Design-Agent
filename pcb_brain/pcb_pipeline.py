@@ -347,7 +347,7 @@ class PCBPipeline:
         # ── Stage 5: iBoM + JLCPCB (并行) ────────────────────
         print("\n[万物] Stage 5/6 — iBoM + JLCPCB报告 (并行)")
         ibom_result, jlcpcb_result = self._stage(
-            "iBoM+JLCPCB", self._stage_ibom_and_jlcpcb, dna
+            "iBoM+JLCPCB", self._stage_ibom_and_jlcpcb, dna, pcb_path
         ) or (None, None)
 
         # ── Stage 6: 总结 ─────────────────────────────────────
@@ -440,7 +440,7 @@ class PCBPipeline:
             print(f"   → Gerber导出失败({e})，已生成模拟文件")
             return {"status": "mock", "gerber_dir": gerber_dir}
 
-    def _stage_ibom_and_jlcpcb(self, dna: DNA):
+    def _stage_ibom_and_jlcpcb(self, dna: DNA, pcb_path: Optional[str] = None):
         """并行生成iBoM和JLCPCB报告"""
         ibom_r = None
         jlcpcb_r = None
@@ -456,14 +456,22 @@ class PCBPipeline:
                 cost = jlc.cost_report(dna.name)
                 bom_csv = str(self.output_dir / f"{dna.name}_bom.csv")
                 cpl_csv = str(self.output_dir / f"{dna.name}_cpl.csv")
-                cpl = jlc.generate_cpl(dna.name)
+                # CPL 优先取真实板坐标(与 Gerber 同源), 失败降级 DNA 标称
+                cpl = jlc.generate_cpl_from_board(pcb_path) if pcb_path else None
+                cpl_source = "board" if cpl else "dna"
+                if cpl is None:
+                    cpl = jlc.generate_cpl(dna.name)
                 jlc.export_bom_csv(bom, bom_csv)
                 jlc.export_cpl_csv(cpl, cpl_csv)
+                # 诚实校验可制造性(宁缺毋假)
+                validation = jlc.validate_bom(dna.name)
                 return {
                     "status": "ok",
                     "bom_csv": bom_csv,
                     "cpl_csv": cpl_csv,
+                    "cpl_source": cpl_source,
                     "cost": cost,
+                    "validation": validation,
                     "order_url": jlc.order_url(dna.name),
                 }
             except Exception as e:
@@ -479,7 +487,16 @@ class PCBPipeline:
             print(f"   → iBoM: {ibom_r['html_path']}")
         if jlcpcb_r and jlcpcb_r.get("status") == "ok":
             cost = jlcpcb_r.get("cost", {})
+            src = jlcpcb_r.get("cpl_source", "dna")
             print(f"   → BOM.csv: {jlcpcb_r['bom_csv']}")
+            print(f"   → CPL坐标源: {'真实板(与Gerber同源)' if src == 'board' else 'DNA标称(无真实板降级)'}")
+            val = jlcpcb_r.get("validation", {})
+            if val:
+                if val.get("assemblable"):
+                    print(f"   → 可制造性: {val['matched']}/{val['total']} 器件均有LCSC料号, 可直接SMT贴片")
+                else:
+                    miss = ", ".join(f"{u['ref']}({u['value']})" for u in val.get("unmatched", [])[:6])
+                    print(f"   → 可制造性: {val['matched']}/{val['total']} 匹配, 待补料号: {miss}")
             if cost:
                 q = cost.get("qty", 5)
                 total = cost.get("total", "?")
