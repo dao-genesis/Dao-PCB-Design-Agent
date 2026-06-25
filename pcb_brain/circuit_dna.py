@@ -998,12 +998,6 @@ def auto_layout(dna: DNA) -> DNA:
     usable_h = h - 2 * margin
     MIN_SPACING = max(2.5, min(4.0, w * 0.04))  # 最小元件间距mm
 
-    # 按组分类元件
-    groups: Dict[str, list] = {}
-    for comp in dna.components:
-        g = comp.group
-        groups.setdefault(g, []).append(comp)
-
     # 组的中心X位置 (0~1)
     GROUP_CX = {
         "power":     0.12,
@@ -1035,19 +1029,36 @@ def auto_layout(dna: DNA) -> DNA:
         # 找不到空位，强制放置
         return (round(cx + col_offset, 2), round(margin + cy_start * usable_h, 2))
 
-    # 布局顺序: MCU → 晶振 → 电源 → 无源/去耦 → 接口 → 其他
-    order = ["mcu", "crystal", "power", "passive", "interface", "misc"]
-    cy_start = {g: 0.15 for g in order}
+    # 知其雄守其雌·因连接生形: 模板里手工布的坐标往往已是依电路意图排好的可布线布局,
+    # 粗暴重排反而把密板挤成拥塞(实测 esp32s3_rs485_can 重排后 4 层仍剩 1 条网络布不通,
+    # 保留原坐标则 4 层 124 线全布通 drc=0)。故只动"确有问题"的元件(出界/互相重叠),
+    # 其余原样保留——最小干预, 既守住已成立的布局, 又修掉真正的冲突。
+    def _in_bounds(p) -> bool:
+        return bool(p) and 0.0 <= p[0] <= w and 0.0 <= p[1] <= h
 
-    for g in order:
+    cy_start = {g: 0.15 for g in GROUP_CX}
+    relocate: List = []
+    # 第一遍: 贪心保留合法且互不重叠的原始坐标
+    for comp in dna.components:
+        p = comp.pos
+        if _in_bounds(p) and not any(math.hypot(p[0] - px, p[1] - py) < MIN_SPACING
+                                     for px, py in placed):
+            placed.append(p)
+        else:
+            relocate.append(comp)
+
+    # 第二遍: 仅对出界/重叠的元件按功能分区另寻空位
+    reloc_groups: Dict[str, list] = {}
+    for comp in relocate:
+        reloc_groups.setdefault(comp.group, []).append(comp)
+    for g, comps in reloc_groups.items():
         cx_rel = GROUP_CX.get(g, 0.5)
-        for idx, comp in enumerate(groups.get(g, [])):
-            pos = _find_free_pos(cx_rel, cy_start[g], idx)
+        for idx, comp in enumerate(comps):
+            pos = _find_free_pos(cx_rel, cy_start.get(g, 0.15), idx)
             comp.pos = pos
             placed.append(pos)
-            cy_start[g] += (MIN_SPACING / usable_h)
+            cy_start[g] = cy_start.get(g, 0.15) + (MIN_SPACING / usable_h)
 
-    # 将DNA中components的pos更新为已计算值
     return dna
 
 

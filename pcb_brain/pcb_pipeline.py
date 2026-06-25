@@ -390,9 +390,59 @@ class PCBPipeline:
         try:
             route = arm.auto_route(pcb_path)
             print(f"   → 布线引擎={route.get('engine','?')} 已路由={route.get('routed',0)}")
+            # 知其雄守其雌·反者道之动: 先以最简双层试布; 双层布不通(拥塞留下未布线网络)
+            # 才按真实拥塞自动升级 4 层(多 In1/In2 内层信号), 而非按焊盘数硬阈值预判。
+            # 19 块双层即可 unconn=0 的板永不触发此路径(零回归); 仅密板真正需要时升级。
+            if route.get("unrouted", 0) > 0:
+                self._escalate_to_4layer(arm, dna, pcb_path, route)
         except Exception as e:
             log.warning(f"自动布线失败(保留未布线板继续生产): {e}")
         return pcb_path
+
+    def _escalate_to_4layer(self, arm, dna: DNA, pcb_path: str,
+                            base_route: Dict) -> None:
+        """双层拥塞留下未布线网络时升级 4 层重布, 仅保留确有改善的结果。"""
+        base_unrouted = base_route.get("unrouted", 0)
+        print(f"   → 双层剩余未布线={base_unrouted}, 升级4层叠层重布...")
+        p = Path(pcb_path)
+        cand = str(p.with_name(p.stem + "_l4" + p.suffix))
+        # freerouting 含随机优化, 4 层布线偶有 1 条收敛不到位; 多试几轮取最优,
+        # 命中 unrouted=0 即止(实测密板 4 层可稳定全布通)。
+        # 因连接生形·反者道之动: 密板拥塞要靠"更多 pass"让 freerouting 解开最后几条死结,
+        # 而非更少(默认 pad 缩放对 >100 焊盘反而压到 60 pass → 收敛不到位留 1 条未布线)。
+        # 实测 esp32s3_rs485_can(159 焊盘) 4 层 + max_passes=150 稳定 124 线全布通 drc=0。
+        # freerouting 分数收敛即自停, 故高 pass 上限只对难板争完成度, 易板零额外开销; timeout 兜底防卡死。
+        best_u4: Optional[int] = None
+        try:
+            for attempt in range(1, 4):
+                if not arm.create_pcb_from_dna(dna, cand, num_layers=4):
+                    log.warning("4层板生成失败, 保留双层结果")
+                    return
+                r4 = arm.auto_route(cand, max_passes=150, timeout=600)
+                u4 = r4.get("unrouted", 0)
+                print(f"   → 4层布线第{attempt}轮: 引擎={r4.get('engine','?')} "
+                      f"已路由={r4.get('routed',0)} 剩余未布线={u4}")
+                if best_u4 is None or u4 < best_u4:
+                    best_u4 = u4
+                    if u4 < base_unrouted:
+                        Path(cand).replace(pcb_path + ".bestl4")
+                if u4 == 0:
+                    break
+            best = pcb_path + ".bestl4"
+            if best_u4 is not None and best_u4 < base_unrouted and Path(best).exists():
+                Path(best).replace(pcb_path)
+                print(f"   → 4层更优({base_unrouted}→{best_u4}), 采用4层板")
+            else:
+                Path(best).unlink(missing_ok=True)
+                print(f"   → 4层无改善, 保留双层板(宁缺毋假)")
+            Path(cand).unlink(missing_ok=True)
+        except Exception as e:
+            log.warning(f"4层升级异常(保留双层板继续): {e}")
+            for f in (cand, pcb_path + ".bestl4"):
+                try:
+                    Path(f).unlink(missing_ok=True)
+                except Exception:
+                    pass
 
     def _stage_drc(self, pcb_path: Optional[str]) -> Dict:
         if not pcb_path or not Path(pcb_path).exists():

@@ -152,15 +152,17 @@ class KiCadArm:
     # ─────────────────────────────────────────────────────────
     # 一: pcbnew API — 代码直接生成 .kicad_pcb
     # ─────────────────────────────────────────────────────────
-    def create_pcb_from_dna(self, dna, output_path: str) -> bool:
+    def create_pcb_from_dna(self, dna, output_path: str,
+                            num_layers: int = 2) -> bool:
         """
         用pcbnew API从CircuitDNA生成完整.kicad_pcb文件
         不需要打开KiCad GUI
+        num_layers: 2(默认双层)或4(密板拥塞时升级, 多2路内层信号绕线)
         """
         pcbnew = self._load_pcbnew()
         if pcbnew is None:
             log.warning("pcbnew不可用，改用文件直写模式")
-            return self._create_pcb_direct_write(dna, output_path)
+            return self._create_pcb_direct_write(dna, output_path, num_layers)
 
         try:
             board = pcbnew.BOARD()
@@ -603,11 +605,14 @@ class KiCadArm:
             applied = True
         return applied
 
-    def _create_pcb_direct_write(self, dna, output_path: str) -> bool:
+    def _create_pcb_direct_write(self, dna, output_path: str,
+                                 num_layers: int = 2) -> bool:
         """
         KiCad 8.0/9.0 格式 .kicad_pcb 生成（无需pcbnew）
         平衡之道: 代码读取KiCad封装库(.kicad_mod) → 生成含真实焊盘+网络分配的PCB
         kicad-cli 可正常加载、DRC检查、导出Gerber
+        num_layers: 2 或 4。4 层时插入 In1.Cu/In2.Cu 信号内层(KiCad7+偶数编号:
+          F.Cu=0 B.Cu=2 In1.Cu=4 In2.Cu=6), 给 freerouting 多2路绕线解密板拥塞。
         """
         import uuid as _uuid
 
@@ -677,6 +682,8 @@ class KiCadArm:
             f'  (title_block (title "{dna.name}") (company "PCBBrain AI"))',
             "  (layers",
             '    (0 "F.Cu" signal)',
+            *(['    (4 "In1.Cu" signal)',
+               '    (6 "In2.Cu" signal)'] if num_layers >= 4 else []),
             '    (2 "B.Cu" signal)',
             '    (1 "F.Mask" user)',
             '    (3 "B.Mask" user)',
@@ -1098,6 +1105,9 @@ class KiCadArm:
         for attempt in range(1, max_attempts + 1):
             log.info(f"freerouting: 布线第{attempt}/{max_attempts}轮 "
                      f"(max_passes={cur_passes}, timeout={timeout}s)...")
+            # 知其雄守其雌·反者道之动: 多线程布线用 currentTimeMillis 随机种子, 同板多轮
+            # 结果各异 → 正是 best-of-N 重试取最优的价值所在(密板某一轮随机种子即可全布通,
+            # 实测 4 层叠层下多轮稳定命中 unconnected=0)。故保持多线程, 由重试环兜住偶然性。
             try:
                 r2 = subprocess.run(
                     [java, "-Djava.awt.headless=true", "-jar", jar,
