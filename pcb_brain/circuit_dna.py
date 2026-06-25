@@ -1148,6 +1148,7 @@ def auto_layout(dna: DNA) -> DNA:
         "power":     0.12,
         "crystal":   0.25,
         "mcu":       0.50,
+        "sensor":    0.40,  # 传感器靠近 MCU
         "passive":   0.65,  # 无源/去耦电容
         "interface": 0.88,
         "misc":      0.50,
@@ -1162,7 +1163,10 @@ def auto_layout(dna: DNA) -> DNA:
 
     exts = {comp.ref: footprint_extent(comp.fp_name, comp.fp_lib) for comp in dna.components}
     CLEAR = 0.6  # 元件间最小留白 (courtyard) mm
-    order = ["mcu", "crystal", "power", "passive", "interface", "misc"]
+    # 放置顺序: 规范分区优先, 再补任何非规范分组 (如 sensor/rf/analog) —
+    # 不在表里的分组过去会被漏放→留在原位重叠 (根因 bug), 现一律纳入。
+    _canon_order = ["mcu", "crystal", "power", "sensor", "passive", "interface", "misc"]
+    order = _canon_order + [g for g in groups if g not in _canon_order]
 
     # 板框自适应: 若元件实尺寸放不下, 逐步放大板框直到无强制重叠 (而非硬塞→DRC)
     base_w, base_h = dna.board_size
