@@ -1061,9 +1061,10 @@ def resolve_pin_names(dna: DNA) -> DNA:
     if not resolver.available:
         return dna
 
-    # ref → value (用于按器件符号解析功能引脚名) + 归一化兜底映射
+    # ref → value (用于按器件符号解析功能引脚名) + 归一化兜底映射 + 封装(二极管极性)
     ref_value: Dict[str, str] = {}
     ref_pinmap: Dict[str, Dict[str, str]] = {}
+    ref_diode: Dict[str, bool] = {}
     for comp in dna.components:
         if not isinstance(comp.value, str):
             continue
@@ -1071,6 +1072,8 @@ def resolve_pin_names(dna: DNA) -> DNA:
         pm = resolver.pin_map(comp.value)
         if pm:
             ref_pinmap[comp.ref] = {_norm_pin(name): num for name, num in pm.items()}
+        fl = comp.fp_lib if isinstance(comp.fp_lib, str) else ""
+        ref_diode[comp.ref] = fl.startswith("Diode")
 
     for net_name, conns in dna.nets.items():
         new_conns = []
@@ -1081,11 +1084,17 @@ def resolve_pin_names(dna: DNA) -> DNA:
                 num = resolver.resolve(ref_value[ref], p)
                 if num is None and ref in ref_pinmap:   # 兜底: 朴素归一化精确命中
                     num = ref_pinmap[ref].get(_norm_pin(p))
+                if num is None and ref_diode.get(ref):   # 二极管极性脚 (KiCad 约定 K=1,A=2)
+                    num = _DIODE_PIN.get(_norm_pin(p))
                 if num is not None:
                     p = num
             new_conns.append((ref, p))
         dna.nets[net_name] = new_conns
     return dna
+
+
+# 二极管/TVS 极性脚 → 焊盘号 (KiCad Diode_* 封装约定: 阴极 K=1, 阳极 A=2)
+_DIODE_PIN = {"k": "1", "c": "1", "cathode": "1", "a": "2", "anode": "2"}
 
 
 def repair_footprints(dna: DNA) -> DNA:
