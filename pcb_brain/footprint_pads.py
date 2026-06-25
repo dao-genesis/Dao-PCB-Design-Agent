@@ -33,6 +33,7 @@ _CHIP: Dict[str, tuple] = {
     "0805": (1.00,  1.15, 1.40),
     "1206": (1.50,  1.25, 1.75),
     "1210": (1.50,  1.25, 2.65),
+    "1812": (2.40,  1.50, 3.40),
 }
 
 
@@ -131,7 +132,98 @@ def _quad_pads(n: int, pitch: float, body_w: float, body_h: float,
     return pads
 
 
-_RE_CHIP = re.compile(r"^(?:R|C|L|LED|F|FB)_(\d{4})_\d+Metric", re.IGNORECASE)
+# 2-pad SMD 二极管标准 land (off=中心±x, w, h) mm
+_DIODE: Dict[str, tuple] = {
+    "SOD-523": (0.95, 0.6, 0.7),
+    "SOD-323": (1.35, 0.8, 0.9),
+    "SOD-123": (1.9,  1.0, 1.3),
+    "SMA":     (2.3,  1.5, 1.65),
+    "SMB":     (2.3,  1.7, 1.8),
+    "SMC":     (3.0,  2.0, 2.2),
+}
+
+
+def _diode_pads(off: float, w: float, h: float) -> List[Dict]:
+    return [
+        {"num": "1", "type": "smd", "shape": "roundrect", "at": (-off, 0.0),
+         "size": (w, h), "layers": list(_SMD_LAYERS), "rratio": 0.25},
+        {"num": "2", "type": "smd", "shape": "roundrect", "at": (off, 0.0),
+         "size": (w, h), "layers": list(_SMD_LAYERS), "rratio": 0.25},
+    ]
+
+
+def _crystal4_pads(body_w: float, body_h: float) -> List[Dict]:
+    # 4-pin SMD 晶振: 四角焊盘, 逆时针 (1 左下, 2 右下, 3 右上, 4 左上)
+    ox = round(body_w / 2.0 * 0.66, 3)
+    oy = round(body_h / 2.0 * 0.66, 3)
+    pw = round(body_w * 0.34, 3)
+    ph = round(body_h * 0.40, 3)
+    corners = [(-ox, oy), (ox, oy), (ox, -oy), (-ox, -oy)]
+    return [{"num": str(i + 1), "type": "smd", "shape": "roundrect", "at": c,
+             "size": (pw, ph), "layers": list(_SMD_LAYERS), "rratio": 0.25}
+            for i, c in enumerate(corners)]
+
+
+def _sot23_pads(n: int) -> List[Dict]:
+    # SOT-23 系列 (3/5/6 脚, pitch 0.95): 下排 1..b 左→右, 上排 b+1..n 右→左 (逆时针)
+    pitch = 0.95
+    span_y = 2.2 if n == 3 else 2.0
+    pw, ph = (0.9, 1.0) if n == 3 else (0.6, 1.0)
+    b = (n + 1) // 2          # 下排引脚数: 3->2, 5->3, 6->3
+    t = n - b                 # 上排引脚数
+    bx = [round(-(b - 1) * pitch / 2.0 + k * pitch, 3) for k in range(b)]
+    pads: List[Dict] = []
+    for k in range(b):        # 下排
+        pads.append({"num": str(1 + k), "type": "smd", "shape": "roundrect",
+                     "at": (bx[k], span_y / 2.0), "size": (pw, ph),
+                     "layers": list(_SMD_LAYERS), "rratio": 0.25})
+    # 上排取最外侧 t 个 x 位置, 右→左
+    top_x = bx if t == b else [bx[0], bx[-1]] if t == 2 else bx[:t]
+    for k in range(t):
+        pads.append({"num": str(b + 1 + k), "type": "smd", "shape": "roundrect",
+                     "at": (sorted(top_x, reverse=True)[k], -span_y / 2.0),
+                     "size": (pw, ph), "layers": list(_SMD_LAYERS), "rratio": 0.25})
+    return pads
+
+
+def _button_pads(kind: str) -> List[Dict]:
+    if kind == "B3U":     # Omron B3U-1000P: 2 脚 SMD 轻触
+        return _diode_pads(2.1, 1.1, 1.4)
+    # PTS645 等 4 脚轻触 (两两等电位): 四角焊盘
+    pads = []
+    for i, (x, y) in enumerate([(-3.25, 2.25), (3.25, 2.25),
+                                (3.25, -2.25), (-3.25, -2.25)], start=1):
+        pads.append({"num": str(i), "type": "smd", "shape": "roundrect",
+                     "at": (x, y), "size": (1.4, 1.5),
+                     "layers": list(_SMD_LAYERS), "rratio": 0.25})
+    return pads
+
+
+def _jst_row_pads(n: int, pitch: float) -> List[Dict]:
+    # JST 单排连接器: n 个信号焊盘成一排 (机械固定脚不接网, 略去)
+    x0 = -(n - 1) * pitch / 2.0
+    pw = round(pitch * 0.6, 3)
+    return [{"num": str(k + 1), "type": "smd", "shape": "roundrect",
+             "at": (round(x0 + k * pitch, 3), 0.0), "size": (pw, 1.6),
+             "layers": list(_SMD_LAYERS), "rratio": 0.25} for k in range(n)]
+
+
+def _cp_radial_pads(pitch: float) -> List[Dict]:
+    # 直插电解电容: 2 个 THT 焊盘, 间距 pitch
+    return [
+        {"num": "1", "type": "thru_hole", "shape": "rect", "at": (-pitch / 2.0, 0.0),
+         "size": (1.8, 1.8), "drill": 1.0, "layers": list(_THT_LAYERS)},
+        {"num": "2", "type": "thru_hole", "shape": "circle", "at": (pitch / 2.0, 0.0),
+         "size": (1.8, 1.8), "drill": 1.0, "layers": list(_THT_LAYERS)},
+    ]
+
+
+_RE_CHIP = re.compile(r"^(?:R|C|L|LED|F|FB|Fuse)_(\d{4})_\d+Metric", re.IGNORECASE)
+_RE_DIODE = re.compile(r"^D_(SOD-\d+|SMA|SMB|SMC)\b", re.IGNORECASE)
+_RE_CRYSTAL4 = re.compile(r"^Crystal_SMD_.*4Pin", re.IGNORECASE)
+_RE_SOT23 = re.compile(r"^SOT-23(?:-(\d+))?\b", re.IGNORECASE)
+_RE_JST = re.compile(r"^JST_.*?1x(\d+).*?P([\d.]+)mm", re.IGNORECASE)
+_RE_CPR = re.compile(r"^CP_Radial_.*P([\d.]+)mm", re.IGNORECASE)
 _RE_HEADER = re.compile(r"PinHeader_(\d+)x(\d+)_P([\d.]+)mm", re.IGNORECASE)
 _RE_DUAL = re.compile(r"^(?:SOIC|SO|SOP|SSOP|TSSOP|MSOP|VSSOP|HTSSOP)-(\d+)", re.IGNORECASE)
 _RE_QUAD = re.compile(r"^(?:LQFP|TQFP|QFP|QFN|DFN|UFQFPN|VQFN|WQFN)-(\d+)", re.IGNORECASE)
@@ -153,6 +245,36 @@ def builtin_fp_pads(fp_lib: str, fp_name: str,
 
     if name.startswith("SOT-223"):
         return _sot223_pads()
+
+    md = _RE_DIODE.match(name)
+    if md:
+        key = md.group(1).upper()
+        if key in _DIODE:
+            return _diode_pads(*_DIODE[key])
+
+    ms = _RE_SOT23.match(name)
+    if ms:
+        n = int(ms.group(1)) if ms.group(1) else 3
+        if n in (3, 5, 6):
+            return _sot23_pads(n)
+
+    if _RE_CRYSTAL4.match(name):
+        mb2 = _RE_BODY.search(name)
+        if mb2:
+            return _crystal4_pads(float(mb2.group(1)), float(mb2.group(2)))
+
+    if "B3U" in name:
+        return _button_pads("B3U")
+    if "PTS645" in name:
+        return _button_pads("PTS645")
+
+    mj = _RE_JST.match(name)
+    if mj:
+        return _jst_row_pads(int(mj.group(1)), float(mj.group(2)))
+
+    mc = _RE_CPR.match(name)
+    if mc:
+        return _cp_radial_pads(float(mc.group(1)))
 
     m = _RE_HEADER.search(name)
     if m:
@@ -204,9 +326,5 @@ def footprint_extent(fp_name: str) -> tuple:
 
 
 def supported(fp_name: str) -> bool:
-    name = fp_name or ""
-    has_geom = bool(_RE_PITCH.search(name) and _RE_BODY.search(name))
-    return bool(_RE_CHIP.match(name) or name.startswith("SOT-223")
-                or _RE_HEADER.search(name)
-                or (_RE_DUAL.match(name) and has_geom)
-                or (_RE_QUAD.match(name) and has_geom))
+    """是否能为该封装生成几何确定的焊盘 (与 builtin_fp_pads 严格一致)。"""
+    return len(builtin_fp_pads("", fp_name)) > 0
