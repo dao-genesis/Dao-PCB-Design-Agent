@@ -57,6 +57,11 @@ def _canon(raw: str) -> str:
     s0 = (raw or "").strip()
     if not s0:
         return ""
+    # 早归一: 整词电源/地脚, 防止后面差分 N 规则误拆 (VIN→VI+N) 或有源低 n 规则误判
+    _early = re.sub(r"[~{}]", "", s0.upper())
+    _early = re.sub(r"[^A-Z0-9]", "", _early)
+    if _early in ("VIN", "VOUT", "VCC", "VDD", "VSS", "GND"):
+        return {"VIN": "VI", "VOUT": "VO", "VCC": "VDD", "VSS": "GND"}.get(_early, _early)
     inv = "~" in s0
     # 有源低记法 (本库差分一律用 +/-, 故下列均判为有源低, 无歧义):
     #   末尾 '#'  ·  分隔式 '_N'/'_n'  ·  数据手册式"全大写词+小写 n" (RSTn/SCSn/INTn)
