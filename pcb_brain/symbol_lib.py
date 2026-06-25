@@ -108,6 +108,11 @@ _VALUE_ALIAS: Dict[str, str] = {
     "ra02": "ai-thinker-ra-01",
     "ra02lora": "ai-thinker-ra-01",
     "ra02sx1278": "ai-thinker-ra-01",
+    # NXP TJA1050 高速 CAN 收发器与后继 TJA1051 同为 8 脚 SO 标准引脚定义 (TXD/GND/VCC/RXD
+    # /CANL/CANH/S, 高速 CAN 收发器行业通用脚序)。借 KiCad TJA1051 符号取 pin-name→pad。
+    "tja1050": "tja1051",
+    "tja1050t": "tja1051",
+    "tja1050t3": "tja1051",
 }
 
 
@@ -218,13 +223,13 @@ class SymbolResolver:
         v = (value or "").strip()
         if not v:
             return None
+        aliased = _VALUE_ALIAS.get(self._norm(v))   # 权威 pin-compatible 兄弟件别名 (逐条注明)
+        if aliased:
+            v = aliased                              # 改用别名继续走常规匹配 (含通配)
         vl = v.lower()
         if vl in self._index:
             return vl
         nv = self._norm(v)
-        alias = _VALUE_ALIAS.get(nv)        # 权威 pin-compatible 兄弟件别名 (来源逐条注明)
-        if alias and alias in self._index:
-            return alias
         for key in self._index:  # 归一化精确
             if self._norm(key) == nv:
                 return key
