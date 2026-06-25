@@ -111,6 +111,17 @@ _VALUE_ALIAS: Dict[str, str] = {
 }
 
 
+# 芯片专属功能脚别名 (硅片固定复用, 数据手册确证 同一物理焊盘的另一名): {符号名(lower):
+# {别名(upper): 符号实际脚名}}。绝不臆造, 仅收录 datasheet 明示的固定复用脚。
+_PIN_ALIAS: Dict[str, Dict[str, str]] = {
+    # ESP32-S3: GPIO19/GPIO20 即原生 USB D-/D+ (同一焊盘; Espressif 数据手册固定复用)
+    "esp32-s3-wroom-1": {
+        "GPIO19": "USB_D-", "GPIO19_DM": "USB_D-",
+        "GPIO20": "USB_D+", "GPIO20_DP": "USB_D+",
+    },
+}
+
+
 def _parse_pins(text: str) -> Tuple[List[Tuple[str, str]], Optional[str]]:
     """从单个符号文件文本中提取 (pin_name, pin_number) 列表 + 可选 extends 父名。
 
@@ -303,6 +314,11 @@ class SymbolResolver:
         if not sym:
             return None
         pm = self._pins_of(sym)
+        alias = _PIN_ALIAS.get(sym)       # 芯片专属固定复用脚 (datasheet确证)
+        if alias:
+            a = alias.get(p.upper())
+            if a and a in pm:
+                return pm[a]
         if p in pm:                       # 名字精确命中
             return pm[p]
         return self._canon_map(sym).get(_canon(p))   # 记法等价桥接

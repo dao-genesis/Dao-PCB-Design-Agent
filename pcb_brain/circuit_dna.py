@@ -1144,7 +1144,7 @@ def resolve_usb_c(dna: DNA) -> DNA:
     for comp in dna.components:
         fn = comp.fp_name if isinstance(comp.fp_name, str) else ""
         val = comp.value if isinstance(comp.value, str) else ""
-        if "USB_C_Receptacle" in fn or ("USB_C" in fn) or (val.upper() == "USB_C"):
+        if "USB_C_Receptacle" in fn or ("USB_C" in fn) or ("USB_C" in val.upper()):
             usb_refs[comp.ref] = comp
     if not usb_refs:
         return dna
