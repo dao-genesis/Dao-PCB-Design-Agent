@@ -85,10 +85,22 @@ def _canon(raw: str) -> str:
     if md:
         s = "IO" + md.group(1)
     s = re.sub(r"[^A-Z0-9]", "", s)
-    # 通用电源/地等价 (3V3 即 3.3V 供电脚)
+    # 通用电源/地等价 (3V3 即 3.3V 供电脚; 稳压器输入/输出 VIN↔VI / VOUT↔VO);
+    # 复位脚核 RST↔RESET (二者同义, 无器件同时具备相异的 RST 与 RESET 脚)
     s = {"VCC": "VDD", "3V3": "VDD", "V3V3": "VDD", "VDD3V3": "VDD",
-         "VSS": "GND"}.get(s, s)
+         "VSS": "GND", "VIN": "VI", "VOUT": "VO", "RST": "RESET"}.get(s, s)
     return f"{s}#{pol}" if pol else s
+
+
+# 权威 value 别名 (归一化键): 模板用值在 KiCad 库无同名符号, 但有"引脚定义确证 pin-compatible"
+# 的兄弟件符号。仅收录有公开依据者, 逐条注明来源, 绝不臆造。键经 _norm 归一 (去非字母数字)。
+_VALUE_ALIAS: Dict[str, str] = {
+    # Ai-Thinker Ra-02 (SX1278) 与 Ra-01 同一 16 焊盘 castellated 引脚定义 (官方文档明示二者
+    # 引脚兼容, 仅天线不同: Ra-01 板载 / Ra-02 IPEX)。借 KiCad RF_Module:Ai-Thinker-Ra-01 符号。
+    "ra02": "ai-thinker-ra-01",
+    "ra02lora": "ai-thinker-ra-01",
+    "ra02sx1278": "ai-thinker-ra-01",
+}
 
 
 def _parse_pins(text: str) -> Tuple[List[Tuple[str, str]], Optional[str]]:
@@ -191,6 +203,9 @@ class SymbolResolver:
         if vl in self._index:
             return vl
         nv = self._norm(v)
+        alias = _VALUE_ALIAS.get(nv)        # 权威 pin-compatible 兄弟件别名 (来源逐条注明)
+        if alias and alias in self._index:
+            return alias
         for key in self._index:  # 归一化精确
             if self._norm(key) == nv:
                 return key
@@ -250,6 +265,22 @@ class SymbolResolver:
                     cidx.pop(key, None)
                 else:
                     cidx[key] = num
+        # 有源低脚 (键尾 '#I') 额外登记其裸核别名: 数据手册/网表常省略上划线 (NSS↔~{NSS}
+        # /RESET↔~{RESET})。仅当裸核不与真实主键或其它别名冲突时登记, 否则留白不臆造;
+        # 差分 +/- (#P/#N) 不做此处理, 避免 TX+/TX- 误并。
+        alias: Dict[str, str] = {}
+        abus: set = set()
+        for key, num in cidx.items():
+            if key.endswith("#I"):
+                base = key[:-2]
+                if base in cidx or (base in alias and alias[base] != num):
+                    abus.add(base)
+                else:
+                    alias[base] = num
+        for b in abus:
+            alias.pop(b, None)
+        for b, num in alias.items():
+            cidx.setdefault(b, num)
         self._canon_cache[sym_lower] = cidx
         return cidx
 
