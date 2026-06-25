@@ -979,38 +979,48 @@ def auto_layout(dna: DNA) -> DNA:
         "misc":      0.50,
     }
 
-    placed: List[tuple] = []  # 已放置的 (x, y) 列表
+    # 元件外形半宽/半高 (mm) — 用真实封装外接框做无重叠布局, 而非仅看中心点距
+    try:
+        from footprint_pads import footprint_extent
+    except Exception:
+        def footprint_extent(_name):  # 退化: 缺省外形
+            return (3.0, 3.0)
 
-    def _find_free_pos(cx_rel: float, cy_start: float, idx: int) -> tuple:
-        """在目标列附近找到不重叠的位置"""
+    CLEAR = 0.6  # 元件间最小留白 (courtyard) mm
+    placed: List[tuple] = []  # 已放置的 (x, y, half_w, half_h)
+
+    def _bbox_overlap(x, y, hw, hh) -> bool:
+        for px, py, phw, phh in placed:
+            if abs(x - px) < (hw + phw + CLEAR) and abs(y - py) < (hh + phh + CLEAR):
+                return True
+        return False
+
+    def _find_free_pos(cx_rel: float, cy_start: float, idx: int, hw: float, hh: float) -> tuple:
+        """在目标列附近按外接框找到不与已放置元件重叠的位置"""
         cx = margin + cx_rel * usable_w
-        # 奇偶行交错，避免完全垂直堆叠
-        col_offset = (idx % 2) * MIN_SPACING * 0.8
-        for row in range(30):
-            cy = margin + (cy_start + row * (MIN_SPACING / usable_h)) * usable_h
-            x = max(margin, min(w - margin, cx + col_offset))
-            y = max(margin, min(h - margin, cy))
-            # 检查与已放置元件的最小间距
-            too_close = any(
-                math.hypot(x - px, y - py) < MIN_SPACING
-                for px, py in placed
-            )
-            if not too_close:
+        col_offset = (idx % 2) * (hw + CLEAR)  # 奇偶列交错
+        step = max(MIN_SPACING, 2 * hh + CLEAR)
+        for row in range(200):
+            cy = margin + hh + cy_start * usable_h + row * step
+            x = max(margin + hw, min(w - margin - hw, cx + col_offset))
+            y = max(margin + hh, min(h - margin - hh, cy))
+            if not _bbox_overlap(x, y, hw, hh):
                 return (round(x, 2), round(y, 2))
-        # 找不到空位，强制放置
-        return (round(cx + col_offset, 2), round(margin + cy_start * usable_h, 2))
+        # 找不到空位 (板太小), 强制放置, 由 pcb_predict 的 DRC 误差继续暴露
+        return (round(cx + col_offset, 2), round(margin + hh + cy_start * usable_h, 2))
 
     # 布局顺序: MCU → 晶振 → 电源 → 无源/去耦 → 接口 → 其他
     order = ["mcu", "crystal", "power", "passive", "interface", "misc"]
-    cy_start = {g: 0.15 for g in order}
+    cy_start = {g: 0.05 for g in order}
 
     for g in order:
         cx_rel = GROUP_CX.get(g, 0.5)
         for idx, comp in enumerate(groups.get(g, [])):
-            pos = _find_free_pos(cx_rel, cy_start[g], idx)
+            hw, hh = footprint_extent(comp.fp_name)
+            pos = _find_free_pos(cx_rel, cy_start[g], idx, hw, hh)
             comp.pos = pos
-            placed.append(pos)
-            cy_start[g] += (MIN_SPACING / usable_h)
+            placed.append((pos[0], pos[1], hw, hh))
+            cy_start[g] += (2 * hh + CLEAR) / usable_h
 
     # 将DNA中components的pos更新为已计算值
     return dna

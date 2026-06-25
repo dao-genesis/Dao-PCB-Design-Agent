@@ -183,6 +183,26 @@ def builtin_fp_pads(fp_lib: str, fp_name: str,
     return []
 
 
+def footprint_extent(fp_name: str) -> tuple:
+    """返回封装的半宽/半高 (mm), 供布局按真实外形间隔避免重叠。
+
+    已知封装由生成的焊盘外接框推出; 未知/损坏封装给保守缺省值。
+    """
+    pads = builtin_fp_pads("", fp_name) if isinstance(fp_name, str) else []
+    if not pads:
+        return (3.0, 3.0)  # 未知封装保守估计 (含异形件/IC)
+    xs: List[float] = []
+    ys: List[float] = []
+    for p in pads:
+        ax, ay = p["at"]
+        w, h = p["size"]
+        xs += [ax - w / 2.0, ax + w / 2.0]
+        ys += [ay - h / 2.0, ay + h / 2.0]
+    hw = (max(xs) - min(xs)) / 2.0
+    hh = (max(ys) - min(ys)) / 2.0
+    return (round(hw, 3), round(hh, 3))
+
+
 def supported(fp_name: str) -> bool:
     name = fp_name or ""
     has_geom = bool(_RE_PITCH.search(name) and _RE_BODY.search(name))
