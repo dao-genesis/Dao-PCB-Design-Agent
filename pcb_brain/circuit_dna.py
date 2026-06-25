@@ -1082,11 +1082,6 @@ def auto_layout(dna: DNA) -> DNA:
     """
     recover_legacy_comps(dna)  # 修复旧式 4 参 Comp 写法 (D 类数据损坏)
     resolve_pin_names(dna)     # 借符号库把网表功能引脚名解析成物理焊盘号 (§4.5)
-    w, h = dna.board_size
-    margin = max(4.0, min(8.0, w * 0.08))  # 边距
-    usable_w = w - 2 * margin
-    usable_h = h - 2 * margin
-    MIN_SPACING = max(2.5, min(4.0, w * 0.04))  # 最小元件间距mm
 
     # 按组分类元件
     groups: Dict[str, list] = {}
@@ -1111,43 +1106,65 @@ def auto_layout(dna: DNA) -> DNA:
         def footprint_extent(_name):  # 退化: 缺省外形
             return (3.0, 3.0)
 
+    exts = {comp.ref: footprint_extent(comp.fp_name) for comp in dna.components}
     CLEAR = 0.6  # 元件间最小留白 (courtyard) mm
-    placed: List[tuple] = []  # 已放置的 (x, y, half_w, half_h)
-
-    def _bbox_overlap(x, y, hw, hh) -> bool:
-        for px, py, phw, phh in placed:
-            if abs(x - px) < (hw + phw + CLEAR) and abs(y - py) < (hh + phh + CLEAR):
-                return True
-        return False
-
-    def _find_free_pos(cx_rel: float, cy_start: float, idx: int, hw: float, hh: float) -> tuple:
-        """在目标列附近按外接框找到不与已放置元件重叠的位置"""
-        cx = margin + cx_rel * usable_w
-        col_offset = (idx % 2) * (hw + CLEAR)  # 奇偶列交错
-        step = max(MIN_SPACING, 2 * hh + CLEAR)
-        for row in range(200):
-            cy = margin + hh + cy_start * usable_h + row * step
-            x = max(margin + hw, min(w - margin - hw, cx + col_offset))
-            y = max(margin + hh, min(h - margin - hh, cy))
-            if not _bbox_overlap(x, y, hw, hh):
-                return (round(x, 2), round(y, 2))
-        # 找不到空位 (板太小), 强制放置, 由 pcb_predict 的 DRC 误差继续暴露
-        return (round(cx + col_offset, 2), round(margin + hh + cy_start * usable_h, 2))
-
-    # 布局顺序: MCU → 晶振 → 电源 → 无源/去耦 → 接口 → 其他
     order = ["mcu", "crystal", "power", "passive", "interface", "misc"]
-    cy_start = {g: 0.05 for g in order}
 
-    for g in order:
-        cx_rel = GROUP_CX.get(g, 0.5)
-        for idx, comp in enumerate(groups.get(g, [])):
-            hw, hh = footprint_extent(comp.fp_name)
-            pos = _find_free_pos(cx_rel, cy_start[g], idx, hw, hh)
-            comp.pos = pos
-            placed.append((pos[0], pos[1], hw, hh))
-            cy_start[g] += (2 * hh + CLEAR) / usable_h
+    # 板框自适应: 若元件实尺寸放不下, 逐步放大板框直到无强制重叠 (而非硬塞→DRC)
+    base_w, base_h = dna.board_size
+    # 由元件外形总面积给板框一个面积下界 (~50% 填充率), 避免从过小起步反复迭代
+    area = sum((2 * hw + CLEAR) * (2 * hh + CLEAR) for hw, hh in exts.values())
+    side = (area / 0.5) ** 0.5
+    base_w = max(base_w, round(side, 1))
+    base_h = max(base_h, round(side, 1))
 
-    # 将DNA中components的pos更新为已计算值
+    for _attempt in range(8):
+        w, h = base_w, base_h
+        margin = max(4.0, min(8.0, w * 0.08))
+        usable_w = w - 2 * margin
+        usable_h = h - 2 * margin
+        MIN_SPACING = max(2.5, min(4.0, w * 0.04))
+        placed: List[tuple] = []  # 已放置的 (x, y, half_w, half_h)
+        forced = [0]
+
+        def _bbox_overlap(x, y, hw, hh, _placed=placed) -> bool:
+            for px, py, phw, phh in _placed:
+                if abs(x - px) < (hw + phw + CLEAR) and abs(y - py) < (hh + phh + CLEAR):
+                    return True
+            return False
+
+        def _find_free_pos(cx_rel, cy_start, idx, hw, hh,
+                           _w=w, _h=h, _margin=margin, _uw=usable_w, _uh=usable_h,
+                           _ms=MIN_SPACING, _forced=forced, _olap=_bbox_overlap) -> tuple:
+            cx = _margin + cx_rel * _uw
+            col_offset = (idx % 2) * (hw + CLEAR)
+            step = max(_ms, 2 * hh + CLEAR)
+            for row in range(400):
+                cy = _margin + hh + cy_start * _uh + row * step
+                x = max(_margin + hw, min(_w - _margin - hw, cx + col_offset))
+                y = max(_margin + hh, min(_h - _margin - hh, cy))
+                if not _olap(x, y, hw, hh):
+                    return (round(x, 2), round(y, 2))
+            _forced[0] += 1  # 该板框仍放不下 → 记一次强制重叠
+            return (round(cx + col_offset, 2),
+                    round(_margin + hh + cy_start * _uh, 2))
+
+        cy_start = {g: 0.05 for g in order}
+        for g in order:
+            cx_rel = GROUP_CX.get(g, 0.5)
+            for idx, comp in enumerate(groups.get(g, [])):
+                hw, hh = exts[comp.ref]
+                pos = _find_free_pos(cx_rel, cy_start[g], idx, hw, hh)
+                comp.pos = pos
+                placed.append((pos[0], pos[1], hw, hh))
+                cy_start[g] += (2 * hh + CLEAR) / usable_h
+
+        if forced[0] == 0:
+            break
+        base_w = round(base_w * 1.25, 1)  # 放不下 → 放大板框重试
+        base_h = round(base_h * 1.25, 1)
+
+    dna.board_size = (base_w, base_h)
     return dna
 
 
