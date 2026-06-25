@@ -339,6 +339,21 @@ def _fp_index() -> Dict[str, Path]:
     return _FP_INDEX
 
 
+def official_fp(name: str) -> Optional[Tuple[str, str]]:
+    """若 name 恰是官方库某封装的精确名 (如模组 'ESP32-S3-WROOM-1'), 返回 (lib, name); 否则 None。
+
+    用于给"封装名=权威器件名"的模组定位真实封装 (取之官方库, 非臆造)。"""
+    if not isinstance(name, str) or not name.strip():
+        return None
+    p = _fp_index().get(name)
+    if p is None:
+        return None
+    lib = p.parent.name
+    if lib.endswith(".pretty"):
+        lib = lib[: -len(".pretty")]
+    return (lib, name)
+
+
 def fp_mod_path(fp_lib: str, fp_name: str) -> Optional[Path]:
     """定位官方库 .kicad_mod: 先按 lib 精确, 再全库精确同名 (绝不近似匹配, 避免张冠李戴)。"""
     if not _FP_LIB_ROOT or not isinstance(fp_name, str) or not fp_name.strip():

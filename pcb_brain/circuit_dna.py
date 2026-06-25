@@ -1008,6 +1008,14 @@ def infer_footprint(value: str, group: str, pins: set) -> Tuple[str, str]:
             if n <= 1:
                 return ("Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical")
             return ("Connector_PinHeader_2.54mm", f"PinHeader_1x{n:02d}_P2.54mm_Vertical")
+    # 模组等"值即权威封装名"者 (ESP32-S3-WROOM-1 ...): 官方库有同名封装即用之 (非臆造)
+    try:
+        from footprint_pads import official_fp
+        of = official_fp(v)
+        if of:
+            return of
+    except Exception:
+        pass
     return ("", "")
 
 
