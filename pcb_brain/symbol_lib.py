@@ -35,6 +35,7 @@ _RE_PIN = re.compile(r'\(pin\b[^\n]*')
 _RE_NAME = re.compile(r'\(name\s+"([^"]*)"')
 _RE_NUMBER = re.compile(r'\(number\s+"([^"]*)"')
 _RE_EXTENDS = re.compile(r'\(extends\s+"([^"]*)"')
+_RE_FOOTPRINT = re.compile(r'\(property\s+"Footprint"\s+"([^"]*)"')
 
 
 def _find_lib_root() -> Optional[Path]:
@@ -80,6 +81,9 @@ def _canon(raw: str) -> str:
     if mp:
         s = mp.group(1)
     s = re.sub(r"^GPIO(?=\d)", "IO", s)          # ESP32: GPIOn ↔ IOn
+    md = re.match(r"^D(\d)(_.*)?$", s)           # SPI NOR flash 数据线 Dn ↔ IOn (JEDEC 通用)
+    if md:
+        s = "IO" + md.group(1)
     s = re.sub(r"[^A-Z0-9]", "", s)
     # 通用电源/地等价 (3V3 即 3.3V 供电脚)
     s = {"VCC": "VDD", "3V3": "VDD", "V3V3": "VDD", "VDD3V3": "VDD",
@@ -205,6 +209,29 @@ class SymbolResolver:
         if not sym:
             return {}
         return dict(self._pins_of(sym))
+
+    def footprint_of(self, value: str) -> Optional[Tuple[str, str]]:
+        """返回该器件符号自带的**权威封装** (lib, name)——KiCad 官方符号为每个器件
+        标注的规范器件-封装配对。解析不到 / 该符号未填封装 → None (留白)。"""
+        if not self.available:
+            return None
+        sym = self._match_symbol(value)
+        if not sym:
+            return None
+        path = self._index.get(sym)
+        if not path:
+            return None
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return None
+        m = _RE_FOOTPRINT.search(text)
+        if not m or ":" not in m.group(1):
+            return None
+        lib, name = m.group(1).split(":", 1)
+        if not lib or not name:
+            return None
+        return (lib, name)
 
     def _canon_map(self, sym_lower: str) -> Dict[str, str]:
         """该符号的 规范键→焊盘号 索引。斜杠复合名(如 'SCK/CLK')按 / 拆分各自登记;

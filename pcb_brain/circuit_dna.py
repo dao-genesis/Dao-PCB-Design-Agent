@@ -1088,6 +1088,46 @@ def resolve_pin_names(dna: DNA) -> DNA:
     return dna
 
 
+def repair_footprints(dna: DNA) -> DNA:
+    """用器件符号自带的**权威封装**修正"封装缺失/脚数不足"的元件。
+
+    根因: 部分模板给器件配了错封装 (如 CH224K 标 SOP-8, 实为 SSOP-10-1EP; MAX30102
+    标错/缺封装, 实为 OLGA-14)。KiCad 官方符号为每个器件标注了规范器件-封装配对——
+    取之即权威。诚实边界: 仅当**当前封装 (真实或内置生成) 覆盖不了网表所需焊盘**, 且
+    符号自带封装能覆盖时才替换; 否则保持原样 (绝不臆造、不破坏已正确的封装)。"""
+    try:
+        from symbol_lib import get_resolver
+        from footprint_pads import real_pad_nums, builtin_fp_pads
+        resolver = get_resolver()
+    except Exception:
+        return dna
+    if not resolver.available:
+        return dna
+    refpins: Dict[str, set] = {}
+    for conns in dna.nets.values():
+        for ref, pin in conns:
+            refpins.setdefault(ref, set()).add(str(pin))
+    for comp in dna.components:
+        if not isinstance(comp.value, str):
+            continue
+        needed = {p for p in refpins.get(comp.ref, set()) if p.isdigit()}
+        if not needed:
+            continue
+        cur_lib = comp.fp_lib if isinstance(comp.fp_lib, str) else ""
+        cur_name = comp.fp_name if isinstance(comp.fp_name, str) else ""
+        cur_pads = real_pad_nums(cur_lib, cur_name)
+        if not cur_pads:
+            cur_pads = {p["num"] for p in builtin_fp_pads(cur_lib, cur_name, needed)}
+        if needed.issubset(cur_pads):
+            continue  # 当前封装已够用, 不动 (保护已交付件)
+        sym_fp = resolver.footprint_of(comp.value)
+        if not sym_fp:
+            continue
+        if needed.issubset(real_pad_nums(*sym_fp)):   # 符号权威封装能覆盖所需脚
+            comp.fp_lib, comp.fp_name = sym_fp
+    return dna
+
+
 def auto_layout(dna: DNA) -> DNA:
     """
     自动布局算法 v2 — 功能分区 + 最小间距保证 + 去耦电容靠近MCU
@@ -1095,6 +1135,7 @@ def auto_layout(dna: DNA) -> DNA:
     """
     recover_legacy_comps(dna)  # 修复旧式 4 参 Comp 写法 (D 类数据损坏)
     resolve_pin_names(dna)     # 借符号库把网表功能引脚名解析成物理焊盘号 (§4.5)
+    repair_footprints(dna)     # 用符号自带权威封装修正错配/缺失的封装
 
     # 按组分类元件
     groups: Dict[str, list] = {}

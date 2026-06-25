@@ -339,6 +339,21 @@ def _fp_index() -> Dict[str, Path]:
     return _FP_INDEX
 
 
+_RE_PAD_NUM = re.compile(r'\(pad\s+"([^"]+)"')
+
+
+def real_pad_nums(fp_lib: str, fp_name: str) -> set:
+    """官方库 .kicad_mod 的全部焊盘编号集合 (含 EP 等); 找不到返回空集。"""
+    path = fp_mod_path(fp_lib, fp_name)
+    if path is None or not path.exists():
+        return set()
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return set()
+    return set(_RE_PAD_NUM.findall(text))
+
+
 def official_fp(name: str) -> Optional[Tuple[str, str]]:
     """若 name 恰是官方库某封装的精确名 (如模组 'ESP32-S3-WROOM-1'), 返回 (lib, name); 否则 None。
 
