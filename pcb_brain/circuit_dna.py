@@ -36,6 +36,7 @@
 
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
+import re
 
 
 @dataclass
@@ -950,11 +951,94 @@ CircuitDNA.register(DNA(
 # ─────────────────────────────────────────────────────────────
 # 工具函数
 # ─────────────────────────────────────────────────────────────
+
+# 具体器件 → (fp_lib, fp_name) 的高置信映射 (封装由器件型号唯一确定)
+_PART_FP: Dict[str, Tuple[str, str]] = {
+    "MAX3485EESA":   ("Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm"),
+    "6N137":         ("Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm"),
+    "TJA1050T":      ("Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm"),
+    "MP2307DN":      ("Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm"),
+    "TXS0108E":      ("Package_SO", "TSSOP-20_4.4x6.5mm_P0.65mm"),
+    "AMS1117-3.3":   ("Package_TO_SOT_SMD", "SOT-223-3_TabPin2"),
+    "AP2112K-1.8":   ("Package_TO_SOT_SMD", "SOT-23-5"),
+    "TPS3823-33":    ("Package_TO_SOT_SMD", "SOT-23-5"),
+    "S8050":         ("Package_TO_SOT_SMD", "SOT-23"),
+    "USBLC6-2SC6":   ("Package_TO_SOT_SMD", "SOT-23-6"),
+    "TPD2E001":      ("Package_TO_SOT_SMD", "SOT-23-6"),
+    "STM32H743VIT6": ("Package_QFP", "LQFP-100_14x14mm_P0.5mm"),
+    "SS34":          ("Diode_SMD", "D_SMA"),
+    "MBRS340":       ("Diode_SMD", "D_SMC"),
+    "SMAJ3.3A":      ("Diode_SMD", "D_SMA"),
+    "SMBJ12A":       ("Diode_SMD", "D_SMB"),
+    "SMBJ5.0A":      ("Diode_SMD", "D_SMB"),
+    "MF-MSMF050":    ("Fuse", "Fuse_1206_3216Metric"),
+    "MF-MSMF150":    ("Fuse", "Fuse_1206_3216Metric"),
+    "BLM31PG600":    ("Inductor_SMD", "L_1206_3216Metric"),
+    "4.7uH":         ("Inductor_SMD", "L_1210_3225Metric"),
+    "25MHz":         ("Crystal", "Crystal_SMD_3225-4Pin_3.2x2.5mm"),
+    "RESET_BTN":     ("Button_Switch_SMD", "SW_SPST_PTS645"),
+}
+
+_RE_CAP = re.compile(r"^\d+(\.\d+)?(pF|nF|uF|mF|F)(_\d+V)?$", re.IGNORECASE)
+_RE_RES = re.compile(r"^\d+(\.\d+)?[kKMRrΩ]?$")
+_RE_IND = re.compile(r"^\d+(\.\d+)?(uH|nH|mH)$", re.IGNORECASE)
+
+
+def infer_footprint(value: str, group: str, pins: set) -> Tuple[str, str]:
+    """从器件值/分组/网络引脚反推应有封装。
+
+    诚实边界: 仅在封装可由型号/值唯一确定, 或连接器引脚数可由网表反演时才赋值;
+    无法确定的模组/异形件 (USB-C/WROOM/FPC 等) 返回 ('',''), 继续被 pcb_predict 记账为缺口。
+    """
+    v = (value or "").strip()
+    if v in _PART_FP:
+        return _PART_FP[v]
+    if _RE_CAP.match(v):
+        bulk = ("uF" in v.lower()) and (("100uF" in v) or ("47uF" in v) or ("_" in v))
+        return ("Capacitor_SMD", "C_0805_2012Metric" if bulk else "C_0603_1608Metric")
+    if _RE_RES.match(v):
+        return ("Resistor_SMD", "R_0603_1608Metric")
+    if _RE_IND.match(v):
+        return ("Inductor_SMD", "L_0805_2012Metric")
+    # 连接器/接口: 引脚数由网表反演 (数据驱动, 非臆造)
+    if group in ("interface", "connector"):
+        nums = [int(p) for p in pins if str(p).isdigit()]
+        if nums:
+            n = max(nums)
+            if n <= 1:
+                return ("Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical")
+            return ("Connector_PinHeader_2.54mm", f"PinHeader_1x{n:02d}_P2.54mm_Vertical")
+    return ("", "")
+
+
+def recover_legacy_comps(dna: DNA) -> DNA:
+    """修复以旧式 4 参约定 Comp(ref,value,group,pos) 写就的模板。
+
+    该约定漏写了 fp_lib/fp_name, 致 group 落入 fp_lib 槽、pos 落入 fp_name 槽。
+    这里把 group/pos 归位 (它们本就在数据里, 只是放错槽), 并由 value/网表反推缺失的封装。
+    """
+    refpins: Dict[str, set] = {}
+    for conns in dna.nets.values():
+        for ref, pin in conns:
+            refpins.setdefault(ref, set()).add(str(pin))
+    for comp in dna.components:
+        if isinstance(comp.fp_name, str):
+            continue  # 正常 6 参写法, 无需修复
+        legacy_group = comp.fp_lib if isinstance(comp.fp_lib, str) else "misc"
+        legacy_pos = comp.fp_name if isinstance(comp.fp_name, tuple) else comp.pos
+        comp.group = legacy_group
+        comp.pos = legacy_pos
+        comp.fp_lib, comp.fp_name = infer_footprint(comp.value, legacy_group,
+                                                     refpins.get(comp.ref, set()))
+    return dna
+
+
 def auto_layout(dna: DNA) -> DNA:
     """
     自动布局算法 v2 — 功能分区 + 最小间距保证 + 去耦电容靠近MCU
     布局分区: 电源(左15%) | 晶振(左30%) | MCU(中心) | 去耦(MCU周围) | 无源(右40%) | 接口(右边)
     """
+    recover_legacy_comps(dna)  # 修复旧式 4 参 Comp 写法 (D 类数据损坏)
     w, h = dna.board_size
     margin = max(4.0, min(8.0, w * 0.08))  # 边距
     usable_w = w - 2 * margin
