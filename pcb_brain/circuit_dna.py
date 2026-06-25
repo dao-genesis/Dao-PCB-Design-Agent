@@ -283,7 +283,7 @@ _drone_components = [
     Comp("C9",  "100nF",          "Capacitor_SMD",              "C_0603_1608Metric",                       (50, 40),  "passive",   "MCU去耦2"),
     Comp("C10", "100nF",          "Capacitor_SMD",              "C_0603_1608Metric",                       (52, 40),  "passive",   "MCU去耦3"),
     Comp("C11", "100nF",          "Capacitor_SMD",              "C_0603_1608Metric",                       (54, 40),  "passive",   "MCU去耦4"),
-    Comp("SW1", "SW_RESET",       "Button_Switch_SMD",          "SW_SPST_PTS645",                          (44, 58),  "interface", "复位按钮"),
+    Comp("SW1", "SW_RESET",       "Button_Switch_SMD",          "SW_SPST_B3U-1000P",                          (44, 58),  "interface", "复位按钮"),
     Comp("R1",  "10k",            "Resistor_SMD",               "R_0603_1608Metric",                       (44, 55),  "passive",   "复位上拉"),
     Comp("R2",  "10k",            "Resistor_SMD",               "R_0603_1608Metric",                       (44, 62),  "passive",   "BOOT0配置"),
     # 传感器
@@ -791,7 +791,7 @@ _safety_protection_nets = {
     "12V":       [("F1","2"),("D1","K"),("D4","A")],
     "5V_IN":     [("F2","1")],
     "5V":        [("F2","2"),("D2","K"),("D4","K")],
-    "3V3":       [("D3","K"),("U4","VDD"),("R1","1"),("C1","1"),("C2","1"),("C5","1"),("C6","1"),("U1","VCC")],
+    "3V3":       [("D3","K"),("U4","VDD"),("R1","1"),("C1","1"),("C2","1"),("C5","1"),("C6","1"),("U1","VBUS")],
     "GND":       [("D1","A"),("D2","A"),("D3","A"),
                   ("U1","GND"),("U2","GND"),("U3","GND"),("U4","GND"),
                   ("C1","2"),("C2","2"),("C3","2"),("C4","2"),("C5","2"),("C6","2")],
@@ -979,7 +979,7 @@ _PART_FP: Dict[str, Tuple[str, str]] = {
     "BLM31PG600":    ("Inductor_SMD", "L_1206_3216Metric"),
     "4.7uH":         ("Inductor_SMD", "L_1210_3225Metric"),
     "25MHz":         ("Crystal", "Crystal_SMD_3225-4Pin_3.2x2.5mm"),
-    "RESET_BTN":     ("Button_Switch_SMD", "SW_SPST_PTS645"),
+    "RESET_BTN":     ("Button_Switch_SMD", "SW_SPST_B3U-1000P"),
 }
 
 _RE_CAP = re.compile(r"^\d+(\.\d+)?(pF|nF|uF|mF|F)(_\d+V)?$", re.IGNORECASE)
@@ -1968,7 +1968,7 @@ _aerial_components = [
     Comp("C15", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (22, 18), "passive",   "MCU VDD去耦"),
     Comp("C16", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (24, 18), "passive",   "MCU VDDA去耦"),
     Comp("C17", "4R7uF",          "Capacitor_SMD",           "C_0805_2012Metric",                   (26, 18), "passive",   "MCU VDDA bulk滤波"),
-    Comp("SW1", "SW_RESET",       "Button_Switch_SMD",       "SW_SPST_PTS645",                      (16, 28), "interface", "复位按键"),
+    Comp("SW1", "SW_RESET",       "Button_Switch_SMD",       "SW_SPST_B3U-1000P",                      (16, 28), "interface", "复位按键"),
     Comp("R2",  "10k",            "Resistor_SMD",            "R_0402_1005Metric",                   (16, 26), "passive",   "NRST上拉10k"),
     Comp("R3",  "10k",            "Resistor_SMD",            "R_0402_1005Metric",                   (16, 30), "passive",   "BOOT0下拉10k(正常启动)"),
     # ── 外部看门狗 TPS3813K50 (1.6s超时→硬件复位MCU) ─────────
@@ -1998,10 +1998,10 @@ _aerial_components = [
     Comp("R9",  "5R1k",           "Resistor_SMD",            "R_0402_1005Metric",                   ( 7, 42), "passive",   "USB CC2 5.1k"),
     Comp("C26", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   ( 9, 42), "passive",   "USB VBUS去耦"),
     # ── 电机输出接口 x4 (DSHOT600/PWM) ───────────────────────
-    Comp("J3",  "MOTOR1_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Horizontal", (45,  8), "interface", "电机1 ESC接口(DSHOT+5V+GND)"),
-    Comp("J4",  "MOTOR2_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Horizontal", (45, 14), "interface", "电机2 ESC接口"),
-    Comp("J5",  "MOTOR3_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Horizontal", (45, 20), "interface", "电机3 ESC接口"),
-    Comp("J6",  "MOTOR4_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Horizontal", (45, 26), "interface", "电机4 ESC接口"),
+    Comp("J3",  "MOTOR1_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Vertical", (45,  8), "interface", "电机1 ESC接口(DSHOT+5V+GND)"),
+    Comp("J4",  "MOTOR2_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Vertical", (45, 14), "interface", "电机2 ESC接口"),
+    Comp("J5",  "MOTOR3_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Vertical", (45, 20), "interface", "电机3 ESC接口"),
+    Comp("J6",  "MOTOR4_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Vertical", (45, 26), "interface", "电机4 ESC接口"),
     # ── UART外设接口 (ArduPilot 6×UART) ──────────────────────
     Comp("J7",  "GPS1_JST4",      "Connector_JST",           "JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal",  (37, 35), "interface", "GPS1 UART1(Ublox M9N)"),
     Comp("J8",  "TELEM1_JST4",    "Connector_JST",           "JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal",  (37, 40), "interface", "遥测1 UART2(MAVLink地面站)"),
