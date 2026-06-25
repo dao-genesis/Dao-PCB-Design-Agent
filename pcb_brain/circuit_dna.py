@@ -1033,12 +1033,55 @@ def recover_legacy_comps(dna: DNA) -> DNA:
     return dna
 
 
+def _norm_pin(s: str) -> str:
+    """归一化引脚名以便跨"网表写法 vs 符号写法"匹配 (去 overbar/下标/斜杠等装饰)。"""
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+def resolve_pin_names(dna: DNA) -> DNA:
+    """把网表里按"功能引脚名"引用的脚, 借 KiCad 符号库解析成"物理焊盘号"。
+
+    根因见 §4.5: 网表按名引用 (("U1","3V3")), 而生成封装的焊盘是物理编号 1..N。
+    权威映射来自符号层 (KiCad 官方符号库)。诚实边界: 符号匹配不到 / 引脚名不在符号里
+    → 保持原样, 继续被 pcb_predict 如实记账, 绝不臆造。
+    """
+    try:
+        from symbol_lib import get_resolver
+        resolver = get_resolver()
+    except Exception:
+        return dna
+    if not resolver.available:
+        return dna
+
+    # ref → 归一化引脚名 → 焊盘号 (来自该元件 value 对应的符号)
+    ref_pinmap: Dict[str, Dict[str, str]] = {}
+    for comp in dna.components:
+        if not isinstance(comp.value, str):
+            continue
+        pm = resolver.pin_map(comp.value)
+        if pm:
+            ref_pinmap[comp.ref] = {_norm_pin(name): num for name, num in pm.items()}
+
+    for net_name, conns in dna.nets.items():
+        new_conns = []
+        for ref, pin in conns:
+            p = str(pin)
+            if not p.isdigit() and ref in ref_pinmap:
+                num = ref_pinmap[ref].get(_norm_pin(p))
+                if num is not None:
+                    p = num
+            new_conns.append((ref, p))
+        dna.nets[net_name] = new_conns
+    return dna
+
+
 def auto_layout(dna: DNA) -> DNA:
     """
     自动布局算法 v2 — 功能分区 + 最小间距保证 + 去耦电容靠近MCU
     布局分区: 电源(左15%) | 晶振(左30%) | MCU(中心) | 去耦(MCU周围) | 无源(右40%) | 接口(右边)
     """
     recover_legacy_comps(dna)  # 修复旧式 4 参 Comp 写法 (D 类数据损坏)
+    resolve_pin_names(dna)     # 借符号库把网表功能引脚名解析成物理焊盘号 (§4.5)
     w, h = dna.board_size
     margin = max(4.0, min(8.0, w * 0.08))  # 边距
     usable_w = w - 2 * margin
