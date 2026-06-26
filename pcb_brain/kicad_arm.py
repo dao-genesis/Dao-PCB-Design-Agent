@@ -1009,119 +1009,227 @@ class KiCadArm:
                         out.add((gx + dx, gy + dy))
             return out
 
-        segments: list = []
-        vias: list = []
-        routed = unrouted = 0
+        import copy as _copy
+        # 占用按 net 分桶, 支持拆线 (rip-up): 走线/过孔的实体+段落均以 net 为键,
+        # 故可整网移除后重布 (协商式拥塞布线的基础)。
+        net_segments: dict = {}   # net -> list(seg)
+        net_vias: dict = {}       # net -> list(via, 保留 _gx/_gy 至最终展平)
 
-        # 路由顺序: 焊盘多(最受约束)的网先布, 趁板面空闲抢到通路;
-        #           简单 2 脚网最后填缝 → 整体开路最少 (无 rip-up 下的最优近似)。
-        for net_idx, pad_list in sorted(
-                pads_by_net.items(), key=lambda kv: -len(kv[1])):
-            if len(pad_list) < 2:
-                continue
-            connected_mm = [pad_list[0]]
-            remaining_mm = list(pad_list[1:])
+        def commit_path(net_idx, path, segs, vlist):
+            net_segments.setdefault(net_idx, []).extend(segs)
+            net_vias.setdefault(net_idx, []).extend(vlist)
+            for gx, gy, L in path:
+                trace_body[L].setdefault(net_idx, set()).add((gx, gy))
+            for L in (LF, LB):
+                if net_idx in trace_body[L]:
+                    trace_halo[L][net_idx] = frozenset(
+                        expand_halo(trace_body[L][net_idx], TRACE_HALO))
+            for v in vlist:
+                via_body.setdefault(net_idx, set()).add((v["_gx"], v["_gy"]))
+            if net_idx in via_body:
+                via_halo[net_idx] = frozenset(
+                    expand_halo(via_body[net_idx], VIA_HALO))
 
-            while remaining_mm:
+        def ripup_net(net_idx):
+            for L in (LF, LB):
+                trace_body[L].pop(net_idx, None)
+                trace_halo[L].pop(net_idx, None)
+            via_body.pop(net_idx, None)
+            via_halo.pop(net_idx, None)
+            net_segments.pop(net_idx, None)
+            net_vias.pop(net_idx, None)
+
+        def build_obs(net_idx, own_cells, exempt, relax_ring):
+            obs = {}
+            for L in (LF, LB):
+                o = set(edge_cells)
+                # 异网走线 (含间距 halo): 从根上保证 clearance
+                for onet, cells in trace_halo[L].items():
+                    if onet != net_idx:
+                        o |= cells
+                # 本网已布线本体: 仅防重复占格 (同网无需间距)
+                o |= trace_body[L].get(net_idx, set())
+                # 过孔 (占双层): 异网含 halo, 本网仅本体
+                for onet, cells in via_halo.items():
+                    if onet != net_idx:
+                        o |= cells
+                o |= via_body.get(net_idx, set())
+                # 异网焊盘: 本体(hard)永不豁免 (走线绝不压在异网焊盘铜上=硬短路);
+                #          仅 clearance 外环可在端点附近豁免 (供紧间距逃逸)。
+                body = set()
+                for nidx, cells in pad_hard[L].items():
+                    if nidx != net_idx:
+                        body |= cells
+                o |= body
+                if not relax_ring:
+                    ring = set()
+                    for nidx, cells in pad_soft[L].items():
+                        if nidx != net_idx:
+                            ring |= cells
+                    ring -= body
+                    o |= (ring - exempt)
+                obs[L] = o - own_cells
+            return obs
+
+        def try_route(net_idx, src_mm, dst_mm, own_cells):
+            """对单条连接走双层迷宫 (含 Level1/Level2 降级)。成功返回 path。"""
+            src_g = mm_to_grid(*src_mm)
+            dst_g = mm_to_grid(*dst_mm)
+            exempt = set(own_cells)
+            for ddx in range(-1, 2):
+                for ddy in range(-1, 2):
+                    exempt.add((src_g[0] + ddx, src_g[1] + ddy))
+                    exempt.add((dst_g[0] + ddx, dst_g[1] + ddy))
+            sl, dl = layers_of(src_mm), layers_of(dst_mm)
+            obs = build_obs(net_idx, own_cells, exempt, relax_ring=False)
+            path = self._maze_route_2layer(
+                src_g, dst_g, sl, dl, obs, gw, gh, VIA_COST)
+            if path is None:
+                obs = build_obs(net_idx, own_cells, exempt, relax_ring=True)
+                path = self._maze_route_2layer(
+                    src_g, dst_g, sl, dl, obs, gw, gh, VIA_COST)
+            return path
+
+        def net_connections(pad_list):
+            """贪心最近对 → 该网的生成树连接序列 [(src_mm, dst_mm), ...]。"""
+            connected = [pad_list[0]]
+            remaining = list(pad_list[1:])
+            conns = []
+            while remaining:
                 best_src = best_dst = None
                 best_d = 1e9
-                for dst_mm in remaining_mm:
-                    for src_mm in connected_mm:
+                for dst_mm in remaining:
+                    for src_mm in connected:
                         d = abs(dst_mm[0]-src_mm[0]) + abs(dst_mm[1]-src_mm[1])
                         if d < best_d:
                             best_d, best_src, best_dst = d, src_mm, dst_mm
+                conns.append((best_src, best_dst))
+                connected.append(best_dst)
+                remaining.remove(best_dst)
+            return conns
 
-                src_g = mm_to_grid(*best_src)
-                dst_g = mm_to_grid(*best_dst)
-                src_layers = layers_of(best_src)
-                dst_layers = layers_of(best_dst)
-
-                own_cells: set = {mm_to_grid(*p) for p in pad_list}
-                exempt: set = set(own_cells)
-                for ddx in range(-1, 2):
-                    for ddy in range(-1, 2):
-                        exempt.add((src_g[0]+ddx, src_g[1]+ddy))
-                        exempt.add((dst_g[0]+ddx, dst_g[1]+ddy))
-
-                def build_obs(relax_ring: bool):
-                    obs = {}
-                    for L in (LF, LB):
-                        o = set(edge_cells)
-                        # 异网走线 (含间距 halo): 从根上保证 clearance
-                        for onet, cells in trace_halo[L].items():
-                            if onet != net_idx:
-                                o |= cells
-                        # 本网已布线本体: 仅防重复占格 (同网无需间距)
-                        o |= trace_body[L].get(net_idx, set())
-                        # 过孔 (占双层): 异网含 halo, 本网仅本体
-                        for onet, cells in via_halo.items():
-                            if onet != net_idx:
-                                o |= cells
-                        o |= via_body.get(net_idx, set())
-                        # 异网焊盘: 本体(hard)永不豁免 (走线绝不压在异网焊盘铜上=硬短路);
-                        #          仅 clearance 外环可在端点附近豁免 (供紧间距逃逸)。
-                        body = set()
-                        for nidx, cells in pad_hard[L].items():
-                            if nidx != net_idx:
-                                body |= cells
-                        o |= body
-                        if not relax_ring:
-                            ring = set()
-                            for nidx, cells in pad_soft[L].items():
-                                if nidx != net_idx:
-                                    ring |= cells
-                            ring -= body
-                            o |= (ring - exempt)
-                        obs[L] = o - own_cells
-                    return obs
-
-                # Level 1: 满 clearance 外环 (端点附近可穿环) → 双层迷宫
-                obs = build_obs(relax_ring=False)
-                path = self._maze_route_2layer(
-                    src_g, dst_g, src_layers, dst_layers, obs, gw, gh, VIA_COST)
-                # Level 2: 丢 clearance 外环 (仍不穿焊盘体/异网走线) → 紧间距降级
-                if path is None:
-                    obs = build_obs(relax_ring=True)
-                    path = self._maze_route_2layer(
-                        src_g, dst_g, src_layers, dst_layers, obs, gw, gh, VIA_COST)
-                    if path:
-                        log.warning(f"  净{net_idx}: ⚠️ Level2降级(可能 clearance 紧)")
-
+        def route_net(net_idx):
+            """整网布线 (先拆后布)。返回未连通的连接列表 [(src,dst), ...]。"""
+            ripup_net(net_idx)
+            pad_list = pads_by_net[net_idx]
+            own_cells = {mm_to_grid(*p) for p in pad_list}
+            failed = []
+            for src_mm, dst_mm in net_connections(pad_list):
+                path = try_route(net_idx, src_mm, dst_mm, own_cells)
                 if path:
                     segs, vlist = self._layered_path_to_segments(
                         path, net_idx, GRID, x0 - EDGE * GRID, y0 - EDGE * GRID,
-                        start_mm=best_src, end_mm=best_dst)
-                    segments.extend(segs)
-                    vias.extend(vlist)
-                    for gx, gy, L in path:
-                        trace_body[L].setdefault(net_idx, set()).add((gx, gy))
-                    for L in (LF, LB):
-                        if net_idx in trace_body[L]:
-                            trace_halo[L][net_idx] = frozenset(
-                                expand_halo(trace_body[L][net_idx], TRACE_HALO))
-                    # 过孔占双层
-                    for v in vlist:
-                        vg = (v["_gx"], v["_gy"])
-                        via_body.setdefault(net_idx, set()).add(vg)
-                    if net_idx in via_body:
-                        via_halo[net_idx] = frozenset(
-                            expand_halo(via_body[net_idx], VIA_HALO))
-                    routed += 1
-                    log.info(f"  净{net_idx}: ✅ {best_src}→{best_dst}, "
-                             f"{len(segs)}段 {len(vlist)}过孔")
+                        start_mm=src_mm, end_mm=dst_mm)
+                    commit_path(net_idx, path, segs, vlist)
                 else:
-                    log.warning(f"  净{net_idx}: ❌ {best_src}→{best_dst} 双层均受阻(诚实留开路)")
-                    unrouted += 1
+                    failed.append((src_mm, dst_mm))
+            return failed
 
-                connected_mm.append(best_dst)
-                remaining_mm.remove(best_dst)
+        def ideal_path(net_idx, src_mm, dst_mm, own_cells):
+            """忽略异网走线/过孔 (仅守边界+异网焊盘体) 的理想路径, 用于识别"挡路网"。"""
+            src_g = mm_to_grid(*src_mm)
+            dst_g = mm_to_grid(*dst_mm)
+            obs = {}
+            for L in (LF, LB):
+                o = set(edge_cells)
+                for nidx, cells in pad_hard[L].items():
+                    if nidx != net_idx:
+                        o |= cells
+                obs[L] = o - own_cells
+            return self._maze_route_2layer(
+                src_g, dst_g, layers_of(src_mm), layers_of(dst_mm),
+                obs, gw, gh, VIA_COST)
 
+        # 路由顺序: 焊盘多(最受约束)的网先布, 趁板面空闲抢到通路。
+        order = sorted(
+            [n for n in pads_by_net if len(pads_by_net[n]) >= 2],
+            key=lambda n: -len(pads_by_net[n]))
+
+        open_conns: dict = {}     # net -> list((src,dst)) 当前未连通连接
+        for net_idx in order:
+            open_conns[net_idx] = route_net(net_idx)
+
+        def total_opens():
+            return sum(len(v) for v in open_conns.values())
+
+        def snapshot():
+            return (_copy.deepcopy(trace_body), _copy.deepcopy(trace_halo),
+                    _copy.deepcopy(via_body), _copy.deepcopy(via_halo),
+                    _copy.deepcopy(net_segments), _copy.deepcopy(net_vias),
+                    _copy.deepcopy(open_conns))
+
+        def restore(snap):
+            tb, th, vb, vh, ns, nv, oc = snap
+            trace_body[LF], trace_body[LB] = tb[LF], tb[LB]
+            trace_halo[LF], trace_halo[LB] = th[LF], th[LB]
+            via_body.clear()
+            via_body.update(vb)
+            via_halo.clear()
+            via_halo.update(vh)
+            net_segments.clear()
+            net_segments.update(ns)
+            net_vias.clear()
+            net_vias.update(nv)
+            open_conns.clear()
+            open_conns.update(oc)
+
+        # ── 拆线重布 (rip-up & reroute): 失败连接拆掉挡路网再重布, 仅当总开路严格
+        #    下降才接受 → 单调收敛, 绝不引入短路 (硬约束 build_obs 全程不放松)。 ──
+        budget = max(20, total_opens() * 6)
+        improved = True
+        while improved and budget > 0 and total_opens() > 0:
+            improved = False
+            for net_idx in order:
+                if not open_conns.get(net_idx):
+                    continue
+                own_cells = {mm_to_grid(*p) for p in pads_by_net[net_idx]}
+                made_progress = False
+                for src_mm, dst_mm in list(open_conns[net_idx]):
+                    ip = ideal_path(net_idx, src_mm, dst_mm, own_cells)
+                    if ip is None:
+                        continue  # 被焊盘/板边挡死, 非走线拥塞 → 拆线无益 (诚实开路)
+                    ideal_by_L = {LF: set(), LB: set()}
+                    for gx, gy, L in ip:
+                        ideal_by_L[L].add((gx, gy))
+                    blockers = set()
+                    for L in (LF, LB):
+                        for onet, cells in trace_halo[L].items():
+                            if onet != net_idx and (cells & ideal_by_L[L]):
+                                blockers.add(onet)
+                    for onet, cells in via_halo.items():
+                        if onet != net_idx and (
+                                cells & ideal_by_L[LF] or cells & ideal_by_L[LB]):
+                            blockers.add(onet)
+                    if not blockers:
+                        continue
+                    before = total_opens()
+                    snap = snapshot()
+                    for b in blockers:
+                        ripup_net(b)
+                    open_conns[net_idx] = route_net(net_idx)
+                    for b in sorted(blockers, key=lambda n: -len(pads_by_net[n])):
+                        open_conns[b] = route_net(b)
+                    if total_opens() < before:
+                        budget -= 1
+                        improved = True
+                        made_progress = True
+                        break  # 该网已改善, 跳到下一个网
+                    else:
+                        restore(snap)
+                if made_progress:
+                    continue
+
+        segments: list = [s for n in net_segments for s in net_segments[n]]
+        vias: list = [v for n in net_vias for v in net_vias[n]]
         for v in vias:
             v.pop("_gx", None)
             v.pop("_gy", None)
+        routed = sum(len(pads_by_net[n]) - 1 - len(open_conns.get(n, []))
+                     for n in order)
+        unrouted = total_opens()
         if segments:
             self._append_segments_to_pcb(pcb_path, segments, vias)
-        log.info(f"✅ 双层自动布线完成: ✅{routed}通 / ❌{unrouted}失败 / "
+        log.info(f"✅ 双层自动布线完成(含rip-up): ✅{routed}通 / ❌{unrouted}失败 / "
                  f"{len(segments)}段 / {len(vias)}过孔")
         return {"routed": routed, "unrouted": unrouted,
                 "segments": len(segments), "vias": len(vias)}

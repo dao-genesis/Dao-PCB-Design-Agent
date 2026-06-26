@@ -49,55 +49,55 @@
     }
   },
   "drone_aerial_h743": {
-    "errors": 16,
-    "warnings": 45,
+    "errors": 14,
+    "warnings": 60,
     "by_rule": {
       "R004": {
         "error": 0,
-        "warning": 12,
+        "warning": 10,
         "info": 0,
         "sample": "网络 'INA226_ALT' (#28) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
       },
       "R006": {
         "error": 0,
-        "warning": 30,
+        "warning": 47,
         "info": 0,
-        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 -0.400mm < 0.5mm"
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
       },
       "R007": {
         "error": 0,
         "warning": 3,
         "info": 0,
-        "sample": "走线间距不足: net 6 ↔ net 35 铜净间距 0.000mm < 0.15mm (B.Cu)"
+        "sample": "走线间距不足: net 36 ↔ net 37 铜净间距 0.000mm < 0.15mm (B.Cu)"
       },
       "R008": {
-        "error": 16,
+        "error": 14,
         "warning": 0,
         "info": 0,
-        "sample": "网络 'VBUS_SENSE' (#3) 未全连通: 6 个 pad 落在 2 个独立连通分量 (开路)"
+        "sample": "网络 'GND' (#6) 未全连通: 51 个 pad 落在 4 个独立连通分量 (开路)"
       }
     },
     "stats": {
       "pads": 357,
-      "segments": 704,
-      "vias": 173,
+      "segments": 827,
+      "vias": 208,
       "footprints": 68,
       "nets": 53
     }
   },
   "drone_flight_controller": {
-    "errors": 10,
-    "warnings": 23,
+    "errors": 9,
+    "warnings": 25,
     "by_rule": {
       "R004": {
         "error": 0,
-        "warning": 7,
+        "warning": 6,
         "info": 0,
-        "sample": "网络 'OSC_OUT' (#6) 有 3 个 pad 但无 segment/via — 可能未布线 (开路)"
+        "sample": "网络 'BOOT0' (#8) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
       },
       "R006": {
         "error": 0,
-        "warning": 11,
+        "warning": 14,
         "info": 0,
         "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
       },
@@ -108,7 +108,7 @@
         "sample": "走线间距不足: net 4 ↔ net 3 铜净间距 0.000mm < 0.15mm (B.Cu)"
       },
       "R008": {
-        "error": 10,
+        "error": 9,
         "warning": 0,
         "info": 0,
         "sample": "网络 'VCC_3V3' (#3) 未全连通: 18 个 pad 落在 3 个独立连通分量 (开路)"
@@ -116,8 +116,8 @@
     },
     "stats": {
       "pads": 201,
-      "segments": 233,
-      "vias": 32,
+      "segments": 249,
+      "vias": 38,
       "footprints": 38,
       "nets": 19
     }
@@ -161,38 +161,38 @@
     }
   },
   "gd32f103_minimal": {
-    "errors": 4,
-    "warnings": 22,
+    "errors": 3,
+    "warnings": 17,
     "by_rule": {
       "R004": {
         "error": 0,
-        "warning": 3,
+        "warning": 1,
         "info": 0,
-        "sample": "网络 'OSC_OUT' (#5) 有 3 个 pad 但无 segment/via — 可能未布线 (开路)"
+        "sample": "网络 'PA0' (#12) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
       },
       "R006": {
         "error": 0,
-        "warning": 15,
+        "warning": 11,
         "info": 0,
-        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 -0.400mm < 0.5mm"
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
       },
       "R007": {
         "error": 0,
-        "warning": 4,
+        "warning": 5,
         "info": 0,
         "sample": "走线间距不足: net 17 ↔ net 18 铜净间距 0.000mm < 0.15mm (B.Cu)"
       },
       "R008": {
-        "error": 4,
+        "error": 3,
         "warning": 0,
         "info": 0,
-        "sample": "网络 'OSC_OUT' (#5) 未全连通: 3 个 pad 落在 3 个独立连通分量 (开路)"
+        "sample": "网络 'NRST' (#6) 未全连通: 4 个 pad 落在 2 个独立连通分量 (开路)"
       }
     },
     "stats": {
       "pads": 102,
-      "segments": 223,
-      "vias": 43,
+      "segments": 259,
+      "vias": 57,
       "footprints": 18,
       "nets": 22
     }
@@ -341,20 +341,20 @@
     }
   },
   "rp2040_minimal": {
-    "errors": 9,
-    "warnings": 10,
+    "errors": 8,
+    "warnings": 13,
     "by_rule": {
       "R004": {
         "error": 0,
-        "warning": 8,
+        "warning": 7,
         "info": 0,
         "sample": "网络 'XOUT' (#12) 有 3 个 pad 但无 segment/via — 可能未布线 (开路)"
       },
       "R006": {
         "error": 0,
-        "warning": 1,
+        "warning": 5,
         "info": 0,
-        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 -0.150mm < 0.5mm"
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 -0.400mm < 0.5mm"
       },
       "R007": {
         "error": 0,
@@ -363,7 +363,7 @@
         "sample": "走线间距不足: net 2 ↔ net 4 铜净间距 0.000mm < 0.15mm (B.Cu)"
       },
       "R008": {
-        "error": 9,
+        "error": 8,
         "warning": 0,
         "info": 0,
         "sample": "网络 'XOUT' (#12) 未全连通: 3 个 pad 落在 3 个独立连通分量 (开路)"
@@ -371,8 +371,8 @@
     },
     "stats": {
       "pads": 164,
-      "segments": 105,
-      "vias": 24,
+      "segments": 129,
+      "vias": 28,
       "footprints": 21,
       "nets": 17
     }
@@ -471,18 +471,12 @@
     }
   },
   "stm32g031_minimal": {
-    "errors": 1,
+    "errors": 0,
     "warnings": 18,
     "by_rule": {
-      "R004": {
-        "error": 0,
-        "warning": 1,
-        "info": 0,
-        "sample": "网络 'PA0' (#11) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
-      },
       "R006": {
         "error": 0,
-        "warning": 9,
+        "warning": 10,
         "info": 0,
         "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.391mm < 0.5mm"
       },
@@ -491,43 +485,31 @@
         "warning": 8,
         "info": 0,
         "sample": "走线间距不足: net 8 ↔ net 13 铜净间距 0.000mm < 0.15mm (B.Cu)"
-      },
-      "R008": {
-        "error": 1,
-        "warning": 0,
-        "info": 0,
-        "sample": "网络 'PA0' (#11) 未全连通: 2 个 pad 落在 2 个独立连通分量 (开路)"
       }
     },
     "stats": {
       "pads": 68,
-      "segments": 173,
-      "vias": 35,
+      "segments": 181,
+      "vias": 38,
       "footprints": 15,
       "nets": 18
     }
   },
   "stm32h743_core": {
-    "errors": 1,
-    "warnings": 2,
+    "errors": 0,
+    "warnings": 1,
     "by_rule": {
       "R006": {
         "error": 0,
-        "warning": 2,
+        "warning": 1,
         "info": 0,
         "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
-      },
-      "R008": {
-        "error": 1,
-        "warning": 0,
-        "info": 0,
-        "sample": "网络 'OSC_OUT' (#7) 未全连通: 3 个 pad 落在 2 个独立连通分量 (开路)"
       }
     },
     "stats": {
       "pads": 160,
-      "segments": 215,
-      "vias": 33,
+      "segments": 236,
+      "vias": 37,
       "footprints": 22,
       "nets": 16
     }
@@ -553,31 +535,31 @@
   },
   "w5500_ethernet": {
     "errors": 5,
-    "warnings": 8,
+    "warnings": 9,
     "by_rule": {
       "R004": {
         "error": 0,
         "warning": 5,
         "info": 0,
-        "sample": "网络 'XTAL1' (#9) 有 3 个 pad 但无 segment/via — 可能未布线 (开路)"
+        "sample": "网络 'XTAL2' (#10) 有 3 个 pad 但无 segment/via — 可能未布线 (开路)"
       },
       "R006": {
         "error": 0,
-        "warning": 3,
+        "warning": 4,
         "info": 0,
-        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.350mm < 0.5mm"
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 -0.400mm < 0.5mm"
       },
       "R008": {
         "error": 5,
         "warning": 0,
         "info": 0,
-        "sample": "网络 'XTAL1' (#9) 未全连通: 3 个 pad 落在 3 个独立连通分量 (开路)"
+        "sample": "网络 'XTAL2' (#10) 未全连通: 3 个 pad 落在 3 个独立连通分量 (开路)"
       }
     },
     "stats": {
       "pads": 94,
-      "segments": 110,
-      "vias": 23,
+      "segments": 131,
+      "vias": 26,
       "footprints": 14,
       "nets": 18
     }
