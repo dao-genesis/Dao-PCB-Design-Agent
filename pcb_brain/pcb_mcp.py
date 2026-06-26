@@ -4,11 +4,12 @@ PCBBrain MCP服务器 — Windsurf/Claude直接调用PCB设计能力
 
 "一生二" — 代码化PCB大脑通过MCP协议对外输出全部能力
 
-工具列表 (18个):
+工具列表 (19个):
   list_templates   — 列出所有21个DNA模板及成本概览
   design_pcb       — 生成PCB文件 (DNA → .kicad_pcb + BFS自动布线)
   design_spec      — 通用设计→PCB (任意 dict/.json/.yaml/.net 网表, 不依赖21模板)
   pipeline_spec    — 通用全闭环 0→1 (任意 spec/网表 → 真实交付物 + 预测编码交付裁决)
+  reconcile        — 预测编码核验 (核心反向传播·纯观测): 量出设计意图 vs 真实产物的自由能
   get_bom          — 获取BOM + LCSC料号 + 成本报告 + JLCPCB下单URL
   run_drc          — 运行DRC检查 (native pcbnew API优先, CLI降级)
   export_gerber    — 导出Gerber生产文件 (native API导出11层, 可直接上传JLCPCB)
@@ -300,6 +301,34 @@ def _pipeline_spec(spec: Any, output_dir: str = "", do_layout: bool = True,
             except (TypeError, ValueError):
                 return str(obj)
         return _make_serializable(result)
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def _reconcile(spec: Any = None, template: str = "",
+               output_dir: str = "") -> Dict[str, Any]:
+    """预测编码核验 (核心反向传播): 对账 '设计意图(DNA预测) vs 真实产物(观测)'。
+
+    纯观测·不重建产物 — 量出自由能(预测误差)与 next_action, 支撑人机协同的逐步迭代:
+    delivered 仅当自由能=0(实质闭合)才True; 否则 surprises/next_action 指明下一步该补什么。
+    传 spec(任意 dict/.json/.yaml/.net) 或 template(内置模板名) 之一。
+    """
+    try:
+        import pcb_predict
+        if spec is not None and spec != "":
+            from pcb_core import PCB
+            dna = PCB._spec_to_dna(spec)
+            out = output_dir or str(_HERE / "output" / dna.name)
+            verdict = pcb_predict.reconcile(dna, Path(out))
+        elif template:
+            out = output_dir or str(_HERE / "output" / template)
+            verdict = pcb_predict.predict_verify(template, out)
+        else:
+            return {"status": "error", "error": "需提供 spec 或 template"}
+        result = verdict.to_dict()
+        result["output_dir"] = out
+        result["report"] = pcb_predict.render(verdict)
+        return result
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -970,6 +999,18 @@ def _run_stdio():
             }
         },
         {
+            "name": "reconcile",
+            "description": "预测编码核验 (核心反向传播·纯观测不重建)。对账'设计意图(DNA预测) vs 真实产物(观测)', 量出自由能(预测误差)。返回 delivered(自由能=0才True)/free_energy/confidence/surprises/next_action — 人机协同逐步迭代的反馈仪表。传 spec 或 template 之一",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec":       {"type": ["object", "string"], "description": "结构化规格对象或规格/网表文件路径 (与 template 二选一)"},
+                    "template":   {"type": "string", "description": "内置DNA模板名 (与 spec 二选一)"},
+                    "output_dir": {"type": "string", "description": "待核验的产物目录 (可选, 默认 output/<名>)"},
+                },
+            }
+        },
+        {
             "name": "search_footprint",
             "description": "搜索KiCad封装库: 153个库/15179个封装全量索引，精确+模糊匹配",
             "inputSchema": {
@@ -1018,6 +1059,7 @@ def _run_stdio():
         "design_pcb":       _design_pcb,
         "design_spec":      _design_spec,
         "pipeline_spec":    _pipeline_spec,
+        "reconcile":        _reconcile,
         "get_bom":          _get_bom,
         "run_drc":          _run_drc,
         "export_gerber":    _export_gerber,
