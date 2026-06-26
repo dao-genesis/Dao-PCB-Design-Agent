@@ -49,7 +49,7 @@
     }
   },
   "drone_aerial_h743": {
-    "errors": 14,
+    "errors": 13,
     "warnings": 60,
     "by_rule": {
       "R004": {
@@ -71,10 +71,10 @@
         "sample": "走线间距不足: net 36 ↔ net 37 铜净间距 0.000mm < 0.15mm (B.Cu)"
       },
       "R008": {
-        "error": 14,
+        "error": 13,
         "warning": 0,
         "info": 0,
-        "sample": "网络 'GND' (#6) 未全连通: 51 个 pad 落在 4 个独立连通分量 (开路)"
+        "sample": "网络 'VBUS_SENSE' (#3) 未全连通: 6 个 pad 落在 2 个独立连通分量 (开路)"
       }
     },
     "stats": {
@@ -161,7 +161,7 @@
     }
   },
   "gd32f103_minimal": {
-    "errors": 3,
+    "errors": 2,
     "warnings": 17,
     "by_rule": {
       "R004": {
@@ -183,7 +183,7 @@
         "sample": "走线间距不足: net 17 ↔ net 18 铜净间距 0.000mm < 0.15mm (B.Cu)"
       },
       "R008": {
-        "error": 3,
+        "error": 2,
         "warning": 0,
         "info": 0,
         "sample": "网络 'NRST' (#6) 未全连通: 4 个 pad 落在 2 个独立连通分量 (开路)"

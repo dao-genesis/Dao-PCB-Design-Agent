@@ -423,6 +423,46 @@ class DRCEngine:
                         refs=[pref, f"net{na}"],
                         extra={"net_seg": na, "net_pad": pnet, "dist": round(d, 4)},
                     ))
+        # 铺铜-异网焊盘: 铺铜覆盖异网焊盘中心 = 短路 (验证浇灌守 clearance)。
+        zone_rects = self._zone_rects_by_net()
+        if zone_rects:
+            for znet, zones in zone_rects.items():
+                for zlayer, rects in zones:
+                    for c, pw, ph, pnet, pref, players in pads:
+                        if pnet == znet:
+                            continue
+                        if "*" not in players and zlayer not in players:
+                            continue
+                        for (rx0, ry0, rx1, ry1) in rects:
+                            if (rx0 + self.short_overlap <= c.x <= rx1 - self.short_overlap and
+                                    ry0 + self.short_overlap <= c.y <= ry1 - self.short_overlap):
+                                out.append(DRCViolation(
+                                    rule="R007", severity=SEVERITY_ERROR,
+                                    message=(f"铺铜短路: net {znet} 铺铜覆盖异网焊盘 "
+                                             f"{pref} (net {pnet})"),
+                                    location=(c.x, c.y),
+                                    refs=[pref, f"net{znet}"],
+                                    extra={"net_zone": znet, "net_pad": pnet}))
+                                break
+        return out
+
+    def _zone_rects_by_net(self) -> Dict[int, List[Tuple[str, List[Tuple[float, float, float, float]]]]]:
+        """每个 net 的铺铜区 → [(layer, [ (x0,y0,x1,y1), ... ]), ...]。
+        每个 zone 一个条目 (含其所在铜层与各 filled_polygon 包围盒)。"""
+        out: Dict[int, List[Tuple[str, List[Tuple[float, float, float, float]]]]] = {}
+        for z in self.board.zones():
+            nnum = z.net
+            if nnum <= 0:
+                continue
+            rects: List[Tuple[float, float, float, float]] = []
+            for poly in z.filled_polygon_points():
+                if len(poly) < 3:
+                    continue
+                xs = [p.x for p in poly]
+                ys = [p.y for p in poly]
+                rects.append((min(xs), min(ys), max(xs), max(ys)))
+            if rects:
+                out.setdefault(nnum, []).append((z.layer or "F.Cu", rects))
         return out
 
     def _r008_net_open(self) -> List[DRCViolation]:
@@ -457,6 +497,7 @@ class DRCEngine:
             net_vias.setdefault(v.net, []).append(v.position)
 
         net_names = {n.number: n.name for n in self.board.nets()}
+        zone_rects = self._zone_rects_by_net()
         out: List[DRCViolation] = []
 
         for nnum, padlist in net_pads.items():
@@ -497,6 +538,16 @@ class DRCEngine:
                     if (abs(pk.x - pc.x) <= hw / 2.0 + tol and
                             abs(pk.y - pc.y) <= hh / 2.0 + tol):
                         dsu.union(pi, k)
+            # 4) 铺铜连通: 同 net 同一铺铜区覆盖的节点互联 (连续铜岛即同电位)。
+            #    每个区是从 GND 焊盘洪泛得到的连通铜岛, 其覆盖的同 net 节点真实同网。
+            for _zlayer, rects in zone_rects.get(nnum, []):
+                members = [
+                    i for i in range(len(nodes))
+                    if any(rx0 - tol <= nodes[i].x <= rx1 + tol and
+                           ry0 - tol <= nodes[i].y <= ry1 + tol
+                           for (rx0, ry0, rx1, ry1) in rects)]
+                for k in range(1, len(members)):
+                    dsu.union(members[0], members[k])
             # pad 所在分量
             roots = {dsu.find(i) for i in range(n_pad)}
             if len(roots) > 1:

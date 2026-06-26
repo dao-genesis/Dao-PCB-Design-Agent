@@ -42,6 +42,12 @@ COL_VIA = "#33ffcc"
 COL_ERR = "#ff2d2d"
 COL_WARN = "#ffae42"
 COL_TEXT = "#cfe8ff"
+COL_BODY = "#1b2733"      # 元件本体填充 (深灰蓝)
+COL_BODY_B = "#241b2e"    # B 面元件本体
+COL_CRTYD = "#5a6b7a"     # courtyard / 丝印外框
+COL_REF = "#e8f3ff"       # 位号文字
+COL_ZONE_F = "#7a2e2e"    # F.Cu 铺铜 (暗红, 半透明)
+COL_ZONE_B = "#2e3d7a"    # B.Cu 铺铜 (暗蓝, 半透明)
 
 
 def _rotate(lx: float, ly: float, deg: float) -> tuple[float, float]:
@@ -56,6 +62,23 @@ def _pad_abs(fp, pad):
     lx, ly = pad.position.x, pad.position.y
     rx, ry = _rotate(lx, ly, fp.rotation)
     return fx + rx, fy + ry
+
+
+def _fp_body_bbox(fp):
+    """元件本体外接矩形 (世界坐标, 含旋转): 焊盘外包络再外扩一圈作 courtyard。
+    返回 (x0,y0,x1,y1) 或 None。"""
+    xs, ys = [], []
+    for pad in fp.pads():
+        ax, ay = _pad_abs(fp, pad)
+        hw = max(0.1, pad.width / 2.0)
+        hh = max(0.1, pad.height / 2.0)
+        xs += [ax - hw, ax + hw]
+        ys += [ay - hh, ay + hh]
+    if not xs:
+        return None
+    margin = 0.35  # courtyard 余量 (mm)
+    return (min(xs) - margin, min(ys) - margin,
+            max(xs) + margin, max(ys) + margin)
 
 
 def _layer_color(layer: str) -> str:
@@ -113,6 +136,45 @@ def render_svg(board: Board, violations, width_px: int = 900) -> tuple[str, dict
             f'width="{(bo.width*scale):.1f}" height="{(bo.height*scale):.1f}" '
             f'fill="{COL_BOARD}" stroke="{COL_EDGE}" stroke-width="2" '
             f'rx="4" opacity="0.85"/>')
+
+    # ── 铺铜 zone (走线之下、板框之上) ──
+    for z in board.zones():
+        zlayer = z.layer or "F.Cu"
+        zcol = COL_ZONE_B if "B.Cu" in zlayer else COL_ZONE_F
+        # 优先画已填充多边形, 否则退回用户定义边界
+        polys = z.filled_polygon_points() or ([z.polygon_points()]
+                                              if z.polygon_points() else [])
+        for poly in polys:
+            if len(poly) < 3:
+                continue
+            pts = " ".join(f"{X(p.x):.1f},{Y(p.y):.1f}" for p in poly)
+            out.append(
+                f'<polygon points="{pts}" fill="{zcol}" '
+                f'stroke="none" opacity="0.38"/>')
+
+    # ── 元件本体 + 丝印位号 (走线之下, 焊盘之下: 先铺底) ──
+    n_fp_drawn = 0
+    for fp in board.footprints():
+        bb = _fp_body_bbox(fp)
+        if bb is None:
+            continue
+        bx0, by0, bx1, by1 = bb
+        is_back = fp.is_back_side
+        body_col = COL_BODY_B if is_back else COL_BODY
+        out.append(
+            f'<rect x="{X(bx0):.1f}" y="{Y(by0):.1f}" '
+            f'width="{((bx1-bx0)*scale):.1f}" height="{((by1-by0)*scale):.1f}" '
+            f'rx="2" fill="{body_col}" stroke="{COL_CRTYD}" '
+            f'stroke-width="1" opacity="0.92"/>')
+        n_fp_drawn += 1
+        # 位号 (元件中心)
+        cx, cy = (bx0 + bx1) / 2.0, (by0 + by1) / 2.0
+        fsz = max(7.0, min(13.0, ((bx1 - bx0) * scale) * 0.30))
+        out.append(
+            f'<text x="{X(cx):.1f}" y="{Y(cy):.1f}" fill="{COL_REF}" '
+            f'font-size="{fsz:.1f}" font-family="monospace" '
+            f'text-anchor="middle" dominant-baseline="central" '
+            f'opacity="0.85">{_esc(fp.ref)}</text>')
 
     # ── 走线 (B.Cu 先画, F.Cu 后画) ──
     segs = board.segments()

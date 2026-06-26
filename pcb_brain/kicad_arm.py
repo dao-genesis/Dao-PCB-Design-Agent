@@ -1229,10 +1229,64 @@ class KiCadArm:
         unrouted = total_opens()
         if segments:
             self._append_segments_to_pcb(pcb_path, segments, vias)
+
+        # ── 铺铜 (copper pour): 给 GND 网在 F.Cu/B.Cu 浇灌真实接地平面 ──
+        # 道法自然: 复用布线同一栅格 — 凡「非边界、非异网焊盘/走线/过孔间距区」
+        # 的格皆可灌铜; 从 GND 焊盘洪泛, 只保留与 GND 焊盘连通的铜岛 (去孤岛),
+        # 故铺铜天然守 clearance (不压异网铜=不短路), 又真实连通其覆盖的 GND 焊盘。
+        net_names = self._pcb_parse_net_names(text)
+        gnd_nets = [n for n, nm in net_names.items()
+                    if n > 0 and self._is_ground_net(nm)]
+        def grid_to_mm(gx, gy):
+            return (x0 - EDGE * GRID + gx * GRID, y0 - EDGE * GRID + gy * GRID)
+        zones: list = []
+        for G in gnd_nets:
+            gnd_seed_cells = {mm_to_grid(*p) for p in pads_by_net.get(G, [])}
+            for L, lname in ((LF, "F.Cu"), (LB, "B.Cu")):
+                blocked = set(edge_cells)
+                for nidx, cells in pad_soft[L].items():
+                    if nidx != G:
+                        blocked |= cells
+                for onet, cells in trace_halo[L].items():
+                    if onet != G:
+                        blocked |= cells
+                for onet, cells in via_halo.items():
+                    if onet != G:
+                        blocked |= cells
+                # 可灌格: 板内 (避 EDGE 环) 且非 blocked
+                fillable = set()
+                for gx in range(EDGE, gw - EDGE):
+                    for gy in range(EDGE, gh - EDGE):
+                        if (gx, gy) not in blocked:
+                            fillable.add((gx, gy))
+                # 从 GND 焊盘洪泛, 只留连通铜岛 (去孤岛)
+                seeds = [s for s in gnd_seed_cells if s in fillable]
+                if not seeds:
+                    continue
+                kept = set()
+                stack = list(seeds)
+                while stack:
+                    c = stack.pop()
+                    if c in kept or c not in fillable:
+                        continue
+                    kept.add(c)
+                    cx, cy = c
+                    stack.extend([(cx+1, cy), (cx-1, cy),
+                                  (cx, cy+1), (cx, cy-1)])
+                if not kept:
+                    continue
+                # 行程编码 → mm 矩形 (filled_polygon)
+                rects = self._rle_cells_to_rects(kept, GRID, grid_to_mm)
+                if rects:
+                    zones.append((G, net_names[G], lname, rects))
+        if zones:
+            self._append_zones_to_pcb(pcb_path, zones)
+
         log.info(f"✅ 双层自动布线完成(含rip-up): ✅{routed}通 / ❌{unrouted}失败 / "
-                 f"{len(segments)}段 / {len(vias)}过孔")
+                 f"{len(segments)}段 / {len(vias)}过孔 / {len(zones)}铺铜区")
         return {"routed": routed, "unrouted": unrouted,
-                "segments": len(segments), "vias": len(vias)}
+                "segments": len(segments), "vias": len(vias),
+                "zones": len(zones)}
 
     def _pcb_board_bounds(self, text: str):
         """从 Edge.Cuts gr_rect 提取板框 (x0,y0,x1,y1)，单位mm"""
@@ -1484,6 +1538,76 @@ class KiCadArm:
         if segs and end_mm:
             segs[-1]["x2"], segs[-1]["y2"] = end_mm[0], end_mm[1]
         return segs
+
+    def _pcb_parse_net_names(self, text: str) -> dict:
+        """解析 (net N "NAME") → {N: NAME}."""
+        out = {}
+        for m in re.finditer(r'\(net\s+(\d+)\s+"([^"]*)"\)', text):
+            out[int(m.group(1))] = m.group(2)
+        return out
+
+    @staticmethod
+    def _is_ground_net(name: str) -> bool:
+        u = (name or "").upper()
+        if u in ("0", "VSS", "EARTH"):
+            return True
+        return "GND" in u or "GROUND" in u
+
+    @staticmethod
+    def _rle_cells_to_rects(cells: set, grid: float, grid_to_mm) -> list:
+        """格集合按行行程编码 → mm 轴对齐矩形 [(x0,y0,x1,y1), ...]。
+        每个矩形为一行内连续格的最大跨度, 外扩半格使相邻行/列铜箔相接。"""
+        rows: dict = {}
+        for gx, gy in cells:
+            rows.setdefault(gy, []).append(gx)
+        h = grid / 2.0
+        rects = []
+        for gy, xs in rows.items():
+            xs.sort()
+            run_start = prev = xs[0]
+            for gx in xs[1:] + [None]:
+                if gx == prev + 1:
+                    prev = gx
+                    continue
+                mx0, my0 = grid_to_mm(run_start, gy)
+                mx1, my1 = grid_to_mm(prev, gy)
+                rects.append((mx0 - h, my0 - h, mx1 + h, my1 + h))
+                if gx is not None:
+                    run_start = prev = gx
+        return rects
+
+    def _append_zones_to_pcb(self, pcb_path: str, zones: list) -> None:
+        """将铺铜 (zone) 追加到 .kicad_pcb。zones=[(net,name,layer,rects), ...];
+        rects 为 mm 轴对齐矩形列表, 每个矩形作一个 filled_polygon。"""
+        import uuid as _uuid
+        text = Path(pcb_path).read_text(encoding="utf-8").rstrip()
+        blocks = []
+        for net, name, layer, rects in zones:
+            xs0 = min(r[0] for r in rects)
+            ys0 = min(r[1] for r in rects)
+            xs1 = max(r[2] for r in rects)
+            ys1 = max(r[3] for r in rects)
+            fps = []
+            for (x0, y0, x1, y1) in rects:
+                fps.append(
+                    f'    (filled_polygon (layer "{layer}") (pts '
+                    f'(xy {x0:.4f} {y0:.4f}) (xy {x1:.4f} {y0:.4f}) '
+                    f'(xy {x1:.4f} {y1:.4f}) (xy {x0:.4f} {y1:.4f})))')
+            blocks.append(
+                f'  (zone (net {net}) (net_name "{name}") (layer "{layer}") '
+                f'(uuid "{_uuid.uuid4()}") (hatch edge 0.5)\n'
+                f'    (connect_pads (clearance 0.2))\n'
+                f'    (min_thickness 0.25)\n'
+                f'    (fill yes (thermal_gap 0.2) (thermal_bridge_width 0.4))\n'
+                f'    (polygon (pts (xy {xs0:.4f} {ys0:.4f}) '
+                f'(xy {xs1:.4f} {ys0:.4f}) (xy {xs1:.4f} {ys1:.4f}) '
+                f'(xy {xs0:.4f} {ys1:.4f})))\n'
+                + "\n".join(fps) + "\n  )")
+        body = "\n".join(blocks)
+        new_text = (text[:-1].rstrip() + "\n" + body + "\n)"
+                    if text.endswith(")") else text + "\n" + body)
+        Path(pcb_path).write_text(new_text, encoding="utf-8")
+        log.info(f"  写入 {len(zones)} 个铺铜区到PCB文件")
 
     def _append_segments_to_pcb(self, pcb_path: str, segments: list,
                                    vias: list = None) -> None:
