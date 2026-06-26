@@ -108,13 +108,16 @@
 </footer>
 
 <script>
-const BRIDGE_URL = 'http://127.0.0.1:9907';
+// 同源优先(被桥服务器直接托管时), 退回 localhost:9907(在 EDA 内以 file:// 加载时)
+const _qp = new URLSearchParams(location.search);
+const BRIDGE_URL = (location.protocol === 'http:' || location.protocol === 'https:')
+  ? location.origin : 'http://127.0.0.1:9907';
 const $ = (id) => document.getElementById(id);
 const hist = $('history');
 
-// 多轮会话态
-const SESSION = 'ext-' + Math.random().toString(36).slice(2, 10);
-let lastOutputDir = null;
+// 多轮会话态: 可由 URL ?s= 固定会话(便于跨页多轮), 否则随机
+const SESSION = _qp.get('s') || ('ext-' + Math.random().toString(36).slice(2, 10));
+let lastOutputDir = _qp.get('dir') || null;
 let busy = false;
 
 function scrollBottom() { hist.scrollTop = hist.scrollHeight; }
@@ -238,6 +241,10 @@ document.querySelectorAll('.chip').forEach((c) => {
 fetch(BRIDGE_URL + '/ping', { cache: 'no-store' })
   .then((r) => r.json()).then(() => setDot(true))
   .catch(() => setDot(false));
+
+// 若 URL 带 ?q=, 加载即自动发送(便于一键演示一句话→全链路→裁决)
+const _autoQ = _qp.get('q');
+if (_autoQ) { setTimeout(() => ask(_autoQ), 400); }
 </script>
 </body>
 </html>

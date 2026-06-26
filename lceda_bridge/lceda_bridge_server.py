@@ -62,6 +62,16 @@ if os.path.isdir(_BRAIN_DIR) and _BRAIN_DIR not in sys.path:
     sys.path.insert(0, _BRAIN_DIR)
 
 
+_DIALOG_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 'L2_extension', 'iframe', 'index.html')
+
+
+def _read_dialog_html() -> str:
+    """读取扩展 iframe 对话框 HTML (主面)。每次读盘, 便于热更新。"""
+    with open(_DIALOG_HTML_PATH, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
 def chat_respond(message: str, session: str | None = None,
                  output_dir: str | None = None) -> dict:
     """对话框 → PCB 全流程 → 预测编码裁决, 委托 pcb_copilot.respond。"""
@@ -248,7 +258,14 @@ class Handler(BaseHTTPRequestHandler):
                 return
             return self._send_json(200, cmd)
 
-        if u.path == '/' or u.path == '/index.html':
+        if u.path == '/' or u.path == '/index.html' or u.path == '/ui' or u.path == '/dialog':
+            # 主面: PCB Copilot 对话框 (复用扩展 iframe, 即"对用户只增加一个对话框")。
+            try:
+                return self._send_text(200, _read_dialog_html(), 'text/html')
+            except Exception as e:
+                return self._send_text(500, f'对话框加载失败: {e}')
+
+        if u.path == '/console':
             return self._send_text(200, _UI_HTML, 'text/html')
 
         return self._send_json(404, {'error': '未知路径', 'path': u.path})
