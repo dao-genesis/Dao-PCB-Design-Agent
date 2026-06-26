@@ -139,6 +139,35 @@ class PCB:
             return {"status": "error", "error": str(e)}
 
     @staticmethod
+    def _spec_to_dna(spec: Any):
+        """本源解析: 任意 spec/网表/DNA → DNA 对象, 不依赖 21 模板注册表。
+
+        spec 可为:
+          * dict        — 结构化规格 (见 pcb_spec.dna_from_spec)
+          * .json/.yaml — 结构化规格文件
+          * .net/.xml   — 标准 KiCad 网表 (任意原理图工具可导出)
+          * DNA 对象    — 直接给定
+
+        无法识别时抛 ValueError, 解析失败时向上抛原始异常。
+        """
+        from circuit_dna import DNA
+        import pcb_spec
+
+        if isinstance(spec, DNA):
+            return spec
+        if isinstance(spec, dict):
+            return pcb_spec.dna_from_spec(spec)
+        p = Path(str(spec))
+        suf = p.suffix.lower()
+        if suf == ".json":
+            return pcb_spec.dna_from_json(p)
+        if suf in (".yaml", ".yml"):
+            return pcb_spec.dna_from_yaml(p)
+        if suf in (".net", ".xml"):
+            return pcb_spec.dna_from_kicad_netlist(p)
+        raise ValueError(f"无法识别的 spec 类型: {spec!r}")
+
+    @staticmethod
     def design_spec(spec: Any, output_dir: str = "",
                     do_layout: bool = True,
                     prefer_freerouting: bool = False) -> Dict[str, Any]:
@@ -153,26 +182,11 @@ class PCB:
         返回与 PCB.design 同构: {"status","name","pcb_path","routing","drc"}。
         这是 "模板退化为种子" 的本源接口: 引擎吃它从没见过的设计。
         """
-        from circuit_dna import DNA, auto_layout as layout_fn
+        from circuit_dna import auto_layout as layout_fn
         from kicad_arm import KiCadArm
-        import pcb_spec
 
         try:
-            if isinstance(spec, DNA):
-                dna = spec
-            elif isinstance(spec, dict):
-                dna = pcb_spec.dna_from_spec(spec)
-            else:
-                p = Path(str(spec))
-                suf = p.suffix.lower()
-                if suf == ".json":
-                    dna = pcb_spec.dna_from_json(p)
-                elif suf in (".yaml", ".yml"):
-                    dna = pcb_spec.dna_from_yaml(p)
-                elif suf in (".net", ".xml"):
-                    dna = pcb_spec.dna_from_kicad_netlist(p)
-                else:
-                    return {"status": "error", "error": f"无法识别的 spec 类型: {spec!r}"}
+            dna = PCB._spec_to_dna(spec)
         except Exception as e:
             log.error(f"spec 解析失败: {e}")
             return {"status": "error", "error": f"spec 解析失败: {e}"}
@@ -316,6 +330,128 @@ class PCB:
             return B.safe_json_serialize(result)
         except Exception as e:
             return {"status": "error", "error": str(e)}
+
+    @staticmethod
+    def pipeline_spec(spec: Any, output_dir: str = "",
+                      do_layout: bool = True,
+                      prefer_freerouting: bool = False,
+                      open_ibom: bool = False) -> Dict[str, Any]:
+        """通用全闭环 — 任意 spec/网表 → 真实可制造交付物 + 预测编码交付裁决。
+
+        不依赖 21 模板注册表 (反者道之动)。完整 0→1 链路:
+            spec → DNA → auto_layout → create_pcb → route
+                 → 真实DRC(kicad_origin) → 真实Gerber/钻孔
+                 → BOM/CPL → iBoM → reconcile(预测编码交付裁决)
+
+        核心反向传播: reconcile 把 "预测(DNA设计意图) vs 观测(真实产物)" 的
+        预测误差(自由能)反馈回来; 自由能=0 才算真正闭合 (delivered=True),
+        否则 next_action 指出主导误差→下一步该补足/修正什么 (active inference)。
+
+        返回 dict 含: status, name, pcb_path, routing, drc, gerber, bom, cpl,
+        cost, ibom, report, verdict, delivered, free_energy, next_action。
+        """
+        from circuit_dna import auto_layout as layout_fn
+        from kicad_arm import KiCadArm
+        import fab_origin
+        import pcb_predict
+        from pcb_jlcpcb import JLCPCBHelper
+        from pcb_ibom import generate_ibom
+
+        # 1) 解析为 DNA (本源接口, 引擎吃从没见过的设计)
+        try:
+            dna = PCB._spec_to_dna(spec)
+        except Exception as e:
+            log.error(f"spec 解析失败: {e}")
+            return {"status": "error", "stage": "parse", "error": f"spec 解析失败: {e}"}
+
+        dna = copy.deepcopy(dna)
+        if do_layout:
+            layout_fn(dna)
+
+        out = Path(output_dir) if output_dir else B.ensure_output_dir(dna.name)
+        out.mkdir(parents=True, exist_ok=True)
+        arm = KiCadArm()
+
+        result: Dict[str, Any] = {
+            "status": "ok", "name": dna.name, "output_dir": str(out),
+            "components": len(dna.components), "nets": len(dna.nets),
+        }
+        stage = "create_pcb"
+        try:
+            # 2) 生成 PCB (真实焊盘 + 网络)
+            pcb_path = str(out / f"{dna.name}.kicad_pcb")
+            if not arm.create_pcb_from_dna(dna, pcb_path):
+                return {"status": "error", "stage": stage,
+                        "error": "create_pcb_from_dna 返回 False"}
+            result["pcb_path"] = pcb_path
+
+            # 3) 自动布线 (含铺铜)
+            stage = "route"
+            result["routing"] = arm.auto_route(pcb_path, prefer_freerouting=prefer_freerouting)
+
+            # 4) 真实 DRC — 纯 Python kicad_origin; 引擎缺位才退化到 arm
+            stage = "drc"
+            drc_result = fab_origin.origin_drc(pcb_path)
+            if drc_result is None:
+                drc_result = arm.run_drc(pcb_path)
+            result["drc"] = drc_result
+
+            # 5) 真实 Gerber + Excellon 钻孔 (无需 KiCad CLI)
+            stage = "gerber"
+            gerber_dir = str(out / "gerber")
+            gerber_result = fab_origin.origin_gerber(pcb_path, gerber_dir)
+            if gerber_result is None:
+                gerber_result = arm.export_gerbers(pcb_path, gerber_dir)
+            result["gerber"] = gerber_result
+            result["gerber_dir"] = gerber_dir
+
+            # 6) BOM / CPL / 成本 (DNA-aware, 不查注册表)
+            stage = "bom"
+            jlc = JLCPCBHelper()
+            bom = jlc.generate_bom(dna)
+            cpl = jlc.generate_cpl(dna)
+            bom_csv = str(out / f"{dna.name}_BOM.csv")
+            cpl_csv = str(out / f"{dna.name}_CPL.csv")
+            jlc.export_bom_csv(bom, bom_csv)
+            jlc.export_cpl_csv(cpl, cpl_csv)
+            cost = jlc.cost_report(dna)
+            result["bom"] = {"csv": bom_csv, "items": len(bom),
+                             "with_lcsc": sum(1 for e in bom if e.lcsc != "?")}
+            result["cpl"] = {"csv": cpl_csv, "items": len(cpl)}
+            result["cost"] = cost
+
+            # 7) 交互式 HTML iBoM
+            stage = "ibom"
+            ibom_res = generate_ibom(dna=dna, output_dir=str(out), auto_open=open_ibom)
+            result["ibom"] = ibom_res
+
+            # 8) 写 pipeline_report.json (供 reconcile 自下而上观测真实 DRC)
+            stage = "report"
+            report = {
+                "name": dna.name, "pcb_path": pcb_path,
+                "routing": result["routing"], "drc": drc_result,
+                "gerber": gerber_result, "bom_csv": bom_csv, "cpl_csv": cpl_csv,
+                "ibom": ibom_res.get("html_path") if isinstance(ibom_res, dict) else None,
+                "cost": cost,
+            }
+            report_path = out / "pipeline_report.json"
+            report_path.write_text(
+                json.dumps(B.safe_json_serialize(report), ensure_ascii=False, indent=2),
+                encoding="utf-8")
+            result["report"] = str(report_path)
+
+            # 9) 预测编码交付裁决 (核心反向传播: 预测误差→自由能→下一步)
+            stage = "reconcile"
+            verdict = pcb_predict.reconcile(dna, out)
+            result["verdict"] = verdict.to_dict()
+            result["delivered"] = verdict.delivered
+            result["free_energy"] = verdict.free_energy
+            result["next_action"] = verdict.next_action
+
+            return B.safe_json_serialize(result)
+        except Exception as e:
+            log.error(f"pipeline_spec failed @ {stage}: {e}")
+            return {"status": "error", "stage": stage, "error": str(e)}
 
     # ── 环境感知 ──────────────────────────────────────────
 

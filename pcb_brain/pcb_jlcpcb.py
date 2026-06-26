@@ -284,6 +284,21 @@ class JLCPCBHelper:
     def __init__(self):
         pass
 
+    @staticmethod
+    def _resolve_dna(template_or_dna: Any) -> Tuple[DNA, str]:
+        """通用解析: 接受模板名(str)或 DNA 对象, 返回 (dna, name)。
+
+        反者道之动 — 不再被 21 模板注册表绑死, 任意 spec/网表导出的 DNA 皆可直接下单。
+        """
+        if isinstance(template_or_dna, DNA):
+            return template_or_dna, template_or_dna.name
+        if isinstance(template_or_dna, str):
+            dna = CircuitDNA.get(template_or_dna)
+            if not dna:
+                raise ValueError(f"模板不存在: {template_or_dna}")
+            return dna, template_or_dna
+        raise TypeError(f"无法解析 DNA: 需要模板名(str)或 DNA 对象, 收到 {type(template_or_dna).__name__}")
+
     def lookup_lcsc(self, value: str) -> Dict[str, Any]:
         """查询器件LCSC料号，支持精确匹配和前缀模糊匹配"""
         if value in LCSC_DB:
@@ -295,14 +310,13 @@ class JLCPCBHelper:
                 return data
         return {"lcsc": "?", "price": 0.5, "note": "未知器件，请手动查找"}
 
-    def generate_bom(self, template_name: str) -> List[BOMEntry]:
+    def generate_bom(self, template_name: Any) -> List[BOMEntry]:
         """
         生成BOM列表
         JLCPCB SMT格式: Designator, Comment, Footprint, LCSC
+        template_name: 模板名(str) 或 DNA 对象 (通用路径)
         """
-        dna = CircuitDNA.get(template_name)
-        if not dna:
-            raise ValueError(f"模板不存在: {template_name}")
+        dna, template_name = self._resolve_dna(template_name)
 
         entries: List[BOMEntry] = []
         for comp in dna.components:
@@ -323,14 +337,13 @@ class JLCPCBHelper:
 
         return entries
 
-    def generate_cpl(self, template_name: str) -> List[CPLEntry]:
+    def generate_cpl(self, template_name: Any) -> List[CPLEntry]:
         """
         生成CPL坐标文件 (Component Placement List)
         JLCPCB格式: Designator, Mid X, Mid Y, Layer, Rotation
+        template_name: 模板名(str) 或 DNA 对象 (通用路径)
         """
-        dna = CircuitDNA.get(template_name)
-        if not dna:
-            raise ValueError(f"模板不存在: {template_name}")
+        dna, template_name = self._resolve_dna(template_name)
 
         entries: List[CPLEntry] = []
         for comp in dna.components:
@@ -374,11 +387,11 @@ class JLCPCBHelper:
         成本报告 (含PCB打样 + SMT贴片估算)
 
         Args:
-            template_name: DNA模板名
+            template_name: DNA模板名 或 DNA 对象
             qty: 数量 (默认5片起打)
         """
-        bom = self.generate_bom(template_name)
-        dna = CircuitDNA.get(template_name)
+        dna, template_name = self._resolve_dna(template_name)
+        bom = self.generate_bom(dna)
 
         total_bom = sum(e.price_each for e in bom)
         smt_count = sum(1 for e in bom if e.jlcpcb_smt)
@@ -454,10 +467,12 @@ class JLCPCBHelper:
         完整报告: BOM + CPL + 成本 + 国产替代
 
         Returns: dict包含所有信息，并写入CSV文件（如果指定output_dir）
+        template_name: 模板名(str) 或 DNA 对象 (通用路径)
         """
-        bom = self.generate_bom(template_name)
-        cpl = self.generate_cpl(template_name)
-        cost = self.cost_report(template_name)
+        dna, template_name = self._resolve_dna(template_name)
+        bom = self.generate_bom(dna)
+        cpl = self.generate_cpl(dna)
+        cost = self.cost_report(dna)
 
         files = {}
         if output_dir:

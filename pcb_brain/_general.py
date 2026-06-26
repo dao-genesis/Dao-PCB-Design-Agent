@@ -127,6 +127,60 @@ def _report(tag: str, res: dict) -> int:
     return 1 if bad else 0
 
 
+def _report_pipeline(tag: str, res: dict) -> int:
+    """核验通用全闭环 pipeline_spec: 不仅 PCB 可制造, 更要真实交付物齐备 +
+    预测编码裁决 delivered=True (自由能=0, 预测=观测, 实质闭环)。"""
+    if res.get("status") != "ok":
+        print(f"[{tag}] FAILED @ {res.get('stage')}: {res.get('error')}")
+        return 1
+
+    out = Path(res["output_dir"])
+    drc = res.get("drc") or {}
+    gerber = res.get("gerber") or {}
+    bom = res.get("bom") or {}
+    cpl = res.get("cpl") or {}
+    ibom = res.get("ibom") or {}
+
+    # 真实交付物存在性 (不信自述, 直接看文件系统)
+    gerber_dir = Path(res.get("gerber_dir", out / "gerber"))
+    gfiles = sorted(f for f in gerber_dir.iterdir()) if gerber_dir.exists() else []
+    # 真实铜层: 含光圈定义 %ADD, 非 "Mock Gerber" 占位
+    real_copper = 0
+    mock = 0
+    for f in gfiles:
+        head = f.read_text(encoding="utf-8", errors="ignore")
+        if "Mock Gerber" in head:
+            mock += 1
+        if ("_Cu" in f.name) and ("%ADD" in head):
+            real_copper += 1
+    bom_ok = bom.get("csv") and Path(bom["csv"]).exists()
+    cpl_ok = cpl.get("csv") and Path(cpl["csv"]).exists()
+    ibom_ok = ibom.get("html_path") and Path(ibom["html_path"]).exists()
+
+    print(f"[{tag}] name={res['name']} comps={res['components']} nets={res['nets']}")
+    print(f"        DRC: status={drc.get('status')} violations={drc.get('violations')}")
+    print(f"        Gerber: files={len(gfiles)} real_copper={real_copper} mock={mock} "
+          f"({gerber.get('status')})")
+    print(f"        BOM={'OK' if bom_ok else 'MISSING'}({bom.get('items')}项, "
+          f"{bom.get('with_lcsc')}有料号) CPL={'OK' if cpl_ok else 'MISSING'}({cpl.get('items')}项) "
+          f"iBoM={'OK' if ibom_ok else 'MISSING'}")
+    print(f"        预测编码裁决: delivered={res.get('delivered')} "
+          f"free_energy={res.get('free_energy')}")
+    print(f"        next_action: {res.get('next_action')}")
+    for s in (res.get("verdict") or {}).get("surprises", []):
+        print(f"          ! {s['name']}: 预测{s['predicted']} vs 观测{s['observed']} "
+              f"(surprise={s['surprise']}) — {s['detail']}")
+
+    bad = (
+        not res.get("delivered")
+        or res.get("free_energy") != 0.0
+        or real_copper < 1 or mock > 0
+        or not (bom_ok and cpl_ok and ibom_ok)
+    )
+    print(f"        => {'OK (0→1 闭环实质闭合, 真实可投产交付)' if not bad else '!! 闭环未闭合'}")
+    return 1 if bad else 0
+
+
 def main() -> int:
     rc = 0
 
@@ -142,6 +196,20 @@ def main() -> int:
     net_path.write_text(_emit_kicad_netlist(SPEC), encoding="utf-8")
     res_b = PCB.design_spec(str(net_path), output_dir=str(out), prefer_freerouting=False)
     rc |= _report("netlist", res_b)
+
+    # ── 通路 C: 全闭环 pipeline_spec (spec dict) → 真实交付物 + 预测编码裁决 ──
+    print("\n=== C) spec dict → 全闭环 pipeline_spec (真实交付物 + 预测编码裁决) ===")
+    out_c = B.ensure_output_dir("attiny85_pwm_rgb_pipe")
+    res_c = PCB.pipeline_spec(SPEC, output_dir=str(out_c), prefer_freerouting=False)
+    rc |= _report_pipeline("pipeline-spec", res_c)
+
+    # ── 通路 D: 全闭环 pipeline_spec (标准 .net) → 真实交付物 + 预测编码裁决 ──
+    print("\n=== D) standard KiCad netlist (.net) → 全闭环 pipeline_spec ===")
+    out_d = B.ensure_output_dir("attiny85_pwm_rgb_pipe_net")
+    net_d = out_d / "attiny85_pwm_rgb.net"
+    net_d.write_text(_emit_kicad_netlist(SPEC), encoding="utf-8")
+    res_d = PCB.pipeline_spec(str(net_d), output_dir=str(out_d), prefer_freerouting=False)
+    rc |= _report_pipeline("pipeline-net", res_d)
 
     print(f"\n通用性测试台总判定: {'PASS' if rc == 0 else 'FAIL (见上方缺口, 待逐层修复)'}")
     return rc
