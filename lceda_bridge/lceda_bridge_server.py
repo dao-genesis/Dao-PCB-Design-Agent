@@ -56,6 +56,49 @@ PORT = 9907
 POLL_TIMEOUT_S = 25.0       # 长轮询最大等待
 CMD_TIMEOUT_S = 30.0        # 命令执行回传超时
 
+# pcb_brain (引擎/对话大脑) 在仓库根的 pcb_brain/ 下
+_BRAIN_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'pcb_brain')
+if os.path.isdir(_BRAIN_DIR) and _BRAIN_DIR not in sys.path:
+    sys.path.insert(0, _BRAIN_DIR)
+
+
+def chat_respond(message: str, session: str | None = None,
+                 output_dir: str | None = None) -> dict:
+    """对话框 → PCB 全流程 → 预测编码裁决, 委托 pcb_copilot.respond。"""
+    from pcb_copilot import respond
+    return respond(message, session=session, output_dir=output_dir)
+
+
+def _notify_eda(reply: dict) -> None:
+    """深度融合(best-effort): 把裁决以 Toast 注入活动嘉立创EDA。
+
+    无活动客户端 / 无该 API 时静默跳过, 绝不阻塞对话主链路。
+    """
+    try:
+        with STATE.lock:
+            if not STATE.sessions:
+                return
+        delivered = reply.get('delivered')
+        fe = reply.get('free_energy')
+        name = reply.get('template') or 'PCB'
+        if delivered is True:
+            text = f'PCB Copilot: 「{name}」已交付 ✓ (自由能=0)'
+            level = 0
+        elif delivered is False:
+            text = f'PCB Copilot: 「{name}」自由能={fe}, {reply.get("next_action") or "尚未闭合"}'
+            level = 1
+        else:
+            text = 'PCB Copilot: ' + (reply.get('reply', '')[:60])
+            level = 0
+        cmd_id = STATE.queue_cmd(None, 'sys_ToastMessage.showMessage', [text, level])
+        # 不强等结果, 给极短超时, 注入失败也不影响对话
+        try:
+            STATE.wait_result(cmd_id, timeout=3.0)
+        except Exception:
+            pass
+    except Exception as e:
+        print(f'[bridge] _notify_eda 跳过: {e}')
+
 # ──────────────────────────────────────────────────────────
 # 全局状态
 # ──────────────────────────────────────────────────────────
@@ -240,6 +283,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json(200, res)
             except Exception as e:
                 return self._send_json(500, {'error': str(e)})
+
+        if u.path == '/chat':
+            # 对话框入口: 一句话 → PCB 全流程 → 预测编码裁决 → 人话回复。
+            # 这是"对用户只增加一个对话框、AI 与 PCB 软件深度融合"的语言中枢。
+            try:
+                reply = chat_respond(
+                    data.get('message', ''),
+                    session=data.get('session'),
+                    output_dir=data.get('output_dir') or None,
+                )
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return self._send_json(500, {
+                    'reply': f'大脑处理时出错: {e}',
+                    'intent': 'error', 'error': str(e),
+                })
+            # 深度融合: 若有活动 EDA 客户端, 把裁决以 Toast 注入活动嘉立创EDA。
+            _notify_eda(reply)
+            return self._send_json(200, reply)
 
         return self._send_json(404, {'error': '未知路径', 'path': u.path})
 

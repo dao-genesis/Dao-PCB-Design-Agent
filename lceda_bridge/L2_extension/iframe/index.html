@@ -2,162 +2,242 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>LCEDA Bridge 控制台</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PCB Copilot — 道之对话</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
   body {
-    font-family: -apple-system, 'Segoe UI', sans-serif;
-    background: #1a1a2e; color: #e0e0e0;
-    padding: 16px; font-size: 13px;
+    font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #16161e; color: #e6e6e6;
+    display: flex; flex-direction: column; font-size: 13px;
   }
-  h1 { font-size: 16px; color: #4fc3f7; margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 8px; }
-  .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-  .label { color: #999; min-width: 100px; }
-  .value { color: #e0e0e0; font-family: 'Cascadia Code', Consolas, monospace; word-break: break-all; }
-  .badge { padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-  .badge.on { background: #1b5e20; color: #c8e6c9; }
-  .badge.off { background: #7f0000; color: #ffcdd2; }
-  .btn-group { display: flex; gap: 8px; margin-top: 12px; }
-  button {
-    padding: 8px 16px; border: 1px solid #4fc3f7;
-    background: transparent; color: #4fc3f7;
-    border-radius: 4px; cursor: pointer; font-weight: 600;
-    transition: all 0.15s;
+  header {
+    padding: 10px 14px; border-bottom: 1px solid #2a2a3a;
+    display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
   }
-  button:hover:not(:disabled) { background: #4fc3f7; color: #1a1a2e; }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  button.danger { border-color: #ef5350; color: #ef5350; }
-  button.danger:hover:not(:disabled) { background: #ef5350; color: #fff; }
-  .log {
-    margin-top: 12px; padding: 8px; background: #0a0a18; border-radius: 4px;
-    height: 100px; overflow-y: auto; font-family: monospace; font-size: 11px;
-    border: 1px solid #333;
+  header .title { font-size: 14px; color: #4fc3f7; font-weight: 700; }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: #555; }
+  header .dot.ok { background: #66bb6a; }
+  header .dot.bad { background: #ef5350; }
+  header .sub { color: #777; font-size: 11px; margin-left: auto; }
+
+  #history {
+    flex: 1 1 auto; overflow-y: auto; padding: 14px;
+    display: flex; flex-direction: column; gap: 12px;
   }
-  .log .line { color: #a0a0a0; padding: 1px 0; }
-  .log .line.event { color: #81c784; }
-  .log .line.error { color: #ef5350; }
-  .footer {
-    margin-top: 12px; padding-top: 8px; border-top: 1px solid #333;
-    color: #666; font-size: 11px; text-align: center;
+  .msg { display: flex; flex-direction: column; gap: 4px; max-width: 100%; }
+  .msg .who { font-size: 11px; color: #888; }
+  .bubble {
+    padding: 9px 12px; border-radius: 10px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
   }
+  .msg.user { align-items: flex-end; }
+  .msg.user .bubble { background: #245; color: #dcefff; border-bottom-right-radius: 2px; }
+  .msg.ai .bubble { background: #20202c; border: 1px solid #2f2f40; border-bottom-left-radius: 2px; }
+  .msg.sys .bubble { background: transparent; color: #777; font-size: 11px; padding: 2px 0; }
+
+  .verdict { margin-top: 8px; border-top: 1px dashed #333; padding-top: 8px; }
+  .verdict .line { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
+  .verdict .k { color: #888; min-width: 64px; font-size: 11px; }
+  .vbadge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .vbadge.on { background: #1b5e20; color: #c8e6c9; }
+  .vbadge.off { background: #5d4037; color: #ffe0b2; }
+  .fe { font-family: Consolas, monospace; }
+  .fe.zero { color: #66bb6a; } .fe.nonzero { color: #ffb74d; }
+  .next { color: #90caf9; font-size: 12px; }
+  .arts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .art { background: #1a1a26; border: 1px solid #333; border-radius: 4px;
+         padding: 2px 7px; font-size: 11px; color: #aaa; font-family: monospace; }
+
+  .typing { color: #888; font-style: italic; }
+  .dots::after { content: '…'; animation: blink 1.2s infinite; }
+  @keyframes blink { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+  footer {
+    flex: 0 0 auto; border-top: 1px solid #2a2a3a; padding: 10px;
+    display: flex; gap: 8px; align-items: flex-end;
+  }
+  #input {
+    flex: 1 1 auto; resize: none; min-height: 38px; max-height: 120px;
+    background: #20202c; color: #e6e6e6; border: 1px solid #333;
+    border-radius: 8px; padding: 9px 11px; font: inherit; line-height: 1.4;
+  }
+  #input:focus { outline: none; border-color: #4fc3f7; }
+  #send {
+    flex: 0 0 auto; padding: 0 16px; height: 38px; border: none;
+    background: #4fc3f7; color: #0d1117; border-radius: 8px;
+    font-weight: 700; cursor: pointer;
+  }
+  #send:disabled { opacity: .45; cursor: not-allowed; }
+  .hint { padding: 0 14px 8px; color: #555; font-size: 11px; }
+  .chip { display:inline-block; background:#20202c; border:1px solid #333;
+          border-radius: 12px; padding: 3px 10px; margin: 3px 4px 0 0;
+          cursor: pointer; color:#9ad; font-size: 11px; }
+  .chip:hover { border-color:#4fc3f7; }
 </style>
 </head>
 <body>
-<h1>🌉 LCEDA Bridge — 道之直连</h1>
+<header>
+  <span class="dot" id="dot"></span>
+  <span class="title">PCB Copilot</span>
+  <span class="sub" id="sub">道之对话 · 反者道之动</span>
+</header>
 
-<div class="row">
-  <span class="label">Python 桥</span>
-  <span class="value" id="bridgeUrl">http://127.0.0.1:9907</span>
-</div>
-<div class="row">
-  <span class="label">连接状态</span>
-  <span class="badge off" id="status">未连接</span>
-</div>
-<div class="row">
-  <span class="label">Session ID</span>
-  <span class="value" id="sessionId">—</span>
-</div>
-<div class="row">
-  <span class="label">已处理命令</span>
-  <span class="value" id="cmdCount">0</span>
-</div>
-<div class="row">
-  <span class="label">最近错误</span>
-  <span class="value" id="lastError" style="color:#ef5350">—</span>
+<div id="history">
+  <div class="msg ai">
+    <span class="who">PCB Copilot</span>
+    <div class="bubble">你好。用一句话告诉我你想做的板子, 我会走完整条链路:
+规格 → DNA → 布局布线 → DRC/Gerber/BOM/CPL → 预测编码裁决, 再把"是否交付 / 自由能 / 下一步"告诉你。
+逐步迭代, 人机共驾。</div>
+  </div>
 </div>
 
-<div class="btn-group">
-  <button id="btnStart">▶ 启动桥接</button>
-  <button id="btnStop" class="danger">■ 停止</button>
-  <button id="btnTest">🔬 测试 eda</button>
-  <button id="btnRefresh">🔄 刷新</button>
+<div class="hint">
+  试试:
+  <span class="chip" data-q="我想做一个ESP32 WiFi 控制板">ESP32 WiFi 板</span>
+  <span class="chip" data-q="做一个STM32F103串口点阵屏的板子">STM32 点阵屏</span>
+  <span class="chip" data-q="做一个AMS1117 3.3V 稳压电源模块">AMS1117 电源</span>
+  <span class="chip" data-q="核验一下刚才的板子">核验上一块</span>
 </div>
 
-<div class="log" id="log"></div>
-
-<div class="footer">
-  反者道之动 · 道法自然 · 无为而无不为<br>
-  顶部菜单 LCEDA Bridge → 关于 查看更多
-</div>
+<footer>
+  <textarea id="input" placeholder="说出你想做的 PCB… (Enter 发送, Shift+Enter 换行)"></textarea>
+  <button id="send">发送</button>
+</footer>
 
 <script>
+const BRIDGE_URL = 'http://127.0.0.1:9907';
 const $ = (id) => document.getElementById(id);
-const logEl = $('log');
+const hist = $('history');
 
-function append(msg, cls = '') {
-  const div = document.createElement('div');
-  div.className = 'line ' + cls;
-  const ts = new Date().toLocaleTimeString();
-  div.textContent = `[${ts}] ${msg}`;
-  logEl.appendChild(div);
-  logEl.scrollTop = logEl.scrollHeight;
-  while (logEl.children.length > 100) logEl.removeChild(logEl.firstChild);
+// 多轮会话态
+const SESSION = 'ext-' + Math.random().toString(36).slice(2, 10);
+let lastOutputDir = null;
+let busy = false;
+
+function scrollBottom() { hist.scrollTop = hist.scrollHeight; }
+
+function addMsg(who, cls, text) {
+  const m = document.createElement('div');
+  m.className = 'msg ' + cls;
+  const w = document.createElement('span'); w.className = 'who'; w.textContent = who;
+  const b = document.createElement('div'); b.className = 'bubble'; b.textContent = text;
+  if (cls !== 'sys') m.appendChild(w);
+  m.appendChild(b);
+  hist.appendChild(m);
+  scrollBottom();
+  return { m, b };
 }
 
-function setStatus(running, sessionId) {
-  const s = $('status');
-  if (running) { s.className = 'badge on'; s.textContent = '已连接'; }
-  else { s.className = 'badge off'; s.textContent = '未连接'; }
-  $('sessionId').textContent = sessionId ?? '—';
-  $('btnStart').disabled = running;
-  $('btnStop').disabled = !running;
+function setDot(state) {
+  const d = $('dot');
+  d.className = 'dot' + (state === true ? ' ok' : state === false ? ' bad' : '');
 }
 
-// 向扩展主代码发消息
-function send(action, payload = {}) {
-  window.parent.postMessage({ source: 'lceda-bridge-iframe', action, ...payload }, '*');
-}
+function renderVerdict(bubble, data) {
+  const v = document.createElement('div');
+  v.className = 'verdict';
 
-// 接收扩展主代码消息
-window.addEventListener('message', (ev) => {
-  const d = ev?.data;
-  if (!d || d.source !== 'lceda-bridge-extension') return;
-
-  switch (d.event) {
-    case 'snapshot':
-      $('bridgeUrl').textContent = d.bridgeUrl ?? 'http://127.0.0.1:9907';
-      setStatus(d.running, d.sessionId);
-      $('cmdCount').textContent = d.cmdCount ?? 0;
-      $('lastError').textContent = d.lastError ?? '—';
-      append(`快照: 状态=${d.running ? '运行' : '停止'}, 命令数=${d.cmdCount}`, 'event');
-      break;
-    case 'connected':
-      setStatus(true, d.sessionId);
-      append(`✅ 已连接, sessionId=${d.sessionId}`, 'event');
-      break;
-    case 'disconnected':
-      append(`❌ 断开: ${d.error}`, 'error');
-      $('lastError').textContent = d.error ?? '?';
-      break;
-    case 'cmd':
-      append(`→ ${d.cmd?.path}`);
-      $('cmdCount').textContent = (parseInt($('cmdCount').textContent) + 1) || 1;
-      break;
-    case 'result':
-      append(`← #${d.cmdId} ${d.error ? '❌' : '✅'}`);
-      break;
-    case 'stopped':
-      setStatus(false, null);
-      append('桥接已停止', 'event');
-      break;
-    case 'execResult':
-      append(`exec→ ${d.error ?? JSON.stringify(d.result).slice(0, 80)}`);
-      break;
+  if (typeof data.delivered === 'boolean') {
+    const l = document.createElement('div'); l.className = 'line';
+    l.innerHTML = '<span class="k">交付</span>';
+    const badge = document.createElement('span');
+    badge.className = 'vbadge ' + (data.delivered ? 'on' : 'off');
+    badge.textContent = data.delivered ? '✓ 已交付' : '✗ 未闭合';
+    l.appendChild(badge);
+    v.appendChild(l);
   }
+  if (data.free_energy !== undefined && data.free_energy !== null) {
+    const fe = Number(data.free_energy);
+    const l = document.createElement('div'); l.className = 'line';
+    l.innerHTML = '<span class="k">自由能</span>';
+    const s = document.createElement('span');
+    s.className = 'fe ' + (fe === 0 ? 'zero' : 'nonzero');
+    s.textContent = fe === 0 ? '0  (预测误差归零)' : fe.toFixed(2);
+    l.appendChild(s);
+    v.appendChild(l);
+  }
+  if (data.next_action) {
+    const l = document.createElement('div'); l.className = 'line';
+    l.innerHTML = '<span class="k">下一步</span>';
+    const s = document.createElement('span'); s.className = 'next';
+    s.textContent = data.next_action;
+    l.appendChild(s);
+    v.appendChild(l);
+  }
+  const arts = [];
+  if (data.pcb_path) arts.push('PCB');
+  if (data.gerber_dir || (data.gerber && data.gerber.count)) arts.push('Gerber');
+  if (data.bom && data.bom.items) arts.push('BOM×' + data.bom.items);
+  if (data.cpl && data.cpl.items) arts.push('CPL×' + data.cpl.items);
+  if (data.ibom) arts.push('iBoM');
+  if (arts.length) {
+    const wrap = document.createElement('div'); wrap.className = 'arts';
+    arts.forEach((a) => { const c = document.createElement('span'); c.className = 'art'; c.textContent = a; wrap.appendChild(c); });
+    v.appendChild(wrap);
+  }
+  if (v.children.length) bubble.appendChild(v);
+  scrollBottom();
+}
+
+async function ask(message) {
+  if (busy || !message.trim()) return;
+  busy = true; $('send').disabled = true;
+  addMsg('你', 'user', message);
+
+  const { b } = addMsg('PCB Copilot', 'ai', '');
+  b.innerHTML = '<span class="typing dots">正在走链路</span>';
+
+  try {
+    const r = await fetch(BRIDGE_URL + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, session: SESSION, output_dir: lastOutputDir }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    setDot(true);
+
+    b.innerHTML = '';
+    const txt = document.createElement('div');
+    txt.textContent = data.reply || '(无回复)';
+    b.appendChild(txt);
+    renderVerdict(b, data);
+
+    if (data.output_dir) lastOutputDir = data.output_dir;
+  } catch (e) {
+    setDot(false);
+    b.innerHTML = '';
+    b.textContent =
+      '⚠ 无法连接 PCB 大脑 (' + BRIDGE_URL + '/chat)\n' +
+      '请确认已在终端运行:  python lceda_bridge/lceda_bridge_server.py\n\n错误: ' + e;
+  } finally {
+    busy = false; $('send').disabled = false;
+    $('input').focus();
+  }
+}
+
+function submit() {
+  const v = $('input').value;
+  if (!v.trim()) return;
+  $('input').value = '';
+  ask(v);
+}
+
+$('send').addEventListener('click', submit);
+$('input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+document.querySelectorAll('.chip').forEach((c) => {
+  c.addEventListener('click', () => { $('input').value = c.dataset.q; $('input').focus(); });
 });
 
-$('btnStart').addEventListener('click', () => { append('启动桥接...'); send('start'); });
-$('btnStop').addEventListener('click', () => { append('停止桥接...'); send('stop'); });
-$('btnRefresh').addEventListener('click', () => send('requestSnapshot'));
-$('btnTest').addEventListener('click', () => {
-  append('测试 eda.sys_Environment.getEditorVersion()...');
-  send('execEdaCall', { reqId: Date.now(), path: 'sys_Environment.getEditorVersion', args: [] });
-});
-
-// 初始请求快照
-append('iframe 已加载, 请求当前状态...');
-send('requestSnapshot');
+// 初次探活
+fetch(BRIDGE_URL + '/ping', { cache: 'no-store' })
+  .then((r) => r.json()).then(() => setDot(true))
+  .catch(() => setDot(false));
 </script>
 </body>
 </html>
