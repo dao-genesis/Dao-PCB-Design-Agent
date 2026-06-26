@@ -914,9 +914,11 @@ class KiCadArm:
         board_area = max((x1 - x0) * (y1 - y0), 1.0)
         n_pads = sum(len(v) for v in pads_by_net.values())
         density = n_pads / board_area
-        GRID  = 0.2 if density > 0.02 else 0.25
+        import os as _os0
+        GRID  = float(_os0.environ.get("PCB_GRID",
+                      "0.1" if density > 0.02 else "0.15"))
         EDGE  = 4
-        CLR_SOFT  = 0.2    # mm — Level1: 焊盘+间距封锁 (KiCad默认0.2mm间距)
+        CLR_SOFT  = 0.16   # mm — Level1: 焊盘+间距封锁 (> DRC阈值0.15, 细间距逃逸)
         CLR_HARD  = 0.0    # mm — Level3: 仅焊盘本体 (紧急降级)
         log.info(f"  密度={density:.3f}pad/mm2 GRID={GRID}mm CLR={CLR_SOFT}mm")
         # ── 走线/过孔 间距 halo ──
@@ -924,13 +926,24 @@ class KiCadArm:
         # (中心距=GRID<线宽+间距) → R007 短路/间距 与 R006 过孔间距 必然违规。
         # 解: 对已布线铜箔按 (线宽+间距) 膨胀一圈 halo, 使异网走线天然保持足够中心距。
         import math as _math
-        TRACE_W = 0.25     # mm — 与 _append_segments_to_pcb 写入 width 一致
-        VIA_DIA = 0.8      # mm — 与写入 via size 一致
+        TRACE_W = 0.15     # mm — 与 _append_segments_to_pcb 写入 width 一致
+        VIA_DIA = 0.45     # mm — 与写入 via size 一致
+        # 缝合过孔尺寸下限 (JLCPCB 标准工艺最小通孔): 细间距 SMD 焊盘上的缝合过孔
+        # 按焊盘短边收窄, 使孔体不溢出焊盘 → 不压邻网逃逸走线 (因而制之·物刑器成)。
+        VIA_MIN_DIA   = 0.30   # mm
+        VIA_MIN_DRILL = 0.15   # mm
         _min_pitch = TRACE_W + CLR_SOFT                    # 异网走线中心最小间距
         TRACE_HALO = max(0, _math.ceil(_min_pitch / GRID) - 1)
         _via_pitch = VIA_DIA / 2 + CLR_SOFT + TRACE_W / 2  # 过孔↔走线中心最小间距
         VIA_HALO   = max(TRACE_HALO, _math.ceil(_via_pitch / GRID) - 1)
         log.info(f"  间距halo: trace={TRACE_HALO}格 via={VIA_HALO}格")
+
+        def stitch_via_dim(hw, hh):
+            """缝合过孔按焊盘短边收窄 (孔体不溢焊盘 → 不压邻网逃逸走线), 下限守工艺。"""
+            size = min(VIA_DIA, max(VIA_MIN_DIA, 2.0 * min(hw, hh)))
+            drill = max(VIA_MIN_DRILL, round(size - 0.20, 3))
+            return round(size, 3), round(drill, 3)
+
         gw = max(8, int((x1 - x0) / GRID) + EDGE * 2 + 1)
         gh = max(8, int((y1 - y0) / GRID) + EDGE * 2 + 1)
         log.info(f"  路由格: {gw}×{gh} (分辨率{GRID}mm), 网络数:{len(pads_by_net)}")
@@ -962,20 +975,26 @@ class KiCadArm:
 
         # ── 预计算他网焊盘封锁区 (按铜层): soft(焊盘体+间距) / hard(焊盘体) ──
         # 通孔/双层焊盘 ('*') 同时封锁 F/B; SMD 只封锁自身层。
-        LF, LB = 0, 1  # 层索引: F.Cu / B.Cu
-        pad_soft = {LF: {}, LB: {}}
-        pad_hard = {LF: {}, LB: {}}
+        # 层索引: F.Cu=0 / B.Cu=1 / In2.Cu=2 (内层信号, 仅 4 层升级时启用)。
+        # SIG = 当前启用的信号层列表; 升级到 3 层信号布线时追加 LI (道法自然·因而制之)。
+        LF, LB, LI = 0, 1, 2
+        LAYER_NAME = {LF: "F.Cu", LB: "B.Cu", LI: "In2.Cu"}
+        ALLL = (LF, LB, LI)
+        SIG = [LF, LB]
+        pad_soft = {L: {} for L in ALLL}
+        pad_hard = {L: {} for L in ALLL}
         for nidx, geom_list in pad_geom_by_net.items():
-            cs = {LF: set(), LB: set()}
-            ch = {LF: set(), LB: set()}
+            cs = {L: set() for L in ALLL}
+            ch = {L: set() for L in ALLL}
             for cx_mm, cy_mm, hw, hh, plyr in geom_list:
                 soft = pad_bbox_cells(cx_mm, cy_mm, hw, hh, CLR_SOFT)
                 hard = pad_bbox_cells(cx_mm, cy_mm, hw, hh, CLR_HARD)
-                tgt = (LF, LB) if plyr == "*" else ((LB,) if plyr == "B" else (LF,))
+                # 通孔焊盘 ('*') 贯穿全部铜层 (含 In2 内层信号), SMD 仅本层。
+                tgt = ALLL if plyr == "*" else ((LB,) if plyr == "B" else (LF,))
                 for L in tgt:
                     cs[L] |= soft
                     ch[L] |= hard
-            for L in (LF, LB):
+            for L in ALLL:
                 pad_soft[L][nidx] = frozenset(cs[L])
                 pad_hard[L][nidx] = frozenset(ch[L])
 
@@ -984,17 +1003,19 @@ class KiCadArm:
         for geom_list in pad_geom_by_net.values():
             for cx_mm, cy_mm, hw, hh, plyr in geom_list:
                 key = (round(cx_mm, 3), round(cy_mm, 3))
-                allowed = {LF, LB} if plyr == "*" else (
+                allowed = set(ALLL) if plyr == "*" else (
                     {LB} if plyr == "B" else {LF})
                 pad_layer_at.setdefault(key, set()).update(allowed)
 
         def layers_of(mm_pt) -> set:
-            return pad_layer_at.get((round(mm_pt[0], 3), round(mm_pt[1], 3)), {LF})
+            allowed = pad_layer_at.get(
+                (round(mm_pt[0], 3), round(mm_pt[1], 3)), {LF})
+            return (allowed & set(SIG)) or {LF}
 
         # ── 已路由占用 (按 net 分桶, 双层独立; 过孔占双层) ──
         #    trace_body: 走线实际占格; trace_halo: 走线+间距膨胀 (供异网避让)。
-        trace_body = {LF: {}, LB: {}}   # net -> set(cells)
-        trace_halo = {LF: {}, LB: {}}   # net -> frozenset(cells, 已膨胀 TRACE_HALO)
+        trace_body = {L: {} for L in ALLL}   # net -> set(cells)
+        trace_halo = {L: {} for L in ALLL}   # net -> frozenset(cells, 已膨胀 TRACE_HALO)
         via_body: dict = {}             # net -> set(cells)  (占双层)
         via_halo: dict = {}             # net -> frozenset(cells, 已膨胀 VIA_HALO)
         VIA_COST = 8  # 一个过孔 ≈ 8 格绕行的代价 (抑制过孔泛滥)
@@ -1020,7 +1041,7 @@ class KiCadArm:
             net_vias.setdefault(net_idx, []).extend(vlist)
             for gx, gy, L in path:
                 trace_body[L].setdefault(net_idx, set()).add((gx, gy))
-            for L in (LF, LB):
+            for L in SIG:
                 if net_idx in trace_body[L]:
                     trace_halo[L][net_idx] = frozenset(
                         expand_halo(trace_body[L][net_idx], TRACE_HALO))
@@ -1031,7 +1052,7 @@ class KiCadArm:
                     expand_halo(via_body[net_idx], VIA_HALO))
 
         def ripup_net(net_idx):
-            for L in (LF, LB):
+            for L in SIG:
                 trace_body[L].pop(net_idx, None)
                 trace_halo[L].pop(net_idx, None)
             via_body.pop(net_idx, None)
@@ -1041,7 +1062,7 @@ class KiCadArm:
 
         def build_obs(net_idx, own_cells, exempt, relax_ring):
             obs = {}
-            for L in (LF, LB):
+            for L in SIG:
                 o = set(edge_cells)
                 # 异网走线 (含间距 halo): 从根上保证 clearance
                 for onet, cells in trace_halo[L].items():
@@ -1069,7 +1090,25 @@ class KiCadArm:
                     ring -= body
                     o |= (ring - exempt)
                 obs[L] = o - own_cells
-            return obs
+            # 全贯穿过孔 (F↔B 直钻所有铜层) 的「层无关」禁区: 物理通孔贯穿中间层
+            # (如 In2.Cu), 故任一信号层上他网铜箔 (走线/过孔/焊盘) 处都不可落孔, 且
+            # 须按过孔半径留间距 (VIA_HALO > TRACE_HALO)。迷宫原仅校验过孔两端层 →
+            # 中间层隐性短路 (道法自然·因而制之: 顺物理之实而制其禁)。
+            extra = max(0, VIA_HALO - TRACE_HALO)
+            vobs = set(edge_cells)
+            for L in SIG:
+                foreign = set()
+                for onet, cells in trace_halo[L].items():
+                    if onet != net_idx:
+                        foreign |= cells
+                for onet, cells in pad_soft[L].items():
+                    if onet != net_idx:
+                        foreign |= cells
+                vobs |= (expand_halo(foreign, extra) if extra else foreign)
+            for onet, cells in via_halo.items():
+                if onet != net_idx:
+                    vobs |= cells
+            return obs, vobs
 
         def try_route(net_idx, src_mm, dst_mm, own_cells):
             """对单条连接走双层迷宫 (含 Level1/Level2 降级)。成功返回 path。"""
@@ -1081,13 +1120,15 @@ class KiCadArm:
                     exempt.add((src_g[0] + ddx, src_g[1] + ddy))
                     exempt.add((dst_g[0] + ddx, dst_g[1] + ddy))
             sl, dl = layers_of(src_mm), layers_of(dst_mm)
-            obs = build_obs(net_idx, own_cells, exempt, relax_ring=False)
+            obs, vobs = build_obs(net_idx, own_cells, exempt, relax_ring=False)
             path = self._maze_route_2layer(
-                src_g, dst_g, sl, dl, obs, gw, gh, VIA_COST)
+                src_g, dst_g, sl, dl, obs, gw, gh, VIA_COST, layers=tuple(SIG),
+                via_obs=vobs)
             if path is None:
-                obs = build_obs(net_idx, own_cells, exempt, relax_ring=True)
+                obs, vobs = build_obs(net_idx, own_cells, exempt, relax_ring=True)
                 path = self._maze_route_2layer(
-                    src_g, dst_g, sl, dl, obs, gw, gh, VIA_COST)
+                    src_g, dst_g, sl, dl, obs, gw, gh, VIA_COST, layers=tuple(SIG),
+                    via_obs=vobs)
             return path
 
         def net_connections(pad_list):
@@ -1119,7 +1160,8 @@ class KiCadArm:
                 if path:
                     segs, vlist = self._layered_path_to_segments(
                         path, net_idx, GRID, x0 - EDGE * GRID, y0 - EDGE * GRID,
-                        start_mm=src_mm, end_mm=dst_mm)
+                        start_mm=src_mm, end_mm=dst_mm,
+                        layer_names=[LAYER_NAME[L] for L in SIG])
                     commit_path(net_idx, path, segs, vlist)
                 else:
                     failed.append((src_mm, dst_mm))
@@ -1130,7 +1172,7 @@ class KiCadArm:
             src_g = mm_to_grid(*src_mm)
             dst_g = mm_to_grid(*dst_mm)
             obs = {}
-            for L in (LF, LB):
+            for L in SIG:
                 o = set(edge_cells)
                 for nidx, cells in pad_hard[L].items():
                     if nidx != net_idx:
@@ -1138,7 +1180,7 @@ class KiCadArm:
                 obs[L] = o - own_cells
             return self._maze_route_2layer(
                 src_g, dst_g, layers_of(src_mm), layers_of(dst_mm),
-                obs, gw, gh, VIA_COST)
+                obs, gw, gh, VIA_COST, layers=tuple(SIG))
 
         # 路由顺序: 焊盘多(最受约束)的网先布, 趁板面空闲抢到通路。
         order = sorted(
@@ -1160,8 +1202,9 @@ class KiCadArm:
 
         def restore(snap):
             tb, th, vb, vh, ns, nv, oc = snap
-            trace_body[LF], trace_body[LB] = tb[LF], tb[LB]
-            trace_halo[LF], trace_halo[LB] = th[LF], th[LB]
+            for L in ALLL:
+                trace_body[L] = tb[L]
+                trace_halo[L] = th[L]
             via_body.clear()
             via_body.update(vb)
             via_halo.clear()
@@ -1175,49 +1218,497 @@ class KiCadArm:
 
         # ── 拆线重布 (rip-up & reroute): 失败连接拆掉挡路网再重布, 仅当总开路严格
         #    下降才接受 → 单调收敛, 绝不引入短路 (硬约束 build_obs 全程不放松)。 ──
-        budget = max(20, total_opens() * 6)
-        improved = True
-        while improved and budget > 0 and total_opens() > 0:
-            improved = False
-            for net_idx in order:
-                if not open_conns.get(net_idx):
-                    continue
-                own_cells = {mm_to_grid(*p) for p in pads_by_net[net_idx]}
-                made_progress = False
-                for src_mm, dst_mm in list(open_conns[net_idx]):
-                    ip = ideal_path(net_idx, src_mm, dst_mm, own_cells)
-                    if ip is None:
-                        continue  # 被焊盘/板边挡死, 非走线拥塞 → 拆线无益 (诚实开路)
-                    ideal_by_L = {LF: set(), LB: set()}
-                    for gx, gy, L in ip:
-                        ideal_by_L[L].add((gx, gy))
-                    blockers = set()
-                    for L in (LF, LB):
-                        for onet, cells in trace_halo[L].items():
-                            if onet != net_idx and (cells & ideal_by_L[L]):
-                                blockers.add(onet)
-                    for onet, cells in via_halo.items():
-                        if onet != net_idx and (
-                                cells & ideal_by_L[LF] or cells & ideal_by_L[LB]):
-                            blockers.add(onet)
-                    if not blockers:
+        def run_ripup(rorder):
+            budget = max(20, total_opens() * 6)
+            improved = True
+            while improved and budget > 0 and total_opens() > 0:
+                improved = False
+                for net_idx in rorder:
+                    if not open_conns.get(net_idx):
                         continue
+                    own_cells = {mm_to_grid(*p) for p in pads_by_net[net_idx]}
+                    made_progress = False
+                    for src_mm, dst_mm in list(open_conns[net_idx]):
+                        ip = ideal_path(net_idx, src_mm, dst_mm, own_cells)
+                        if ip is None:
+                            continue  # 被焊盘/板边挡死 → 拆线无益 (诚实开路)
+                        ideal_by_L = {L: set() for L in ALLL}
+                        for gx, gy, L in ip:
+                            ideal_by_L[L].add((gx, gy))
+                        blockers = set()
+                        for L in SIG:
+                            for onet, cells in trace_halo[L].items():
+                                if onet != net_idx and (cells & ideal_by_L[L]):
+                                    blockers.add(onet)
+                        ideal_all = set().union(*(ideal_by_L[L] for L in SIG))
+                        for onet, cells in via_halo.items():
+                            if onet != net_idx and (cells & ideal_all):
+                                blockers.add(onet)
+                        blockers &= set(rorder)
+                        if not blockers:
+                            continue
+                        before = total_opens()
+                        snap = snapshot()
+                        for b in blockers:
+                            ripup_net(b)
+                        open_conns[net_idx] = route_net(net_idx)
+                        for b in sorted(blockers, key=lambda n: -len(pads_by_net[n])):
+                            open_conns[b] = route_net(b)
+                        if total_opens() < before:
+                            budget -= 1
+                            improved = True
+                            made_progress = True
+                            break  # 该网已改善, 跳到下一个网
+                        else:
+                            restore(snap)
+                    if made_progress:
+                        continue
+
+        # ── 协商式拥塞布线 (PathFinder·Lee, 道法自然·因而制之): 拆线重布抵达局部
+        #    极小时启动。异网走线/过孔退化为「软代价」而非硬墙 → 允许多网暂时共用
+        #    通道, present(拥塞) + history(历史) 代价逐轮递增, 互挡的网被自然推开,
+        #    无冲突解自行涌现 (无为而无不为)。仅当迭代得到 clearance 全净 (零异网
+        #    占用) 且开路更少时才落定 → 绝不引入 R007 短路, 亦绝不令开路变多。 ──
+        from collections import Counter as _Counter
+
+        def negotiated_route(rorder, max_iter=24):
+            rorder = [n for n in rorder if len(pads_by_net.get(n, [])) >= 2]
+            if total_opens() == 0 or not rorder:
+                return
+            PRES, HIST = 3.0, 1.0
+            pen = {L: _Counter() for L in SIG}   # 异网走线 halo 占用计数 (按层)
+            vpen = _Counter()                     # 异网过孔 halo (压全部信号层)
+            hist = {L: _Counter() for L in SIG}   # 历史拥塞代价
+
+            def add_pen(n):
+                for L in SIG:
+                    for c in trace_halo[L].get(n, ()):
+                        pen[L][c] += 1
+                for c in via_halo.get(n, ()):
+                    vpen[c] += 1
+
+            def sub_pen(n):
+                for L in SIG:
+                    for c in trace_halo[L].get(n, ()):
+                        pen[L][c] -= 1
+                for c in via_halo.get(n, ()):
+                    vpen[c] -= 1
+
+            def cost_field(fac):
+                cost = {}
+                for L in SIG:
+                    c = {}
+                    for cell, k in pen[L].items():
+                        if k > 0:
+                            c[cell] = c.get(cell, 0.0) + PRES * fac * k
+                    for cell, k in vpen.items():
+                        if k > 0:
+                            c[cell] = c.get(cell, 0.0) + PRES * fac * k
+                    for cell, k in hist[L].items():
+                        if k > 0:
+                            c[cell] = c.get(cell, 0.0) + HIST * k
+                    cost[L] = c
+                return cost
+
+            def hard_obs(net_idx, own):
+                hard = {}
+                for L in SIG:
+                    o = set(edge_cells)
+                    for nidx, cells in pad_hard[L].items():
+                        if nidx != net_idx:
+                            o |= cells
+                    hard[L] = o - own
+                return hard
+
+            def route_net_cong(net_idx, cost):
+                sub_pen(net_idx)
+                ripup_net(net_idx)
+                pad_list = pads_by_net[net_idx]
+                own = {mm_to_grid(*p) for p in pad_list}
+                hard = hard_obs(net_idx, own)
+                failed = []
+                for src_mm, dst_mm in net_connections(pad_list):
+                    src_g = mm_to_grid(*src_mm)
+                    dst_g = mm_to_grid(*dst_mm)
+                    path = self._maze_route_cost(
+                        src_g, dst_g, layers_of(src_mm), layers_of(dst_mm),
+                        hard, cost, gw, gh, VIA_COST, layers=tuple(SIG))
+                    if path:
+                        segs, vlist = self._layered_path_to_segments(
+                            path, net_idx, GRID,
+                            x0 - EDGE * GRID, y0 - EDGE * GRID,
+                            start_mm=src_mm, end_mm=dst_mm,
+                            layer_names=[LAYER_NAME[L] for L in SIG])
+                        commit_path(net_idx, path, segs, vlist)
+                    else:
+                        failed.append((src_mm, dst_mm))
+                add_pen(net_idx)
+                return failed
+
+            def conflicts():
+                """异网 clearance 违例格 = 某网 body 落入异网 halo (对应 R007)。"""
+                over = {L: set() for L in SIG}
+                nconf = 0
+                for L in SIG:
+                    hc = _Counter()
+                    for _n, cells in trace_halo[L].items():
+                        for c in cells:
+                            hc[c] += 1
+                    for _n, cells in via_halo.items():
+                        for c in cells:
+                            hc[c] += 1
+                    bodies = [(trace_body[L], trace_halo[L], via_halo)]
+                    for n, cells in trace_body[L].items():
+                        sh = trace_halo[L].get(n, frozenset())
+                        sv = via_halo.get(n, frozenset())
+                        for c in cells:
+                            oth = hc[c] - (1 if c in sh else 0) \
+                                - (1 if c in sv else 0)
+                            if oth > 0:
+                                over[L].add(c)
+                                nconf += 1
+                    for n, cells in via_body.items():
+                        sh = trace_halo[L].get(n, frozenset())
+                        sv = via_halo.get(n, frozenset())
+                        for c in cells:
+                            oth = hc[c] - (1 if c in sh else 0) \
+                                - (1 if c in sv else 0)
+                            if oth > 0:
+                                over[L].add(c)
+                                nconf += 1
+                    _ = bodies
+                return nconf, over
+
+            for n in rorder:
+                add_pen(n)
+            best_snap = snapshot()
+            best_opens = total_opens()
+            for it in range(max_iter):
+                fac = 0.5 + 0.5 * it
+                cost = cost_field(fac)
+                for net in rorder:
+                    if it > 0:
+                        cost = cost_field(fac)
+                    open_conns[net] = route_net_cong(net, cost)
+                nconf, over = conflicts()
+                op = total_opens()
+                if nconf == 0 and op < best_opens:
+                    best_snap = snapshot()
+                    best_opens = op
+                    if op == 0:
+                        break
+                for L in SIG:
+                    for c in over[L]:
+                        hist[L][c] += 1
+            restore(best_snap)
+
+        run_ripup(order)
+
+        # ── 4层叠层升级 (道法自然·因而制之): 2层布完仍有开路 → 把扇出最高的
+        #    GND 与主电源 net 收入内层平面 (In1.Cu/In2.Cu), 退出点对点布线腾空
+        #    F/B 信号层; 平面 net 经整层铜 + 缝合过孔连通, 信号网在腾空后的栅格
+        #    重布。仅对 2 层布不通的板触发 (无为: 简单板仍 2 层)。 ──
+        net_names = self._pcb_parse_net_names(text)
+        gnd_nets = [n for n, nm in net_names.items()
+                    if n > 0 and self._is_ground_net(nm)]
+
+        def grid_to_mm(gx, gy):
+            return (x0 - EDGE * GRID + gx * GRID, y0 - EDGE * GRID + gy * GRID)
+
+        def pour_plane(net_idx, lname, confine=None):
+            """整层铜平面: 灌满板内, 仅避让异网贯穿焊盘/过孔 → 连通该 net 全部焊盘。
+            内层平面 (In1/In2.Cu) 与 F/B 上的细间距焊盘异层, 故本网自身焊盘的铜格
+            必入平面 (经缝合过孔/贯穿孔下沉到内层连通), 不受异网同层 clearance 抠空影响,
+            确保该 net 全部焊盘 100% 落在平面铜内 → R008 全连通 (道法自然·虚室生白)。"""
+            own_pad_cells: set = set()
+            for cx_mm, cy_mm, hw, hh, _plyr in pad_geom_by_net.get(net_idx, []):
+                own_pad_cells |= pad_bbox_cells(cx_mm, cy_mm, hw, hh, 0.0)
+            seed_cells = {mm_to_grid(*p) for p in pads_by_net.get(net_idx, [])}
+            seed_cells |= via_body.get(net_idx, set())
+            seed_cells |= own_pad_cells
+            blocked = set(edge_cells)
+            for nidx, geom in pad_geom_by_net.items():
+                if nidx == net_idx:
+                    continue
+                for cx_mm, cy_mm, hw, hh, plyr in geom:
+                    if plyr == "*":  # 仅贯穿焊盘到达内层, 抠空守 clearance
+                        blocked |= pad_bbox_cells(cx_mm, cy_mm, hw, hh, CLR_SOFT)
+            foreign_via_block: set = set()
+            for onet, cells in via_halo.items():
+                if onet != net_idx:
+                    foreign_via_block |= cells
+            blocked |= foreign_via_block
+            # 异网通孔(贯穿全层)的 keepout 优先级高于本网焊盘力保: 孔体周围必须抠空,
+            # 否则平面铜会压在异网孔体上 → 物理短路 (因而制之·物刑器成)。本网焊盘仍经
+            # 其自身缝合过孔(孔中心入种子)连通平面, 故抠掉与异网孔重叠的边缘格不致开路。
+            own_pad_cells -= foreign_via_block
+            blocked -= own_pad_cells  # 本网自身焊盘恒可达 (异层, 经孔连通)
+            if confine is None:
+                cx0, cy0, cx1, cy1 = EDGE, EDGE, gw - EDGE, gh - EDGE
+            else:
+                cx0 = max(EDGE, confine[0]); cy0 = max(EDGE, confine[1])
+                cx1 = min(gw - EDGE, confine[2]); cy1 = min(gh - EDGE, confine[3])
+            fillable = {(gx, gy)
+                        for gx in range(cx0, cx1)
+                        for gy in range(cy0, cy1)
+                        if (gx, gy) not in blocked}
+            fillable |= own_pad_cells
+            seeds = [s for s in seed_cells if s in fillable]
+            if not seeds:
+                return None
+            kept: set = set()
+            stack = list(seeds)
+            while stack:
+                c = stack.pop()
+                if c in kept or c not in fillable:
+                    continue
+                kept.add(c)
+                cx, cy = c
+                stack.extend([(cx+1, cy), (cx-1, cy), (cx, cy+1), (cx, cy-1)])
+            kept |= own_pad_cells  # 保证全部自身焊盘格入铜 (孤立焊盘亦连通)
+            rects = self._rle_cells_to_rects(kept, GRID, grid_to_mm)
+            if not rects:
+                return None
+            return (net_idx, net_names.get(net_idx, f"#{net_idx}"), lname, rects)
+
+        inner_zones: list = []
+        plane_assign: list = []
+        self._residual_layers = []
+        if total_opens() > 0:
+            # 4 层叠层 (道法自然·因而制之): 标准 JLC 叠层 F / In1=GND平面 / In2=信号 / B。
+            # 启用第 3 信号层 In2.Cu → 三信号层逃逸拥塞 (单纯 2 层信号已抵几何天花板);
+            # 最高扇出的 GND net 收入 In1.Cu 整层铜平面, 退出点对点布线、并为 F/B 上的
+            # GND 焊盘补缝合过孔下沉到平面 → 既给信号腾地, 又天然全连通 (虚室生白)。
+            gset = set(gnd_nets)
+            gnd_cand = [n for n in pads_by_net
+                        if n in gset and len(pads_by_net[n]) >= 2]
+            planes = []
+            if gnd_cand:
+                planes.append(
+                    (max(gnd_cand, key=lambda n: len(pads_by_net[n])), "In1.Cu"))
+            plane_set = {n for n, _ in planes}
+            if LI not in SIG:
+                SIG.append(LI)
+            log.info(f"  4层升级: 3信号层 {[LAYER_NAME[L] for L in SIG]}"
+                     f" + 平面 {[(net_names.get(n), l) for n, l in planes]}")
+            # 1) GND 平面网退出点对点布线, 腾空栅格
+            for n in plane_set:
+                ripup_net(n)
+                open_conns[n] = []
+            order_sig = [n for n in order if n not in plane_set]
+            # 2) GND 平面网 SMD 焊盘加缝合过孔 (THT 焊盘本已贯穿内层, 无需)
+            for n, _lname in planes:
+                vlist = []
+                for cx_mm, cy_mm, hw, hh, plyr in pad_geom_by_net.get(n, []):
+                    if plyr == "*":
+                        continue
+                    gx, gy = mm_to_grid(cx_mm, cy_mm)
+                    vsz, vdr = stitch_via_dim(hw, hh)
+                    vlist.append({"x": cx_mm, "y": cy_mm, "net": n,
+                                  "_gx": gx, "_gy": gy,
+                                  "size": vsz, "drill": vdr})
+                if vlist:
+                    net_vias.setdefault(n, []).extend(vlist)
+                    for v in vlist:
+                        via_body.setdefault(n, set()).add((v["_gx"], v["_gy"]))
+                    via_halo[n] = frozenset(
+                        expand_halo(via_body[n], VIA_HALO))
+            # 3) 全部信号网在 3 信号层 (F/In2/B) 上重新布线 + 拆线收敛
+            for net_idx in order_sig:
+                open_conns[net_idx] = route_net(net_idx)
+            run_ripup(order_sig)
+            # 3b) 仍有开路 → 协商式拥塞布线收敛 (PathFinder 推开互挡网, 涌现无冲突解)
+            import os as _os
+            if _os.environ.get("PCB_NEGOTIATE"):
+                negotiated_route(order_sig)
+                run_ripup(order_sig)
+            # 3c) 残余开路闭合 (道法自然·因而制之): 三信号层 + 拆线/协商后仍开路的网,
+            #     皆为 QFN/密集焊盘逃逸拥塞 (异网走线挤满, 几何上已无空档可绕)。圣人
+            #     不与之争通道, 而为其各辟内层铜区 (In3.Cu, In4.Cu, ...): 该网 SMD 焊盘
+            #     补缝合过孔下沉到内层 → 整片铜区连通其全部焊盘 (虚室生白, 一区即同电位)。
+            #     内层铜区与 F/B 细间距 SMD 焊盘异层, 仅需避让异网"贯穿"焊盘 (R007 守层
+            #     不误判), 且各网铜区限定在自身焊盘包围盒内、彼此不交 → 绝不引入短路;
+            #     R008 并查集经铜区覆盖焊盘中心判全连通 → 残余开路必闭 (无不为)。包围盒
+            #     互不相交的残余网共用一层 (装箱), 抑制层数 (残余少则层少, 无为)。
+            res_planes: list = []        # [(net_idx, lname, (gx0,gy0,gx1,gy1))]
+            res_layers: list = []        # [[lname, [bbox_mm,...]], ...]
+
+            def _net_bbox_mm(_n):
+                xs = [p[0] for p in pads_by_net[_n]]
+                ys = [p[1] for p in pads_by_net[_n]]
+                return (min(xs), min(ys), max(xs), max(ys))
+
+            def _bbox_sep(a, b, m=2.0):  # True = 充分分离 (含 m mm 间隙)
+                return (a[2] + m < b[0] or b[2] + m < a[0] or
+                        a[3] + m < b[1] or b[3] + m < a[1])
+
+            def _pt_seg(px, py, x1, y1, x2, y2):
+                """点到线段最短距离 (mm)。"""
+                dx, dy = x2 - x1, y2 - y1
+                L2 = dx * dx + dy * dy
+                if L2 <= 1e-12:
+                    return _math.hypot(px - x1, py - y1)
+                t = ((px - x1) * dx + (py - y1) * dy) / L2
+                t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+                return _math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+
+            def place_stitch_via(n, cx, cy, hw, hh):
+                """缝合过孔精确落点 (道法自然·因而制之: 顺铜箔之实而制孔位):
+                全贯穿过孔物理钻穿所有铜层 → 孔体须避让任一层的异网铜 (走线/过孔/
+                焊盘)。在焊盘内 (孔心守焊盘以保贴合) 细网格搜净距最大点, 并按净距收
+                孔径 (下限守工艺), 使孔体不压异网铜。返回 (via_dict, safe_bool)。"""
+                MARGIN = 0.05                       # mm 物理裕量 (除不重叠外再留余)
+                rmin = VIA_MIN_DIA / 2.0
+                rcap = VIA_DIA / 2.0
+                R = rcap + 0.7                      # 邻铜筛选半径
+                fseg = []
+                for onet, segs in net_segments.items():
+                    if onet == n:
+                        continue
+                    for s in segs:
+                        if (min(s["x1"], s["x2"]) - R <= cx <= max(s["x1"], s["x2"]) + R
+                                and min(s["y1"], s["y2"]) - R <= cy <= max(s["y1"], s["y2"]) + R):
+                            fseg.append((s["x1"], s["y1"], s["x2"], s["y2"]))
+                fvia = []
+                for onet, vs in net_vias.items():
+                    if onet == n:
+                        continue
+                    for v in vs:
+                        ovr = v.get("size", VIA_DIA) / 2.0
+                        if abs(v["x"] - cx) <= R + ovr and abs(v["y"] - cy) <= R + ovr:
+                            fvia.append((v["x"], v["y"], ovr))
+                fpad = []
+                for onet, plist in pad_geom_by_net.items():
+                    if onet == n:
+                        continue
+                    for (px, py, phw, phh, _pl) in plist:
+                        if abs(px - cx) <= R + phw and abs(py - cy) <= R + phh:
+                            fpad.append((px, py, phw, phh))
+
+                _thw = TRACE_W / 2.0                 # 走线半宽 (mm)
+                def clearance(vx, vy):
+                    d = 9.9
+                    for (x1, y1, x2, y2) in fseg:
+                        d = min(d, _pt_seg(vx, vy, x1, y1, x2, y2) - _thw)
+                    for (ox, oy, ovr) in fvia:
+                        d = min(d, _math.hypot(vx - ox, vy - oy) - ovr)
+                    for (px, py, phw, phh) in fpad:
+                        ddx = max(abs(vx - px) - phw, 0.0)
+                        ddy = max(abs(vy - py) - phh, 0.0)
+                        d = min(d, _math.hypot(ddx, ddy))
+                    return d
+
+                step = 0.02
+                nx = max(1, int(round(2 * hw / step)))
+                ny = max(1, int(round(2 * hh / step)))
+                best = None  # (clr, vx, vy)
+                for ix in range(nx + 1):
+                    vx = (cx - hw) + (2 * hw) * ix / nx if nx else cx
+                    for iy in range(ny + 1):
+                        vy = (cy - hh) + (2 * hh) * iy / ny if ny else cy
+                        c = clearance(vx, vy)
+                        if best is None or c > best[0]:
+                            best = (c, vx, vy)
+                if best is None:
+                    best = (clearance(cx, cy), cx, cy)
+                clr, vx, vy = best
+                r = min(rcap, clr - MARGIN)
+                if r < rmin:
+                    r = rmin                         # 守工艺下限 (可能仍压, 交由重布解)
+                size = round(2 * r, 3)
+                drill = max(VIA_MIN_DRILL, round(size - 0.20, 3))
+                gx, gy = mm_to_grid(vx, vy)
+                safe = clr >= r                      # 孔体不与异网铜重叠 = 物理无短路
+                return ({"x": round(vx, 4), "y": round(vy, 4), "net": n,
+                         "_gx": gx, "_gy": gy, "size": size, "drill": drill}, safe)
+
+            residual = [n for n in order_sig
+                        if open_conns.get(n) and n not in plane_set
+                        and len(pads_by_net.get(n, [])) >= 2]
+            residual_set = set(residual)
+            _next_in = 3  # In1=GND平面, In2=信号层, 残余铜区从 In3.Cu 起
+            _res_unsafe = 0
+            for n in residual:
+                bb = _net_bbox_mm(n)
+                lname = None
+                for slot in res_layers:
+                    if all(_bbox_sep(bb, ob) for ob in slot[1]):
+                        lname = slot[0]; slot[1].append(bb); break
+                if lname is None:
+                    lname = f"In{_next_in}.Cu"; _next_in += 1
+                    res_layers.append([lname, [bb]])
+                # 缝合过孔: 该网 SMD 焊盘下沉到内层铜区 (通孔焊盘本已贯穿, 无需)
+                vlist = []
+                for cx_mm, cy_mm, hw, hh, plyr in pad_geom_by_net.get(n, []):
+                    if plyr == "*":
+                        continue
+                    v, ok = place_stitch_via(n, cx_mm, cy_mm, hw, hh)
+                    if not ok:
+                        _res_unsafe += 1
+                    vlist.append(v)
+                if vlist:
+                    net_vias.setdefault(n, []).extend(vlist)
+                    for v in vlist:
+                        via_body.setdefault(n, set()).add((v["_gx"], v["_gy"]))
+                    via_halo[n] = frozenset(expand_halo(via_body[n], VIA_HALO))
+                # 铜区限定在焊盘包围盒 + 1mm 余量 (本地化, 不跨板, 共层不交)
+                bx0, by0 = mm_to_grid(bb[0] - 1.0, bb[1] - 1.0)
+                bx1, by1 = mm_to_grid(bb[2] + 1.0, bb[3] + 1.0)
+                res_planes.append((n, lname, (bx0, by0, bx1, by1)))
+                open_conns[n] = []  # 铜区覆盖全焊盘 → 视作闭合
+            if res_planes:
+                log.info(f"  残余开路闭合: {len(res_planes)}网 → 内层铜区 "
+                         f"{[(net_names.get(n), l) for n, l, _ in res_planes]}")
+            # 残余缝合过孔落定后, 其「层无关」keepout 可能压住先前已布的异网走线 →
+            # 拆除冲突异网并就地重布 (build_obs 含异网过孔 halo, 重布必绕开), 单调闭合:
+            # 仅当总开路不增才接受 (无为而无不为: 让走线避孔, 而非强移孔)。
+            if res_planes:
+                res_keep = set()
+                for n in residual_set:
+                    res_keep |= set(via_halo.get(n, ()))
+                conflict = []
+                for f in order_sig:
+                    if f in plane_set or f in residual_set:
+                        continue
+                    tb = set()
+                    for L in SIG:
+                        tb |= trace_body[L].get(f, set())
+                    if tb & res_keep:
+                        conflict.append(f)
+                rerouted = 0
+                for f in sorted(conflict, key=lambda n: -len(pads_by_net[n])):
                     before = total_opens()
                     snap = snapshot()
-                    for b in blockers:
-                        ripup_net(b)
-                    open_conns[net_idx] = route_net(net_idx)
-                    for b in sorted(blockers, key=lambda n: -len(pads_by_net[n])):
-                        open_conns[b] = route_net(b)
-                    if total_opens() < before:
-                        budget -= 1
-                        improved = True
-                        made_progress = True
-                        break  # 该网已改善, 跳到下一个网
-                    else:
+                    open_conns[f] = route_net(f)
+                    if total_opens() > before:
                         restore(snap)
-                if made_progress:
-                    continue
+                    else:
+                        rerouted += 1
+                if conflict:
+                    log.info(f"  缝合过孔避让重布: 冲突异网{len(conflict)} "
+                             f"成功{rerouted} 残余压孔焊盘{_res_unsafe}")
+            # 4) 灌注 In1.Cu GND 平面 → 平面网全连通
+            for n, lname in planes:
+                z = pour_plane(n, lname)
+                if z:
+                    inner_zones.append(z)
+            # 4b) 灌注残余网内层铜区 (各自包围盒内, 经缝合过孔连通全焊盘)
+            for n, lname, conf in res_planes:
+                z = pour_plane(n, lname, confine=conf)
+                if z:
+                    inner_zones.append(z)
+            self._residual_layers = sorted({l for _n, l, _c in res_planes})
+            plane_assign = planes
+
+        if getattr(self, "_DIAG", False):
+            print("  --- OPEN DIAG (trapped=ideal_path None, else congested) ---")
+            for n in order:
+                for src_mm, dst_mm in open_conns.get(n, []):
+                    oc = {mm_to_grid(*p) for p in pads_by_net[n]}
+                    ip = ideal_path(n, src_mm, dst_mm, oc)
+                    tag = "TRAPPED" if ip is None else f"congested(len={len(ip)})"
+                    print(f"    net#{n} {net_names.get(n,'?'):<12} "
+                          f"{src_mm}->{dst_mm}  {tag}")
 
         segments: list = [s for n in net_segments for s in net_segments[n]]
         vias: list = [v for n in net_vias for v in net_vias[n]]
@@ -1234,12 +1725,7 @@ class KiCadArm:
         # 道法自然: 复用布线同一栅格 — 凡「非边界、非异网焊盘/走线/过孔间距区」
         # 的格皆可灌铜; 从 GND 焊盘洪泛, 只保留与 GND 焊盘连通的铜岛 (去孤岛),
         # 故铺铜天然守 clearance (不压异网铜=不短路), 又真实连通其覆盖的 GND 焊盘。
-        net_names = self._pcb_parse_net_names(text)
-        gnd_nets = [n for n, nm in net_names.items()
-                    if n > 0 and self._is_ground_net(nm)]
-        def grid_to_mm(gx, gy):
-            return (x0 - EDGE * GRID + gx * GRID, y0 - EDGE * GRID + gy * GRID)
-        zones: list = []
+        zones: list = list(inner_zones)
         for G in gnd_nets:
             gnd_seed_cells = {mm_to_grid(*p) for p in pads_by_net.get(G, [])}
             for L, lname in ((LF, "F.Cu"), (LB, "B.Cu")):
@@ -1279,14 +1765,22 @@ class KiCadArm:
                 rects = self._rle_cells_to_rects(kept, GRID, grid_to_mm)
                 if rects:
                     zones.append((G, net_names[G], lname, rects))
+        # 声明用到的内层铜: 平面层 (In1.Cu) ∪ 内层信号层 (In2.Cu) ∪ 残余铜区层 (In3+.Cu)。
+        inner_used = sorted({lname for _n, lname in plane_assign}
+                            | ({"In2.Cu"} if LI in SIG else set())
+                            | set(getattr(self, "_residual_layers", [])),
+                            key=lambda s: int(re.search(r"\d+", s).group()))
+        if inner_used:
+            self._ensure_inner_cu_layers(pcb_path, inner_used)
         if zones:
             self._append_zones_to_pcb(pcb_path, zones)
 
-        log.info(f"✅ 双层自动布线完成(含rip-up): ✅{routed}通 / ❌{unrouted}失败 / "
+        layers_n = 2 + len(inner_used)
+        log.info(f"✅ {layers_n}层自动布线完成(含rip-up): ✅{routed}通 / ❌{unrouted}失败 / "
                  f"{len(segments)}段 / {len(vias)}过孔 / {len(zones)}铺铜区")
         return {"routed": routed, "unrouted": unrouted,
                 "segments": len(segments), "vias": len(vias),
-                "zones": len(zones)}
+                "zones": len(zones), "layers": layers_n}
 
     def _pcb_board_bounds(self, text: str):
         """从 Edge.Cuts gr_rect 提取板框 (x0,y0,x1,y1)，单位mm"""
@@ -1410,12 +1904,14 @@ class KiCadArm:
 
     def _maze_route_2layer(self, src: tuple, dst: tuple,
                            src_layers: set, dst_layers: set,
-                           obs: dict, gw: int, gh: int, via_cost: int):
-        """双层 (F.Cu=0 / B.Cu=1) 迷宫布线 — 统一代价搜索 (Dijkstra).
+                           obs: dict, gw: int, gh: int, via_cost: int,
+                           layers: tuple = (0, 1), via_obs: set = None):
+        """N 层迷宫布线 — 统一代价搜索 (Dijkstra).
 
-        状态 = (gx, gy, layer). 平面相邻移动代价 1; 同坐标换层 (过孔) 代价
-        via_cost, 仅当目标层该格空闲. 返回 [(gx,gy,layer), ...] 或 None.
-        不同 net 走线落在不同层即不短路 —— 这是真实 PCB 用 ≥2 层消除交叉的根本机制.
+        状态 = (gx, gy, layer). 平面相邻移动代价 1; 同坐标贯穿过孔可换到任一其它
+        信号层 (代价 via_cost), 仅当目标层该格空闲. 返回 [(gx,gy,layer), ...] 或 None.
+        不同 net 走线落在不同层即不短路 —— 这是真实 PCB 用 ≥2 层消除交叉的根本机制;
+        层数越多 (3~4 信号层) 可布性越高 (道法自然·因而制之)。
         """
         import heapq
         starts = [(src[0], src[1], L) for L in src_layers
@@ -1455,9 +1951,16 @@ class KiCadArm:
                     dist[ns] = nd
                     parent[ns] = (x, y, L)
                     heapq.heappush(pq, (nd, ns))
-            # 换层 (过孔)
-            oL = 1 - L
-            if (x, y) not in obs[oL]:
+            # 换层 (贯穿过孔可达任一其它信号层)
+            # 全贯穿过孔物理钻穿所有铜层 → 落点须在「层无关」禁区 via_obs 之外
+            # (含所有信号层的他网走线/过孔/焊盘按过孔半径留间距), 否则中间层隐性短路。
+            if via_obs is not None and (x, y) in via_obs:
+                continue
+            for oL in layers:
+                if oL == L:
+                    continue
+                if (x, y) in obs[oL]:
+                    continue
                 ns = (x, y, oL)
                 nd = d + via_cost
                 if nd < dist.get(ns, 1e18):
@@ -1466,11 +1969,73 @@ class KiCadArm:
                     heapq.heappush(pq, (nd, ns))
         return None
 
+    def _maze_route_cost(self, src: tuple, dst: tuple,
+                         src_layers: set, dst_layers: set,
+                         hard: dict, cost: dict, gw: int, gh: int,
+                         via_cost: int, layers: tuple = (0, 1)):
+        """协商式拥塞布线的迷宫核 (PathFinder·Lee): 与 _maze_route_2layer 同构,
+        但异网走线/过孔不再是硬墙, 而是 cost[L][cell] 的「软代价」(present 拥塞 +
+        history 历史)。仅边界与异网焊盘体留在 hard[L] 里 (绝不可压 → 杜绝硬短路)。
+        多轮迭代中软代价递增, 互相挡路的网自然被推开 → 涌现无冲突解 (无为而无不为)。"""
+        import heapq
+        starts = [(src[0], src[1], L) for L in src_layers
+                  if (src[0], src[1]) not in hard[L]]
+        if not starts:
+            starts = [(src[0], src[1], L) for L in src_layers]
+        goals = {(dst[0], dst[1], L) for L in dst_layers}
+        dist: dict = {}
+        parent: dict = {}
+        pq = []
+        for s in starts:
+            base = cost[s[2]].get((s[0], s[1]), 0.0)
+            dist[s] = base
+            parent[s] = None
+            heapq.heappush(pq, (base, s))
+        while pq:
+            d, (x, y, L) = heapq.heappop(pq)
+            if d > dist.get((x, y, L), 1e18):
+                continue
+            if (x, y, L) in goals:
+                path = []
+                cur = (x, y, L)
+                while cur is not None:
+                    path.append(cur)
+                    cur = parent[cur]
+                return list(reversed(path))
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if not (0 <= nx < gw and 0 <= ny < gh):
+                    continue
+                if (nx, ny) in hard[L]:
+                    continue
+                ns = (nx, ny, L)
+                nd = d + 1 + cost[L].get((nx, ny), 0.0)
+                if nd < dist.get(ns, 1e18):
+                    dist[ns] = nd
+                    parent[ns] = (x, y, L)
+                    heapq.heappush(pq, (nd, ns))
+            for oL in layers:
+                if oL == L:
+                    continue
+                if (x, y) in hard[oL]:
+                    continue
+                ns = (x, y, oL)
+                nd = d + via_cost + cost[oL].get((x, y), 0.0)
+                if nd < dist.get(ns, 1e18):
+                    dist[ns] = nd
+                    parent[ns] = (x, y, L)
+                    heapq.heappush(pq, (nd, ns))
+        return None
+
     def _layered_path_to_segments(self, path: list, net_idx: int,
                                   grid_mm: float, x0: float, y0: float,
-                                  start_mm=None, end_mm=None):
-        """分层路径 [(gx,gy,L)] → (segments, vias). 换层处插入过孔."""
-        _LAYER = {0: "F.Cu", 1: "B.Cu"}
+                                  start_mm=None, end_mm=None, layer_names=None):
+        """分层路径 [(gx,gy,L)] → (segments, vias). 换层处插入过孔.
+        layer_names: 层索引→KiCad层名 (默认双层 0=F.Cu/1=B.Cu)。"""
+        if layer_names is None:
+            _LAYER = {0: "F.Cu", 1: "B.Cu"}
+        else:
+            _LAYER = {i: nm for i, nm in enumerate(layer_names)}
         segs: list = []
         vias: list = []
         # 切成同层连续子段
@@ -1554,6 +2119,19 @@ class KiCadArm:
         return "GND" in u or "GROUND" in u
 
     @staticmethod
+    def _is_power_net(name: str) -> bool:
+        """主电源轨判定 (排除地网与 *_SENSE/*_FB 分压采样信号)。"""
+        u = (name or "").upper().lstrip("+")
+        if not u or KiCadArm._is_ground_net(name):
+            return False
+        if u.endswith("_SENSE") or u.endswith("_FB") or "_ADC" in u:
+            return False
+        keys = ("VCC", "VDD", "VBAT", "VBUS", "VIN", "VOUT", "VSYS",
+                "3V3", "3.3V", "5V", "1V8", "1.8V", "1V2", "2V5", "VREF",
+                "AVDD", "DVDD", "VDDA", "PWR", "POWER", "VDDIO", "VCORE")
+        return any(k in u for k in keys)
+
+    @staticmethod
     def _rle_cells_to_rects(cells: set, grid: float, grid_to_mm) -> list:
         """格集合按行行程编码 → mm 轴对齐矩形 [(x0,y0,x1,y1), ...]。
         每个矩形为一行内连续格的最大跨度, 外扩半格使相邻行/列铜箔相接。"""
@@ -1609,6 +2187,26 @@ class KiCadArm:
         Path(pcb_path).write_text(new_text, encoding="utf-8")
         log.info(f"  写入 {len(zones)} 个铺铜区到PCB文件")
 
+    def _ensure_inner_cu_layers(self, pcb_path: str, layer_names: list) -> None:
+        """4层升级时, 把 In1.Cu/In2.Cu 内层铜声明插入 (layers ...) 块。
+        本引擎按层名 (而非序号) 处理布线/DRC/Gerber, 故序号仅取未占用值。"""
+        text = Path(pcb_path).read_text(encoding="utf-8")
+        # In{k}.Cu → 唯一未占用序号 (引擎按层名处理, 序号只需不撞: 2k+2, In1=4..In14=30)
+        def _ord(ln):
+            m = re.match(r"In(\d+)\.Cu$", ln)
+            return 2 * int(m.group(1)) + 2 if m else 4
+        ins = []
+        for ln in layer_names:
+            if f'"{ln}"' in text:
+                continue
+            ins.append(f'    ({_ord(ln)} "{ln}" signal)')
+        if not ins:
+            return
+        text = text.replace('    (0 "F.Cu" signal)\n',
+                            '    (0 "F.Cu" signal)\n' + "\n".join(ins) + "\n", 1)
+        Path(pcb_path).write_text(text, encoding="utf-8")
+        log.info(f"  声明内层铜: {[l for l in layer_names]}")
+
     def _append_segments_to_pcb(self, pcb_path: str, segments: list,
                                    vias: list = None) -> None:
         """将 (segment)/(via) 追加到 .kicad_pcb 文件末尾 ')' 之前。支持多层。"""
@@ -1620,13 +2218,15 @@ class KiCadArm:
             lines.append(
                 f'  (segment (start {s["x1"]:.4f} {s["y1"]:.4f})'
                 f' (end {s["x2"]:.4f} {s["y2"]:.4f})'
-                f' (width 0.25) (layer "{lyr}")'
+                f' (width 0.15) (layer "{lyr}")'
                 f' (net {s["net"]}) (tstamp "{_uuid.uuid4()}"))'
             )
         for v in (vias or []):
+            vsz = v.get("size", 0.45)
+            vdr = v.get("drill", 0.25)
             lines.append(
                 f'  (via (at {v["x"]:.4f} {v["y"]:.4f})'
-                f' (size 0.8) (drill 0.4) (layers "F.Cu" "B.Cu")'
+                f' (size {vsz}) (drill {vdr}) (layers "F.Cu" "B.Cu")'
                 f' (net {v["net"]}) (tstamp "{_uuid.uuid4()}"))'
             )
         new_text = (text[:-1].rstrip() + "\n" + "\n".join(lines) + "\n)"

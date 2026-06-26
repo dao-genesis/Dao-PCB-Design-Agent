@@ -1328,6 +1328,145 @@ def repair_footprints(dna: DNA) -> DNA:
     return dna
 
 
+def _place_by_connectivity(dna: DNA, exts: Dict[str, tuple],
+                           clear: float) -> bool:
+    """连通性驱动的构造式布局 (道法自然·因而制之):
+    以 MCU/最强连通元件为锚, 按网表「弹簧权重」把每个元件逐一吸附到其已放置网邻的
+    加权质心, 在该质心周围螺旋搜索最近的「无重叠」空位落子 → 强连通的小元件 (晶振/
+    去耦/旁路/信号端点) 天然紧贴主控, 走线从板级长度坍缩为局部短线; 拥塞自消、开路
+    自灭。构造过程恒守无重叠 (R001=0), 最终按真实外形紧致包围盒定板框 (虚室生白)。
+
+    返回 True 表示已完成布局 (auto_layout 直接采用), False 表示回退旧分区布局。"""
+    import os as _os
+    import math as _math
+    from collections import Counter as _Counter, defaultdict as _dd
+    if _os.environ.get("PCB_LEGACY_PLACE"):
+        return False
+    comps = dna.components
+    if len(comps) < 3:
+        return False
+    by_ref = {c.ref: c for c in comps}
+    dims = {c.ref: exts.get(c.ref, (3.0, 3.0)) for c in comps}
+
+    # ── 弹簧权重图: 小网 (2..MAXN) 全连接星状均摊; 大网 (电源/GND) 退化为
+    #    「向枢纽 (该网焊盘最多的元件, 通常 MCU/电源IC) 的弱辐条」, 既给去耦电容
+    #    朝主控的吸力, 又不致把全部元件拉塌成一团。 ──
+    MAXN = 6
+    BIGW = 0.18
+    wmap: Dict[tuple, float] = _dd(float)
+    for _net, conns in dna.nets.items():
+        refs = sorted({r for r, _p in conns if r in by_ref})
+        n = len(refs)
+        if n < 2:
+            continue
+        if n <= MAXN:
+            wgt = 1.0 / (n - 1)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    wmap[(refs[i], refs[j])] += wgt
+        else:
+            cnt = _Counter(r for r, _p in conns if r in by_ref)
+            hub = max(refs, key=lambda r: (cnt[r], r))
+            for r in refs:
+                if r != hub:
+                    wmap[tuple(sorted((hub, r)))] += BIGW
+    adj: Dict[str, list] = _dd(list)
+    for (a, b), wt in wmap.items():
+        adj[a].append((b, wt))
+        adj[b].append((a, wt))
+
+    deg = {c.ref: sum(wt for _nb, wt in adj[c.ref]) for c in comps}
+    areas = {r: (2 * hw) * (2 * hh) for r, (hw, hh) in dims.items()}
+    mcus = [c.ref for c in comps if c.group == "mcu"]
+    if mcus:
+        anchor = max(mcus, key=lambda r: (areas[r], deg[r], r))
+    else:
+        anchor = max((c.ref for c in comps),
+                     key=lambda r: (deg[r], areas[r], r))
+
+    # 布局留白: courtyard + 走线呼吸槽 (给相邻元件间留逃逸通道), 可经环境变量微调。
+    try:
+        gap = float(_os.environ.get("PCB_PLACE_GAP", "1.0"))
+    except ValueError:
+        gap = 1.0
+    eff_clear = max(clear, gap)
+
+    placed: Dict[str, tuple] = {}
+    boxes: list = []  # (x, y, hw, hh)
+
+    def _olap(x, y, hw, hh) -> bool:
+        for px, py, phw, phh in boxes:
+            if (abs(x - px) < hw + phw + eff_clear and
+                    abs(y - py) < hh + phh + eff_clear):
+                return True
+        return False
+
+    def _spiral_free(tx, ty, hw, hh) -> tuple:
+        if not _olap(tx, ty, hw, hh):
+            return (round(tx, 2), round(ty, 2))
+        step = max(0.5, min(hw, hh) + eff_clear * 0.5)
+        r = step
+        while r < 2000.0:
+            npts = max(8, int(2 * _math.pi * r / step))
+            for k in range(npts):
+                ang = 2 * _math.pi * k / npts
+                x = tx + r * _math.cos(ang)
+                y = ty + r * _math.sin(ang)
+                if not _olap(x, y, hw, hh):
+                    return (round(x, 2), round(y, 2))
+            r += step
+        return (round(tx, 2), round(ty, 2))
+
+    def _place(ref, tx, ty):
+        hw, hh = dims[ref]
+        x, y = (tx, ty) if not boxes else _spiral_free(tx, ty, hw, hh)
+        placed[ref] = (x, y)
+        boxes.append((x, y, hw, hh))
+
+    _place(anchor, 0.0, 0.0)
+    remaining = set(by_ref) - {anchor}
+    while remaining:
+        best = None
+        best_w = 0.0
+        best_t = (0.0, 0.0)
+        for ref in sorted(remaining):
+            tw = tx = ty = 0.0
+            for nb, wt in adj[ref]:
+                if nb in placed:
+                    px, py = placed[nb]
+                    tw += wt
+                    tx += px * wt
+                    ty += py * wt
+            if tw > best_w:
+                best_w = tw
+                best = ref
+                best_t = (tx / tw, ty / tw)
+        if best is None:
+            break
+        _place(best, best_t[0], best_t[1])
+        remaining.discard(best)
+
+    # 孤立元件 (无任何网连接): 落在已放置质心附近, 螺旋自然外推到空边。
+    if remaining and placed:
+        cx = sum(p[0] for p in placed.values()) / len(placed)
+        cy = sum(p[1] for p in placed.values()) / len(placed)
+        for ref in sorted(remaining):
+            _place(ref, cx, cy)
+
+    # ── 归一化到板内 + 按真实外形紧致包围盒定板框 ──
+    margin = 5.0
+    minx = min(placed[r][0] - dims[r][0] for r in placed)
+    miny = min(placed[r][1] - dims[r][1] for r in placed)
+    maxx = max(placed[r][0] + dims[r][0] for r in placed)
+    maxy = max(placed[r][1] + dims[r][1] for r in placed)
+    for c in comps:
+        x, y = placed[c.ref]
+        c.pos = (round(x - minx + margin, 2), round(y - miny + margin, 2))
+    dna.board_size = (round(maxx - minx + 2 * margin, 1),
+                      round(maxy - miny + 2 * margin, 1))
+    return True
+
+
 def auto_layout(dna: DNA) -> DNA:
     """
     自动布局算法 v2 — 功能分区 + 最小间距保证 + 去耦电容靠近MCU
@@ -1365,6 +1504,12 @@ def auto_layout(dna: DNA) -> DNA:
 
     exts = {comp.ref: footprint_extent(comp.fp_name, comp.fp_lib) for comp in dna.components}
     CLEAR = 0.6  # 元件间最小留白 (courtyard) mm
+
+    # 连通性驱动构造式布局 (默认): 紧致、网邻聚拢 → 走线短、拥塞消。失败/禁用则回退
+    # 下面的功能分区列布局 (PCB_LEGACY_PLACE=1 强制旧布局)。
+    if _place_by_connectivity(dna, exts, CLEAR):
+        return dna
+
     # 放置顺序: 规范分区优先, 再补任何非规范分组 (如 sensor/rf/analog) —
     # 不在表里的分组过去会被漏放→留在原位重叠 (根因 bug), 现一律纳入。
     _canon_order = ["mcu", "crystal", "power", "sensor", "passive", "interface", "misc"]
@@ -1425,7 +1570,91 @@ def auto_layout(dna: DNA) -> DNA:
         base_h = round(base_h * 1.25, 1)
 
     dna.board_size = (base_w, base_h)
+    _refine_layout_by_connectivity(dna, exts, CLEAR)
     return dna
+
+
+def _refine_layout_by_connectivity(dna: DNA, exts: Dict[str, tuple],
+                                   clear: float) -> None:
+    """连通性感知布局精修 (道法自然·因而制之): 以网表为弹簧, 把强连通的小元件
+    (晶振/去耦/旁路/信号端点) 吸附到其网邻的加权中心, 在严守「无重叠 + 板内」
+    约束下缩短走线 → 缓解拥塞 → 开路自消。纯局部贪心, 单调安全 (移动仅当不引入
+    任何重叠时才接受), 故绝不破坏既有的 R001=0。"""
+    import os as _os
+    if _os.environ.get("PCB_NO_REFINE"):
+        return
+    comps = dna.components
+    if len(comps) < 3:
+        return
+    by_ref = {c.ref: c for c in comps}
+    dims = {c.ref: exts.get(c.ref, (3.0, 3.0)) for c in comps}
+    w, h = dna.board_size
+    margin = max(4.0, min(8.0, w * 0.08))
+
+    # 弹簧权重: 仅小网 (2..MAXN 焊盘) 施力; 电源/GND 等大网交由平面/铺铜处理,
+    # 若纳入会把所有元件拉成一团 (失真)。每条网按 1/(n-1) 星型均摊。
+    MAXN = 6
+    weight: Dict[tuple, float] = {}
+    for _net, conns in dna.nets.items():
+        refs = sorted({r for r, _p in conns if r in by_ref})
+        n = len(refs)
+        if n < 2 or n > MAXN:
+            continue
+        wgt = 1.0 / (n - 1)
+        for i in range(n):
+            for j in range(i + 1, n):
+                key = (refs[i], refs[j])
+                weight[key] = weight.get(key, 0.0) + wgt
+
+    adj: Dict[str, list] = {c.ref: [] for c in comps}
+    for (a, b), wgt in weight.items():
+        adj[a].append((b, wgt))
+        adj[b].append((a, wgt))
+
+    # 锚点: MCU / 大元件不动 (作为吸附中枢), 其余小元件向网邻聚拢。
+    areas = {r: (2 * hw) * (2 * hh) for r, (hw, hh) in dims.items()}
+    max_area = max(areas.values()) if areas else 1.0
+    anchored = {c.ref for c in comps
+                if c.group == "mcu" or areas[c.ref] >= 0.6 * max_area}
+
+    def overlaps(ref, x, y) -> bool:
+        hw, hh = dims[ref]
+        for c in comps:
+            if c.ref == ref:
+                continue
+            px, py = c.pos
+            phw, phh = dims[c.ref]
+            if (abs(x - px) < (hw + phw + clear) and
+                    abs(y - py) < (hh + phh + clear)):
+                return True
+        return False
+
+    movable = [c for c in comps if c.ref not in anchored and adj[c.ref]]
+    movable.sort(key=lambda c: c.ref)  # 确定性顺序
+    for _round in range(80):
+        moved = False
+        for c in movable:
+            hw, hh = dims[c.ref]
+            tw = sum(wgt for _nb, wgt in adj[c.ref])
+            if tw <= 0:
+                continue
+            tx = sum(by_ref[nb].pos[0] * wgt for nb, wgt in adj[c.ref]) / tw
+            ty = sum(by_ref[nb].pos[1] * wgt for nb, wgt in adj[c.ref]) / tw
+            cx, cy = c.pos
+            # 沿目标方向逐步收敛 (大步→小步), 取首个无重叠落点。
+            for frac in (0.6, 0.4, 0.25, 0.12):
+                nx = round(max(margin + hw, min(w - margin - hw,
+                                                cx + (tx - cx) * frac)), 2)
+                ny = round(max(margin + hh, min(h - margin - hh,
+                                                cy + (ty - cy) * frac)), 2)
+                if (nx, ny) == (cx, cy):
+                    continue
+                if not overlaps(c.ref, nx, ny):
+                    c.pos = (nx, ny)
+                    moved = True
+                    break
+        if not moved:
+            break
 
 
 def estimate_bom_cost(dna: DNA) -> Dict[str, float]:
