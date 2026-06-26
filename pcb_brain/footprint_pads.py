@@ -213,6 +213,38 @@ def _jst_row_pads(n: int, pitch: float) -> List[Dict]:
              "layers": list(_SMD_LAYERS), "rratio": 0.25} for k in range(n)]
 
 
+def _perimeter_pads(n: int, body_w: float, body_h: float) -> List[Dict]:
+    """模组类 castellated 封装: n 个焊盘沿本体周界均匀分布 (与片式/QFP 同源的 first-principles
+    land pattern; 焊盘数取自器件手册, 周界几何由本体尺寸确定, 非臆造焊盘号)。
+    pin1 起于左上角, 顺时针 上边→右边→下边→左边。"""
+    hw, hh = body_w / 2.0, body_h / 2.0
+    perim = 2.0 * (body_w + body_h)
+    pads: List[Dict] = []
+    for i in range(n):
+        d = (i + 0.5) / n * perim
+        if d <= body_w:                       # 上边 左→右 (焊盘竖向)
+            x, y, sz = -hw + d, -hh, (0.6, 1.0)
+        elif d <= body_w + body_h:            # 右边 上→下 (焊盘横向)
+            x, y, sz = hw, -hh + (d - body_w), (1.0, 0.6)
+        elif d <= 2.0 * body_w + body_h:      # 下边 右→左 (焊盘竖向)
+            x, y, sz = hw - (d - body_w - body_h), hh, (0.6, 1.0)
+        else:                                 # 左边 下→上 (焊盘横向)
+            x, y, sz = -hw, hh - (d - 2.0 * body_w - body_h), (1.0, 0.6)
+        pads.append({"num": str(i + 1), "type": "smd", "shape": "roundrect",
+                     "at": (round(x, 3), round(y, 3)), "size": sz,
+                     "layers": list(_SMD_LAYERS), "rratio": 0.25})
+    return pads
+
+
+# 模组类封装 (castellated 周界焊盘): name -> (焊盘数, 本体宽mm, 本体高mm)。
+# 焊盘数与外形取自器件手册; 周界几何 first-principles 生成 (与片式/QFP 同源)。绝不臆造。
+_MODULE_FP: Dict[str, tuple] = {
+    # EBYTE E73-2G4M08S1C (nRF52840 模组), 13.0×18.0mm, 43 castellated 焊盘。
+    # 据 E73-2G4M08S1C 用户手册 §3 "Size and pin definition" (Pad quantity: 43, Size 13.0×18.0mm)。
+    "Ebyte_E73-2G4M08S1C": (43, 18.0, 13.0),
+}
+
+
 def _cp_radial_pads(pitch: float) -> List[Dict]:
     # 直插电解电容: 2 个 THT 焊盘, 间距 pitch
     return [
@@ -243,6 +275,9 @@ def builtin_fp_pads(fp_lib: str, fp_name: str,
     if not isinstance(fp_name, str):  # 损坏的 Comp (fp_name 为坐标元组等) → 不生成
         return []
     name = fp_name or ""
+
+    if name in _MODULE_FP:                 # 模组类 castellated 封装 (焊盘数据手册确证)
+        return _perimeter_pads(*_MODULE_FP[name])
 
     m = _RE_CHIP.match(name)
     if m and m.group(1) in _CHIP:

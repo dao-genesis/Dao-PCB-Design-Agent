@@ -131,6 +131,9 @@ _PIN_ALIAS: Dict[str, Dict[str, str]] = {
     },
     # STM32G031: 复位脚为 PF2-NRST (引脚5, 复位与 PF2 复用同焊盘; ST 数据手册)
     "stm32g031g8ux": {"NRST": "PF2", "RESET": "PF2"},
+    # DW01A: 官方符号脚 1 名 "OD"(Output Discharge, 放电控制FET栅驱动); 原理图常记 "DO"
+    # (Discharge Output) — 同一物理焊盘 (DW01A datasheet §6 Pin Configuration)。
+    "dw01a": {"DO": "OD"},
 }
 
 
@@ -151,7 +154,76 @@ _DATASHEET_PINMAP: Dict[str, Dict[str, str]] = {
     # SDO(MISO)=1 CS=12。
     "icm42688p": {"VDD": "8", "VDDIO": "5", "GND": "6", "AP_SDO": "1",
                   "AP_SDI": "14", "AP_SCLK": "13", "AP_CS": "12", "INT1": "4"},
+    # EBYTE E73-2G4M08S1C (nRF52840 模组, 43 castellated 焊盘)。据 E73-2G4M08S1C 用户手册
+    # §3 "Size and pin definition" Pad No.1~43 全表逐脚录入 (功能脚名取该表 "Pin item"/"chip
+    # pin item")。模组只引出 nRF52840 的部分 GPIO; 未引出脚不在此表 (网表如引用须改接已引出脚)。
+    "e732g4m08s1c": {
+        "P1.11": "1", "P1.10": "2", "P0.03": "3", "P0.28": "4", "GND": "5",
+        "P1.13": "6", "P0.02": "7", "P0.29": "8", "P0.31": "9", "P0.30": "10",
+        "P0.00": "11", "XL1": "11", "P0.26": "12", "P0.01": "13", "XL2": "13",
+        "P0.06": "14", "P0.05": "15", "P0.08": "16", "P1.09": "17", "P0.04": "18",
+        "VDD": "19", "VCC": "19", "P0.12": "20", "P0.07": "22", "VDDH": "23",
+        "DCCH": "25", "P0.18": "26", "RESET": "26", "RST": "26", "VBUS": "27",
+        "P0.15": "28", "D-": "29", "USBD-": "29", "P0.17": "30", "D+": "31",
+        "USBD+": "31", "P0.20": "32", "P0.13": "33", "P0.22": "34", "P0.24": "35",
+        "P1.00": "36", "SWDIO": "37", "P1.02": "38", "SWDCLK": "39", "P1.04": "40",
+        "P0.09": "41", "NFC1": "41", "P1.06": "42", "P0.10": "43", "NFC2": "43",
+    },
+    # QST QMI8658C 6轴IMU (2.5×3.0mm 14-Pin LGA)。据 QMI8658C datasheet rev0.9 Table 2
+    # "Pin Definitions": 1=SDO/SA0 2=SDx 3=SCx 4=INT1 5=VDDIO 6=GND(NC) 7=GND 8=VDD
+    # 9=INT2 10/11=RESV-NC 12=CS 13=SCL 14=SDA。
+    "qmi8658c": {
+        "SDO": "1", "SA0": "1", "SDX": "2", "SCX": "3", "INT1": "4", "VDDIO": "5",
+        "GND": "7", "VDD": "8", "INT2": "9", "CS": "12", "SCL": "13", "SDA": "14",
+    },
+    # AO8205 (Alpha&Omega) 双 N-MOS 电池保护开关 (SOIC-8/TSSOP-8)。据 8205A 系列 datasheet
+    # Pin Configuration: 1=D1/D2 2=S1 3=S1 4=G1 5=G2 6=S2 7=S2 8=D1/D2 (两管共漏内连)。
+    "ao8205": {"D1": "1", "S1": "2", "G1": "4", "G2": "5", "S2": "6", "D2": "8"},
+    # Goodix GT911 电容触摸控制器 (52-pin QFN 6×6mm)。据 GT911 datasheet §4 Pin
+    # Configurations: 12=AVDD28 13=AVDD18 14=DVDD12 15=DGND 16=INT 17/18=Sensor_OPT
+    # 19=I2C_SDA 20=I2C_SCL 21=VDDIO 22=/RSTB(复位) 49=AGND (1~11/50~52=SEN, 23~48=DRV)。
+    "gt911": {
+        "AVDD28": "12", "VDD": "12", "VCC": "12", "AVDD18": "13", "DVDD12": "14",
+        "DGND": "15", "GND": "15", "INT": "16", "SENSOR_OPT1": "17",
+        "SENSOR_OPT2": "18", "SDA": "19", "I2C_SDA": "19", "SCL": "20",
+        "I2C_SCL": "20", "VDDIO": "21", "RST": "22", "RESET": "22", "RSTB": "22",
+        "AGND": "49",
+    },
 }
+
+
+# 无源 FFC/FPC/排线连接器 信号↔焊盘 分配 (设计级约定, 非器件手册): 选定的 Hirose FH12 系列
+# 连接器物理上有 1..N 号焊盘, 各信号接到哪号脚由本板设计决定。键经 _norm 归一。
+_CONN_PINOUT: Dict[str, Dict[str, str]] = {
+    # 1.54" OLED SPI 显示屏 12P FPC (Hirose FH12-12S, 12 焊盘): 本设计脚序
+    "oledfpc12p": {"GND": "1", "VCC": "2", "VDD": "2", "SDA": "3", "SCL": "4",
+                   "RST": "5", "DC": "6", "CS": "7", "CLK": "8", "MOSI": "9"},
+    # 4.3" TFT-LCD 40P RGB FPC (Hirose FH12-40S, 40 焊盘): 本设计脚序
+    "fpc40lcd": {"GND": "1", "R0": "2", "R1": "3", "G0": "4", "G1": "5", "B0": "6",
+                 "B1": "7", "HSYNC": "8", "VSYNC": "9", "CLK": "10", "DE": "11",
+                 "TP_SDA": "12", "TP_SCL": "13", "TP_INT": "14", "TP_RST": "15"},
+    # DVP 摄像头 24P FPC (Hirose FH12-24S, 24 焊盘): 本设计脚序
+    "fpc24camera": {"GND": "1", "PCLK": "2", "VSYNC": "3", "HREF": "4",
+                    "XCLK": "5", "D0": "6", "D1": "7"},
+}
+
+
+def _canon_index(pinmap: Dict[str, str]) -> Dict[str, str]:
+    """据原始 {脚名: 焊盘号} 建 规范键→焊盘号 索引 (与 SymbolResolver._canon_map 同法):
+    斜杠复合名按 / 拆分, 多个不同焊盘撞同一规范键即剔除该键 (宁留白不臆造)。"""
+    cidx: Dict[str, str] = {}
+    ambiguous: set = set()
+    for name, num in pinmap.items():
+        for part in (name.split("/") if "/" in name else [name]):
+            key = _canon(part)
+            if not key or key in ambiguous:
+                continue
+            if key in cidx and cidx[key] != num:
+                ambiguous.add(key)
+                cidx.pop(key, None)
+            else:
+                cidx[key] = num
+    return cidx
 
 
 def _parse_pins(text: str) -> Tuple[List[Tuple[str, str]], Optional[str]]:
@@ -274,10 +346,17 @@ class SymbolResolver:
         sym = self._match_symbol(value) if self.available else None
         if sym:
             return dict(self._pins_of(sym))
-        ds = _DATASHEET_PINMAP.get(self._norm(value))   # 库无符号 → 数据手册兜底 (非臆造)
-        if ds:
-            return dict(ds)
-        return {}
+        fb = self._fallback_pinmap(value)   # 库无符号 → 数据手册/连接器兜底 (非臆造)
+        return dict(fb) if fb else {}
+
+    @staticmethod
+    def _fallback_pinmap(value: str) -> Dict[str, str]:
+        """KiCad 官方库无符号时的兜底 {脚名:焊盘号}: 数据手册权威表 + 无源连接器设计脚序。"""
+        nv = SymbolResolver._norm(value)
+        out: Dict[str, str] = {}
+        out.update(_DATASHEET_PINMAP.get(nv, {}))
+        out.update(_CONN_PINOUT.get(nv, {}))
+        return out
 
     def footprint_of(self, value: str) -> Optional[Tuple[str, str]]:
         """返回该器件符号自带的**权威封装** (lib, name)——KiCad 官方符号为每个器件
@@ -346,8 +425,13 @@ class SymbolResolver:
         if p.isdigit():
             return None
         sym = self._match_symbol(value)
-        if not sym:
-            return None
+        if not sym:                       # 库无符号: 数据手册/连接器兜底表 (脚名精确 + 记法桥接)
+            fb = self._fallback_pinmap(value)
+            if not fb:
+                return None
+            if p in fb:
+                return fb[p]
+            return _canon_index(fb).get(_canon(p))
         pm = self._pins_of(sym)
         alias = _PIN_ALIAS.get(sym)       # 芯片专属固定复用脚 (datasheet确证)
         if alias:

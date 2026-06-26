@@ -899,7 +899,7 @@ CircuitDNA.register(DNA(
 _lcd_tft_43_components = [
     Comp("J1",  "FPC40_LCD",      "interface", (20.0, 25.0)),
     Comp("J2",  "FPC24_CAMERA",   "interface", (20.0, 45.0)),
-    Comp("U1",  "GT911_TP",       "interface", (55.0, 20.0)),
+    Comp("U1",  "GT911",          "interface", (55.0, 20.0)),
     Comp("R1",  "4.7k",           "passive",   (65.0, 16.0)),
     Comp("R2",  "4.7k",           "passive",   (68.0, 16.0)),
     Comp("C1",  "100nF",          "passive",   (55.0, 28.0)),
@@ -993,6 +993,10 @@ _PART_FP: Dict[str, Tuple[str, str]] = {
     "25MHz":         ("Crystal", "Crystal_SMD_3225-4Pin_3.2x2.5mm"),
     "32768Hz":       ("Crystal", "Crystal_SMD_3225-4Pin_3.2x2.5mm"),
     "RESET_BTN":     ("Button_Switch_SMD", "SW_SPST_B3U-1000P"),
+    # 触摸/显示异形件: 封装由器件型号唯一确定 (官方库实测存在)
+    "GT911":         ("Package_DFN_QFN", "VQFN-52-1EP_6x6mm_P0.4mm_EP4.7x4.7mm"),
+    "FPC40_LCD":     ("Connector_FFC-FPC", "Hirose_FH12-40S-0.5SH_1x40-1MP_P0.50mm_Horizontal"),
+    "FPC24_CAMERA":  ("Connector_FFC-FPC", "Hirose_FH12-24S-0.5SH_1x24-1MP_P0.50mm_Horizontal"),
 }
 
 _RE_CAP = re.compile(r"^\d+(\.\d+)?(pF|nF|uF|mF|F)(_\d+V)?$", re.IGNORECASE)
@@ -1703,7 +1707,7 @@ CircuitDNA.register(DNA(
 # 来源: Nordic nRF52840 + EBYTE E73模组, GitHub nRF5 SDK精华
 # ─────────────────────────────────────────────────────────────
 _nrf52840_components = [
-    Comp("U1",  "E73-2G4M08S1C",  "RF_Module",             "Ebyte_E73_SMD_18x11mm",                   (35.0, 30.0), "mcu",       "EBYTE E73 nRF52840模组(含晶振+天线)"),
+    Comp("U1",  "E73-2G4M08S1C",  "RF_Module",             "Ebyte_E73-2G4M08S1C",                     (35.0, 30.0), "mcu",       "EBYTE E73 nRF52840模组(含晶振+天线)"),
     Comp("U2",  "AP2112K-3.3",    "Package_TO_SOT_SMD",    "SOT-23-5",                                 (10.0, 30.0), "power",     "3.3V超低噪声LDO (nRF RF需求)"),
     Comp("C1",  "10uF",           "Capacitor_SMD",         "C_0805_2012Metric",                        (7.0,  25.0), "passive",   "LDO输入滤波"),
     Comp("C2",  "10uF",           "Capacitor_SMD",         "C_0805_2012Metric",                        (7.0,  35.0), "passive",   "LDO输出滤波"),
@@ -1741,9 +1745,10 @@ _nrf52840_nets = {
     "P0_30":   [("U1","P0.30"),("J4","3")],
     "P0_31":   [("U1","P0.31"),("J4","4")],
     "P1_00":   [("U1","P1.00"),("J4","5")],
-    "P1_01":   [("U1","P1.01"),("J4","6")],
+    # E73 模组未引出 P1.01/P1.03 (nRF52840 裸片有, 模组手册 §3 未列), 改接已引出的 P1.04/P1.06
+    "P1_04":   [("U1","P1.04"),("J4","6")],
     "P1_02":   [("U1","P1.02"),("J4","7")],
-    "P1_03":   [("U1","P1.03"),("J4","8")],
+    "P1_06":   [("U1","P1.06"),("J4","8")],
 }
 CircuitDNA.register(DNA(
     name="nrf52840_ble5",
@@ -1774,7 +1779,7 @@ CircuitDNA.register(DNA(
 _smartwatch_components = [
     # ── MCU: nRF52840 BLE5 超低功耗主控模组 ──────────────────
     Comp("U1",  "E73-2G4M08S1C",    "RF_Module",
-         "Ebyte_E73_SMD_18x11mm",                   (20.0, 20.0), "mcu",
+         "Ebyte_E73-2G4M08S1C",                     (20.0, 20.0), "mcu",
          "nRF52840 BLE5/Zigbee/Thread模组(LCSC C2681571)"),
     # ── 电源管理 ──────────────────────────────────────────────
     Comp("U2",  "AP2112K-3.3",       "Package_TO_SOT_SMD",
@@ -1794,7 +1799,7 @@ _smartwatch_components = [
          "QFN-14_2.5x5.5mm_P0.65mm",                 (31.0, 32.0), "sensor",
          "心率/血氧SpO2光学传感器(LCSC C124499)"),
     Comp("U6",  "QMI8658C",          "Package_LGA",
-         "LGA-12_2.5x3.0mm_P0.5mm",                  (31.0, 20.0), "sensor",
+         "LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y",   (31.0, 20.0), "sensor",
          "6轴IMU加速度计+陀螺仪可穿戴专用(LCSC C3002720)"),
     Comp("U7",  "PCF8563T/5",        "Package_SO",
          "SOIC-8_3.9x4.9mm_P1.27mm",                  (6.0,  10.0), "sensor",
@@ -1852,7 +1857,7 @@ _smartwatch_components = [
          "USB_C_Receptacle_GCT_USB4135_Vertical",      (5.0,   3.0), "interface",
          "USB-C充电/供电接口"),
     Comp("J2",  "OLED_FPC_12P",      "Connector_FFC-FPC",
-         "FFC_FPC_12-Pin_P0.5mm",                     (25.0,   3.0), "interface",
+         "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal", (25.0, 3.0), "interface",
          "1.54寸OLED显示屏FPC 12Pin 0.5mm间距"),
     Comp("J3",  "BATTERY_JST",       "Connector_JST",
          "JST_PH_S2B-PH-K_1x02_P2.0mm_Horizontal",   (36.0, 28.0), "interface",
@@ -1894,7 +1899,8 @@ _smartwatch_nets = {
     # ── I2C总线 (MAX30102+QMI8658+PCF8563+OLED 共享) ─────────
     "I2C_SDA":    [("U1","P0.26"),  ("R1","2"),
                    ("U5","SDA"),    ("U6","SDA"),  ("U7","5"),   ("J2","SDA")],
-    "I2C_SCL":    [("U1","P0.27"),  ("R2","2"),
+    # E73 未引出 P0.27 → I2C SCL 改接已引出的 P0.13
+    "I2C_SCL":    [("U1","P0.13"),  ("R2","2"),
                    ("U5","SCL"),    ("U6","SCL"),  ("U7","6"),   ("J2","SCL")],
     # ── 传感器中断 ────────────────────────────────────────────
     "HR_INT":     [("U5","INT"),    ("U1","P0.03")],
@@ -1907,7 +1913,7 @@ _smartwatch_nets = {
     "DISP_RST":   [("U1","P0.08"),  ("J2","RST")],
     "DISP_DC":    [("U1","P0.09"),  ("J2","DC")],
     "DISP_CS":    [("U1","P0.10"),  ("J2","CS")],
-    "DISP_CLK":   [("U1","P0.14"),  ("J2","CLK")],
+    "DISP_CLK":   [("U1","P0.12"),  ("J2","CLK")],
     "DISP_MOSI":  [("U1","P0.15"),  ("J2","MOSI")],
     # ── 振动马达 ─────────────────────────────────────────────
     "MOTOR_EN":   [("U1","P0.06"),  ("R4","1")],
