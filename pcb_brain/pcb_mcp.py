@@ -4,9 +4,11 @@ PCBBrain MCP服务器 — Windsurf/Claude直接调用PCB设计能力
 
 "一生二" — 代码化PCB大脑通过MCP协议对外输出全部能力
 
-工具列表 (16个):
+工具列表 (18个):
   list_templates   — 列出所有21个DNA模板及成本概览
   design_pcb       — 生成PCB文件 (DNA → .kicad_pcb + BFS自动布线)
+  design_spec      — 通用设计→PCB (任意 dict/.json/.yaml/.net 网表, 不依赖21模板)
+  pipeline_spec    — 通用全闭环 0→1 (任意 spec/网表 → 真实交付物 + 预测编码交付裁决)
   get_bom          — 获取BOM + LCSC料号 + 成本报告 + JLCPCB下单URL
   run_drc          — 运行DRC检查 (native pcbnew API优先, CLI降级)
   export_gerber    — 导出Gerber生产文件 (native API导出11层, 可直接上传JLCPCB)
@@ -248,6 +250,52 @@ def _run_pipeline(template: str, output_dir: str = "", open_ibom: bool = False) 
                 return [_make_serializable(i) for i in obj]
             try:
                 import json; json.dumps(obj)
+                return obj
+            except (TypeError, ValueError):
+                return str(obj)
+        return _make_serializable(result)
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def _design_spec(spec: Any, output_dir: str = "", do_layout: bool = True,
+                 prefer_freerouting: bool = False) -> Dict[str, Any]:
+    """通用设计→PCB: 任意 spec(dict) / 网表(.net) / 规格文件(.json/.yaml) → .kicad_pcb。
+
+    反者道之动 — 不依赖21模板注册表, 引擎可处理它从没见过的设计。
+    """
+    try:
+        from pcb_core import PCB
+        return PCB.design_spec(spec, output_dir=output_dir,
+                               do_layout=do_layout,
+                               prefer_freerouting=prefer_freerouting)
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def _pipeline_spec(spec: Any, output_dir: str = "", do_layout: bool = True,
+                   prefer_freerouting: bool = False,
+                   open_ibom: bool = False) -> Dict[str, Any]:
+    """通用全闭环 0→1: 任意 spec/网表 → 真实交付物 + 预测编码交付裁决。
+
+    核心反向传播 — reconcile 把 '预测(DNA设计意图) vs 观测(真实产物)' 的
+    预测误差(自由能)反馈回来; 自由能=0 才算 delivered=True(实质闭合),
+    否则 next_action 指明下一步该补足什么 (active inference)。
+    """
+    try:
+        from pcb_core import PCB
+        result = PCB.pipeline_spec(spec, output_dir=output_dir,
+                                   do_layout=do_layout,
+                                   prefer_freerouting=prefer_freerouting,
+                                   open_ibom=open_ibom)
+
+        def _make_serializable(obj):
+            if isinstance(obj, dict):
+                return {k: _make_serializable(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [_make_serializable(i) for i in obj]
+            try:
+                json.dumps(obj)
                 return obj
             except (TypeError, ValueError):
                 return str(obj)
@@ -893,6 +941,35 @@ def _run_stdio():
             }
         },
         {
+            "name": "design_spec",
+            "description": "通用设计→PCB (反者道之动·不依赖21模板)。接受任意结构化规格(dict)或文件路径(.json/.yaml/.net 标准KiCad网表)→ DNA → 布局布线 → .kicad_pcb。让引擎处理它从没见过的设计",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec":               {"type": ["object", "string"], "description": "结构化规格对象, 或规格/网表文件路径 (.json/.yaml/.net)"},
+                    "output_dir":         {"type": "string", "description": "输出目录 (可选)"},
+                    "do_layout":          {"type": "boolean", "description": "自动布局 (默认true)"},
+                    "prefer_freerouting": {"type": "boolean", "description": "优先freerouting布线 (默认false)"},
+                },
+                "required": ["spec"]
+            }
+        },
+        {
+            "name": "pipeline_spec",
+            "description": "通用全闭环 0→1 (核心反向传播)。任意 spec/网表 → DNA → 布局布线 → 真实DRC/Gerber/钻孔 → BOM/CPL → iBoM → 预测编码交付裁决。返回 delivered(自由能=0才True) + free_energy + next_action, 实质闭合而非中间态",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec":               {"type": ["object", "string"], "description": "结构化规格对象, 或规格/网表文件路径 (.json/.yaml/.net)"},
+                    "output_dir":         {"type": "string", "description": "输出目录 (可选)"},
+                    "do_layout":          {"type": "boolean", "description": "自动布局 (默认true)"},
+                    "prefer_freerouting": {"type": "boolean", "description": "优先freerouting布线 (默认false)"},
+                    "open_ibom":          {"type": "boolean", "description": "完成后浏览器打开iBoM (默认false)"},
+                },
+                "required": ["spec"]
+            }
+        },
+        {
             "name": "search_footprint",
             "description": "搜索KiCad封装库: 153个库/15179个封装全量索引，精确+模糊匹配",
             "inputSchema": {
@@ -939,6 +1016,8 @@ def _run_stdio():
     DISPATCH = {
         "list_templates":   _list_templates,
         "design_pcb":       _design_pcb,
+        "design_spec":      _design_spec,
+        "pipeline_spec":    _pipeline_spec,
         "get_bom":          _get_bom,
         "run_drc":          _run_drc,
         "export_gerber":    _export_gerber,
