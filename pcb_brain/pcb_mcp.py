@@ -305,6 +305,38 @@ def _pipeline_spec(spec: Any, output_dir: str = "", do_layout: bool = True,
         return {"status": "error", "error": str(e)}
 
 
+def _pipeline_converge(spec: Any, output_dir: str = "", max_iters: int = 3,
+                       prefer_freerouting: bool = False,
+                       open_ibom: bool = False) -> Dict[str, Any]:
+    """反向传播闭环 0→1→0 (反者道之动): 前向产出 → 量自由能 → 反演修正动作 → 重产出, 迭代至收敛。
+
+    把 pipeline_spec 的'单次前向+量误差'升格为完整 active-inference 循环:
+    每轮 reconcile 量出自由能与主导误差, 反演为可执行修正(补齐焊盘/换布线策略)据此重跑;
+    直到 free_energy=0(delivered=True) 或修正动作耗尽(交人机迭代)。
+    返回最终结果 + convergence{iterations, history[Δ自由能轨迹], converged, fe_start, fe_end}。
+    """
+    try:
+        from pcb_core import PCB
+        result = PCB.pipeline_converge(spec, output_dir=output_dir,
+                                       max_iters=max_iters,
+                                       prefer_freerouting=prefer_freerouting,
+                                       open_ibom=open_ibom)
+
+        def _ser(obj):
+            if isinstance(obj, dict):
+                return {k: _ser(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [_ser(i) for i in obj]
+            try:
+                json.dumps(obj)
+                return obj
+            except (TypeError, ValueError):
+                return str(obj)
+        return _ser(result)
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 def _reconcile(spec: Any = None, template: str = "",
                output_dir: str = "") -> Dict[str, Any]:
     """预测编码核验 (核心反向传播): 对账 '设计意图(DNA预测) vs 真实产物(观测)'。
@@ -735,6 +767,10 @@ def _run_http(port: int = 9907):
         "generate_order":   (_generate_order,    "生成JLCPCB下单包"),
         "generate_ibom":    (_generate_ibom,     "交互式HTML BOM"),
         "run_pipeline":     (_run_pipeline,      "全闭环流水线"),
+        "design_spec":      (_design_spec,       "通用设计→PCB (任意 spec/网表)"),
+        "pipeline_spec":    (_pipeline_spec,     "通用全闭环 + 预测编码裁决"),
+        "pipeline_converge": (_pipeline_converge, "反向传播闭环 (迭代至自由能=0)"),
+        "reconcile":        (_reconcile,         "预测编码核验 (核心反向传播)"),
         "search_footprint": (_search_footprint,  "搜索KiCad封装库"),
         "search_symbol":    (_search_symbol,     "搜索KiCad符号库"),
         "parse_pcb":        (_parse_pcb,         "解析PCB文件结构"),
@@ -999,6 +1035,21 @@ def _run_stdio():
             }
         },
         {
+            "name": "pipeline_converge",
+            "description": "反向传播闭环 0→1→0 (反者道之动)。把 pipeline_spec 的'单次前向+量误差'升格为完整 active-inference 循环: 每轮 reconcile 量出自由能与主导误差, 反演为可执行修正(补齐焊盘/换布线策略)据此重跑, 迭代至 free_energy=0(已交付) 或修正动作耗尽(交人机迭代)。返回最终结果 + convergence{iterations,history[Δ自由能轨迹],converged,fe_start,fe_end}",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec":               {"type": ["object", "string"], "description": "结构化规格对象, 或规格/网表文件路径 (.json/.yaml/.net)"},
+                    "output_dir":         {"type": "string", "description": "输出目录 (可选)"},
+                    "max_iters":          {"type": "integer", "description": "最大迭代轮数 (默认3)"},
+                    "prefer_freerouting": {"type": "boolean", "description": "优先freerouting布线 (默认false)"},
+                    "open_ibom":          {"type": "boolean", "description": "收敛后浏览器打开iBoM (默认false)"},
+                },
+                "required": ["spec"]
+            }
+        },
+        {
             "name": "reconcile",
             "description": "预测编码核验 (核心反向传播·纯观测不重建)。对账'设计意图(DNA预测) vs 真实产物(观测)', 量出自由能(预测误差)。返回 delivered(自由能=0才True)/free_energy/confidence/surprises/next_action — 人机协同逐步迭代的反馈仪表。传 spec 或 template 之一",
             "inputSchema": {
@@ -1059,6 +1110,7 @@ def _run_stdio():
         "design_pcb":       _design_pcb,
         "design_spec":      _design_spec,
         "pipeline_spec":    _pipeline_spec,
+        "pipeline_converge": _pipeline_converge,
         "reconcile":        _reconcile,
         "get_bom":          _get_bom,
         "run_drc":          _run_drc,

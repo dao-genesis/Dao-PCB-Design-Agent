@@ -363,6 +363,49 @@ def reconcile(dna: "DNA", output_dir: Path) -> Verdict:
                    predictions=preds, observed=observed, predicted=pred)
 
 
+# ─────────────────────────────────────────────────────────────
+# 反向传播 — 把预测误差翻译成"下一步该改什么" (active inference 动作)
+# ─────────────────────────────────────────────────────────────
+# 动作语义 (供 pipeline_converge 据此修正生成过程并重跑):
+ACT_COVER_PADS = "cover_pads"    # 焊盘接网误差 → 依需求别名/合成焊盘使端点可接网
+ACT_REROUTE = "reroute"          # 布线误差(焊盘已接网) → 换布线策略重跑
+ACT_NONE = "none"                # 无可由重跑消解的实质误差 (已闭合 / 仅认知误差)
+
+
+def corrective_action(verdict: Verdict) -> Dict[str, object]:
+    """把主导预测误差反演为一个可执行的修正动作 (反向传播的"梯度方向")。
+
+    返回 {action, reason, kind, target}:
+      · action=ACT_COVER_PADS — 主导误差是"焊盘接网"(实质): 端点未落到真实焊盘上,
+        下一步令生成器依观测需求补齐焊盘 (cover_required=True) 后重跑;
+      · action=ACT_REROUTE   — 焊盘已接网但"布线"仍欠: 换布线策略重跑;
+      · action=ACT_NONE      — 自由能=0 已闭合, 或仅剩认知误差(工具缺位, 重跑无益,
+        交由人补足观测手段)。
+    """
+    if verdict.error:
+        return {"action": ACT_NONE, "reason": f"模型缺失: {verdict.error}",
+                "kind": EPISTEMIC, "target": ""}
+    s = verdict.surprises
+    if not s:
+        return {"action": ACT_NONE, "reason": "自由能=0, 闭环已实质闭合", "kind": "", "target": ""}
+    top = s[0]
+    if top.kind == EPISTEMIC:
+        return {"action": ACT_NONE,
+                "reason": f"主导为认知误差(重跑无益, 需补足观测): {top.name}",
+                "kind": EPISTEMIC, "target": top.name}
+    if top.name == "焊盘接网":
+        return {"action": ACT_COVER_PADS,
+                "reason": f"{top.name}: 应接网 {int(top.predicted)} 实测 {int(top.observed)}"
+                          f" → 依观测需求补齐焊盘后重跑",
+                "kind": PRAGMATIC, "target": top.name}
+    if top.name == "布线":
+        return {"action": ACT_REROUTE,
+                "reason": f"{top.name}: 换布线策略重跑", "kind": PRAGMATIC, "target": top.name}
+    return {"action": ACT_NONE,
+            "reason": f"主导实质误差 {top.name} 暂无自动修正策略, 交人机迭代",
+            "kind": PRAGMATIC, "target": top.name}
+
+
 def predict_verify(template: str, output_dir: str | Path) -> Verdict:
     """对单个模板的产物做预测编码核验。"""
     out = Path(output_dir)

@@ -138,15 +138,20 @@ class KiCadArm:
     # ─────────────────────────────────────────────────────────
     # 一: pcbnew API — 代码直接生成 .kicad_pcb
     # ─────────────────────────────────────────────────────────
-    def create_pcb_from_dna(self, dna, output_path: str) -> bool:
+    def create_pcb_from_dna(self, dna, output_path: str,
+                            cover_required: bool = False) -> bool:
         """
         用pcbnew API从CircuitDNA生成完整.kicad_pcb文件
         不需要打开KiCad GUI
+
+        cover_required=True 时, 文件直写路径会依据网络端点需求别名/合成焊盘,
+        使每个被引用的引脚都可接网 (pipeline_converge 的反向传播修正动作)。
         """
         pcbnew = self._load_pcbnew()
         if pcbnew is None:
             log.warning("pcbnew不可用，改用文件直写模式")
-            return self._create_pcb_direct_write(dna, output_path)
+            return self._create_pcb_direct_write(dna, output_path,
+                                                 cover_required=cover_required)
 
         try:
             board = pcbnew.BOARD()
@@ -293,7 +298,8 @@ class KiCadArm:
             pad["rratio"] = float(rr_m.group(1))
         return pad
 
-    def _create_pcb_direct_write(self, dna, output_path: str) -> bool:
+    def _create_pcb_direct_write(self, dna, output_path: str,
+                                 cover_required: bool = False) -> bool:
         """
         KiCad 8.0/9.0 格式 .kicad_pcb 生成（无需pcbnew）
         平衡之道: 代码读取KiCad封装库(.kicad_mod) → 生成含真实焊盘+网络分配的PCB
@@ -372,7 +378,8 @@ class KiCadArm:
                 try:
                     from footprint_pads import builtin_fp_pads
                     req = {str(pin) for (ref, pin) in pad_net if ref == comp.ref}
-                    fp_pads = builtin_fp_pads(comp.fp_lib, comp.fp_name, req)
+                    fp_pads = builtin_fp_pads(comp.fp_lib, comp.fp_name, req,
+                                              cover_required=cover_required)
                     if fp_pads:
                         builtin_used += 1
                 except Exception as e:

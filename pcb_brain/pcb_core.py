@@ -335,7 +335,8 @@ class PCB:
     def pipeline_spec(spec: Any, output_dir: str = "",
                       do_layout: bool = True,
                       prefer_freerouting: bool = False,
-                      open_ibom: bool = False) -> Dict[str, Any]:
+                      open_ibom: bool = False,
+                      cover_required: bool = False) -> Dict[str, Any]:
         """通用全闭环 — 任意 spec/网表 → 真实可制造交付物 + 预测编码交付裁决。
 
         不依赖 21 模板注册表 (反者道之动)。完整 0→1 链路:
@@ -380,7 +381,7 @@ class PCB:
         try:
             # 2) 生成 PCB (真实焊盘 + 网络)
             pcb_path = str(out / f"{dna.name}.kicad_pcb")
-            if not arm.create_pcb_from_dna(dna, pcb_path):
+            if not arm.create_pcb_from_dna(dna, pcb_path, cover_required=cover_required):
                 return {"status": "error", "stage": stage,
                         "error": "create_pcb_from_dna 返回 False"}
             result["pcb_path"] = pcb_path
@@ -447,11 +448,71 @@ class PCB:
             result["delivered"] = verdict.delivered
             result["free_energy"] = verdict.free_energy
             result["next_action"] = verdict.next_action
+            result["corrective"] = pcb_predict.corrective_action(verdict)
 
             return B.safe_json_serialize(result)
         except Exception as e:
             log.error(f"pipeline_spec failed @ {stage}: {e}")
             return {"status": "error", "stage": stage, "error": str(e)}
+
+    @staticmethod
+    def pipeline_converge(spec: Any, output_dir: str = "",
+                          max_iters: int = 3,
+                          prefer_freerouting: bool = False,
+                          open_ibom: bool = False) -> Dict[str, Any]:
+        """反向传播闭环 — 前向产出 → 量自由能 → 反演修正动作 → 重产出, 迭代至收敛。
+
+        这是把 pipeline_spec 的"单次前向 + 量误差"升格为完整的 active-inference
+        循环 (反者道之动): 每轮 reconcile 量出自由能与主导误差, corrective_action
+        将其反演为一个可执行修正 (cover_pads/reroute), 据此调整生成参数并重跑;
+        直到 free_energy=0 (delivered=True) 或修正动作耗尽 (交人机迭代)。
+
+        返回最终 pipeline_spec 结果, 并附 convergence:
+            {iterations, history:[{iter, free_energy, action, reason}],
+             converged, fe_start, fe_end}
+        每一轮都向上报 Δ自由能, 即"步步为营、人机共驾"的真实收敛轨迹。
+        """
+        import pcb_predict
+        cover_required = False
+        prefer_fr = prefer_freerouting
+        history: List[Dict[str, Any]] = []
+        result: Dict[str, Any] = {}
+        max_iters = max(1, int(max_iters))
+
+        for i in range(max_iters):
+            last = (i == max_iters - 1)
+            result = PCB.pipeline_spec(
+                spec, output_dir=output_dir, prefer_freerouting=prefer_fr,
+                open_ibom=open_ibom and last, cover_required=cover_required)
+            if result.get("status") != "ok":
+                result["convergence"] = {
+                    "iterations": i + 1, "history": history,
+                    "converged": False, "error": result.get("error", "")}
+                return result
+
+            fe = float(result.get("free_energy", 0.0))
+            corr = result.get("corrective") or {}
+            action = corr.get("action", pcb_predict.ACT_NONE)
+            history.append({"iter": i + 1, "free_energy": fe,
+                            "action": action, "reason": corr.get("reason", "")})
+
+            if result.get("delivered") or fe == 0.0:
+                break
+            # 反演修正动作 → 调整下一轮生成参数 (无新动作可加则停, 交人机迭代)
+            if action == pcb_predict.ACT_COVER_PADS and not cover_required:
+                cover_required = True
+            elif action == pcb_predict.ACT_REROUTE and not prefer_fr:
+                prefer_fr = True
+            else:
+                break
+
+        fe_start = history[0]["free_energy"] if history else None
+        fe_end = history[-1]["free_energy"] if history else None
+        result["convergence"] = {
+            "iterations": len(history), "history": history,
+            "converged": bool(result.get("delivered")),
+            "fe_start": fe_start, "fe_end": fe_end}
+        return B.safe_json_serialize(result)
 
     # ── 环境感知 ──────────────────────────────────────────
 

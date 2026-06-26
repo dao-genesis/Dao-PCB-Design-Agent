@@ -161,7 +161,7 @@ def layer3_mcp_stdio():
     # Verify tools/list
     r2 = responses[1] if len(responses) > 1 else {}
     tools = r2.get("result", {}).get("tools", [])
-    expected_count = 16
+    expected_count = 20
     if len(tools) == expected_count:
         print(f"  ✅  tools/list: {len(tools)}/{expected_count} 工具")
         _PASS += 1

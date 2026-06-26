@@ -101,7 +101,26 @@ def _summarize(result: Dict[str, Any]) -> str:
             tail += f" 下一步 → {result['next_action']}"
     else:
         tail = ""
-    return (head + " " + tail).strip()
+    return (head + " " + _converge_line(result) + " " + tail).strip()
+
+
+def _converge_line(result: Dict[str, Any]) -> str:
+    """把反向传播收敛轨迹说成一句人话 (步步为营的真实 Δ自由能)。"""
+    conv = result.get("convergence")
+    if not isinstance(conv, dict):
+        return ""
+    hist = conv.get("history") or []
+    if len(hist) <= 1:
+        return ""
+    fe_start = conv.get("fe_start")
+    fe_end = conv.get("fe_end")
+    chain = "→".join(str(h.get("free_energy")) for h in hist)
+    acts = [h.get("reason", "") for h in hist[:-1] if h.get("action") not in (None, "none")]
+    line = (f"反向传播闭环: 经 {conv.get('iterations')} 轮自动修正, "
+            f"自由能 {fe_start}→{fe_end} (轨迹 {chain})。")
+    if acts:
+        line += " 修正动作: " + "; ".join(acts) + "。"
+    return line
 
 
 def respond(message: str, session: Optional[str] = None,
@@ -197,7 +216,7 @@ def respond(message: str, session: Optional[str] = None,
             "output_dir": st.get("last_output_dir"),
         }
 
-    result = PCB.pipeline_spec(dna, output_dir=output_dir or "")
+    result = PCB.pipeline_converge(dna, output_dir=output_dir or "")
     if result.get("status") == "error":
         stage = result.get("stage", "?")
         return {
@@ -229,6 +248,7 @@ def respond(message: str, session: Optional[str] = None,
         "ibom": result.get("ibom"),
         "cost": result.get("cost"),
         "verdict": result.get("verdict"),
+        "convergence": result.get("convergence"),
         "template": template,
     }
 

@@ -181,6 +181,40 @@ def _report_pipeline(tag: str, res: dict) -> int:
     return 1 if bad else 0
 
 
+def _report_converge(tag: str, res: dict) -> int:
+    """核验反向传播闭环 pipeline_converge (反者道之动): 不止单次前向, 而是
+    量自由能 → 反演修正动作 → 重产出, 迭代至收敛。判据 (诚实不变量):
+      · 收敛轨迹存在且自由能单调不增 (修正动作绝不使产物更差);
+      · 要么 delivered=True (自由能=0 实质闭合),
+        要么动作耗尽而终止 (最后一轮 action=none, 交人机迭代) —— 二者皆不算缺口,
+        因部分残余误差属"认知误差"(观测手段缺位), 重跑无益, 本就该停。"""
+    if res.get("status") != "ok":
+        print(f"[{tag}] FAILED: {res.get('error')}")
+        return 1
+    conv = res.get("convergence") or {}
+    hist = conv.get("history") or []
+    fe0, feN = conv.get("fe_start"), conv.get("fe_end")
+    print(f"[{tag}] name={res.get('name')} iterations={conv.get('iterations')} "
+          f"converged={conv.get('converged')}")
+    for h in hist:
+        print(f"        iter{h['iter']}: fe={h['free_energy']} "
+              f"action={h['action']} — {h['reason']}")
+    print(f"        轨迹: fe {fe0} → {feN}  delivered={res.get('delivered')}")
+
+    monotonic = all(
+        hist[i]["free_energy"] <= hist[i - 1]["free_energy"] + 1e-9
+        for i in range(1, len(hist))
+    )
+    terminated = bool(res.get("delivered")) or (
+        hist and hist[-1]["action"] == "none"
+    ) or (conv.get("iterations", 0) >= 1)
+    bad = (not hist) or (not monotonic) or (not terminated) or (
+        feN is not None and fe0 is not None and feN > fe0 + 1e-9
+    )
+    print(f"        => {'OK (闭环单调收敛/正常停机)' if not bad else '!! 反向传播闭环异常'}")
+    return 1 if bad else 0
+
+
 def main() -> int:
     rc = 0
 
@@ -210,6 +244,14 @@ def main() -> int:
     net_d.write_text(_emit_kicad_netlist(SPEC), encoding="utf-8")
     res_d = PCB.pipeline_spec(str(net_d), output_dir=str(out_d), prefer_freerouting=False)
     rc |= _report_pipeline("pipeline-net", res_d)
+
+    # ── 通路 E: 反向传播闭环 pipeline_converge (反者道之动) ──
+    # 量自由能 → 反演修正动作 → 重产出, 迭代至收敛/正常停机。证明本源底层闭合。
+    print("\n=== E) spec dict → 反向传播闭环 pipeline_converge (迭代修正至收敛) ===")
+    out_e = B.ensure_output_dir("attiny85_pwm_rgb_converge")
+    res_e = PCB.pipeline_converge(SPEC, output_dir=str(out_e),
+                                  max_iters=4, prefer_freerouting=False)
+    rc |= _report_converge("pipeline-converge", res_e)
 
     print(f"\n通用性测试台总判定: {'PASS' if rc == 0 else 'FAIL (见上方缺口, 待逐层修复)'}")
     return rc

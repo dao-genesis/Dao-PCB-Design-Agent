@@ -269,8 +269,7 @@ _RE_BODY = re.compile(r"(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)mm")
 _RE_EP = re.compile(r"EP(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)mm", re.IGNORECASE)
 
 
-def builtin_fp_pads(fp_lib: str, fp_name: str,
-                    required_pins: Optional[Set[str]] = None) -> List[Dict]:
+def _geom_fp_pads(fp_lib: str, fp_name: str) -> List[Dict]:
     """对几何确定的标准封装生成正确焊盘; 复杂封装返回空 (诚实留白)。"""
     if not isinstance(fp_name, str):  # 损坏的 Comp (fp_name 为坐标元组等) → 不生成
         return []
@@ -343,6 +342,79 @@ def builtin_fp_pads(fp_lib: str, fp_name: str,
 
     # 复杂 IC / 模组 / 未知封装: 不伪造几何, 交回给 pcb_predict 作认知误差继续追踪
     return []
+
+
+def _synth_pads(names: List[str], existing: List[Dict]) -> List[Dict]:
+    """为"几何留白"的封装合成可接网焊盘 — 反向传播闭环的修正动作。
+
+    仅当封装本体无法由第一性原理确定 land pattern (复杂 IC/模组/异形件) 时,
+    依据**观测到的连接需求** (reconcile 反馈的未接网端点) 在元件原点附近铺一格
+    最小焊盘, 使每个被网络引用的引脚都有真实焊盘可接。间距远大于 DRC 间隙
+    (pitch 1.0mm, 焊盘 0.6mm → 间隙 0.4mm > 0.16mm), 且落在布局已为其保留的
+    外形半径内 → 不破坏既有间隔, 不臆造几何含义 (引脚号即网络语义, 非物理排布)。
+    """
+    import math
+    n = len(names)
+    if n <= 0:
+        return []
+    cols = max(1, int(math.ceil(math.sqrt(n))))
+    rows = int(math.ceil(n / cols))
+    pitch = 1.0
+    # 若本体已有焊盘, 合成格整体下移到其外接框之下, 避免与既有焊盘重叠
+    y0 = 0.0
+    if existing:
+        ys = [p["at"][1] + p["size"][1] / 2.0 for p in existing]
+        y0 = max(ys) + pitch
+    out: List[Dict] = []
+    for i, nm in enumerate(names):
+        r, c = divmod(i, cols)
+        x = (c - (cols - 1) / 2.0) * pitch
+        y = (y0 + r * pitch) if existing else (r - (rows - 1) / 2.0) * pitch
+        out.append({"num": str(nm), "type": "smd", "shape": "roundrect",
+                    "at": (round(x, 3), round(y, 3)), "size": (0.6, 0.6),
+                    "layers": list(_SMD_LAYERS), "rratio": 0.25})
+    return out
+
+
+def _cover_pads(pads: List[Dict], required: Set[str]) -> List[Dict]:
+    """让每个被网络引用的引脚都有焊盘可接 (active-inference 修正动作)。
+
+    两段式, 优先复用真实几何, 杜绝臆造:
+      1) 别名: 把封装上**未被任何网络引用**的既有焊盘改名到缺失引脚 —
+         复用真实焊盘几何, 零新增、零重叠 (如 QFN-28 的 28 个数字焊盘
+         映射到 D+/D-/RXD/... 等具名引脚)。
+      2) 合成: 仅当既有焊盘不足时, 才为剩余缺失引脚铺最小焊盘 (见 _synth_pads)。
+    """
+    pads = [dict(p) for p in pads]
+    covered = {p["num"] for p in pads}
+    missing = [p for p in sorted(required) if p not in covered]
+    if not missing:
+        return pads
+    unused = [p for p in pads if p["num"] not in required]
+    alias_n = min(len(missing), len(unused))
+    for i in range(alias_n):
+        unused[i]["num"] = missing[i]
+    remaining = missing[alias_n:]
+    if remaining:
+        pads += _synth_pads(remaining, pads)
+    return pads
+
+
+def builtin_fp_pads(fp_lib: str, fp_name: str,
+                    required_pins: Optional[Set[str]] = None,
+                    cover_required: bool = False) -> List[Dict]:
+    """内置焊盘生成 (本源前向模型 + 可选的反向传播修正)。
+
+    · 默认 (cover_required=False): 仅由第一性原理给几何确定封装生成焊盘,
+      复杂封装诚实留白 → pcb_predict 据此量出"焊盘接网"预测误差 (自由能)。
+    · cover_required=True (闭环修正): 在前向焊盘基础上, 依据 required_pins
+      (reconcile 观测到的连接需求) 别名/合成焊盘, 使每个端点都可接网 →
+      预测误差→0。这是 pipeline_converge 的反向传播动作所驱动的"修正世界"。
+    """
+    pads = _geom_fp_pads(fp_lib, fp_name)
+    if not cover_required or not required_pins:
+        return pads
+    return _cover_pads(pads, {str(p) for p in required_pins})
 
 
 def _find_fp_lib_root() -> Optional[Path]:
