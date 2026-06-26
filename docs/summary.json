@@ -1,0 +1,604 @@
+{
+  "ams1117_power": {
+    "errors": 0,
+    "warnings": 0,
+    "by_rule": {},
+    "stats": {
+      "pads": 10,
+      "segments": 24,
+      "vias": 2,
+      "footprints": 4,
+      "nets": 4
+    }
+  },
+  "ch32v003_minimal": {
+    "errors": 5,
+    "warnings": 28,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 26,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.307mm < 0.5mm"
+      },
+      "R007": {
+        "error": 5,
+        "warning": 2,
+        "info": 0,
+        "sample": "走线短路: net 2 走线与 net 9 走线铜箔重叠 0.250mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 55,
+      "segments": 192,
+      "vias": 55,
+      "footprints": 12,
+      "nets": 21
+    }
+  },
+  "drone_aerial_h743": {
+    "errors": 44,
+    "warnings": 110,
+    "by_rule": {
+      "R004": {
+        "error": 0,
+        "warning": 9,
+        "info": 0,
+        "sample": "网络 'MCU_BOOT0' (#10) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
+      },
+      "R006": {
+        "error": 0,
+        "warning": 88,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 28,
+        "warning": 13,
+        "info": 0,
+        "sample": "走线短路: net 1 走线与 net 3 走线铜箔重叠 0.141mm (B.Cu)"
+      },
+      "R008": {
+        "error": 16,
+        "warning": 0,
+        "info": 0,
+        "sample": "网络 'GND' (#6) 未全连通: 51 个 pad 落在 5 个独立连通分量 (开路)"
+      }
+    },
+    "stats": {
+      "pads": 357,
+      "segments": 1017,
+      "vias": 257,
+      "footprints": 68,
+      "nets": 53
+    }
+  },
+  "drone_flight_controller": {
+    "errors": 28,
+    "warnings": 29,
+    "by_rule": {
+      "R004": {
+        "error": 0,
+        "warning": 6,
+        "info": 0,
+        "sample": "网络 'BOOT0' (#8) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
+      },
+      "R006": {
+        "error": 0,
+        "warning": 22,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 22,
+        "warning": 1,
+        "info": 0,
+        "sample": "走线短路: net 3 走线与 net 4 走线铜箔重叠 0.250mm (B.Cu)"
+      },
+      "R008": {
+        "error": 6,
+        "warning": 0,
+        "info": 0,
+        "sample": "网络 'BOOT0' (#8) 未全连通: 2 个 pad 落在 2 个独立连通分量 (开路)"
+      }
+    },
+    "stats": {
+      "pads": 201,
+      "segments": 255,
+      "vias": 54,
+      "footprints": 38,
+      "nets": 19
+    }
+  },
+  "esp32_servo_wifi": {
+    "errors": 1,
+    "warnings": 5,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 5,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 1,
+        "warning": 0,
+        "info": 0,
+        "sample": "走线短路: net 3 走线与 net 10 走线铜箔重叠 0.250mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 117,
+      "segments": 129,
+      "vias": 22,
+      "footprints": 16,
+      "nets": 14
+    }
+  },
+  "esp32s3_rs485_can": {
+    "errors": 1,
+    "warnings": 10,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 10,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 1,
+        "warning": 0,
+        "info": 0,
+        "sample": "走线短路: net 8 走线与 net 23 走线铜箔重叠 0.250mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 145,
+      "segments": 249,
+      "vias": 53,
+      "footprints": 26,
+      "nets": 28
+    }
+  },
+  "gd32f103_minimal": {
+    "errors": 8,
+    "warnings": 24,
+    "by_rule": {
+      "R004": {
+        "error": 0,
+        "warning": 2,
+        "info": 0,
+        "sample": "网络 'PA1' (#13) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
+      },
+      "R006": {
+        "error": 0,
+        "warning": 20,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.307mm < 0.5mm"
+      },
+      "R007": {
+        "error": 4,
+        "warning": 2,
+        "info": 0,
+        "sample": "走线短路: net 2 走线与 net 12 走线铜箔重叠 0.083mm (F.Cu)"
+      },
+      "R008": {
+        "error": 4,
+        "warning": 0,
+        "info": 0,
+        "sample": "网络 'GND' (#3) 未全连通: 17 个 pad 落在 2 个独立连通分量 (开路)"
+      }
+    },
+    "stats": {
+      "pads": 102,
+      "segments": 245,
+      "vias": 63,
+      "footprints": 18,
+      "nets": 22
+    }
+  },
+  "industrial_power": {
+    "errors": 1,
+    "warnings": 2,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 2,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 1,
+        "warning": 0,
+        "info": 0,
+        "sample": "走线短路: net 5 走线与 net 6 走线铜箔重叠 0.250mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 51,
+      "segments": 129,
+      "vias": 24,
+      "footprints": 20,
+      "nets": 9
+    }
+  },
+  "lcd_tft_43": {
+    "errors": 12,
+    "warnings": 37,
+    "by_rule": {
+      "R004": {
+        "error": 0,
+        "warning": 5,
+        "info": 0,
+        "sample": "网络 'TP_RST' (#17) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
+      },
+      "R006": {
+        "error": 0,
+        "warning": 31,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.307mm < 0.5mm"
+      },
+      "R007": {
+        "error": 6,
+        "warning": 1,
+        "info": 0,
+        "sample": "走线短路: net 1 走线与 net 10 走线铜箔重叠 0.250mm (B.Cu)"
+      },
+      "R008": {
+        "error": 6,
+        "warning": 0,
+        "info": 0,
+        "sample": "网络 'TP_SCL' (#15) 未全连通: 3 个 pad 落在 2 个独立连通分量 (开路)"
+      }
+    },
+    "stats": {
+      "pads": 187,
+      "segments": 298,
+      "vias": 70,
+      "footprints": 18,
+      "nets": 26
+    }
+  },
+  "led_indicator": {
+    "errors": 1,
+    "warnings": 2,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 2,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.307mm < 0.5mm"
+      },
+      "R007": {
+        "error": 1,
+        "warning": 0,
+        "info": 0,
+        "sample": "走线短路: net 2 走线与 net 4 走线铜箔重叠 0.250mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 20,
+      "segments": 68,
+      "vias": 16,
+      "footprints": 9,
+      "nets": 6
+    }
+  },
+  "lora_sx1276_gateway": {
+    "errors": 1,
+    "warnings": 2,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 2,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 1,
+        "warning": 0,
+        "info": 0,
+        "sample": "走线短路: net 3 走线与 net 8 走线铜箔重叠 0.250mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 47,
+      "segments": 113,
+      "vias": 17,
+      "footprints": 12,
+      "nets": 12
+    }
+  },
+  "motor_driver_dual": {
+    "errors": 5,
+    "warnings": 18,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 18,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 5,
+        "warning": 0,
+        "info": 0,
+        "sample": "走线短路: net 2 走线与 net 11 走线铜箔重叠 0.250mm (F.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 48,
+      "segments": 134,
+      "vias": 37,
+      "footprints": 10,
+      "nets": 15
+    }
+  },
+  "nrf52840_ble5": {
+    "errors": 0,
+    "warnings": 17,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 15,
+        "info": 0,
+        "sample": "钻孔间距过小: J2.SH (Ø1.7) ↔ via@ (Ø0.4) 净间距 0.252mm < 0.5mm"
+      },
+      "R007": {
+        "error": 0,
+        "warning": 2,
+        "info": 0,
+        "sample": "走线间距不足: net 12 ↔ net 13 铜净间距 0.029mm < 0.15mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 104,
+      "segments": 314,
+      "vias": 60,
+      "footprints": 13,
+      "nets": 27
+    }
+  },
+  "rp2040_minimal": {
+    "errors": 10,
+    "warnings": 21,
+    "by_rule": {
+      "R004": {
+        "error": 0,
+        "warning": 2,
+        "info": 0,
+        "sample": "网络 'USB_DM' (#14) 有 3 个 pad 但无 segment/via — 可能未布线 (开路)"
+      },
+      "R006": {
+        "error": 0,
+        "warning": 13,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.307mm < 0.5mm"
+      },
+      "R007": {
+        "error": 7,
+        "warning": 6,
+        "info": 0,
+        "sample": "走线间距不足: net 2 ↔ net 10 铜净间距 0.103mm < 0.15mm (F.Cu)"
+      },
+      "R008": {
+        "error": 3,
+        "warning": 0,
+        "info": 0,
+        "sample": "网络 'USB_DM' (#14) 未全连通: 3 个 pad 落在 3 个独立连通分量 (开路)"
+      }
+    },
+    "stats": {
+      "pads": 164,
+      "segments": 144,
+      "vias": 42,
+      "footprints": 21,
+      "nets": 17
+    }
+  },
+  "safety_protection": {
+    "errors": 2,
+    "warnings": 5,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 5,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 2,
+        "warning": 0,
+        "info": 0,
+        "sample": "走线短路: net 5 走线与 net 6 走线铜箔重叠 0.250mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 51,
+      "segments": 99,
+      "vias": 26,
+      "footprints": 18,
+      "nets": 16
+    }
+  },
+  "smartwatch_core": {
+    "errors": 3,
+    "warnings": 514,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 45,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.159mm < 0.5mm"
+      },
+      "R007": {
+        "error": 3,
+        "warning": 469,
+        "info": 0,
+        "sample": "走线间距不足: net 1 ↔ net 10 铜净间距 0.020mm < 0.15mm (F.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 173,
+      "segments": 429,
+      "vias": 112,
+      "footprints": 30,
+      "nets": 28
+    }
+  },
+  "stm32f103c6_dot_matrix": {
+    "errors": 9,
+    "warnings": 30,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 25,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 6,
+        "warning": 5,
+        "info": 0,
+        "sample": "走线间距不足: net 1 ↔ net 2 铜净间距 0.000mm < 0.15mm (F.Cu)"
+      },
+      "R008": {
+        "error": 3,
+        "warning": 0,
+        "info": 0,
+        "sample": "网络 'XTAL_OUT' (#12) 未全连通: 3 个 pad 落在 2 个独立连通分量 (开路)"
+      }
+    },
+    "stats": {
+      "pads": 102,
+      "segments": 198,
+      "vias": 61,
+      "footprints": 17,
+      "nets": 23
+    }
+  },
+  "stm32g031_minimal": {
+    "errors": 3,
+    "warnings": 21,
+    "by_rule": {
+      "R004": {
+        "error": 0,
+        "warning": 1,
+        "info": 0,
+        "sample": "网络 'PB0' (#16) 有 2 个 pad 但无 segment/via — 可能未布线 (开路)"
+      },
+      "R006": {
+        "error": 0,
+        "warning": 16,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.307mm < 0.5mm"
+      },
+      "R007": {
+        "error": 2,
+        "warning": 4,
+        "info": 0,
+        "sample": "走线间距不足: net 1 ↔ net 2 铜净间距 0.058mm < 0.15mm (F.Cu)"
+      },
+      "R008": {
+        "error": 1,
+        "warning": 0,
+        "info": 0,
+        "sample": "网络 'PB0' (#16) 未全连通: 2 个 pad 落在 2 个独立连通分量 (开路)"
+      }
+    },
+    "stats": {
+      "pads": 68,
+      "segments": 167,
+      "vias": 48,
+      "footprints": 15,
+      "nets": 18
+    }
+  },
+  "stm32h743_core": {
+    "errors": 0,
+    "warnings": 7,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 5,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 0,
+        "warning": 2,
+        "info": 0,
+        "sample": "走线间距不足: net 4 ↔ net 12 铜净间距 0.047mm < 0.15mm (B.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 160,
+      "segments": 209,
+      "vias": 48,
+      "footprints": 22,
+      "nets": 16
+    }
+  },
+  "usb_c_pd_trigger": {
+    "errors": 1,
+    "warnings": 2,
+    "by_rule": {
+      "R006": {
+        "error": 0,
+        "warning": 1,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 1,
+        "warning": 1,
+        "info": 0,
+        "sample": "走线间距不足: net 1 ↔ net 8 铜净间距 0.124mm < 0.15mm (F.Cu)"
+      }
+    },
+    "stats": {
+      "pads": 45,
+      "segments": 92,
+      "vias": 19,
+      "footprints": 13,
+      "nets": 10
+    }
+  },
+  "w5500_ethernet": {
+    "errors": 9,
+    "warnings": 14,
+    "by_rule": {
+      "R004": {
+        "error": 0,
+        "warning": 1,
+        "info": 0,
+        "sample": "网络 'XTAL2' (#10) 有 3 个 pad 但无 segment/via — 可能未布线 (开路)"
+      },
+      "R006": {
+        "error": 0,
+        "warning": 10,
+        "info": 0,
+        "sample": "钻孔间距过小: via@ (Ø0.4) ↔ via@ (Ø0.4) 净间距 0.100mm < 0.5mm"
+      },
+      "R007": {
+        "error": 8,
+        "warning": 3,
+        "info": 0,
+        "sample": "走线短路: net 1 走线与 net 15 走线铜箔重叠 0.250mm (B.Cu)"
+      },
+      "R008": {
+        "error": 1,
+        "warning": 0,
+        "info": 0,
+        "sample": "网络 'XTAL2' (#10) 未全连通: 3 个 pad 落在 3 个独立连通分量 (开路)"
+      }
+    },
+    "stats": {
+      "pads": 94,
+      "segments": 162,
+      "vias": 35,
+      "footprints": 14,
+      "nets": 18
+    }
+  }
+}
