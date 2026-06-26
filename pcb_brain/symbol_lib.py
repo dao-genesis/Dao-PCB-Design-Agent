@@ -134,6 +134,26 @@ _PIN_ALIAS: Dict[str, Dict[str, str]] = {
 }
 
 
+# 数据手册权威引脚定义: KiCad 官方库无此符号, 据公开 datasheet "Pin Functions" 表逐脚录入,
+# 注明来源。键经 _norm 归一 (去非字母数字+小写); 值为 {功能脚名: 物理焊盘号}。绝不臆造。
+_DATASHEET_PINMAP: Dict[str, Dict[str, str]] = {
+    # Monolithic Power MP2307DN (SOIC-8 含背面外露焊盘)。据 MPS MP2307 datasheet PIN FUNCTIONS:
+    # 1=BS 2=IN 3=SW 4=GND 5=FB 6=COMP 7=EN 8=SS (外露焊盘接 Pin4 GND)。
+    "mp2307dn": {"BS": "1", "IN": "2", "VIN": "2", "SW": "3", "GND": "4",
+                 "FB": "5", "COMP": "6", "EN": "7", "SS": "8"},
+    # TI TPD2E001 双通道 ESD 保护阵列 (DRY USON-6 / DRS WSON-6, 6 脚)。据 TI SLLS684I
+    # 图5 Pin Configuration: 1=VCC 2=N.C. 3=IO1 4=GND 5=N.C. 6=IO2 (N.C. 内部不连)。
+    "tpd2e001": {"VCC": "1", "IO1": "3", "GND": "4", "IO2": "6"},
+    # TDK InvenSense ICM-42688-P 6轴IMU (2.5×3mm 14-Pin LGA)。据 TDK DS-000347 §4.1
+    # "PIN OUT DIAGRAM AND SIGNAL DESCRIPTION": 1=AP_SDO/AP_AD0(SPI数据输出/I2C地址)
+    # 4=INT1 5=VDDIO 6=GND 7=RESV(接GND) 8=VDD 9=INT2/FSYNC 12=AP_CS 13=AP_SCL/AP_SCLK
+    # 14=AP_SDA/AP_SDIO/AP_SDI; 2/3/10/11=RESV(接GND)。4线SPI: SCLK=13 SDI(MOSI)=14
+    # SDO(MISO)=1 CS=12。
+    "icm42688p": {"VDD": "8", "VDDIO": "5", "GND": "6", "AP_SDO": "1",
+                  "AP_SDI": "14", "AP_SCLK": "13", "AP_CS": "12", "INT1": "4"},
+}
+
+
 def _parse_pins(text: str) -> Tuple[List[Tuple[str, str]], Optional[str]]:
     """从单个符号文件文本中提取 (pin_name, pin_number) 列表 + 可选 extends 父名。
 
@@ -248,13 +268,16 @@ class SymbolResolver:
         return best
 
     def pin_map(self, value: str) -> Dict[str, str]:
-        """返回 {pin_name: pin_number}; 匹配不到则空 dict (留白)。"""
-        if not self.available:
-            return {}
-        sym = self._match_symbol(value)
-        if not sym:
-            return {}
-        return dict(self._pins_of(sym))
+        """返回 {pin_name: pin_number}; 匹配不到则空 dict (留白)。
+
+        KiCad 官方库无符号时, 兜底查数据手册权威引脚表 (_DATASHEET_PINMAP, 逐脚注明来源)。"""
+        sym = self._match_symbol(value) if self.available else None
+        if sym:
+            return dict(self._pins_of(sym))
+        ds = _DATASHEET_PINMAP.get(self._norm(value))   # 库无符号 → 数据手册兜底 (非臆造)
+        if ds:
+            return dict(ds)
+        return {}
 
     def footprint_of(self, value: str) -> Optional[Tuple[str, str]]:
         """返回该器件符号自带的**权威封装** (lib, name)——KiCad 官方符号为每个器件
