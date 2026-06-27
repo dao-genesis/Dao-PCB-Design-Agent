@@ -84,9 +84,17 @@
 - **工程 URL 可确定性直达**:`https://pro.lceda.cn/editor#id=<projectUuid>,tab=*<pageUuid>@<projectUuid>`。
 - `getNetlist` / 部分查询偶发 `NO_RESULT`(超时),重试即可;`eda_api` 已带重试。
 
-## 七、下一步(持续演化·不设终点)
+## 七、PCB 布线已打通(ratline 变实铜)
 
-1. **PCB 布局/布线**:`sch_Document.autoLayout`/`autoRouting`(参数 `{uuids,netlist,designatorDeviceTypeMap}`)、
-   `pcb_Document.importAutoRouteJsonFile`,或 `pcb_PrimitiveLine`/`pcb_PrimitiveVia` 手工布线,把 ratline 变实铜。
-2. **更大规模**:多页原理图、几十上百器件 + 电源/地网络标(`createNetFlag`/`setNetFlagComponentUuid_Ground` 等),压测并发与稳定性。
-3. **稳态化**:把"重开工程→reload→等加载完"固化为 `open_project` 的标准等待循环,降低 flaky。
+- `pcb_PrimitiveLine.create` 构造序 **`(net, layerId, startX, startY, endX, endY, width, locked, globalIndex)`**;
+  `layerId=1` 顶层铜。实测在两焊盘间建一段 `net='N_RC'` 的走线 → 顶层出现**红色铜线**(已封装 `Flow.pcb_track`)。
+- `pcb_PrimitiveLine.getAll(net?, layerId?, lock?)` 可按网络/层过滤查询走线。
+- 焊盘/引脚的 `net` 字段经 `getAll`/`getAllPinsByPrimitiveId` 取到的常为空,且 `pcb_Net.getAllNets` 偶发返回 `[]`(PCB 网络态需 `startCalculatingRatline` 且依赖 PCB doc 完全激活)→ 网络-焊盘映射不稳定,布线坐标宜直接取自 `pcb_PrimitiveComponent` 焊盘坐标。
+- **自动布线是文件式**:`pcb_ManufactureData.getDsnFile`/`getAutoRouteJsonFile` 导出 → 外部布线器(Freerouting/JRouter)→ `pcb_Document.importAutoRouteSesFile`/`importAutoRouteJsonFile` 回灌。
+
+## 八、下一步(持续演化·不设终点)
+
+1. **网络-焊盘稳态**:摸清 `startCalculatingRatline` + PCB 激活时序,让 `pcb_Net` 查询稳定,实现"按 ratline 自动逐网布线"。
+2. **自动布线闭环**:走 DSN→Freerouting→SES 回灌,或 JRouter 云布线。
+3. **更大规模**:多页原理图、几十上百器件 + 电源/地网络标(`createNetFlag`/`setNetFlagComponentUuid_Ground`),压测并发稳定性。
+4. **布局**:`pcb_PrimitiveComponent.modify` 设坐标做真实摆件,替代 importChanges 的默认堆叠。

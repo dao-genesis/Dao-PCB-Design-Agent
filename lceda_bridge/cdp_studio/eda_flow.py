@@ -202,6 +202,21 @@ class Flow:
     def pcb_component_ids(self):
         return self.eda.call("pcb_PrimitiveComponent.getAllPrimitiveId", timeout=20)
 
+    def pcb_component_pins(self, comp_id):
+        return self.eda.call("pcb_PrimitiveComponent.getAllPinsByPrimitiveId", comp_id, timeout=15)
+
+    # --- PCB 布线(把 ratline 变实铜) ---
+    def pcb_track(self, net, x1, y1, x2, y2, layer=1, width=10):
+        """在指定层画一段铜线(走线)。layer=1 顶层铜;构造序 (net,layerId,sx,sy,ex,ey,width)。"""
+        return self.eda.call("pcb_PrimitiveLine.create", net, layer, x1, y1, x2, y2, width, timeout=20)
+
+    def pcb_track_ids(self, net=None, layer=None):
+        args = [a for a in (net, layer) if a is not None]
+        return self.eda.call("pcb_PrimitiveLine.getAllPrimitiveId", *args, timeout=15)
+
+    def pcb_via(self, net, x, y):
+        return self.eda.call("pcb_PrimitiveVia.create", net, x, y, timeout=20)
+
     # --- 原理图 → PCB 同步(importChanges + 自动确认) ---
     def update_pcb_from_schematic(self, pcb_uuid, timeout=40):
         self.eda.call("pcb_Document.importChanges", pcb_uuid, timeout=timeout)
