@@ -77,6 +77,45 @@ def _norm_nets(nets: Dict[str, Any]) -> Dict[str, List[Tuple[str, str]]]:
     return out
 
 
+def validate_nets(nets: Dict[str, List[Tuple[str, str]]],
+                  comp_refs: "set[str] | None" = None) -> None:
+    """ERC 地基 (反向传播之前先确保'名'自洽): 一个焊盘只能属于一条网络。
+
+    任何 EDA 在布线前都要先过电气规则检查。引擎过去对'同一焊盘被分到两条
+    网络'(物理短路)毫无察觉, 任由 pipeline_converge 追一个结构上不可达的目标
+    (端点数 > 唯一焊盘数, 自由能永远归不了零)。此处把它升为一等硬错误, 在
+    解析期当场指明冲突焊盘与冲突网络, 让缺陷可见、可改, 而非静默吞掉。
+
+    检查:
+      1) 同一 (ref,pad) 出现在 ≥2 条网络 → 短路冲突, 抛 ValueError;
+      2) 若给了元件清单, 网络引用了不存在的元件 → 悬空节点, 抛 ValueError。
+    """
+    pad_owner: Dict[Tuple[str, str], str] = {}
+    conflicts: List[str] = []
+    dangling: List[str] = []
+    for net_name, conns in nets.items():
+        seen_in_net: set[Tuple[str, str]] = set()
+        for ref, pad in conns:
+            key = (ref, pad)
+            if comp_refs is not None and ref not in comp_refs:
+                dangling.append(f"{ref}.{pad} (net {net_name}) — 元件 {ref} 不在元件清单")
+            if key in seen_in_net:
+                continue  # 同一焊盘在同一网内重复列出, 无害, 去重即可
+            seen_in_net.add(key)
+            if key in pad_owner and pad_owner[key] != net_name:
+                conflicts.append(
+                    f"{ref}.{pad} 同时被分到网络 '{pad_owner[key]}' 与 '{net_name}'")
+            else:
+                pad_owner[key] = net_name
+    errs: List[str] = []
+    if conflicts:
+        errs.append("焊盘多网冲突(物理短路): " + "; ".join(conflicts))
+    if dangling:
+        errs.append("悬空节点: " + "; ".join(dangling))
+    if errs:
+        raise ValueError("网表电气规则检查未过 — " + " | ".join(errs))
+
+
 def dna_from_spec(spec: Dict[str, Any]) -> DNA:
     """结构化规格 → DNA。
 
@@ -111,12 +150,14 @@ def dna_from_spec(spec: Dict[str, Any]) -> DNA:
         ))
 
     bs = spec.get("board_size") or [50.0, 50.0]
+    nets = _norm_nets(spec["nets"])
+    validate_nets(nets, comp_refs={c.ref for c in comps})
     return DNA(
         name=name,
         description=str(spec.get("description", "")),
         board_size=(float(bs[0]), float(bs[1])),
         components=comps,
-        nets=_norm_nets(spec["nets"]),
+        nets=nets,
         design_notes=str(spec.get("design_notes", "")),
         category=str(spec.get("category", "general")),
     )
@@ -206,6 +247,7 @@ def dna_from_kicad_netlist(path: Union[str, Path]) -> DNA:
     name = Path(path).stem
     if not comps or not nets:
         raise ValueError(f"网表解析为空 (comps={len(comps)}, nets={len(nets)}): {path}")
+    validate_nets(nets, comp_refs={c.ref for c in comps})
     return DNA(name=name, description=f"imported from {Path(path).name}",
                board_size=(50.0, 50.0), components=comps, nets=nets,
                category="imported")

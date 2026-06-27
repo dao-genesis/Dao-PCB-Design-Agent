@@ -937,8 +937,11 @@ class KiCadArm:
         VIA_DIA = 0.45     # mm — 与写入 via size 一致
         # 缝合过孔尺寸下限 (JLCPCB 标准工艺最小通孔): 细间距 SMD 焊盘上的缝合过孔
         # 按焊盘短边收窄, 使孔体不溢出焊盘 → 不压邻网逃逸走线 (因而制之·物刑器成)。
-        VIA_MIN_DIA   = 0.30   # mm
-        VIA_MIN_DRILL = 0.15   # mm
+        # 下限须守工艺能力 (quality._dim_dfm): 孔径≥0.20, 环宽≥0.10 → 外径≥0.40。
+        # 即便落在细间距焊盘上略溢出本网焊盘亦无妨 (同网无短路); 与异网铜的间距
+        # 由下方 clearance 搜索 + safe 判定 + 重布兜底, 不靠把孔缩到工艺下限以下。
+        VIA_MIN_DIA   = 0.40   # mm (孔0.20 + 双边环宽0.10)
+        VIA_MIN_DRILL = 0.20   # mm
         _min_pitch = TRACE_W + CLR_SOFT                    # 异网走线中心最小间距
         TRACE_HALO = max(0, _math.ceil(_min_pitch / GRID) - 1)
         _via_pitch = VIA_DIA / 2 + CLR_SOFT + TRACE_W / 2  # 过孔↔走线中心最小间距
