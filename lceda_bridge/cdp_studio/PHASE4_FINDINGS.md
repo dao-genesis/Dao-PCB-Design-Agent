@@ -109,5 +109,8 @@
 1. **逐网自动布线的拦路**:`getAllNetsName` 列得出 N_CL,但 `getAllPrimitivesByNet('N_CL',['Ratline'/'Pad'])` 仍空
    → 未布网络的"焊盘/飞线成员"查询尚不可靠;需找到稳定取每网两端焊盘坐标的途径(或解析 `getAutoRouteJsonFile` 的 DSN)才能"按飞线逐网自动布线"。
 2. **自动布线闭环**:走 DSN→Freerouting→SES 回灌,或 JRouter 云布线。
+   - 实测拦路:`getDsnFile` 返回 `NOT_BLOB`、`getAutoRouteJsonFile` 返回 `null`(此最小板导不出布线问题)。
+   - 推测需先备齐**有效板框(Board Outline 层闭合)+ 设计规则/AutoRouteRule**,布线问题才可导出。
+   - 下一步:在 PCB 上用 `pcb_PrimitiveBoardLine`/区域建闭合板框 + 配规则,再试 DSN/JSON 导出。
 3. **更大规模**:多页原理图、几十上百器件 + 电源/地网络标(`createNetFlag`/`setNetFlagComponentUuid_Ground`),压测并发稳定性。
 4. **布局**:`pcb_PrimitiveComponent.modify` 设坐标做真实摆件,替代 importChanges 的默认堆叠。
