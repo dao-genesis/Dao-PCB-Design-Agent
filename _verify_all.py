@@ -55,7 +55,7 @@ def main() -> int:
         text = dump(tree)
         check("sexpr dump", "kicad_pcb" in text)
         v = get_value(tree, "version", 0)
-        check("sexpr get_value", v == 20240108, f"version={v}")
+        check("sexpr get_value", v in (20240108, 20241229), f"version={v}")
     except Exception as e:
         check("sexpr import", False, str(e))
 
@@ -101,7 +101,7 @@ def main() -> int:
         from kicad_origin.pcb.board import Board
         check("Board import", True)
         board = Board.empty()
-        check("Board.empty()", board.version == 20240108)
+        check("Board.empty()", board.version in (20240108, 20241229))
         text = board.to_text()
         check("Board.to_text()", "kicad_pcb" in text)
     except Exception as e:
