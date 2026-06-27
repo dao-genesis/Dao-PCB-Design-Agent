@@ -63,7 +63,7 @@ class MazeRouteReport:
 
 def route_ratsnest_maze(board: Any, *, grid: float = 0.1, clearance: float = 0.2,
                         width: float = 0.25, layer: str = "F.Cu",
-                        margin: float = 0.3) -> MazeRouteReport:
+                        margin: float = 0.3, node_cap: int = 200000) -> MazeRouteReport:
     """对每个网的每条 MST 飞线, 用 A* 在避障栅格上找绕障路径并落铜.
 
     Args:
@@ -114,19 +114,34 @@ def route_ratsnest_maze(board: Any, *, grid: float = 0.1, clearance: float = 0.2
                 net_pads.setdefault(nn, (name, []))
                 net_pads[nn][1].append(wp)
 
+    # 静态障碍栅格(一次性把焊盘光环烧进格子): owner[(r,c)] = 占此格的 net 号;
+    # 多网光环重叠 或 净0/机械焊盘 → -1 (硬障, 对谁都不可走). 把 blocked_for 从
+    # O(格×焊盘) 降到 O(1) 查表 —— 大板布线性能瓶颈的本源在此.
+    owner: Dict[Cell, int] = {}
+    for (pn, ax0, ay0, ax1, ay1) in pad_rects:
+        c0 = max(0, int(math.floor((ax0 - x0) / grid)))
+        c1 = min(ncols - 1, int(math.ceil((ax1 - x0) / grid)))
+        r0 = max(0, int(math.floor((ay0 - y0) / grid)))
+        r1 = min(nrows - 1, int(math.ceil((ay1 - y0) / grid)))
+        mark = pn if pn > 0 else -1
+        for r in range(r0, r1 + 1):
+            for c in range(c0, c1 + 1):
+                cur = owner.get((r, c))
+                if cur is None:
+                    owner[(r, c)] = mark
+                elif cur != mark:
+                    owner[(r, c)] = -1   # 不同网光环交叠 → 硬障
+
     # 占用栅格: occ[(r,c)] = 占用此格的 net 号 (走线落子后登记); 用于避开已布他网走线
     occ: Dict[Cell, int] = {}
 
     def blocked_for(net: int, cell: Cell) -> bool:
-        """格 cell 对 net 是否为障: 落在他网焊盘光环内, 或被他网走线占用."""
-        wp = to_world(cell)
-        for (pn, ax0, ay0, ax1, ay1) in pad_rects:
-            if pn == net:
-                continue
-            if ax0 <= wp.x <= ax1 and ay0 <= wp.y <= ay1:
-                return True
-        o = occ.get(cell)
+        """格 cell 对 net 是否为障: 落在他网焊盘光环内, 或被他网走线占用. O(1) 查表."""
+        o = owner.get(cell)
         if o is not None and o != net:
+            return True
+        oc = occ.get(cell)
+        if oc is not None and oc != net:
             return True
         return False
 
@@ -140,6 +155,8 @@ def route_ratsnest_maze(board: Any, *, grid: float = 0.1, clearance: float = 0.2
         openh: List[Tuple[float, Cell]] = [(0.0, start)]
         came: Dict[Cell, Cell] = {}
         g: Dict[Cell, float] = {start: 0.0}
+        expanded = 0
+        cap = min(node_cap, nrows * ncols)
 
         def block(cell: Cell) -> bool:
             if cell == start or cell == goal:
@@ -151,6 +168,10 @@ def route_ratsnest_maze(board: Any, *, grid: float = 0.1, clearance: float = 0.2
 
         while openh:
             _, cur = heapq.heappop(openh)
+            expanded += 1
+            if expanded > cap:
+                return None   # 知止: 超出探索上限, 记为未布通 (诚实), 不死等
+
             if cur == goal:
                 path = [cur]
                 while cur in came:
