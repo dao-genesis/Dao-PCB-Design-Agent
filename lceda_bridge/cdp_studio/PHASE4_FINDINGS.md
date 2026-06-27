@@ -97,13 +97,17 @@
 - **`pcb_Document.startCalculatingRatline` 是网络查询稳态的开关**:调用并等 `getCalculatingRatlineStatus=='active'` 后,
   `pcb_Net.getAllNets` 才稳定返回(含 `length` 等几何);否则偶发空。已封装 `Flow.prepare_pcb_nets`。
 - `pcb_PrimitiveComponent.modify(id, {layer,x,y,rotation,primitiveLock})` 可移动/翻面器件(layer=1 顶,翻面用它)。
-- **连线→PCB 网络传播依赖引脚端点精确吸附**:实测 R.pin2↔C.pin1 连成了 N_RC,但 C.pin2↔LED 的 N_CL
-  在 PCB 端电容焊盘 `net` 仍为空 → 该段连线没真正吸附到电容引脚电气点。
-  **下一步要做引脚端点校验/吸附**(连完用 `getNetlist.components` 核对每个器件引脚都挂到预期网络)。
+- **连线→PCB 网络传播是正确的(更正前述判断)**:`connect_pins` 按真实引脚坐标连线后,
+  首次 `importChanges` 即把 N_RC、N_CL 两网都同步进 PCB(`pcb_Net.getAllNetsName=['N_RC','N_CL']`)。
+  先前"N_CL 没传播"是**我后续手工建走线+翻面+重算 ratline 造成的瞬时 desync**,并非连线缺陷。
+  **正确姿势:任何手工改动后,重新 `update_pcb_from_schematic` + `prepare_pcb_nets`** 即得到一致网络态
+  (实测 N_RC length=522 有铜、N_CL length=0 待布)。
+- `sch_Netlist.getNetlist` 较重、偶发 `NO_RESULT`(多次超时),核对连通**优先看 PCB 层** `pcb_Net`(配合 `prepare_pcb_nets`),不依赖 getNetlist。
 
 ## 八、下一步(持续演化·不设终点)
 
-1. **网络-焊盘稳态**:摸清 `startCalculatingRatline` + PCB 激活时序,让 `pcb_Net` 查询稳定,实现"按 ratline 自动逐网布线"。
+1. **逐网自动布线的拦路**:`getAllNetsName` 列得出 N_CL,但 `getAllPrimitivesByNet('N_CL',['Ratline'/'Pad'])` 仍空
+   → 未布网络的"焊盘/飞线成员"查询尚不可靠;需找到稳定取每网两端焊盘坐标的途径(或解析 `getAutoRouteJsonFile` 的 DSN)才能"按飞线逐网自动布线"。
 2. **自动布线闭环**:走 DSN→Freerouting→SES 回灌,或 JRouter 云布线。
 3. **更大规模**:多页原理图、几十上百器件 + 电源/地网络标(`createNetFlag`/`setNetFlagComponentUuid_Ground`),压测并发稳定性。
 4. **布局**:`pcb_PrimitiveComponent.modify` 设坐标做真实摆件,替代 importChanges 的默认堆叠。
