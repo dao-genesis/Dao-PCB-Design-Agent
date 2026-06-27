@@ -11,3 +11,7 @@ Dao_BOM*
 Dao_PnP*
 *.xlsx
 _*.py
+
+ne555_docs.json
+ne555_ids.json
+ne555_*.png

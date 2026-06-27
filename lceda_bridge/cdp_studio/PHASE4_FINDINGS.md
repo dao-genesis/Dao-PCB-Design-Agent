@@ -114,3 +114,43 @@
    - 下一步:在 PCB 上用 `pcb_PrimitiveBoardLine`/区域建闭合板框 + 配规则,再试 DSN/JSON 导出。
 3. **更大规模**:多页原理图、几十上百器件 + 电源/地网络标(`createNetFlag`/`setNetFlagComponentUuid_Ground`),压测并发稳定性。
 4. **布局**:`pcb_PrimitiveComponent.modify` 设坐标做真实摆件,替代 importChanges 的默认堆叠。
+
+## 九、复杂工程实践:NE555 LED 闪烁器(0→网表全通,build_ne555.py)
+
+第一个真实多器件工程(U1 NE555 + R1/R2/R3 + C1/C2 + LED1,6 网),从建工程到 PCB
+网表完整跑通,过程中暴露并攻克数个底层边界:
+
+1. **文档创建链**:工程走 REST(`eda_rest.create_project`);进编辑器后
+   `dmt_Schematic.createSchematic(name)` / `dmt_Pcb.createPcb(name)` **返回 null
+   但确已创建**;再用 `dmt_Board.getAllBoardsInfo` 拿到 board 关联的
+   `schematic.page[0].uuid`(放件用)与 `pcb.uuid`(同步用)。
+
+2. **选对 2 脚器件**:搜索词 "RES 10k 0603" 命中的常是 `4D03...` **排阻(8 脚)**,
+   会彻底打乱引脚假设。用**具体料号** `0603WAF1002T5E`(10k)/`0603WAF1001T5E`(1k)
+   才是 2 脚贴片电阻。教训:放件后**必校验引脚数**。
+
+3. **放件可靠化**:`placeComponentWithMouse`+CDP 落子会偶发**漏放/产生 ghost id**
+   (`get()` 返回 None、`getAllPinsByPrimitiveId` 报错)。固化做法:
+   `get()!=None` 校验真实新元件 + 重试 3 次,成功后 `modify(id,{x,y,designator})`
+   **精确落位 + 命名**(同时解决 mouse 落子坐标不可控导致的重叠)。
+
+4. **导线只能正交**:`sch_PrimitiveWire.create` 的 line 对角线段被拒(`create
+   failed!`);**水平/垂直段可用,折线 `[x1,y1,x2,y2,x3,y3,...]` 可用**。
+
+5. **连通判据(关键)**:导线**端点/拐点**落在某引脚上=把该脚并入此网(可致短路);
+   两线**十字交叉**(交点均非端点)**不连**。故布线只需保证"端点只落目标脚、拐点全
+   在空白区",交叉随意。
+
+6. **无碰撞自动布线算法**(`build_ne555.wire`):每根引脚沿其朝向(脚 x 相对器件中心)
+   先"逃逸"出器件到全局唯一竖直 lane,再竖直下到**该网络专属横轨**,横轨把各竖段端点
+   T 接成网。NE555 引脚仅相隔 10 单位,旧的"先横后竖 L 形"会让拐点正好落在相邻脚上
+   (VCC↔GND、OUT↔THRES 短路并网);逃逸+横轨后 **6 网全部正确传播到 PCB**:
+   VCC/GND/THRES 各 4 脚、DISCH 3 脚、OUT/N_LED 各 2 脚(`getAllPrimitivesByNet`
+   计数与电路设计完全吻合)。
+
+7. **网络标签 API**:`createNetLabel` **不存在**;`sch_PrimitiveComponent.createNetPort(
+   type, netName, x, y, rotation)` **5 参可用**(传第 6 个 mirror 参报"数据不符合
+   规范")。本工程用纯导线+横轨建网,未依赖端口,连通已硬验证。
+
+8. **删除不可靠**:`sch_PrimitiveComponent.delete(id|list)` 返回 True 但常只删掉
+   部分(整页 reload 后才见少量减少)→ 重来时**新建干净工程**比原地清空更稳。
