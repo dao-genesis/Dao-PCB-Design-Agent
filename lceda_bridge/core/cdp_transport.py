@@ -36,10 +36,13 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import socket
 import struct
 import subprocess
+import threading
 import time
+from dataclasses import dataclass, field
 from typing import Any, Optional, TYPE_CHECKING
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -284,12 +287,90 @@ def list_targets(debug_port: int = 9222) -> list[dict]:
 
 
 def cdp_available(debug_port: int = 9222) -> bool:
-    """嘉立创EDA 是否已开启 CDP 调试端口."""
+    """嘉立创EDA 是否已开启 CDP 调试端口 (HTTP /json/version 可达).
+
+    注意: lceda-pro 在部分版本屏蔽了 HTTP /json 接口 — 此时端口虽在监听且
+    browser WebSocket 可用, 但本函数仍返 False. 判活请并用 cdp_tcp_listening().
+    """
     try:
         with urlopen(f"http://127.0.0.1:{debug_port}/json/version", timeout=2) as r:
             return r.status == 200
-    except URLError:
+    except (URLError, OSError):
         return False
+
+
+def cdp_tcp_listening(debug_port: int = 9222) -> bool:
+    """调试端口是否在 TCP 层监听 (即使 HTTP /json 被屏蔽也能判活)."""
+    try:
+        with socket.create_connection(("127.0.0.1", debug_port), timeout=1.5):
+            return True
+    except OSError:
+        return False
+
+
+def _try_discover_existing_browser_ws(debug_port: int = 9222) -> Optional[str]:
+    """经 HTTP /json/version 取 browser 级 WebSocket 调试 URL.
+
+    lceda-pro 屏蔽 HTTP 时返 None (此时需靠启动 stderr 抓 ws URL).
+    """
+    try:
+        with urlopen(f"http://127.0.0.1:{debug_port}/json/version", timeout=2) as r:
+            data = json.loads(r.read().decode("utf-8"))
+            return data.get("webSocketDebuggerUrl")
+    except (URLError, OSError, ValueError):
+        return None
+
+
+def list_targets_via_browser_ws(browser_ws_url: Optional[str], timeout: float = 3.0) -> list[dict]:
+    """经 browser 级 WebSocket 用 Target.getTargets 列目标.
+
+    用于 lceda-pro 屏蔽 HTTP /json/list 的场景 — 只要拿到 browser_ws_url 即可.
+    返回 targetInfos 列表 (每项含 targetId / type / url / title).
+    """
+    if not browser_ws_url:
+        return []
+    ws = _WS(browser_ws_url, timeout=timeout)
+    try:
+        ws.send_text(json.dumps({"id": 1, "method": "Target.getTargets"}))
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            msg = json.loads(ws.recv_text())
+            if msg.get("id") == 1:
+                return msg.get("result", {}).get("targetInfos", []) or []
+        return []
+    finally:
+        ws.close()
+
+
+def cdp_diagnose(debug_port: int = 9222) -> dict:
+    """三层 (tcp / http / ws) CDP 诊断 — 不抛错, 给全景.
+
+    返回 {port, tcp_listening, http_version, http_targets, browser_ws_url}.
+    http_version 为 /json/version 的 HTTP 状态码 (屏蔽则 None).
+    """
+    tcp = cdp_tcp_listening(debug_port)
+    http_version: Optional[int] = None
+    http_targets = 0
+    browser_ws: Optional[str] = None
+    if tcp:
+        try:
+            with urlopen(f"http://127.0.0.1:{debug_port}/json/version", timeout=2) as r:
+                http_version = r.status
+                data = json.loads(r.read().decode("utf-8"))
+                browser_ws = data.get("webSocketDebuggerUrl")
+        except (URLError, OSError, ValueError):
+            http_version = None
+        try:
+            http_targets = len(list_targets(debug_port))
+        except Exception:
+            http_targets = 0
+    return {
+        "port": debug_port,
+        "tcp_listening": tcp,
+        "http_version": http_version,
+        "http_targets": http_targets,
+        "browser_ws_url": browser_ws,
+    }
 
 
 # ──────────────────────────────────────────────────────────
@@ -421,30 +502,105 @@ class BusTransport:
         """)
 
 
+@dataclass
+class LaunchedEDA:
+    """一次 EDA 启动 (或对已运行实例的接管) 的结果句柄.
+
+    we_started_it 区分 "我们拉起的" 与 "已在运行接管的":
+    前者 proc 非空、可 terminate; 后者 proc=None.
+    browser_ws_url 为 browser 级 WebSocket 调试 URL — 在 lceda-pro 屏蔽 HTTP
+    /json 时, 它是触达 CDP 的唯一入口 (经启动 stderr 的 "DevTools listening" 抓得).
+    """
+    proc: Optional[subprocess.Popen] = None
+    browser_ws_url: Optional[str] = None
+    we_started_it: bool = False
+    debug_port: int = 9222
+    stderr_lines: list = field(default_factory=list)
+
+    @property
+    def pid(self) -> Optional[int]:
+        return self.proc.pid if self.proc is not None else None
+
+
+_DEVTOOLS_WS_RE = re.compile(r"(ws://\S+/devtools/browser/\S+)")
+
+
 def launch_eda_with_cdp(
     exe: str = DEFAULT_LCEDA_EXE,
     debug_port: int = 9222,
     wait_seconds: float = 30.0,
-) -> subprocess.Popen:
-    """启动嘉立创EDA并打开远程调试端口.
+    no_proxy: bool = False,
+    capture_stderr: bool = False,
+    extra_args: Optional[list[str]] = None,
+) -> Optional[LaunchedEDA]:
+    """启动嘉立创EDA并打开远程调试端口, 返回 LaunchedEDA 句柄.
 
-    返回 Popen. 调用方负责 .terminate() 或留它跑.
+    若已存在 CDP 可达的实例则不重启, 返回 we_started_it=False 的句柄
+    (proc=None, browser_ws_url 经 HTTP 探测, 屏蔽则 None).
 
-    若已存在监听 debug_port 的实例则不重启, 直接返回 None.
+    no_proxy:       加 --no-proxy-server (绕 clash/v2ray 等系统代理).
+    capture_stderr: 抓子进程 stderr, 解析 "DevTools listening on ws://..." 拿
+                    browser_ws_url — lceda-pro 屏蔽 HTTP /json 时唯一可靠来源.
+    extra_args:     附加命令行 (如 ['--no-sandbox', '--user-data-dir=...']).
     """
     if cdp_available(debug_port):
-        return None  # 已启动
+        return LaunchedEDA(
+            proc=None,
+            browser_ws_url=_try_discover_existing_browser_ws(debug_port),
+            we_started_it=False,
+            debug_port=debug_port,
+        )
     if not os.path.exists(exe):
         raise FileNotFoundError(exe)
-    proc = subprocess.Popen(
-        [exe, f"--remote-debugging-port={debug_port}"],
-        creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
-        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+
+    args = [exe, f"--remote-debugging-port={debug_port}", "--remote-allow-origins=*"]
+    if no_proxy:
+        args.append("--no-proxy-server")
+    if extra_args:
+        args.extend(extra_args)
+
+    creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+        subprocess, "CREATE_NEW_PROCESS_GROUP", 0
     )
-    # 轮询调试端口可用
+    stderr_lines: list[str] = []
+    ws_holder: dict[str, str] = {}
+    if capture_stderr:
+        proc = subprocess.Popen(
+            args,
+            creationflags=creationflags,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            bufsize=1,
+            universal_newlines=True,
+        )
+
+        def _reader() -> None:
+            try:
+                for line in proc.stderr:  # type: ignore[union-attr]
+                    line = line.rstrip()
+                    if line:
+                        stderr_lines.append(line)
+                    m = _DEVTOOLS_WS_RE.search(line)
+                    if m and "url" not in ws_holder:
+                        ws_holder["url"] = m.group(1)
+            except Exception:
+                pass
+
+        threading.Thread(target=_reader, daemon=True).start()
+    else:
+        proc = subprocess.Popen(args, creationflags=creationflags)
+
+    # 轮询: HTTP 可达 或 stderr 抓到 browser ws (屏蔽 HTTP 场景) 即视为启动成功
     deadline = time.time() + wait_seconds
     while time.time() < deadline:
-        if cdp_available(debug_port):
-            return proc
+        if cdp_available(debug_port) or ws_holder.get("url"):
+            ws_url = ws_holder.get("url") or _try_discover_existing_browser_ws(debug_port)
+            return LaunchedEDA(
+                proc=proc,
+                browser_ws_url=ws_url,
+                we_started_it=True,
+                debug_port=debug_port,
+                stderr_lines=stderr_lines,
+            )
         time.sleep(0.5)
     raise RuntimeError(f"启动后 {wait_seconds}s 内未见调试端口 {debug_port}")
