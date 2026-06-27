@@ -205,6 +205,29 @@ class Flow:
     def pcb_component_pins(self, comp_id):
         return self.eda.call("pcb_PrimitiveComponent.getAllPinsByPrimitiveId", comp_id, timeout=15)
 
+    def prepare_pcb_nets(self, pcb_uuid=None, max_wait=12):
+        """让 PCB 网络态可稳定查询:打开 PCB doc → startCalculatingRatline → 等 status=active。
+        实测:不做这步,pcb_Net.getAllNets 偶发返回 [];做完后返回真实网络+几何(走线长度等)。"""
+        if pcb_uuid:
+            self.open_document(pcb_uuid)
+        self.eda.call("pcb_Document.startCalculatingRatline", timeout=20)
+        deadline = time.time() + max_wait
+        while time.time() < deadline:
+            try:
+                if self.eda.call("pcb_Document.getCalculatingRatlineStatus") == "active":
+                    return True
+            except Exception:
+                pass
+            time.sleep(1.5)
+        return False
+
+    def pcb_nets(self):
+        """返回 PCB 网络(含长度等几何);调用前建议先 prepare_pcb_nets。"""
+        return self.eda.call("pcb_Net.getAllNets", timeout=20)
+
+    def pcb_net_primitives(self, net, types=None):
+        return self.eda.call("pcb_Net.getAllPrimitivesByNet", net, types, timeout=20)
+
     # --- PCB 布线(把 ratline 变实铜) ---
     def pcb_track(self, net, x1, y1, x2, y2, layer=1, width=10):
         """在指定层画一段铜线(走线)。layer=1 顶层铜;构造序 (net,layerId,sx,sy,ex,ey,width)。"""
