@@ -57,13 +57,20 @@
 
 ## 诚实诊断 (按杠杆排序, 为道日损)
 
-**1. 头号瓶颈 — 命名引脚未绑 (netbind GAP).**
+**1. 头号瓶颈 — 命名引脚未绑 (netbind GAP). ◐ 已补 pinmap (保守版).**
 DNA 网表用逻辑引脚名 (VCC/GND/MOSI/TX+/XTAL1...), 但 inline 出来的封装焊盘是
 数字编号 (1..48). 二者无映射 → IC 的引脚全部 unbound。这是几乎每块板 `unbound>0`
 的根因 (smartwatch 57, nrf52840 34, rp2040 29...)。
-→ **下一工具: 引脚映射 (logical pin name → pad number)。本源就在 KiCad 符号库**
-  (`.kicad_sym` 里每个 pin 有 name+number); 用现成的 `lib/symbol_reader` 自动抽取即可——
-  道法自然, 数据已在, 不必另造。
+→ 已补: **`pinmap.resolve_named_pins`** —— 据 DNA 元件 value 在 KiCad 符号库认出符号
+  (`SymbolIndex.search`), 取 `list_pins` 的 name↔number, 把命名引脚翻成脚号。**保守对齐**:
+  只精确 + 高可信归一化匹配 (剥 ~{} 低有效装饰/分隔符/大小写; SCSn↔~{SCS}), 一个电源/地
+  逻辑网扇出到符号同名多脚; **对不准的 (VCC↔VDD/AVDD 多电源轨、TX+↔差分名) 不猜, 留空且
+  报候选** —— 接错电源即短路, 宁缺毋错。
+→ 实测 w5500 (真 DRC): netbind 绑定 **28→43** (+15 脚), 暴露的真飞线 15→30 条 ——
+  即原先"看着干净"实因 IC 脚未绑; 绑上后 router 当下布通 19/30 (0 错, 11 未连)。
+  这把"假净"变"真活": **下一棒交给 router/拥塞**, 而非自欺。
+> 仍是 ◐ 半解: GD32 等符号库无的器件认不出; 多电源轨/差分/XTAL 等名需人工/数据库别名表
+> (`extra_aliases`)。本源数据在 KiCad, 已能取; 余下是名实对齐的判断, 留待更准 pinout 源。
 
 **2. 单层拥塞 — 需双层+过孔 (route GAP). ✓ 已补 route_maze2.**
 即便全绑定 (led_indicator), 单层 F.Cu 也常布不完 (11/15), 4 条飞线挤不下。

@@ -30,6 +30,7 @@ from kicad_origin.pcb.netbind import bind_netlist
 from kicad_origin.pcb.route_maze import route_ratsnest_maze
 from kicad_origin.pcb.route_maze2 import route_ratsnest_maze2
 from kicad_origin.pcb.placement import spread_placement
+from kicad_origin.pcb.pinmap import resolve_named_pins
 
 REPO = Path(__file__).resolve().parents[2]
 KCLI_CANDIDATES = [
@@ -63,7 +64,7 @@ def real_drc(kcli: str, board_path: Path) -> dict:
 
 
 def run(board_name: str, grid: float, router: str = "maze",
-        spread: bool = False) -> dict:
+        spread: bool = False, pinmap: bool = False) -> dict:
     dna = CircuitDNA.get(board_name)
     if dna is None:
         raise SystemExit(f"未知板 DNA: {board_name}  (可选: {CircuitDNA.list_names() if hasattr(CircuitDNA,'list_names') else '...'})")
@@ -93,11 +94,18 @@ def run(board_name: str, grid: float, router: str = "maze",
                            "moved": sp.moved,
                            "overlaps": f"{sp.overlaps_before}→{sp.overlaps_after}"})
 
-    rb = bind_netlist(b, dna.nets, reset=True)
+    nets = dna.nets
+    pm = None
+    if pinmap:
+        nets, pm = resolve_named_pins(dna.nets, dna.components)
+    rb = bind_netlist(b, nets, reset=True)
     _save(b, work)
     if kcli:
-        stages.append({"stage": "netbind(绑网后)", **real_drc(kcli, work),
-                       "bound": rb.bound, "unbound": rb.unbound_count})
+        st = {"stage": "netbind(绑网后)", **real_drc(kcli, work),
+              "bound": rb.bound, "unbound": rb.unbound_count}
+        if pm is not None:
+            st["pinmap"] = f"译{pm.resolved}→{pm.expanded_pads}脚/不准{len(pm.unresolved)}"
+        stages.append(st)
 
     t = time.time()
     if router == "maze2":
@@ -120,6 +128,7 @@ def run(board_name: str, grid: float, router: str = "maze",
         "bind": rb.to_dict(),
         "route": rr.to_dict(),
         "spread": sp.to_dict() if sp else None,
+        "pinmap": pm.to_dict() if pm else None,
         "kicad_cli": bool(kcli),
         "stages": stages,
     }
@@ -166,8 +175,9 @@ def main() -> None:
     ap.add_argument("--grid", type=float, default=0.1)
     ap.add_argument("--router", choices=["maze", "maze2"], default="maze")
     ap.add_argument("--spread", action="store_true", help="布线前先拉开 courtyard 相叠的元件")
+    ap.add_argument("--pinmap", action="store_true", help="用符号库把命名引脚翻成脚号")
     args = ap.parse_args()
-    res = run(args.board, args.grid, args.router, args.spread)
+    res = run(args.board, args.grid, args.router, args.spread, args.pinmap)
     print(json.dumps(res, ensure_ascii=False, indent=2))
     last = res["stages"][-1] if res["stages"] else {}
     if last.get("errors") == 0 and last.get("unconnected") == 0:
