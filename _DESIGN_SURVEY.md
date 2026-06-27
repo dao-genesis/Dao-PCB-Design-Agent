@@ -1,0 +1,70 @@
+# 全库实践审计 · bind+route 跑遍 16 块板 (KiCad 9.0.9 真 DRC)
+
+> 我(设计者)用自己造的 `netbind`+`route_maze` 把每块占位板往"可制造"推, 用 KiCad
+> 自身 DRC 验证, 诚实记录每块板停在哪、为何停。为学日益, 为道日损——下一步该补什么,
+> 数据自己会说话。
+
+## 结果 (grid=0.2mm) — 已修性能后, 16 板全部完成, 无超时
+
+> GAP3 性能已先解决: 障碍栅格预栅格化 (owner 表 O(1) 查障) + A* 节点上限 (知止不死等)。
+> 三块原 >90s 超时的大板现 23/32/11s 完成。全库一遍 ≈2 分钟。
+
+| 板 | 绑定 | 未绑 | 飞线布通 | err | 未连 | 秒 | 结论 |
+|----|-----|-----|---------|-----|-----|----|------|
+| ams1117_power            |  9 |  0 |  6/6  | 0 | 0 |  2 | **全净 CLEAN ✓** |
+| usb_c_pd_trigger         | 20 | 12 | 13/13 | 0 | 0 |  5 | 已绑部分全布通·0错 |
+| w5500_ethernet           | 28 | 22 | 15/15 | 0 | 0 |  4 | 已绑部分全布通·0错 |
+| motor_driver_dual        | 24 | 16 |  9/10 | 7 | 1 |  4 | 单层布不完+短路 |
+| led_indicator            | 20 |  0 | 11/15 | 1 | 4 |  5 | **全绑定·单层布不完** |
+| stm32f103c6_dot_matrix   | 63 |  0 | 13/40 | 46|27 | 11 | **全绑定·单层严重拥塞** |
+| lora_sx1276_gateway      | 25 | 12 | 11/15 | 8 | 4 |  8 | 部分未绑+拥塞 |
+| rp2040_minimal           | 28 | 29 | 17/19 | 9 | 2 |  8 | 部分未绑+拥塞 |
+| stm32g031_minimal        | 36 | 15 | 13/18 | 20| 5 |  9 | 部分未绑+拥塞 |
+| nrf52840_ble5            | 34 | 34 |  7/10 | 17| 3 |  6 | 大量命名引脚未绑 |
+| esp32_servo_wifi         | 20 | 20 | 12/14 | 25| 2 |  6 | 大量命名引脚未绑 |
+| ch32v003_minimal         | 32 | 20 |  9/12 | 17| 3 |  7 | 部分未绑+拥塞 |
+| gd32f103_minimal         | 66 |  6 | 15/37 | 27|22 |  6 | 大板·单层严重拥塞 |
+| smartwatch_core          | 45 | 57 | 24/30 | 19| 6 | 11 | 命名引脚未绑最多 |
+| drone_flight_controller  | 89 |  2 | 44/69 |104|24 | 32 | 大板·单层严重拥塞 |
+| drone_aerial_h743        |174 | 41 |45/115 |181|69 | 23 | 大板·单层严重拥塞 |
+
+## 诚实诊断 (按杠杆排序, 为道日损)
+
+**1. 头号瓶颈 — 命名引脚未绑 (netbind GAP).**
+DNA 网表用逻辑引脚名 (VCC/GND/MOSI/TX+/XTAL1...), 但 inline 出来的封装焊盘是
+数字编号 (1..48). 二者无映射 → IC 的引脚全部 unbound。这是几乎每块板 `unbound>0`
+的根因 (smartwatch 57, nrf52840 34, rp2040 29...)。
+→ **下一工具: 引脚映射 (logical pin name → pad number)。本源就在 KiCad 符号库**
+  (`.kicad_sym` 里每个 pin 有 name+number); 用现成的 `lib/symbol_reader` 自动抽取即可——
+  道法自然, 数据已在, 不必另造。
+
+**2. 单层拥塞 — 需双层+过孔 (route GAP). ✓ 已补 route_maze2.**
+即便全绑定 (led_indicator), 单层 F.Cu 也常布不完 (11/15), 4 条飞线挤不下。
+→ 已补: **双层避障布线 `route_maze2`** (A* 状态扩为 (row,col,layer); 顶层受阻则过孔
+  下钻 B.Cu 绕行; 焊盘按层设障; 过孔以 via_halo 双层避让)。
+→ 实测 led_indicator (grid=0.15): **15/15 飞线全布通、0 unconnected、0 布线错** (10 过孔),
+  单层只能 11/15。下一拥塞瓶颈交给第二层化解, 上下相生。
+
+**2b. 摆放质量 — courtyard 相叠 (placement GAP). ✓ 已补 placement.spread.**
+led_indicator 双层布通后仍剩 1 个 `courtyards_overlap` (J1/J2 连接器外廓相叠): 非布线
+能解, 是 DNA 把元件摆得 courtyard 物理相叠, 而板上还有大片空地。
+→ 已补: **`spread_placement`** —— 读每个元件**真实 F.CrtYd courtyard 几何**(非焊盘外接,
+  连接器 courtyard 远大于焊盘), 凡两件外廓相侵, 沿最浅穿插轴互推开各让一半, 迭代至
+  互不相侵且不越板框。
+→ 实测 led_indicator (grid=0.1, 全链路 inline→**spread**→netbind→route_maze2→真 DRC):
+  courtyards_overlap 1→0, **15/15 飞线、0 error、0 unconnected** = 第二块全净可制造板
+  (且这块用齐了 spread+双层+性能三件新工具)。
+
+> 注: `courtyard_bbox` 必须取真实 F.CrtYd 图元 (会按 90°/270° 旋转变换), 焊盘外接框会
+> 严重低估连接器等元件的占地 (J1 焊盘宽 1.7 但 courtyard 宽 3.54) —— 实践教训, 已修。
+
+**3. 性能 — 大板超时 (route GAP). ✓ 已解决.**
+`blocked_for` 曾每格扫全部焊盘 = O(格×焊盘); 大板 (drone 43 元件, 1000×900 格) 跑爆。
+→ 已补: **障碍栅格预栅格化** (一次性把焊盘光环烧进 `owner` 表, A* 查障 O(1)) +
+  **A* 节点上限** (探索超限即知止, 记为未布通而非死等)。
+→ 实测: drone_aerial 23s / drone_flight 32s / dot_matrix 11s (原皆 >90s 超时), 全库 16 板 ≈2 分钟跑完。
+
+## 已被证明可用的部分
+- `ams1117_power`: 全数字引脚 → 绑定 9/9、布线 6/6、**KiCad DRC 0 错 0 未连** = 真可制造。
+- `usb_c_pd_trigger` / `w5500_ethernet`: 已绑定子网 **15/15、13/13 全布通且 0 错** —
+  证明布线器本身稳, 瓶颈在绑定 (命名引脚), 不在布线。
