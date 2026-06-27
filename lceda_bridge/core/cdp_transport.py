@@ -256,9 +256,27 @@ class CdpTransport:
         debug_port: int = 9222,
         target_url_substring: str = "editor",
         timeout: float = 30.0,
+        browser_ws_url: Optional[str] = None,
     ) -> "CdpTransport":
-        """自动连接 — 找包含 target_url_substring 的页面."""
+        """自动连接 — 找包含 target_url_substring 的页面.
+
+        browser_ws_url 非空且 HTTP /json/list 不可达时, 走 browser 级 ws 列目标
+        (Target.getTargets), 再据 targetId 直连 page ws — lceda-pro 屏 HTTP /json
+        之境的唯一通路. HTTP /json/list 可达时仍走之 (常态).
+        """
         targets = list_targets(debug_port=debug_port)
+        if not targets and browser_ws_url:
+            targets = [
+                {
+                    "type": t.get("type"),
+                    "url": t.get("url"),
+                    "title": t.get("title"),
+                    "webSocketDebuggerUrl":
+                        f"ws://127.0.0.1:{debug_port}/devtools/page/{t.get('targetId')}",
+                }
+                for t in list_targets_via_browser_ws(browser_ws_url, timeout=timeout)
+                if t.get("type") == "page"
+            ]
         if not targets:
             raise RuntimeError(
                 f"无 CDP 目标. 请确保 EDA 启动时加了 --remote-debugging-port={debug_port}\n"
