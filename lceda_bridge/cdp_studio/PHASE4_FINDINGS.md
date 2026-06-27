@@ -45,8 +45,28 @@
 - **读类 API 实测可用**(身份、版本、语言、工作区、团队、渲染查询等),并发调用通过。
 - **编辑器内写类 API**(放件/连线/PCB)需先有工程/文档**打开**才有意义 → 下一步:经 REST 建工程后,用编辑器层打开并在其中操作,跑通「执行→反馈(取画布图)→呈现」闭环。
 
-## 五、下一步(Phase 4.3 / 4.4)
+## 五、全流程已打通(从想法到制造文件)· 已封装为 `eda_flow.py`
 
-1. 打通"打开指定工程到编辑器"(URL 直达 or extapi `openProject`/`openDocument`),使编辑器层有上下文。
-2. 在工程内:新建原理图 → 放置元件(`sch_PrimitiveComponent` / `lib_Device` 搜索)→ `dmt_EditorControl.getCurrentRenderedAreaImage` 取图回传。
-3. 据此层层递进到大型 PCB 全流程(布局/布线/DRC/Gerber/BOM),边实践边补齐 REST/extapi 测绘。
+**实测一条流水线跑通**(`eda_flow.Flow` + `eda_rest`):
+1. `EdaRest.create_project` 建工程(账号层)。
+2. `Flow.open_project(uuid)` → `getCurrentProjectInfo` 返回该工程(编辑器层有上下文)。
+3. `Flow.open_document(schPageUuid)` 打开原理图页。
+4. `lib_Device.search('Resistor'/'Capacitor'/'LED')` → `Flow.place_device` 放置(进入跟随态后 CDP 鼠标落子 + Esc 退出连放)。
+5. `Flow.update_pcb_from_schematic(pcbUuid)` = `pcb_Document.importChanges` + **自动确认对话框**(见下坑)→ 器件进 PCB。
+6. `pcb_Drc.check()` → `true`。
+7. `Flow.export_all()` 落盘:**Gerber(zip,含 GTL/GBL/GTO/GBO/GTS/GBS/GTP/GKO + 飞针 + 下单必读)、BOM.xlsx、贴片坐标.xlsx**——即可直接送厂。
+
+### 关键坑(已在 `eda_flow.py` 内处理)
+
+- **`importChanges` 只是弹"确认导入更改"对话框**,不会自动同步;必须点 **Apply Changes**。
+  → `ui_click_text(ws, ['Apply Changes','应用更改'])` 用真实 CDP 鼠标事件按文案点击确认。
+- **导出类 API 返回浏览器 `File`/`Blob`**,无法经 `returnByValue` 直接取;
+  → 在页面内 `await blob.arrayBuffer()` → `btoa` 成 base64 → Python 落盘。
+- **`placeComponentWithMouse` 进入"跟随鼠标"放置态**,需一次画布点击落子;连续放置态用 Esc 退出。
+- `getCurrentRenderedAreaImage(t)` **arity=1**(需参数,尚未测清),反馈面暂用 `Page.captureScreenshot` 兜底。
+
+## 六、下一步(持续演化·不设终点)
+
+1. **真实连线/网络**:`sch_PrimitiveWire.create` + `sch_Net`/`sch_Netlist`,把分立器件连成有意义的电路(暴露引脚坐标/网络命名的边界)。
+2. **PCB 布局/布线**:`sch_Document.autoLayout` / `autoRouting`、`pcb_Document.importAutoRouteJsonFile`,以及 `pcb_PrimitiveLine`/`pcb_PrimitiveVia` 手工布线。
+3. **更大规模**:多页原理图、几十上百器件,压测并发与稳定性,持续补齐 `eda_flow`。

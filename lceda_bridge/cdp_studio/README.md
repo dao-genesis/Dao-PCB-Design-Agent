@@ -25,7 +25,8 @@ WebSocket，只要经 Chrome 远程调试(CDP)在**主页面上下文** `Runtime
 | `eda_api_catalog.py` / `eda_api_catalog.json` | 全量**测绘** `_EXTAPI_ROOT_`(94 命名空间 / 701 方法)→ 机器可读目录 |
 | `eda_api.py` | **编辑器层**高层绑定:`eda.dmt_Project.xxx()` 直调、字符串寻址、`.map()` 多并发、自动重连、对照目录告警 |
 | `eda_rest.py` | **账号层**高层绑定:工程/团队/用户/文件夹的 REST CRUD(cookie 直连,绕过浏览器 SW) |
-| `PHASE4_FINDINGS.md` | Phase 4 本体测绘与实战发现录(两层架构 / SW 坑 / 已验证端点) |
+| `eda_flow.py` | **全流程编排**:建工程→打开→放件→原理图转 PCB(自动确认)→DRC→导出 Gerber/BOM/贴片坐标 |
+| `PHASE4_FINDINGS.md` | Phase 4 本体测绘与实战发现录(两层架构 / SW 坑 / 全流程已通 / 已验证端点) |
 
 ## 两层架构(道并行而不相悖)
 
