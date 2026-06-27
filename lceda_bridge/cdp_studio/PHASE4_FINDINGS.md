@@ -154,3 +154,44 @@
 
 8. **删除不可靠**:`sch_PrimitiveComponent.delete(id|list)` 返回 True 但常只删掉
    部分(整页 reload 后才见少量减少)→ 重来时**新建干净工程**比原地清空更稳。
+
+## 十、布线闭环攻克:NE555 全自动布线 → 2 层实铜 → 制造包(0→送厂 全链落地)
+
+承接第九章(网表全通),本会话把 NE555 推到**完整制造文件**,攻克 PCB 布线这一长期
+卡点。最终成品:**56 条铜线(顶层 49 / 底层 7)+ 5 过孔**,DRC 通过,Gerber/BOM/
+贴片坐标全部导出(GTL 1285→3130B、GBL 624→1162B,含过孔钻孔文件),板子可直接送厂。
+
+1. **板框 = layer11 闭合 Polyline,不是 4 条 Line**(本章头号发现)。
+   - 用 `pcb_PrimitiveLine` 在 layer11 画 4 条边围成矩形:**能进 Gerber GKO、
+     `zoomToBoardOutline` 也认**,但**自动布线不认**,报
+     `Please draw a board outline first!`。
+   - 真正的板框由 `Place → Board Outline → Rectangle` 画出,底层是**一个闭合
+     Polyline**,结构:
+     ```json
+     {"primitiveType":"Polyline","layer":11,
+      "polygon":{"polygon":["R", x, y, w, h, 0, 0]}, "lineWidth":10}
+     ```
+     `["R",x,y,w,h,0,0]`= 矩形(左上角 x,y + 宽 w + 高 h + 两个圆角=0)。
+   - `pcb_PrimitivePolyline.create` 的入参签名尚未试出(传 `["R",...]` 或
+     `{"polygon":[...]}` 均报"无法创建多边形图元")→ **当前板框走 GUI 矩形工具**画
+     (`Flow.has_board_outline()` 可检测),程序化 create 的精确签名留作下一边界。
+
+2. **新建板框后必须 save + 整页 reload**,布线引擎才识别为闭合板框;否则
+   `zoomToBoardOutline`/自动布线仍报 not closed。reload 后 `zoomToBoardOutline` OK、
+   `prepare_pcb_nets` 使 ratline `active`、6 网齐备。
+
+3. **自动布线只能走 GUI,extapi 无可用布线/DSN 导出**:`getDsnFile`/
+   `getAutoRouteJsonFile` 返回 undefined(RPC 响应无 blobData)。原生自动布线在
+   `Route → Auto Routing... → Run`(All Nets / 45° / All Layers)。已封装
+   `Flow.autoroute_gui()`:拉高视口→点 Route→点 Auto Routing→DOM 定位 Run 真实点击→
+   回查 `tracks/vias`。一次 Run 即把 6 网全部飞线变实铜(顶红/底蓝 + 过孔)。
+
+4. **铜线计数查询**:`pcb_PrimitiveLine.getAllPrimitiveId()`(**不带**层过滤)返回全部
+   铜线;带 `('',1)` 过滤在本版返回 0(过滤签名与预期不符)→ 取全量后用
+   `get(id).layer` 自行归类(顶 49 / 底 7)。过孔走 `pcb_PrimitiveVia.getAllPrimitiveId`。
+
+5. **完整落地流水线**(NE555 实测):
+   scaffold(REST+extapi) → place(7 件) → wire(逃逸+横轨,6 网) →
+   importChanges(自动确认) → 画板框矩形(GUI) → **save+reload** →
+   prepare_pcb_nets → **autoroute_gui()** → drc_check → export_all
+   (Gerber/BOM/PnP)。这是首块从 0 到送厂文件、**全自动布线**的真实多器件板。

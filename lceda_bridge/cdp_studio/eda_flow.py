@@ -240,6 +240,52 @@ class Flow:
     def pcb_via(self, net, x, y):
         return self.eda.call("pcb_PrimitiveVia.create", net, x, y, timeout=20)
 
+    # --- 原生自动布线(GUI:Route → Auto Routing → Run) ---
+    def autoroute_gui(self, wait=12):
+        """用编辑器**原生自动布线**把飞线全部变实铜(2层:顶红/底蓝 + 过孔)。
+
+        实战发现(本会话攻克的边界,已硬验证):
+          ① extapi 没有可用的自动布线/DSN 导出:getDsnFile/getAutoRouteJsonFile 返回 undefined
+             (RPC 响应无 blobData)→ 自动布线**只能走 GUI**,这是唯一可达的布线器。
+          ② 自动布线强制要求**真实板框**:板框是 layer11 的**闭合 Polyline**
+             (结构 {"polygon":{"polygon":["R",x,y,w,h,0,0]}}, lineWidth=10),
+             由 Place→Board Outline→Rectangle 画出。光用 pcb_PrimitiveLine 在 layer11
+             画 4 条边**不被认可**(虽然能进 Gerber GKO),自动布线会报
+             "Please draw a board outline first!"。
+          ③ 新建板框后必须 save + **整页 reload**,引擎才把它识别为闭合板框
+             (否则 zoomToBoardOutline/自动布线仍报 not closed)。
+        前置:已有板框 + prepare_pcb_nets 使 ratline active。返回 {tracks, vias}。
+        """
+        # 自动布线对话框 Run 按钮在视口底部,先把视口拉高确保可点
+        try:
+            self.ws.cmd("Emulation.setDeviceMetricsOverride",
+                        {"width": 1284, "height": 880, "deviceScaleFactor": 1, "mobile": False}, timeout=8)
+            time.sleep(1)
+        except Exception:
+            pass
+        ui_click_text(self.ws, ["Route", "Route (U)", "布线"], settle=1.2)
+        ui_click_text(self.ws, ["Auto Routing...", "Auto Routing", "自动布线...", "自动布线"], settle=1.5)
+        js = ("(()=>{var b=[].slice.call(document.querySelectorAll('button'))"
+              ".filter(function(b){var t=b.textContent.trim();return t==='Run'||t==='\u8fd0\u884c';});"
+              "if(!b.length)return 'null';var r=b[0].getBoundingClientRect();"
+              "return JSON.stringify({x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)})})()")
+        v, e = d.evaluate(self.ws, js)
+        if not v or v == "null":
+            raise FlowError("autoroute_gui: 未找到 Run 按钮(对话框未打开?)")
+        o = json.loads(v)
+        for ev in ("mouseMoved", "mousePressed", "mouseReleased"):
+            self.ws.cmd("Input.dispatchMouseEvent",
+                        {"type": ev, "x": o["x"], "y": o["y"], "button": "left",
+                         "clickCount": 0 if ev == "mouseMoved" else 1}, timeout=5)
+        time.sleep(wait)
+        tracks = len(self.eda.call("pcb_PrimitiveLine.getAllPrimitiveId", timeout=15) or [])
+        vias = len(self.eda.call("pcb_PrimitiveVia.getAllPrimitiveId", timeout=15) or [])
+        return {"tracks": tracks, "vias": vias}
+
+    def has_board_outline(self):
+        """板框 = layer11 闭合 Polyline。返回是否存在板框 Polyline。"""
+        return bool(self.eda.call("pcb_PrimitivePolyline.getAllPrimitiveId", timeout=12) or [])
+
     # --- 原理图 → PCB 同步(importChanges + 自动确认) ---
     def update_pcb_from_schematic(self, pcb_uuid, timeout=40):
         self.eda.call("pcb_Document.importChanges", pcb_uuid, timeout=timeout)

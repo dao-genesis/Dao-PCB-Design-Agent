@@ -202,6 +202,40 @@ def sync_verify():
     return names
 
 
+def route_export():
+    """布线闭环:确认板框 → reload → 自动布线(GUI) → DRC → 导出制造包。
+
+    前置:已有板框(Place→Board Outline→Rectangle 画的闭合 Polyline)。本会话发现:
+    extapi 无法程序化创建该 Polyline(签名未试出)且无可用 DSN 导出,自动布线只能走
+    GUI;新建板框后必须整页 reload 引擎才认。详见 PHASE4_FINDINGS 第十章。"""
+    f = eda_flow.Flow()
+    f.open_project(_docs()["project"])
+    f.open_document(_docs()["pcb"])
+    time.sleep(2)
+    if not f.has_board_outline():
+        print("!! 没有板框 Polyline — 请先在编辑器 Place→Board Outline→Rectangle 画一个再跑")
+        return None
+    # 整页 reload 让布线引擎识别板框
+    f.ws.cmd("Page.reload", {}, timeout=10)
+    time.sleep(8)
+    f.open_project(_docs()["project"])
+    f.open_document(_docs()["pcb"])
+    time.sleep(3)
+    f.prepare_pcb_nets()
+    time.sleep(2)
+    res = f.autoroute_gui(wait=12)
+    print("autoroute:", res)
+    try:
+        print("drc:", f.drc_check(timeout=90))
+    except Exception as e:
+        print("drc warn:", str(e)[:60])
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ne555_fab")
+    exp = f.export_all(out, base="NE555_Blinker")
+    print("export:", json.dumps(exp, ensure_ascii=False)[:300])
+    return {"route": res, "export": exp}
+
+
 if __name__ == "__main__":
     stage = sys.argv[1] if len(sys.argv) > 1 else "scaffold"
-    print({"scaffold": scaffold, "reset": reset, "place": place, "wire": wire, "sync": sync_verify}[stage]())
+    print({"scaffold": scaffold, "reset": reset, "place": place, "wire": wire,
+           "sync": sync_verify, "route": route_export}[stage]())
