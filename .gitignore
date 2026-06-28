@@ -13,6 +13,8 @@ logs/
 pcb_brain/output/
 pcb_brain/jre/
 pcb_brain/freerouting.jar
+dao_kicad/out/
+dao_kicad/**/out/
 
 # Session/screencast (regenerable)
 _live_session/

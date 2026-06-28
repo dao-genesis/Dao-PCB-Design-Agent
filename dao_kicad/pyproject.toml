@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daokicad"
+version = "0.1.0"
+description = "Dao-KiCad — a Cursor for KiCad: an in-KiCad agent that drives the board you have open via KiCad's official IPC API (sense -> edit -> route -> verify -> fabricate)."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Dao-PCB" }]
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+ipc = ["kicad-python"]
+
+[project.scripts]
+daokicad = "daokicad.cli:main"
+
+[tool.setuptools]
+packages = ["daokicad", "daokicad.fusion", "daokicad.kicad_plugin"]
+
+[tool.setuptools.package-data]
+daokicad = ["_pcbworker.py"]
