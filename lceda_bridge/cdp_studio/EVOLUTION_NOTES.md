@@ -108,18 +108,27 @@ scaffold(建工程/原理图/PCB) → open sch → place(放件) → save
   或给 sch 侧那条内部 rpc 加 fire-and-forget+轮询。
 - 重型调用(网表/导入)需放大 CDP 传输超时(`call(..., timeout=40~120)`)。
 
-### setNetlist 往返实测(本轮初验)
-- **`pcb_Net.setNetlist(...)` 可调用且返回 `True`** → **确定性写入网表的通路确实存在**(反向建网可行)。
-- 但回读未见写入的测试网名(TESTNET),根因是**回读的网表是多层 JSON 嵌套编码**:
-  顶层 str→dict;`components` 是**以器件 id 为键的 dict**(不是 list);其 value、乃至
-  `attributes` / `pinInfoMap` 字段可能各自再被 JSON 字符串化(同一方法不同次调用返回的
-  序列化深度还不一致,疑与 returnByValue + 编辑器退化有关)。
-- ⇒ 下一步要点:**逐字段递归反序列化**还原出干净结构 → 精确按 schema 改 `pinInfoMap[n].net` →
-  `setNetlist` 回灌 → 再回读校验。最好在**新开、未退化的编辑器实例**上做(本轮实例已退化)。
+### setNetlist 往返实测(本轮·已查清真实 schema 与语义)
+- `pcb_Net.getNetlist('JLCEDA')` **原生返回一个 JSON 字符串**(非对象);`JSON.parse` 后:
+  ```
+  { version, components:{ "<UniqueID>": { props:{...BOM/封装...}, pinInfoMap:{ "<pin>":{name,number,net} } }, ... },
+    designRule, netClass, equalLengthNetGroup, differentialPair }
+  ```
+  注意:器件容器是**以 Unique ID 为键的对象**;器件字段是 **`props`(不是 `attributes`)** + `pinInfoMap`。
+  (此前 Python 侧 Designator=None 即因错读 `attributes`;且 CDP returnByValue 偶发多层字符串化,
+  **正解:整段 get→改→set 在浏览器内 evaluate 完成,native 对象不过 CDP 序列化**。)
+- **关键语义发现**:在浏览器内把两个器件 `pinInfoMap[1].net` 同赋 `DAO_TESTNET` →
+  `pcb_Net.setNetlist('JLCEDA', JSON.stringify(nl))` **返回 `true`**,但回读网表**查无该网名**。
+  ⇒ 推断 `pcb_Net.setNetlist` 设的是**参考/期望网表(供 DRC 与 `netlistComparison` 比对)**,
+  **并非 PCB 实际铜层网络拓扑**;实际网络拓扑来自**原理图**经 importChanges 下传。
+- ⇒ **确定性建网的真正入口是 `sch_Netlist.setNetlist`(构建原理图)+ `sch_Document.importChanges`**;
+  pcb 侧 set 仅用于"灌入参考网表做反向比对"——这恰好是**逆向工程比对**的利器(用成品网表当参考)。
 
 ### 反向路线下一步(可执行顺序)
-1. **打通 `setNetlist` 往返的 schema 精度**(见上):干净反序列化 + 精确写网 + 回读校验。
-   打通即得**确定性建网骨干**,正向放件瓶颈作废。
+1. **走 `sch_Netlist.setNetlist` + `importChanges` 做确定性建网**(见上语义结论):
+   先在新开编辑器内取一份 sch 网表样本(给 sch 的 getNetlist 内部封装查询加 fire-and-forget
+   绕过 hang),摸清 sch 网表 schema → 程序化构造器件+网络 → setNetlist 落到原理图 →
+   importChanges 下传 PCB → 回读校验。打通即得**确定性建网骨干**,正向鼠标放件瓶颈作废。
 2. 取一块真实开源硬件板(公开 Gerber/网表/BOM)→ `importProjectByProjectFile` 或
    网表导入 → 还原可编辑设计。
 3. **FreeRouting 闭环**:导出 Specctra DSN → FreeRouting 跑线 → `importAutoRouteSesFile` 回灌。
