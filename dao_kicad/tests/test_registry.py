@@ -212,3 +212,49 @@ def test_render_adapter_invokes_kicad_cli_and_reports_png(tmp_path, monkeypatch)
     assert seen["cmd"][1:3] == ["pcb", "render"]
     assert "bottom" in seen["cmd"]                      # side override passed through
     assert Path(out["png"]).name == "b_bottom.png"      # <board>_<side>.png in a dir
+
+
+def test_netlist_adapter_exports_via_kicad_cli(tmp_path, monkeypatch):
+    """The netlist backend must drive 'kicad-cli sch export netlist' and report
+    the .net it produced — mocked LiveKiCad, no KiCad needed."""
+    from daokicad import adapters as A
+    from daokicad import live as _live
+
+    sch = tmp_path / "x.kicad_sch"
+    sch.write_text("(kicad_sch)")
+    net = tmp_path / "x.net"
+    seen = {}
+
+    class FakeCLI:
+        ok = True
+        stderr = ""
+
+    class FakeLive:
+        def cli(self, *args):
+            seen["args"] = args
+            Path(args[args.index("-o") + 1]).write_text("(export)")
+            return FakeCLI()
+    monkeypatch.setattr(_live, "LiveKiCad", FakeLive)
+
+    out = A._netlist_export(sch, net)
+    assert out["ok"] and Path(out["netlist"]) == net and net.is_file()
+    assert seen["args"][:3] == ("sch", "export", "netlist")
+
+
+def test_drc_adapter_delegates_to_live_drc(tmp_path, monkeypatch):
+    """The drc backend must return LiveKiCad.drc's clean/violation dict verbatim
+    so the brain can score any board uniformly — mocked, no KiCad needed."""
+    from daokicad import adapters as A
+    from daokicad import live as _live
+
+    pcb = tmp_path / "b.kicad_pcb"
+    pcb.write_text("(kicad_pcb)")
+
+    class FakeLive:
+        def drc(self, p, report=None, **kw):
+            return {"ok": True, "violations": 0, "warnings": 1,
+                    "unconnected": 0, "clean": True}
+    monkeypatch.setattr(_live, "LiveKiCad", FakeLive)
+
+    out = A._drc_run(pcb)
+    assert out["clean"] is True and out["violations"] == 0

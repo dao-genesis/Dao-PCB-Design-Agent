@@ -75,7 +75,9 @@ API key），16/21 个后端在本机点亮。**六条**继承链已端到端贯
   （含边框 + 鼠咬桥），可直接送厂；
 - `registry().run("fabricate", board, dir, prefer="kibot")` → KiBot 出 24 张 gerber
   + drill + 贴装坐标 CSV（CI 级、板级即可、无需原理图）；
-- `registry().run("render", board, dir, side="top")` → kicad-cli 光追 3D 出 PNG。
+- `registry().run("render", board, dir, side="top")` → kicad-cli 光追 3D 出 PNG；
+- `registry().run("netlist", sch, net)` / `registry().run("drc", pcb)` → builtin 阶段
+  亦收口到能力层，大脑可对任意板统一导网表/打 DRC（clean=0 错+0 未连）。
 
 ## place 域：合法化 2D floorplan（opt-in 竞选后端）
 

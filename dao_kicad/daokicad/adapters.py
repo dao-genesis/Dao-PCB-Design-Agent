@@ -218,6 +218,36 @@ def _render(pcb, out=None, *, side="top", width=1600, height=1000,
             "reason": "" if ok else (cp.stderr or cp.stdout)[-300:]}
 
 
+def _netlist_export(schematic, netlist=None, **kw) -> dict:
+    """Export a schematic's netlist via kicad-cli (builtin engine).
+
+    Mirrors what ``build_from_schematic`` does internally so the brain can ask
+    for the ``netlist`` capability directly. Project-local footprint libs
+    resolve against the schematic's own directory.
+    """
+    from .live import LiveKiCad
+    sch = Path(schematic)
+    if not sch.is_file():
+        return {"ok": False, "reason": f"schematic not found: {sch}"}
+    net = Path(netlist) if netlist else sch.with_suffix(".net")
+    net.parent.mkdir(parents=True, exist_ok=True)
+    cli = LiveKiCad().cli("sch", "export", "netlist", "--format", "kicadsexpr",
+                          "-o", str(net), str(sch))
+    ok = cli.ok and net.is_file() and net.stat().st_size > 0
+    return {"ok": ok, "netlist": str(net) if ok else None,
+            "reason": "" if ok else (cli.stderr or "kicad-cli export failed")}
+
+
+def _drc_run(pcb, report=None, **kw) -> dict:
+    """Run DRC + connectivity on a board via kicad-cli (builtin engine).
+
+    Returns the same dict the engine's own DRC gate uses (clean iff zero
+    errors and zero unconnected), so the brain can score any board uniformly.
+    """
+    from .live import LiveKiCad
+    return LiveKiCad().drc(pcb, report=report, **kw)
+
+
 def default_registry() -> Registry:
     """Build the registry of every capability backend this project knows about.
 
@@ -259,7 +289,8 @@ def default_registry() -> Registry:
         "kicad-cli", "netlist",
         "Export netlist from a schematic via kicad-cli (builtin engine).",
         "GPL-3.0", "kicad-cli", Probe("func", func=_kicad_ready,
-                                      label="kicad-cli present"), priority=60))
+                                      label="kicad-cli present"), priority=60,
+        invoke=_netlist_export))
 
     # ---- place ----
     reg.register(Backend(
@@ -298,7 +329,8 @@ def default_registry() -> Registry:
         "kicad-drc", "drc",
         "DRC + connectivity via kicad-cli / pcbnew (builtin engine).",
         "GPL-3.0", "kicad-cli", Probe("func", func=_kicad_ready,
-                                      label="kicad-cli present"), priority=60))
+                                      label="kicad-cli present"), priority=60,
+        invoke=_drc_run))
 
     # ---- fabricate ----
     reg.register(Backend(
