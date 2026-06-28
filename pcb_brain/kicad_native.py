@@ -30,20 +30,37 @@ log = logging.getLogger("kicad_native")
 # KiCad 9.0 环境常量 (自动搜索安装路径)
 # ─────────────────────────────────────────────────────────────
 def _find_kicad_root() -> Path:
-    """搜索KiCad安装目录，兼容多机器部署"""
-    candidates = [
+    """搜索KiCad安装目录，兼容多机器部署。
+
+    万法归宗: 优先复用 _pcb_bootstrap.detect_env() 探到的 kicad-cli (glob 任意版本),
+    由 …\\<ver>\\bin\\kicad-cli.exe 反推 root; 再退回 glob/硬编码候选。
+    """
+    # ① bootstrap 探测的 CLI 反推 (单一事实来源)
+    try:
+        from _pcb_bootstrap import detect_env
+        cli = detect_env().get("kicad_cli")
+        if cli:
+            binp = Path(cli).parent
+            if binp.name.lower() == "bin":
+                return binp.parent
+    except Exception:
+        pass
+    # ② 环境变量
+    env_root = os.environ.get("KICAD_ROOT")
+    candidates: list = [Path(env_root)] if env_root else []
+    # ③ glob 任意已装版本 (高版本优先), 再加硬编码兜底
+    for base in ("C:/Program Files/KiCad", "C:/Program Files (x86)/KiCad"):
+        candidates += [Path(p) for p in sorted(glob.glob(base + "/*/bin"), reverse=True)]
+    candidates += [
         Path("D:/KICAD"),
         Path("C:/Program Files/KiCad/9.0"),
         Path("C:/Program Files/KiCad/8.0"),
-        Path("C:/Program Files/KiCad"),
     ]
-    # 环境变量优先
-    env_root = os.environ.get("KICAD_ROOT")
-    if env_root:
-        candidates.insert(0, Path(env_root))
     for p in candidates:
-        if (p / "bin").exists():
-            return p
+        # glob 命中的是 …/bin, 其余是 root
+        root = p.parent if p.name.lower() == "bin" else p
+        if (root / "bin").exists():
+            return root
     return Path("D:/KICAD")  # 默认回退
 
 KICAD_ROOT      = _find_kicad_root()
@@ -66,12 +83,14 @@ IU_PER_MM = 1_000_000   # KiCad内部单位: 1mm = 1,000,000 IU
 # 桥接脚本头 (每次执行时注入到子进程, 使用动态KICAD_ROOT)
 def _make_bridge_header() -> str:
     _bin = str(KICAD_BIN).replace("\\", "/")
+    _fp = str(KICAD_FP_DIR).replace("\\", "/")
     return f"""\
 import os, sys, json, traceback
 os.add_dll_directory('{_bin}')
 sys.path.insert(0, '{_bin}/Lib/site-packages')
 import pcbnew
 
+KICAD_FP_DIR = r'{_fp}'  # 动态封装库根目录 (随已装版本变化)
 def from_mm(mm): return int(mm * 1_000_000)
 def to_mm(iu):   return iu / 1_000_000
 """
@@ -252,8 +271,8 @@ b = pcbnew.LoadBoard(path)
 
 fp = None
 # 尝试多种路径格式加载封装
-for lib_try in [fp_lib, f'D:/KICAD/share/kicad/footprints/{fp_lib}.pretty',
-                f'D:/KICAD/share/kicad/footprints/{fp_lib}']:
+for lib_try in [fp_lib, KICAD_FP_DIR + f'/{fp_lib}.pretty',
+                KICAD_FP_DIR + f'/{fp_lib}']:
     try:
         fp = pcbnew.FootprintLoad(lib_try, fp_name)
         if fp: break

@@ -64,7 +64,29 @@ _DEFAULT_OUT = _HERE / "output"
 # ─────────────────────────────────────────────────────────────
 
 def _check_environment() -> Dict[str, Any]:
-    """检查所有工具链状态"""
+    """检查所有工具链状态。
+
+    万法归宗: 统一委托给 _pcb_bootstrap.detect_env() (glob 自动发现任意 KiCad 版本),
+    避免各模块各写一份探测逻辑而产生版本漂移。bootstrap 不可用时退回本地探测。
+    """
+    try:
+        from _pcb_bootstrap import detect_env
+        e = detect_env()
+        return {
+            "kicad_cli": bool(e.get("kicad_cli")),
+            "kicad_cli_path": e.get("kicad_cli") or "",
+            "kicad_version": e.get("kicad_version", ""),
+            "freerouting": bool(e.get("freerouting")),
+            "freerouting_path": e.get("freerouting") or "",
+            "java": bool(e.get("java")),
+            "java_path": e.get("java") or "",
+            "kicad_pcbnew": bool(e.get("pcbnew_api")),
+            "python_ok": True,
+        }
+    except Exception:
+        pass
+
+    # ── 退回: 本地探测 (bootstrap 不可用时) ──
     env = {
         "kicad_cli": False, "kicad_cli_path": "",
         "freerouting": False, "freerouting_path": "",
@@ -72,15 +94,18 @@ def _check_environment() -> Dict[str, Any]:
         "kicad_pcbnew": False,
         "python_ok": True,
     }
-    cli_candidates = [
+    import glob as _glob
+    cli_candidates = sorted(
+        _glob.glob(r"C:\Program Files\KiCad\*\bin\kicad-cli.exe"), reverse=True
+    ) + [
         r"D:\KICAD\bin\kicad-cli.exe",
-        r"C:\Program Files\KiCad\8.0\bin\kicad-cli.exe",
         r"C:\Program Files\KiCad\9.0\bin\kicad-cli.exe",
+        r"C:\Program Files\KiCad\8.0\bin\kicad-cli.exe",
         "kicad-cli",
     ]
     for c in cli_candidates:
         try:
-            r = subprocess.run([c, "--version"], capture_output=True, timeout=5)
+            r = subprocess.run([c, "version"], capture_output=True, timeout=5)
             if r.returncode == 0:
                 env["kicad_cli"] = True
                 env["kicad_cli_path"] = c
@@ -322,7 +347,7 @@ class PCBPipeline:
         # ── Stage 5: iBoM + JLCPCB (并行) ────────────────────
         print("\n[万物] Stage 5/6 — iBoM + JLCPCB报告 (并行)")
         ibom_result, jlcpcb_result = self._stage(
-            "iBoM+JLCPCB", self._stage_ibom_and_jlcpcb, dna
+            "iBoM+JLCPCB", self._stage_ibom_and_jlcpcb, dna, pcb_path
         ) or (None, None)
 
         # ── Stage 6: 总结 ─────────────────────────────────────
@@ -355,14 +380,69 @@ class PCBPipeline:
             if not ok:
                 raise RuntimeError("create_pcb_from_dna 返回 False")
             print(f"   → {pcb_path}")
-            # 自动布线 (优先本地freerouting→Cloud→BFS)
-            route = arm.auto_route(pcb_path)
-            print(f"   → 布线引擎={route.get('engine','?')} 已路由={route.get('routed',0)}")
-            return pcb_path
         except Exception as e:
+            # 板生成本身失败才退化占位符
             log.warning(f"PCB生成失败: {e}，返回虚拟路径")
             Path(pcb_path).write_text("# PCB placeholder", encoding="utf-8")
             return pcb_path
+        # 布线独立 try: 布线失败/超时不得覆盖已生成的真实板,
+        # 否则下游 DRC/Gerber 会 "Failed to load board"。
+        try:
+            route = arm.auto_route(pcb_path)
+            print(f"   → 布线引擎={route.get('engine','?')} 已路由={route.get('routed',0)}")
+            # 知其雄守其雌·反者道之动: 先以最简双层试布; 双层布不通(拥塞留下未布线网络)
+            # 才按真实拥塞自动升级 4 层(多 In1/In2 内层信号), 而非按焊盘数硬阈值预判。
+            # 19 块双层即可 unconn=0 的板永不触发此路径(零回归); 仅密板真正需要时升级。
+            if route.get("unrouted", 0) > 0:
+                self._escalate_to_4layer(arm, dna, pcb_path, route)
+        except Exception as e:
+            log.warning(f"自动布线失败(保留未布线板继续生产): {e}")
+        return pcb_path
+
+    def _escalate_to_4layer(self, arm, dna: DNA, pcb_path: str,
+                            base_route: Dict) -> None:
+        """双层拥塞留下未布线网络时升级 4 层重布, 仅保留确有改善的结果。"""
+        base_unrouted = base_route.get("unrouted", 0)
+        print(f"   → 双层剩余未布线={base_unrouted}, 升级4层叠层重布...")
+        p = Path(pcb_path)
+        cand = str(p.with_name(p.stem + "_l4" + p.suffix))
+        # freerouting 含随机优化, 4 层布线偶有 1 条收敛不到位; 多试几轮取最优,
+        # 命中 unrouted=0 即止(实测密板 4 层可稳定全布通)。
+        # 因连接生形·反者道之动: 密板拥塞要靠"更多 pass"让 freerouting 解开最后几条死结,
+        # 而非更少(默认 pad 缩放对 >100 焊盘反而压到 60 pass → 收敛不到位留 1 条未布线)。
+        # 实测 esp32s3_rs485_can(159 焊盘) 4 层 + max_passes=150 稳定 124 线全布通 drc=0。
+        # freerouting 分数收敛即自停, 故高 pass 上限只对难板争完成度, 易板零额外开销; timeout 兜底防卡死。
+        best_u4: Optional[int] = None
+        try:
+            for attempt in range(1, 4):
+                if not arm.create_pcb_from_dna(dna, cand, num_layers=4):
+                    log.warning("4层板生成失败, 保留双层结果")
+                    return
+                r4 = arm.auto_route(cand, max_passes=150, timeout=600)
+                u4 = r4.get("unrouted", 0)
+                print(f"   → 4层布线第{attempt}轮: 引擎={r4.get('engine','?')} "
+                      f"已路由={r4.get('routed',0)} 剩余未布线={u4}")
+                if best_u4 is None or u4 < best_u4:
+                    best_u4 = u4
+                    if u4 < base_unrouted:
+                        Path(cand).replace(pcb_path + ".bestl4")
+                if u4 == 0:
+                    break
+            best = pcb_path + ".bestl4"
+            if best_u4 is not None and best_u4 < base_unrouted and Path(best).exists():
+                Path(best).replace(pcb_path)
+                print(f"   → 4层更优({base_unrouted}→{best_u4}), 采用4层板")
+            else:
+                Path(best).unlink(missing_ok=True)
+                print(f"   → 4层无改善, 保留双层板(宁缺毋假)")
+            Path(cand).unlink(missing_ok=True)
+        except Exception as e:
+            log.warning(f"4层升级异常(保留双层板继续): {e}")
+            for f in (cand, pcb_path + ".bestl4"):
+                try:
+                    Path(f).unlink(missing_ok=True)
+                except Exception:
+                    pass
 
     def _stage_drc(self, pcb_path: Optional[str]) -> Dict:
         if not pcb_path or not Path(pcb_path).exists():
@@ -396,7 +476,13 @@ class PCBPipeline:
         try:
             arm.export_gerbers(pcb_path, gerber_dir)
             arm.export_drill(pcb_path, gerber_dir)
-            gerbers = list(Path(gerber_dir).glob("*.gbr")) + list(Path(gerber_dir).glob("*.drl"))
+            # KiCad 导出 Protel 扩展名 (.gtl/.gbl/.gts/.gto/.gm1…) 而非统一 .gbr,
+            # 旧 glob 只数 *.gbr+*.drl 漏算; 改为统计全部 Gerber/钻孔扩展名。
+            GERBER_EXT = {".gbr", ".gtl", ".gbl", ".gts", ".gbs", ".gto", ".gbo",
+                          ".gtp", ".gbp", ".gm1", ".gko", ".drl", ".g2", ".g3",
+                          ".gbrjob"}
+            gerbers = [p for p in Path(gerber_dir).iterdir()
+                       if p.suffix.lower() in GERBER_EXT]
             print(f"   → Gerber: {len(gerbers)}文件 → {gerber_dir}")
             return {"status": "ok", "gerber_dir": gerber_dir, "file_count": len(gerbers)}
         except Exception as e:
@@ -404,7 +490,7 @@ class PCBPipeline:
             print(f"   → Gerber导出失败({e})，已生成模拟文件")
             return {"status": "mock", "gerber_dir": gerber_dir}
 
-    def _stage_ibom_and_jlcpcb(self, dna: DNA):
+    def _stage_ibom_and_jlcpcb(self, dna: DNA, pcb_path: Optional[str] = None):
         """并行生成iBoM和JLCPCB报告"""
         ibom_r = None
         jlcpcb_r = None
@@ -420,14 +506,22 @@ class PCBPipeline:
                 cost = jlc.cost_report(dna.name)
                 bom_csv = str(self.output_dir / f"{dna.name}_bom.csv")
                 cpl_csv = str(self.output_dir / f"{dna.name}_cpl.csv")
-                cpl = jlc.generate_cpl(dna.name)
+                # CPL 优先取真实板坐标(与 Gerber 同源), 失败降级 DNA 标称
+                cpl = jlc.generate_cpl_from_board(pcb_path) if pcb_path else None
+                cpl_source = "board" if cpl else "dna"
+                if cpl is None:
+                    cpl = jlc.generate_cpl(dna.name)
                 jlc.export_bom_csv(bom, bom_csv)
                 jlc.export_cpl_csv(cpl, cpl_csv)
+                # 诚实校验可制造性(宁缺毋假)
+                validation = jlc.validate_bom(dna.name)
                 return {
                     "status": "ok",
                     "bom_csv": bom_csv,
                     "cpl_csv": cpl_csv,
+                    "cpl_source": cpl_source,
                     "cost": cost,
+                    "validation": validation,
                     "order_url": jlc.order_url(dna.name),
                 }
             except Exception as e:
@@ -443,7 +537,16 @@ class PCBPipeline:
             print(f"   → iBoM: {ibom_r['html_path']}")
         if jlcpcb_r and jlcpcb_r.get("status") == "ok":
             cost = jlcpcb_r.get("cost", {})
+            src = jlcpcb_r.get("cpl_source", "dna")
             print(f"   → BOM.csv: {jlcpcb_r['bom_csv']}")
+            print(f"   → CPL坐标源: {'真实板(与Gerber同源)' if src == 'board' else 'DNA标称(无真实板降级)'}")
+            val = jlcpcb_r.get("validation", {})
+            if val:
+                if val.get("assemblable"):
+                    print(f"   → 可制造性: {val['matched']}/{val['total']} 器件均有LCSC料号, 可直接SMT贴片")
+                else:
+                    miss = ", ".join(f"{u['ref']}({u['value']})" for u in val.get("unmatched", [])[:6])
+                    print(f"   → 可制造性: {val['matched']}/{val['total']} 匹配, 待补料号: {miss}")
             if cost:
                 q = cost.get("qty", 5)
                 total = cost.get("total", "?")
