@@ -108,9 +108,18 @@ scaffold(建工程/原理图/PCB) → open sch → place(放件) → save
   或给 sch 侧那条内部 rpc 加 fire-and-forget+轮询。
 - 重型调用(网表/导入)需放大 CDP 传输超时(`call(..., timeout=40~120)`)。
 
+### setNetlist 往返实测(本轮初验)
+- **`pcb_Net.setNetlist(...)` 可调用且返回 `True`** → **确定性写入网表的通路确实存在**(反向建网可行)。
+- 但回读未见写入的测试网名(TESTNET),根因是**回读的网表是多层 JSON 嵌套编码**:
+  顶层 str→dict;`components` 是**以器件 id 为键的 dict**(不是 list);其 value、乃至
+  `attributes` / `pinInfoMap` 字段可能各自再被 JSON 字符串化(同一方法不同次调用返回的
+  序列化深度还不一致,疑与 returnByValue + 编辑器退化有关)。
+- ⇒ 下一步要点:**逐字段递归反序列化**还原出干净结构 → 精确按 schema 改 `pinInfoMap[n].net` →
+  `setNetlist` 回灌 → 再回读校验。最好在**新开、未退化的编辑器实例**上做(本轮实例已退化)。
+
 ### 反向路线下一步(可执行顺序)
-1. **验证 `setNetlist` 往返**:`pcb_Net.getNetlist` → 程序化补网(给 pinInfoMap 填 net)→
-   `setNetlist` 回灌 → 校验器件+网络落盘。打通即得**确定性建网骨干**,正向放件瓶颈作废。
+1. **打通 `setNetlist` 往返的 schema 精度**(见上):干净反序列化 + 精确写网 + 回读校验。
+   打通即得**确定性建网骨干**,正向放件瓶颈作废。
 2. 取一块真实开源硬件板(公开 Gerber/网表/BOM)→ `importProjectByProjectFile` 或
    网表导入 → 还原可编辑设计。
 3. **FreeRouting 闭环**:导出 Specctra DSN → FreeRouting 跑线 → `importAutoRouteSesFile` 回灌。
