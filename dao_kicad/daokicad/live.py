@@ -95,11 +95,14 @@ class LiveKiCad:
         A fixed 300s cap silently abandons large industrial boards: rebuilding
         vme-wren (1508 footprints / 6828 pads / 12 layers) needs to load and
         save a 68 MB board and overruns 300s. Give big boards proportionally
-        more time (footprints + connections both drive the cost), clamped to a
-        sane ceiling so a genuinely stuck worker still fails."""
+        more time (footprints, connections AND reconstructed routing all drive
+        the cost), clamped to a sane ceiling so a genuinely stuck worker still
+        fails."""
         fps = len(spec.get("footprints") or [])
         conns = len(spec.get("connections") or [])
-        return max(300, min(3600, fps + conns // 5))
+        # reconstructed routing: each track/via is another board item to add.
+        routing = len(spec.get("tracks") or []) + len(spec.get("vias") or [])
+        return max(300, min(5400, fps + conns // 5 + routing // 20))
 
     def build_board(self, spec: dict, out_path: str | Path,
                     *, timeout: Optional[int] = None) -> dict:
