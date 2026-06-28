@@ -319,6 +319,37 @@ def test_reverse_reconstructs_routing_on_inner_layers(tmp_path):
 
 
 @needs_script
+def test_reroute_eval_grades_against_human(tmp_path, monkeypatch):
+    """reroute_eval strips a board's copper, re-routes with our engine and grades
+    the result vs the human-routed original. The autorouter (Java) is stubbed so
+    the test exercises the orchestration: build unrouted -> route -> DRC both ->
+    compare cleanliness."""
+    from daokicad import live as _live
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("voltage_divider")
+    pcb = tmp_path / "product.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+
+    def _fake_autoroute(self, src, out, **kw):       # no freerouting/Java
+        import shutil
+        shutil.copy(src, out)
+        return {"ok": True, "stage": "import_ses", "tracks": 7, "path": str(out)}
+
+    monkeypatch.setattr(_live.LiveKiCad, "autoroute", _fake_autoroute)
+    monkeypatch.setattr(_live.LiveKiCad, "drc",
+                        lambda self, p, *a, **k: {"clean": True, "violations": 0,
+                                                  "unconnected": 0, "ok": True})
+
+    r = reverse.reroute_eval(pcb, tmp_path / "rerouted.kicad_pcb")
+    assert r["ok"], r
+    assert r["nets"] >= 1
+    assert r["our_drc"]["clean"] and r["human_drc"]["clean"]
+    assert r["matches_human_cleanliness"] is True
+
+
+@needs_script
 def test_reverse_harvest_writes_kicad_mods(tmp_path):
     """harvest_footprints must recover a .kicad_mod for every unique footprint
     straight from the board, independent of any installed library."""

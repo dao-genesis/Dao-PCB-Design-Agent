@@ -188,19 +188,12 @@ def harvest_footprints(pcb_path: str | Path,
     return mapping
 
 
-def roundtrip(pcb_path: str | Path, out_path: str | Path,
-              harvest: bool = True, route: bool = True) -> dict[str, Any]:
-    """Recover a finished board's source, rebuild from it, and diff.
+def _recover_buildable_spec(pcb_path, out_path, harvest):
+    """Shared front half of every reverse rebuild: extract → re-point parts at a
+    harvested library (or the project's) → heal → check for unbuildable parts.
 
-    extract → feed the recovered spec back through the build engine → re-extract
-    the rebuild → compare connectivity. Any divergence is a defect in our own
-    extract/rebuild chain. Footprints resolve against the original project's
-    fp-lib-table so real (non-standard-library) parts build.
-
-    When ``route`` is set the recovered track/via geometry is folded into the
-    rebuild spec, so the rebuilt board reconstructs the original's *routing*
-    (not just its connectivity + placement); the diff then also reports how
-    faithfully tracks/vias were reproduced.
+    Returns ``(src, spec, lib_dirs, live, subs, blocked)``; ``blocked`` is a
+    ready-to-return error dict when footprints can't be resolved, else ``None``.
     """
     from . import fplib as _fplib
     from .live import LiveKiCad
@@ -209,9 +202,6 @@ def roundtrip(pcb_path: str | Path, out_path: str | Path,
     spec = dict(src["spec"])
     spec["footprints"] = [dict(f) for f in spec["footprints"]]
     spec["layers"] = src["stackup"]["copper_layers"]
-    if route:
-        spec["tracks"] = src["routing_geometry"]["tracks"]
-        spec["vias"] = src["routing_geometry"]["vias"]
 
     if harvest:
         # recover the part library from the product itself, then re-point every
@@ -231,10 +221,80 @@ def roundtrip(pcb_path: str | Path, out_path: str | Path,
     live = LiveKiCad()
     subs = live.heal_footprints(spec["footprints"], lib_dirs)
     missing = live.missing_footprints(spec["footprints"], lib_dirs)
+    blocked = None
     if missing:
-        return {"ok": False, "reason": "rebuild blocked: footprints not in libs",
-                "missing": missing[:20], "missing_count": len(missing),
+        blocked = {"ok": False, "reason": "rebuild blocked: footprints not in libs",
+                   "missing": missing[:20], "missing_count": len(missing),
+                   "original_counts": src["counts"]}
+    return src, spec, lib_dirs, live, subs, blocked
+
+
+def reroute_eval(pcb_path: str | Path, out_path: str | Path,
+                 harvest: bool = True) -> dict[str, Any]:
+    """Strip a finished board's copper, re-route it with our own engine, and
+    grade the result against the human-routed original (反者道之动).
+
+    Recover netlist + placement (no tracks) → build an *unrouted* board → run
+    our autorouter (freerouting) → DRC. Comparing the re-routed board's DRC
+    cleanliness and track/via counts against the original measures whether our
+    engine reproduces human-grade routing — and exposes where it falls short.
+    """
+    src, spec, lib_dirs, live, subs, blocked = _recover_buildable_spec(
+        pcb_path, out_path, harvest)
+    if blocked:
+        return blocked
+
+    out_path = Path(out_path)
+    unrouted = out_path.with_name(out_path.stem + "_unrouted.kicad_pcb")
+    build = live.build_board(spec, unrouted)
+    if not build.get("ok"):
+        return {"ok": False, "reason": "rebuild failed", "build": build,
                 "original_counts": src["counts"]}
+
+    nets = src["counts"]["nets"]
+    routed = live.autoroute(unrouted, out_path,
+                            timeout=live.route_timeout_for(nets))
+    if not routed.get("ok"):
+        return {"ok": False, "reason": "autoroute failed", "route": routed,
+                "original_counts": src["counts"], "nets": nets}
+
+    ours = live.drc(out_path)
+    human = live.drc(pcb_path)
+    rebuilt = extract(out_path)
+    return {
+        "ok": True,
+        "nets": nets,
+        "original_routing": src["routing"],
+        "rerouted_routing": rebuilt["routing"],
+        "human_drc": {"clean": human["clean"], "violations": human["violations"],
+                      "unconnected": human["unconnected"]},
+        "our_drc": {"clean": ours["clean"], "violations": ours["violations"],
+                    "unconnected": ours["unconnected"]},
+        "matches_human_cleanliness": ours["clean"] and human["clean"],
+    }
+
+
+def roundtrip(pcb_path: str | Path, out_path: str | Path,
+              harvest: bool = True, route: bool = True) -> dict[str, Any]:
+    """Recover a finished board's source, rebuild from it, and diff.
+
+    extract → feed the recovered spec back through the build engine → re-extract
+    the rebuild → compare connectivity. Any divergence is a defect in our own
+    extract/rebuild chain. Footprints resolve against the original project's
+    fp-lib-table so real (non-standard-library) parts build.
+
+    When ``route`` is set the recovered track/via geometry is folded into the
+    rebuild spec, so the rebuilt board reconstructs the original's *routing*
+    (not just its connectivity + placement); the diff then also reports how
+    faithfully tracks/vias were reproduced.
+    """
+    src, spec, lib_dirs, live, subs, blocked = _recover_buildable_spec(
+        pcb_path, out_path, harvest)
+    if blocked:
+        return blocked
+    if route:
+        spec["tracks"] = src["routing_geometry"]["tracks"]
+        spec["vias"] = src["routing_geometry"]["vias"]
 
     build = live.build_board(spec, out_path)
     if not build.get("ok"):
