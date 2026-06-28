@@ -339,6 +339,73 @@ class Flow:
         h = (max(ys) - min(ys)) + 2 * margin
         return self.board_outline_rect(x, top_y, w, h)
 
+    def copper_pour(self, net, layer, x, y, w, h, name="", line_width=10):
+        """**程序化**敷铜(覆铜):在某层用矩形给某网络铺地/铺电源平面。
+
+        本会话攻克的边界(逆向 api.js 的 `Or` 类硬验证)。`pcb_PrimitivePour.create`
+        被外层 try/catch 吞了真错("无法创建覆铜边框图元"),逼出构造函数真签名:
+          create(net, layer, complexPolygon, fillMethod="solid", preserveSilos=false,
+                 pourName, pourPriority, lineWidth, lock=false)
+        两个坑:① **第 1 参是网络名**(不是 name)、第 3 参必须是 **complexPolygon**
+        (`pcb_MathPolygon.createComplexPolygon([["R",x,y,w,h,0,0]])`,**不是** createPolygon);
+        ② 创建出的只是**覆铜边框**,铜没算出来(pcb_PrimitivePoured 为 0)——必须再触发
+        一次"重建覆铜"(见 rebuild_pours,走 GUI 快捷键 Shift+B,extapi 无此命令)。
+
+        矩形坐标同板框:(x,y)=左上角, h 向 −y(向下)。返回 {"id","layer","net"}。
+        """
+        R = "window._EXTAPI_ROOT_"
+        rect = json.dumps(["R", x, y, w, h, 0, 0])
+        js = ("(async()=>{try{var R=%s;"
+              "var cp=R.pcb_MathPolygon.createComplexPolygon([%s]);"
+              "if(!cp)return JSON.stringify({err:'createComplexPolygon undefined'});"
+              "var r=await R.pcb_PrimitivePour.create(%s,%d,cp,'solid',false,%s,0,%d,false);"
+              "return JSON.stringify({ok:!!r,id:r&&r.primitiveId,layer:r&&r.layer,net:r&&r.net});"
+              "}catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+              % (R, rect, json.dumps(net), layer, json.dumps(name or (net + "_L" + str(layer))), line_width))
+        v, e = d.evaluate(self.ws, js, await_promise=True, timeout=25)
+        if e:
+            raise FlowError("copper_pour eval: " + e)
+        o = json.loads(v)
+        if o.get("err") or not o.get("ok"):
+            raise FlowError("copper_pour: " + str(o.get("err") or o))
+        return {"id": o.get("id"), "layer": o.get("layer"), "net": o.get("net")}
+
+    def auto_ground_pour(self, net="GND", layers=(1, 2), margin=20, line_width=10):
+        """从焊盘 bbox 自动给指定层铺 GND(双面地平面),建完即 rebuild_pours 算出铜。"""
+        pads = self.eda.call("pcb_PrimitivePad.getAllPrimitiveId", timeout=15) or []
+        xs, ys = [], []
+        for p in pads:
+            g = self.eda.call("pcb_PrimitivePad.get", p, timeout=8)
+            if g and "x" in g and "y" in g:
+                xs.append(g["x"]); ys.append(g["y"])
+        if not xs:
+            raise FlowError("auto_ground_pour: 焊盘无坐标(先 importChanges?)")
+        x = min(xs) - margin
+        top_y = max(ys) + margin
+        w = (max(xs) - min(xs)) + 2 * margin
+        h = (max(ys) - min(ys)) + 2 * margin
+        made = [self.copper_pour(net, ly, x, top_y, w, h, line_width=line_width) for ly in layers]
+        poured = self.rebuild_pours()
+        return {"pours": made, "poured": poured}
+
+    def rebuild_pours(self, settle=4):
+        """触发"重建覆铜"算出实铜(extapi 无此命令 → GUI 快捷键 Shift+B)。
+        返回 pcb_PrimitivePoured 计算出的实铜对象数(>0 即敷铜成功)。"""
+        # 先点画布拿到焦点,再发 Shift+B
+        for ev in ("mousePressed", "mouseReleased"):
+            self.ws.cmd("Input.dispatchMouseEvent",
+                        {"type": ev, "x": 600, "y": 400, "button": "left",
+                         "clickCount": 1, "buttons": 1 if ev == "mousePressed" else 0}, timeout=8)
+        time.sleep(0.4)
+        seq = [("keyDown", "ShiftLeft", "Shift", 16, 8), ("keyDown", "KeyB", "B", 66, 8),
+               ("keyUp", "KeyB", "B", 66, 8), ("keyUp", "ShiftLeft", "Shift", 16, 0)]
+        for t, code, key, vk, mods in seq:
+            self.ws.cmd("Input.dispatchKeyEvent",
+                        {"type": t, "code": code, "key": key,
+                         "windowsVirtualKeyCode": vk, "modifiers": mods}, timeout=8)
+        time.sleep(settle)
+        return len(self.eda.call("pcb_PrimitivePoured.getAllPrimitiveId", timeout=15) or [])
+
     def reload_and_reopen(self, project_uuid, pcb_uuid, settle=8):
         """整页 reload(让布线引擎识别新建板框)后,重开工程+PCB 文档并等加载完。
         新建板框后必须 save + reload,引擎才认其为闭合板框(否则自动布线报 not closed)。"""

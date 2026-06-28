@@ -37,11 +37,12 @@ class BoardSpec:
     nets:  {网络名: [(designator, pinNumber), ...], ...}
     """
 
-    def __init__(self, name, parts, nets, introduction=""):
+    def __init__(self, name, parts, nets, introduction="", ground_pour=False):
         self.name = name
         self.parts = parts
         self.nets = nets
         self.introduction = introduction or (name + " — Dao declarative board")
+        self.ground_pour = ground_pour  # True 则布线后自动双面铺 GND 地平面
 
     def pin_count_hint(self):
         """每个器件在 nets 里被引用到的最大引脚号(用于放件后粗校验引脚数是否够)。"""
@@ -213,6 +214,13 @@ class BoardBuilder:
         f.prepare_pcb_nets()
         time.sleep(2)
         route = f.autoroute_gui(wait=18)
+        pour = None
+        if getattr(self, "_ground_pour", False):
+            try:
+                pour = f.auto_ground_pour(net="GND", layers=(1, 2))
+                f.eda.call("pcb_Document.save", timeout=20)
+            except Exception as e:
+                pour = "ERR:" + str(e)[:60]
         try:
             drc = f.drc_check(timeout=120)
         except Exception as e:
@@ -220,7 +228,7 @@ class BoardBuilder:
         out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                (out_base or self.state.get("name", "Dao")) + "_fab")
         exp = f.export_all(out_dir, base=out_base or self.state.get("name", "Dao"))
-        return {"outline": bo, "route": route, "drc": drc, "export_dir": out_dir,
+        return {"outline": bo, "route": route, "pour": pour, "drc": drc, "export_dir": out_dir,
                 "export": {k: (v.get("size") if isinstance(v, dict) else v) for k, v in exp.items()}}
 
     # ---- 一键全流程 ----
@@ -230,6 +238,7 @@ class BoardBuilder:
         report["place"] = self.place(spec)
         report["wire"] = self.wire(spec)
         report["sync"] = self.sync(spec)
+        self._ground_pour = getattr(spec, "ground_pour", False)
         report["route_export"] = self.route_export(out_base=spec.name, margin=margin)
         return report
 
