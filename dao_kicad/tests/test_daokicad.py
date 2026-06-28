@@ -80,7 +80,8 @@ def test_connectivity_order_clusters_connected_parts():
     # must be dropped — otherwise it would weld the two chains into one blob.
     conns += [{"ref": r, "pad": "9", "net": "GND"} for r in interleaved]
 
-    out = [t[0]["ref"] for t in pw._order_by_connectivity(autos, conns)]
+    out_autos, _ = pw._order_by_connectivity(autos, conns)
+    out = [t[0]["ref"] for t in out_autos]
     assert sorted(out) == sorted(interleaved)  # no parts lost/duplicated
 
     def contiguous(group):
@@ -119,15 +120,16 @@ def test_placement_order_never_worse_than_netlist():
     bad = [grid[r][c] for c in range(side - 1, -1, -1) for r in range(side)]
     autos = [({"ref": r}, None, 2.0, 2.0) for r in bad]
 
-    out = [t[0]["ref"] for t in pw._order_by_connectivity(autos, conns, gap=1.0)]
+    out_autos, chosen_tw = pw._order_by_connectivity(autos, conns, gap=1.0)
+    out = [t[0]["ref"] for t in out_autos]
     assert sorted(out) == sorted(refs)             # nothing lost/duplicated
 
     sizes = {r: (2.0, 2.0, 0.0) for r in refs}
     w, _ = pw._net_adjacency(refs, conns)
-    import math
-    target_w = max(2.0, math.sqrt(len(refs) * 9.0) * 1.25)
+    # the order+width are co-optimised, so compare at the chosen width: the
+    # netlist order at that same width is in the sweep, so the pick can't lose.
     cost = lambda order: pw._ratsnest_cost(
-        pw._packed_centers(order, sizes, 1.0, target_w), w)
+        pw._packed_centers(order, sizes, 1.0, chosen_tw), w)
     assert cost(out) <= cost(bad)                  # never worse than netlist
 
 

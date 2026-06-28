@@ -21,8 +21,8 @@ Environment: KiCad **10.0.4** · Temurin **JDK 25** · freerouting **2.2.4** (Wi
 | pic_programmer | 63 | 112 | ~500 | **clean** | |
 | complex_hierarchy | 68 | 53 | ~419 | **clean** | flaky 0–1 unconn run-to-run |
 | sonde xilinx | 25 | 43 | 246 | **clean** | fixed by the space-path patch below |
-| interf_u | 24 | 174 | ~1500 | ~10–14 unconn | dense analog; placement boundary |
-| stickhub | 94 | 48 | ~850 | 1 viol + ~21 unconn | placement boundary |
+| interf_u | 24 | 174 | ~1350 | 2 unconn | dense analog; was ~10–14, cut by the aspect-ratio sweep below |
+| stickhub | 94 | 48 | ~900 | 1 viol + ~21 unconn | placement boundary |
 | kit-dev-coldfire-xilinx_5213 | 160 | 279 | 3355 | 72 unconn @900s | heavy; placement boundary |
 | video | multi-sheet | — | — | timeout | heavy multi-sheet |
 | multichannel_mixer | ~90 | — | — | **gated** | 1 genuinely-custom vendor part (`CLIFF_FC68148`) has no stock equivalent — healer fixed all 90+ others and correctly refuses to *guess* the last |
@@ -38,11 +38,19 @@ in `route.py` by routing inside a space-free temp dir and copying the SES back.
 `sonde xilinx` went from **route-fail / 66 unconnected → clean (246 tracks)**.
 Regression test: `tests/test_daokicad.py::test_route_dsn_handles_space_in_path`.
 
+## Placement evolution this round — aspect-ratio co-optimisation
+
+The placer already picked the best part *order* by simulated ratsnest. It now
+also sweeps the board **aspect ratio** (row width ∈ {1.0, 1.25, 1.6, 2.0}×√area,
+never below the widest part) and keeps the `(order, width)` pair with the lowest
+simulated ratsnest — the old 1.25 ratio is in the sweep, so it can never do
+worse in proxy cost. Measured effect: **interf_u 10–14 → 2 unconnected**, while
+ecc83 / pic_programmer / complex_hierarchy stayed clean (no regression).
+
 ## Standing boundary (next frontier)
 
-Dense boards (interf_u, stickhub, kit-dev-coldfire) leave a handful of
-unconnected nets. Routing budget is *not* the lever — raising freerouting
-passes just times out without converging. The ceiling is **placement**: the
-connectivity-aware square-grid placer needs to evolve toward legalized 2D
-floorplanning (cluster-aware, overlap-free, edge-affinity for connectors) so the
-router gets a layout it can actually finish. This is the next thing to push.
+stickhub and kit-dev-coldfire still leave unconnected nets — the ceiling is
+genuine 2D placement, not routing budget (raising freerouting passes just times
+out). Next push: evolve from shelf/row packing toward legalized 2D floorplanning
+(overlap-free force coordinates, edge-affinity for connectors) so the router
+gets a layout it can finish.

@@ -238,11 +238,11 @@ def _order_by_connectivity(autos, connections, gap=3.0):
     refs = [fs["ref"] for fs, _, _, _ in autos]
     n = len(refs)
     if n <= 2 or n > 4000:
-        return autos
+        return autos, None
     idx = {r: i for i, r in enumerate(refs)}
     w, deg = _net_adjacency(refs, connections)
     if not w:                                # no usable connectivity signal
-        return autos
+        return autos, None
     sizes = {fs["ref"]: (wd, ht, float(fs.get("pitch", 0.0)))
              for fs, _, wd, ht in autos}
     total_area = sum((wd + gap) * (ht + gap) for _, _, wd, ht in autos)
@@ -252,13 +252,21 @@ def _order_by_connectivity(autos, connections, gap=3.0):
     candidates = {"netlist": refs, "greedy": _greedy_order(refs, w, deg, idx)}
     if n <= 800:
         candidates["force"] = _force_order(refs, w, deg, idx)
-    best_order, best_cost = refs, None
+    # Co-optimise the row order *and* the board aspect ratio: a too-narrow strip
+    # forces board-spanning nets, a too-wide one wastes the router's reach. Sweep
+    # a few target widths (all >= the widest part) and keep the (order, width)
+    # pair with the lowest simulated ratsnest. The default 1.25 ratio is in the
+    # sweep, so the result is never worse than before in proxy cost.
+    base = math.sqrt(total_area)
+    tw_opts = sorted({max(widest, base * m) for m in (1.0, 1.25, 1.6, 2.0)})
+    best_order, best_tw, best_cost = refs, target_w, None
     for order in candidates.values():
-        c = _ratsnest_cost(_packed_centers(order, sizes, gap, target_w), w)
-        if best_cost is None or c < best_cost:
-            best_order, best_cost = order, c
+        for tw in tw_opts:
+            c = _ratsnest_cost(_packed_centers(order, sizes, gap, tw), w)
+            if best_cost is None or c < best_cost:
+                best_order, best_tw, best_cost = order, tw, c
     pos = {r: i for i, r in enumerate(best_order)}
-    return sorted(autos, key=lambda t: pos[t[0]["ref"]])
+    return sorted(autos, key=lambda t: pos[t[0]["ref"]]), best_tw
 
 
 def build(spec, out_path):
@@ -330,11 +338,12 @@ def build(spec, out_path):
     if autos:
         # cluster densely-connected parts before packing so the autorouter sees
         # short ratsnest instead of board-spanning nets (huge win on dense boards).
-        autos = _order_by_connectivity(autos, spec.get("connections", []), gap)
+        autos, chosen_tw = _order_by_connectivity(autos, spec.get("connections", []), gap)
         total_area = sum((w + gap) * (h + gap) for _, _, w, h in autos)
         widest = max(w for _, _, w, _ in autos)
-        # ~1.3:1 width:height target; never narrower than the widest part
-        target_w = float(grid.get("row_width", max(widest, math.sqrt(total_area) * 1.25)))
+        # aspect ratio chosen by the cost sweep above; fall back to ~1.3:1
+        default_tw = max(widest, math.sqrt(total_area) * 1.25)
+        target_w = float(grid.get("row_width", chosen_tw if chosen_tw else default_tw))
         auto_x, auto_y, row_h = origin_x, origin_y, 0.0
         for fpspec, fp, w, h in autos:
             if auto_x > origin_x and (auto_x - origin_x) + w > target_w:
