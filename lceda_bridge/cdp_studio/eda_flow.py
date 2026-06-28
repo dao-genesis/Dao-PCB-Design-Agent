@@ -173,7 +173,19 @@ class Flow:
         return self._retry_call("sch_PrimitiveComponent.get", pid, timeout=12)
 
     def part_pins(self, pid):
-        return self._retry_call("sch_PrimitiveComponent.getAllPinsByPrimitiveId", pid, timeout=12) or []
+        # 坑:刚放件/刚 save 后引脚索引未就绪会报"获取器件关联的所有引脚失败"。
+        # 实测:先 get(pid) 预热再取脚即稳;仍失败则多轮重试。
+        for _ in range(10):
+            try:
+                self.call("sch_PrimitiveComponent.get", pid, timeout=10, retries=0)
+                r = self.call("sch_PrimitiveComponent.getAllPinsByPrimitiveId", pid,
+                              timeout=12, retries=0)
+                if r:
+                    return r
+            except Exception:
+                pass
+            time.sleep(2)
+        return []
 
     def _click(self, px, py):
         self.ws.cmd("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": px, "y": py}, timeout=5)
@@ -234,12 +246,32 @@ class Flow:
                 time.sleep(1)
         raise last
 
+    def _pin_xy(self, pid, pin):
+        pm = {str(p.get("pinNumber")): p for p in self.part_pins(pid)}
+        p = pm[str(pin)]
+        return int(round(p["x"])), int(round(p["y"]))
+
+    def net_route(self, terminals, net, lane_x):
+        """把同网多引脚经一条**该网专属**竖直 lane(x=lane_x)汇接。
+
+        坑根因(本会话实测):两不同网的竖直段若落在同一 x(如竖放电阻的两脚),
+        会被 EDA 融成一根多网名导线(DRC: Wire has multiple net names)。
+        给每个网一条唯一 lane_x,竖直段就永不重叠,网络互不串。
+        terminals: [(pid, pinNumber), ...]。
+        """
+        coords = [self._pin_xy(pid, pin) for pid, pin in terminals]
+        ys = [c[1] for c in coords]
+        self.wire([lane_x, min(ys), lane_x, max(ys)], net)   # 竖直主干
+        for x, y in coords:
+            if x != lane_x:
+                self.wire([x, y, lane_x, y], net)             # 各脚水平接入 lane
+        return coords
+
     def connect(self, pid_a, pin_a, pid_b, pin_b, net=""):
-        """按引脚号连两器件(正交折线:先水平到目标 x,再竖直到目标 y)。"""
-        pa = {str(p.get("pinNumber")): p for p in self.part_pins(pid_a)}
-        pb = {str(p.get("pinNumber")): p for p in self.part_pins(pid_b)}
-        a, b = pa[str(pin_a)], pb[str(pin_b)]
-        x1, y1, x2, y2 = a["x"], a["y"], b["x"], b["y"]
+        """按引脚号连两器件(正交折线:先水平到目标 x,再竖直到目标 y)。
+        多脚同网请改用 net_route 以避免跨网竖直段重叠融合。"""
+        x1, y1 = self._pin_xy(pid_a, pin_a)
+        x2, y2 = self._pin_xy(pid_b, pin_b)
         if x1 == x2 or y1 == y2:  # 已正交,直连
             return self.wire([x1, y1, x2, y2], net)
         return self.wire([x1, y1, x2, y1, x2, y2], net)  # 水平→竖直 两段正交
