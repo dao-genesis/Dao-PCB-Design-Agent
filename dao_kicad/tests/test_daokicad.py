@@ -80,7 +80,7 @@ def test_connectivity_order_clusters_connected_parts():
     # must be dropped — otherwise it would weld the two chains into one blob.
     conns += [{"ref": r, "pad": "9", "net": "GND"} for r in interleaved]
 
-    out_autos, _ = pw._order_by_connectivity(autos, conns)
+    out_autos, _, _ = pw._order_by_connectivity(autos, conns)
     out = [t[0]["ref"] for t in out_autos]
     assert sorted(out) == sorted(interleaved)  # no parts lost/duplicated
 
@@ -120,7 +120,7 @@ def test_placement_order_never_worse_than_netlist():
     bad = [grid[r][c] for c in range(side - 1, -1, -1) for r in range(side)]
     autos = [({"ref": r}, None, 2.0, 2.0) for r in bad]
 
-    out_autos, chosen_tw = pw._order_by_connectivity(autos, conns, gap=1.0)
+    out_autos, chosen_tw, _ = pw._order_by_connectivity(autos, conns, gap=1.0)
     out = [t[0]["ref"] for t in out_autos]
     assert sorted(out) == sorted(refs)             # nothing lost/duplicated
 
@@ -131,6 +131,57 @@ def test_placement_order_never_worse_than_netlist():
     cost = lambda order: pw._ratsnest_cost(
         pw._packed_centers(order, sizes, 1.0, chosen_tw), w)
     assert cost(out) <= cost(bad)                  # never worse than netlist
+
+
+@needs_script
+def test_floorplan_is_opt_in_only():
+    """The free legalized 2D floorplan must never hijack the default path —
+    measured reality is it routes worse than the row-pack. ``_order_by_
+    connectivity`` returns ``centers=None`` unless ``allow_floorplan=True``."""
+    from daokicad import _pcbworker as pw
+
+    refs = [f"U{i}" for i in range(6)]
+    conns = []
+    for i in range(len(refs) - 1):                 # simple chain
+        net = f"n{i}"
+        conns += [{"ref": refs[i], "pad": "1", "net": net},
+                  {"ref": refs[i + 1], "pad": "2", "net": net}]
+    autos = [({"ref": r}, None, 3.0, 3.0) for r in refs]
+
+    _, _, centers_default = pw._order_by_connectivity(autos, conns, gap=1.0)
+    assert centers_default is None                 # default path stays row-pack
+
+    _, _, centers_opt = pw._order_by_connectivity(
+        autos, conns, gap=1.0, allow_floorplan=True)
+    # opt-in may or may not win the cost sweep, but when it does the centres
+    # must cover every part with no courtyard overlaps.
+    if centers_opt is not None:
+        assert set(centers_opt) == set(refs)
+        items = list(centers_opt.items())
+        for i in range(len(items)):
+            ra, (xa, ya) = items[i]
+            for j in range(i + 1, len(items)):
+                rb, (xb, yb) = items[j]
+                # 3x3 parts + 1mm gap => centres must be >= 4mm apart on an axis
+                assert abs(xa - xb) >= 4.0 - 1e-6 or abs(ya - yb) >= 4.0 - 1e-6, (
+                    f"{ra}/{rb} courtyards overlap")
+
+
+@needs_script
+def test_legalize_separates_overlaps():
+    """``_legalize`` must push coincident parts apart until every courtyard
+    clears the required half-extent + gap on at least one axis."""
+    from daokicad import _pcbworker as pw
+
+    refs = [f"P{i}" for i in range(5)]
+    sizes = {r: (2.0, 2.0, 0.0) for r in refs}
+    cen = {r: [0.0, 0.0] for r in refs}            # all stacked at the origin
+    pw._legalize(cen, sizes, gap=1.0)
+    for i in range(len(refs)):
+        for j in range(i + 1, len(refs)):
+            xa, ya = cen[refs[i]]
+            xb, yb = cen[refs[j]]
+            assert abs(xa - xb) >= 3.0 - 1e-6 or abs(ya - yb) >= 3.0 - 1e-6
 
 
 def test_led_indicator_scales():

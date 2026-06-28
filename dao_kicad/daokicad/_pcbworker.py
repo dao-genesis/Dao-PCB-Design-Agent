@@ -119,18 +119,13 @@ def _greedy_order(refs, w, deg, idx):
     return order
 
 
-def _force_order(refs, w, deg, idx):
-    """Force-directed (Fruchterman-Reingold-lite) 2D embedding, linearised into
-    a row-major order for the packer.
+def _force_layout(refs, w, idx):
+    """Fruchterman-Reingold-lite 2D embedding of the shared-net graph.
 
-    A 1D greedy walk keeps a net's parts adjacent *along the snake*, but the
-    packer wraps that snake into rows, so parts adjacent across a wrap land far
-    apart. Embedding the shared-net graph in 2D first — edge springs pull
-    connected parts together, all-pairs repulsion spreads the rest — then
-    reading the result out in row bands (sort by y-band, then x) gives the
-    packer an order whose row layout mirrors a genuine 2D floorplan. Fully
-    deterministic (grid init, no RNG). O(n^2) per iteration, so the caller
-    gates it to small/medium boards.
+    Edge springs pull net-connected parts together, all-pairs repulsion spreads
+    the rest. Fully deterministic (grid init, no RNG). O(n^2) per iteration, so
+    callers gate it to small/medium boards. Returns ``{ref: [x, y]}`` on a unit
+    grid (ideal edge length 1.0); scale to mm or read out in bands downstream.
     """
     import math
 
@@ -180,6 +175,23 @@ def _force_order(refs, w, deg, idx):
             pos[r][0] += dx / dl * step
             pos[r][1] += dy / dl * step
         t *= 0.95
+    return pos
+
+
+def _force_order(refs, w, deg, idx):
+    """Force-directed 2D embedding linearised into a row-major order.
+
+    A 1D greedy walk keeps a net's parts adjacent *along the snake*, but the
+    packer wraps that snake into rows, so parts adjacent across a wrap land far
+    apart. Embedding in 2D first then reading the result out in row bands (sort
+    by y-band, then x) gives the packer an order whose row layout mirrors a
+    genuine 2D floorplan.
+    """
+    import math
+
+    n = len(refs)
+    cols = max(1, int(math.ceil(math.sqrt(n))))
+    pos = _force_layout(refs, w, idx)
     ys = [pos[r][1] for r in refs]
     span = (max(ys) - min(ys)) or 1.0
     band_h = span / max(1, cols)
@@ -220,29 +232,91 @@ def _ratsnest_cost(centers, w):
     return cost
 
 
-def _order_by_connectivity(autos, connections, gap=3.0):
+def _legalize(cen, sizes, gap, iters=120):
+    """Remove courtyard overlaps from a free 2D placement by iterative pairwise
+    separation: for each overlapping pair, push them apart along the axis of
+    least penetration (so a small nudge fixes it without scrambling the layout).
+    Deterministic, O(n^2) per pass; converges quickly for sparse overlaps."""
+    refs = list(cen)
+    n = len(refs)
+    for _ in range(iters):
+        moved = False
+        for i in range(n):
+            ri = refs[i]
+            xi, yi = cen[ri]
+            wi, hi, _ = sizes[ri]
+            for j in range(i + 1, n):
+                rj = refs[j]
+                xj, yj = cen[rj]
+                wj, hj, _ = sizes[rj]
+                ox = (wi + wj) / 2.0 + gap - abs(xi - xj)
+                oy = (hi + hj) / 2.0 + gap - abs(yi - yj)
+                if ox > 1e-6 and oy > 1e-6:          # courtyards overlap
+                    moved = True
+                    if ox <= oy:                     # least-penetration axis
+                        s = ox / 2.0 * (1.0 if xi >= xj else -1.0)
+                        cen[ri][0] += s
+                        cen[rj][0] -= s
+                    else:
+                        s = oy / 2.0 * (1.0 if yi >= yj else -1.0)
+                        cen[ri][1] += s
+                        cen[rj][1] -= s
+                    xi, yi = cen[ri]
+        if not moved:
+            break
+    return cen
+
+
+def _floorplan_centers(refs, w, idx, sizes, gap):
+    """True 2D placement candidate: force-embed the shared-net graph, scale it
+    to physical part sizes, then legalize overlaps. Unlike the row-packer this
+    keeps a net's parts close in *both* axes (not just along a wrapped snake),
+    which is what closes board-spanning ratsnest on dense boards. Returns
+    ``{ref: (cx, cy)}`` centres with the cluster's top-left at the origin."""
+    import math
+
+    pos = _force_layout(refs, w, idx)
+    n = len(refs)
+    avg = sum(max(wd, ht) for wd, ht, _ in sizes.values()) / max(1, n)
+    scale = (avg + gap) * 1.3                  # unit edge -> ~one part + gap
+    cen = {r: [pos[r][0] * scale, pos[r][1] * scale] for r in refs}
+    _legalize(cen, sizes, gap)
+    minx = min(cen[r][0] - sizes[r][0] / 2.0 for r in refs)
+    miny = min(cen[r][1] - sizes[r][1] / 2.0 for r in refs)
+    return {r: (cen[r][0] - minx, cen[r][1] - miny) for r in refs}
+
+
+def _order_by_connectivity(autos, connections, gap=3.0, allow_floorplan=False):
     """Order auto-placed footprints so densely-connected parts sit adjacent.
 
     Feeding the packer raw netlist order scatters each net's pads across the
     whole board, leaving the autorouter board-spanning ratsnest it can't close
     on dense boards (cm5_minima: 204 unconnected). Build the shared-net graph
-    and produce two candidate orders — a greedy 1D walk and a force-directed 2D
+    and produce candidate orders — a greedy 1D walk and a force-directed 2D
     floorplan linearised for the packer — then *simulate the row-pack* for each
     (plus the original netlist order) and keep whichever yields the shortest
-    total ratsnest. Selecting by simulated cost means a candidate can never make
-    placement worse than netlist order. O(n^2); very large boards (>4000 parts)
-    skip reordering and >800 skip the force layout to stay fast.
+    total ratsnest. A fourth candidate is a **true legalized 2D floorplan**
+    (free force-directed coordinates, overlaps removed) scored on its own
+    centres rather than the row-pack: on dense boards it keeps a net's parts
+    close in both axes, closing board-spanning ratsnest the row-packer can't.
+    Selecting by simulated cost means a candidate can never make placement
+    worse than netlist order. O(n^2); very large boards (>4000 parts) skip
+    reordering and >800 skip the force layouts to stay fast.
+
+    Returns ``(autos_sorted, target_w, centers)``. When ``centers`` is not None
+    the free floorplan won and the caller places each part at its centre;
+    otherwise the caller row-packs ``autos_sorted`` at ``target_w``.
     """
     import math
 
     refs = [fs["ref"] for fs, _, _, _ in autos]
     n = len(refs)
     if n <= 2 or n > 4000:
-        return autos, None
+        return autos, None, None
     idx = {r: i for i, r in enumerate(refs)}
     w, deg = _net_adjacency(refs, connections)
     if not w:                                # no usable connectivity signal
-        return autos, None
+        return autos, None, None
     sizes = {fs["ref"]: (wd, ht, float(fs.get("pitch", 0.0)))
              for fs, _, wd, ht in autos}
     total_area = sum((wd + gap) * (ht + gap) for _, _, wd, ht in autos)
@@ -265,8 +339,23 @@ def _order_by_connectivity(autos, connections, gap=3.0):
             c = _ratsnest_cost(_packed_centers(order, sizes, gap, tw), w)
             if best_cost is None or c < best_cost:
                 best_order, best_tw, best_cost = order, tw, c
+
+    # True legalized 2D floorplan competes on its own centres — but only when
+    # explicitly opted in (``place_strategy: "floorplan"``). Measured reality
+    # (道法自然): free placement lowers the *center-to-center* ratsnest proxy yet
+    # routes WORSE than the row-pack (interf_u 2→3 unconnected; stickhub timed
+    # out), because the proxy ignores that a compact row-pack gives the gridded
+    # autorouter shorter real paths and less congestion. So it stays an opt-in
+    # competing backend, never the default path — the row-pack remains the
+    # zero-regression anchor until a routing-correlated cost model exists.
+    fp_centers = None
+    if allow_floorplan and n <= 800:
+        cen = _floorplan_centers(refs, w, idx, sizes, gap)
+        if _ratsnest_cost(cen, w) < (best_cost if best_cost is not None else float("inf")):
+            fp_centers = cen
+
     pos = {r: i for i, r in enumerate(best_order)}
-    return sorted(autos, key=lambda t: pos[t[0]["ref"]]), best_tw
+    return sorted(autos, key=lambda t: pos[t[0]["ref"]]), best_tw, fp_centers
 
 
 def build(spec, out_path):
@@ -338,28 +427,43 @@ def build(spec, out_path):
     if autos:
         # cluster densely-connected parts before packing so the autorouter sees
         # short ratsnest instead of board-spanning nets (huge win on dense boards).
-        autos, chosen_tw = _order_by_connectivity(autos, spec.get("connections", []), gap)
-        total_area = sum((w + gap) * (h + gap) for _, _, w, h in autos)
-        widest = max(w for _, _, w, _ in autos)
-        # aspect ratio chosen by the cost sweep above; fall back to ~1.3:1
-        default_tw = max(widest, math.sqrt(total_area) * 1.25)
-        target_w = float(grid.get("row_width", chosen_tw if chosen_tw else default_tw))
-        auto_x, auto_y, row_h = origin_x, origin_y, 0.0
-        for fpspec, fp, w, h in autos:
-            if auto_x > origin_x and (auto_x - origin_x) + w > target_w:
-                auto_x = origin_x
-                auto_y += row_h + gap
-                row_h = 0.0
-            # Align the footprint's *bounding box* (not its anchor) to the grid
-            # cell: anchors sit at arbitrary offsets inside odd/THT footprints
-            # (valves, mounting holes…), so anchor-based placement let their
-            # courtyards overlap. Offset the anchor by (anchor - bbox top-left).
+        # default path is the zero-regression row-pack; "floorplan" opts into
+        # the experimental free legalized 2D placement competing backend.
+        allow_fp = str(spec.get("place_strategy", grid.get("strategy", ""))) == "floorplan"
+        autos, chosen_tw, fp_centers = _order_by_connectivity(
+            autos, spec.get("connections", []), gap, allow_floorplan=allow_fp)
+        # Helper: align a footprint's *bounding box* top-left (not its anchor)
+        # to (tx, ty). Anchors sit at arbitrary offsets inside odd/THT parts
+        # (valves, mounting holes…), so anchor-based placement let courtyards
+        # overlap; offset the anchor by (anchor - bbox top-left).
+        def _place_topleft(fp, tx, ty):
             bb = fp.GetBoundingBox()
             off_x = pcbnew.ToMM(fp.GetPosition().x - bb.GetLeft())
             off_y = pcbnew.ToMM(fp.GetPosition().y - bb.GetTop())
-            fp.SetPosition(_v(auto_x + off_x, auto_y + off_y))
-            auto_x += max(w, float(fpspec.get("pitch", 0.0))) + gap
-            row_h = max(row_h, h)
+            fp.SetPosition(_v(tx + off_x, ty + off_y))
+
+        if fp_centers is not None:
+            # True legalized 2D floorplan won the cost sweep: place each part at
+            # its overlap-free centre (centres are bbox centres, cluster top-left
+            # at origin), shifted to the board origin.
+            for fpspec, fp, w, h in autos:
+                cx, cy = fp_centers[fpspec["ref"]]
+                _place_topleft(fp, origin_x + cx - w / 2.0, origin_y + cy - h / 2.0)
+        else:
+            total_area = sum((w + gap) * (h + gap) for _, _, w, h in autos)
+            widest = max(w for _, _, w, _ in autos)
+            # aspect ratio chosen by the cost sweep above; fall back to ~1.3:1
+            default_tw = max(widest, math.sqrt(total_area) * 1.25)
+            target_w = float(grid.get("row_width", chosen_tw if chosen_tw else default_tw))
+            auto_x, auto_y, row_h = origin_x, origin_y, 0.0
+            for fpspec, fp, w, h in autos:
+                if auto_x > origin_x and (auto_x - origin_x) + w > target_w:
+                    auto_x = origin_x
+                    auto_y += row_h + gap
+                    row_h = 0.0
+                _place_topleft(fp, auto_x, auto_y)
+                auto_x += max(w, float(fpspec.get("pitch", 0.0))) + gap
+                row_h = max(row_h, h)
 
     # nets: explicit + derived from connections
     netnames = set(spec.get("nets", []))

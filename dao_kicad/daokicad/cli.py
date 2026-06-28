@@ -81,12 +81,42 @@ def _build_sch(args) -> int:
     return _finish_build(lk, pcb, out_dir, args, build)
 
 
+def _capabilities(args) -> int:
+    """Print the integrated tool stack — what each capability inherits and
+    which backend is live on this machine (the 'KiCad Devin Desktop' map)."""
+    from .adapters import registry
+    desc = registry().describe()
+    if args.json:
+        _print(desc)
+        return 0
+    for cap, info in desc.items():
+        sel = info["selected"]
+        print(f"\n■ {cap}  →  selected: {sel or '(none available)'}")
+        for b in info["backends"]:
+            if not args.all and not b["available"]:
+                continue
+            mark = "✓" if b["available"] else "·"
+            run = " [runnable]" if b["runnable"] else ""
+            print(f"   {mark} {b['name']:<14} {b['kind']:<8} {b['license']:<12}"
+                  f"{run}  {b['summary']}")
+    avail = sum(1 for c in desc.values() for b in c["backends"] if b["available"])
+    total = sum(len(c["backends"]) for c in desc.values())
+    print(f"\n{avail}/{total} backends live across "
+          f"{len(desc)} capability domains.")
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="daokicad", description="Cursor for KiCad")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("status", help="KiCad environment status")
     sub.add_parser("templates", help="list circuit DNA templates")
+    cap = sub.add_parser("capabilities",
+                         help="integrated tool stack per capability (inherited tools)")
+    cap.add_argument("--all", action="store_true",
+                     help="include declared-but-unavailable backends")
+    cap.add_argument("--json", action="store_true", help="raw JSON map")
 
     d = sub.add_parser("design", help="design one board (closed loop)")
     d.add_argument("template")
@@ -145,6 +175,8 @@ def main(argv=None):
     if args.cmd == "templates":
         _print(dna.list_templates())
         return 0
+    if args.cmd == "capabilities":
+        return _capabilities(args)
     if args.cmd == "design":
         agent = DesignAgent(workdir=args.out)
         r = agent.design(args.template, max_iter=args.max_iter,

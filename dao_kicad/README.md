@@ -48,7 +48,12 @@
 | 万物 4 | `daokicad/ipc.py` | **可选** IPC 通道:经 KiCad 原生 API 驱动正在运行的 GUI(缺失则优雅降级) |
 | 万物 4 | `daokicad/fusion/` | **深度融合层**:经官方 IPC API(`kipy`)接到正在运行的 KiCad 底层 —— 感知/编辑/动作/导出 的可组合能力注册表 + 意图路由 agent(每次改板都是一次原生可撤销 commit) |
 | 万物 4 | `daokicad/kicad_plugin/` | **KiCad 内的脸**:注册进 PCB 编辑器工具栏的 Action Plugin + 停靠画布的对话面板,在你正打开的板上原地动手(像 Cursor 之于 VS Code) |
-| 万物 4 | `daokicad/cli.py` | 命令行入口 `daokicad`(含 `install-plugin` / `fusion`) |
+| 万物 4 | `daokicad/registry.py` | **能力归一总线** Registry/Backend/Probe:大脑只认"能力"，由它选本机最优可用后端 |
+| 万物 4 | `daokicad/adapters.py` | **继承一切**:把 builtin 引擎与世界级工具(SKiDL/kicad-skip/KiKit/InteractiveHtmlBom/freerouting…)按统一接口接入 |
+| 万物 4 | `daokicad/cli.py` | 命令行入口 `daokicad`(含 `capabilities` / `install-plugin` / `fusion`) |
+
+> 本源转向见 [`ARCHITECTURE.md`](ARCHITECTURE.md):我们是一个**编排内核**(KiCad 的
+> Devin Desktop),继承天下之器、归一调用,而非从零自造每个阶段。
 
 ## 安装
 
@@ -64,6 +69,8 @@ daokicad status        # 查看探测到的 KiCad 环境
 
 ```bash
 daokicad status                       # KiCad/freerouting 环境
+daokicad capabilities                 # 集成工具栈：每个能力域继承了哪些工具、本机点亮了谁
+daokicad capabilities --all           # 连同"可继承但未安装"的后端一并列出
 daokicad templates                    # 列出电路 DNA 模板
 daokicad design ams1117_regulator     # 跑一块板的完整闭环(含产出)
 daokicad design rc_lowpass --no-fab   # 只到 DRC，不导出制造文件
