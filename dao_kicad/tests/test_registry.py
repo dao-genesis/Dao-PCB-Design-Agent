@@ -144,3 +144,37 @@ def test_kikit_adapter_builds_panelize_invocation(tmp_path, monkeypatch):
     assert out["ok"] and Path(out["panel"]) == panel and panel.is_file()
     assert seen["cmd"][1:4] == ["-m", "kikit.ui", "panelize"]
     assert any("rows: 2; cols: 3" in a for a in seen["cmd"])  # grid override built
+
+
+def test_kibot_fab_writes_default_config_and_reports_gerbers(tmp_path, monkeypatch):
+    """KiBot fab must drive 'python -m kibot' on a board-only default config
+    (no schematic) and count the gerbers produced — mocked, no KiBot needed."""
+    from daokicad import adapters as A
+    from daokicad import env as _env
+
+    pcb = tmp_path / "b.kicad_pcb"
+    pcb.write_text("(kicad_pcb)")
+    outdir = tmp_path / "fab"
+
+    class FakeEnv:
+        python = tmp_path / "py.exe"
+    monkeypatch.setattr(_env, "detect", lambda *a, **k: FakeEnv())
+
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"] = cmd
+        gdir = outdir / "gerbers"
+        gdir.mkdir(parents=True, exist_ok=True)
+        (gdir / "b-F_Cu.gbr").write_text("G04*")
+        (gdir / "b-B_Cu.gbr").write_text("G04*")
+
+        class CP:
+            stdout = stderr = ""
+        return CP()
+    monkeypatch.setattr(__import__("subprocess"), "run", fake_run)
+
+    out = A._kibot_fab(pcb, outdir)
+    assert out["ok"] and out["gerbers"] == 2
+    assert seen["cmd"][1:3] == ["-m", "kibot"]
+    assert (outdir / "kibot_fab.yaml").is_file()        # default board-only config written

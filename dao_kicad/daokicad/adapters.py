@@ -117,6 +117,49 @@ def _skidl(script, netlist=None, *, symbol_dir=None, timeout=120, **kw) -> dict:
             "reason": "" if ok else (cp.stderr or cp.stdout)[-300:]}
 
 
+_KIBOT_FAB_CFG = """\
+kibot:
+  version: 1
+outputs:
+  - name: gerbers
+    type: gerber
+    dir: gerbers
+  - name: drill
+    type: excellon
+    dir: gerbers
+  - name: position
+    type: position
+    dir: assembly
+    options: { format: CSV, units: millimeters }
+"""
+
+
+def _kibot_fab(pcb, out=None, *, config=None, timeout=300, **kw) -> dict:
+    """Fabrication outputs (gerber/drill/pos) via KiBot — CI-grade, reproducible.
+
+    KiBot is AGPL → invoked strictly as a subprocess. A board-only default
+    config (no schematic needed) is written when none is supplied.
+    """
+    import subprocess
+    from . import env
+    pcb = Path(pcb)
+    out = Path(out) if out else pcb.parent / "kibot"
+    out.mkdir(parents=True, exist_ok=True)
+    py = env.detect().python
+    if not py:
+        return {"ok": False, "reason": "KiCad bundled python not found"}
+    cfg = Path(config) if config else out / "kibot_fab.yaml"
+    if not config:
+        cfg.write_text(_KIBOT_FAB_CFG)
+    cp = subprocess.run([str(py), "-m", "kibot", "-c", str(cfg),
+                         "-b", str(pcb), "-d", str(out)],
+                        capture_output=True, text=True, timeout=timeout)
+    gerbers = sorted(str(p) for p in (out / "gerbers").glob("*.gbr"))
+    ok = len(gerbers) > 0
+    return {"ok": ok, "dir": str(out) if ok else None, "gerbers": len(gerbers),
+            "reason": "" if ok else (cp.stderr or cp.stdout)[-300:]}
+
+
 def _kikit_panelize(pcb, out=None, *, rows=2, cols=2, space="2mm",
                     frame=True, mousebites=True, timeout=180, **kw) -> dict:
     """Panelize a board into an rows×cols array (inherited: KiKit).
@@ -236,8 +279,8 @@ def default_registry() -> Registry:
     reg.register(Backend(
         "kibot", "fabricate",
         "KiBot fab-output/documentation automation (CI-grade).",
-        "GPL-3.0", "https://github.com/INTI-CMNB/KiBot",
-        Probe("cli", cli="kibot"), priority=60))
+        "AGPL-3.0", "https://github.com/INTI-CMNB/KiBot",
+        Probe("python", module="kibot"), priority=50, invoke=_kibot_fab))
 
     # ---- bom ----
     reg.register(Backend(
@@ -247,8 +290,8 @@ def default_registry() -> Registry:
     reg.register(Backend(
         "kibot-bom", "bom",
         "KiBot BOM (XLSX/CSV/HTML with variants & sourcing).",
-        "GPL-3.0", "https://github.com/INTI-CMNB/KiBot",
-        Probe("cli", cli="kibot"), priority=55))
+        "AGPL-3.0", "https://github.com/INTI-CMNB/KiBot",
+        Probe("python", module="kibot"), priority=35))
 
     # ---- interactive_bom ----
     reg.register(Backend(

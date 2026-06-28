@@ -40,17 +40,17 @@
 | place | 连通度+力导+长宽比竞选布局 | （下一步：DREAMPlace/解析式合法化） | — |
 | route | freerouting(自带 jar) + daisy 兜底 | — | DeepPCB、Quilter.ai |
 | drc | kicad-cli / pcbnew | — | — |
-| fabricate | kicad-cli(gerber/drill/pos/STEP) | **KiBot**(GPL3, CLI·CI 级) | — |
-| bom | 分组 BOM CSV | KiBot BOM(变体/采购) | — |
+| fabricate | kicad-cli(gerber/drill/pos/STEP) | **KiBot**(AGPL3, CLI·CI 级) ✅已贯通 | — |
+| bom | 分组 BOM CSV | KiBot BOM(AGPL3, 变体/采购) | — |
 | interactive_bom | — | **InteractiveHtmlBom**(MIT) ✅已贯通 | — |
 | panelize | — | **KiKit**(MIT) ✅已贯通 | — |
 | sourcing | — | — | LCSC、Octopart/Nexar |
 | render | kicad-cli(PNG/SVG/3D) | — | — |
 
-> license 纪律：GPL 工具（KiBot/freerouting）一律以**子进程/CLI** 形式调用
-> （编排，不静态链接）；MIT 工具（SKiDL/IBOM/KiKit）可直接 import 或子进程皆可，
-> 这里 KiKit 也走子进程（CLI 即其稳定接口）。云后端只在用户提供凭据（环境变量）
-> 时才点亮，绝不内置密钥。
+> license 纪律：copyleft 工具（KiBot=AGPL、freerouting=GPL）一律以**子进程/CLI**
+> 形式调用（编排，不静态链接，避免传染）；MIT 工具（SKiDL/IBOM/KiKit）import 或
+> 子进程皆可，这里 KiKit 也走子进程（CLI 即其稳定接口）。云后端只在用户提供凭据
+> （环境变量）时才点亮，绝不内置密钥。
 
 ## 为何这是"局部最优"的方向
 
@@ -64,12 +64,14 @@
 ## 现状（本机实测）
 
 `python -m daokicad capabilities` → **11/12 能力域已有在线后端**（仅 sourcing 待
-API key），14/21 个后端在本机点亮。三条继承链已端到端贯通（非纸面声明）：
+API key），16/21 个后端在本机点亮。四条继承链已端到端贯通（非纸面声明）：
 - `registry().run("interactive_bom", pcb)` → 真实 ecc83 板产出可点击 HTML BOM；
 - `registry().run("design_as_code", "examples/skidl_divider.py", net)` → SKiDL
   代码出网表 → `build-netlist` → 3 件布局、8 走线、**DRC 0/0 干净**、产出 fab；
 - `registry().run("panelize", board, panel, rows=2, cols=2)` → KiKit 出 2×2 拼板
-  （含边框 + 鼠咬桥），可直接送厂。
+  （含边框 + 鼠咬桥），可直接送厂；
+- `registry().run("fabricate", board, dir, prefer="kibot")` → KiBot 出 24 张 gerber
+  + drill + 贴装坐标 CSV（CI 级、板级即可、无需原理图）。
 
 ## 下一步（持续演化·不停）
 
