@@ -175,6 +175,10 @@ class Footprint:
                 return p
         return None
 
+    def pads_by_number(self, num: str) -> List[Pad]:
+        """同号焊盘可不止一个 (如外露地焊盘 EP 带一组散热过孔, 皆同号)."""
+        return [p for p in self.pads() if p.number == num]
+
     # ── bbox ────────────────────────────────────────────────────
     @property
     def bbox(self) -> BBox:

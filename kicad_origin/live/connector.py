@@ -239,9 +239,13 @@ class LiveKiCad:
         if b is None:
             return {"available": False}
         try:
+            # kipy Board.name 在 9.x 为 str 属性; 老版本/某些对象可能是方法.
+            # 两种都兼容: callable 则调用, 否则直接取值.
+            raw_name = getattr(b, "name", "")
+            name = raw_name() if callable(raw_name) else raw_name
             return {
                 "available": True,
-                "name":      str(getattr(b, "name", lambda: "")()),
+                "name":      str(name),
                 "footprints": self._ipc.pcb_count_footprints(),
                 "nets":       self._ipc.pcb_count_nets(),
             }

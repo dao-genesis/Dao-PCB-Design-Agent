@@ -1,4 +1,4 @@
-"""
+r"""
 kicad_origin — KiCad 本源逆向层 (一劳永逸)
 
 "道生一, 一生二, 二生三, 三生万物."
@@ -60,9 +60,42 @@ from kicad_origin.origin.env import (
     has_kicad_install, get_origin_root, get_mirror_root,
 )
 
+# 一·镜像与索引 (Layer 1 · lib)
+from kicad_origin.lib import (
+    SymbolIndex, FootprintIndex, LibSource,
+    extract_symbol_block, get_pin_positions, list_symbols_in_lib, SymbolPin,
+    parse_footprint_file, list_footprints_in_lib, FootprintInfo, FootprintPad,
+    mirror_sync, mirror_status, MirrorScope,
+)
+
+# 二·PCB 内核 (Layer 2 · pcb)
+from kicad_origin.pcb import (
+    Point, BBox, rotate_point, distance,
+    Board, Footprint, Pad, Segment, Via, Arc, Net, NetClass, Zone,
+)
+
+# 三·制造引擎 (Layer 3 · engine)
+from kicad_origin.engine import (
+    DRCViolation, DRCReport, DRCEngine, run_drc,
+    SEVERITY_ERROR, SEVERITY_WARNING, SEVERITY_INFO,
+    GerberWriter, write_gerber, ExcellonWriter, write_excellon,
+)
+
+# 万物·应用层 (Layer 4 · app)
+from kicad_origin.app import (
+    pcbnew_compat, install_pcbnew_compat, uninstall_pcbnew_compat,
+)
+
+# 道·直连器 + 反馈 + MCP (dao)
+from kicad_origin.dao import (
+    Dao, DaoStatus, DaoAction, DaoResult,
+    Feedback, FeedbackChannel, ConsoleFeedback, JSONFeedback, MultiFeedback,
+    MCPServer, MCPTool, list_tools, run_mcp_stdio, DaoBridge,
+)
+
 __all__ = [
     "__version__",
-    # origin
+    # origin (Layer 0)
     "SExpr", "Symbol", "parse", "parse_file", "dump", "dump_file",
     "find_all", "find_first", "get_value", "get_path",
     "mm_to_iu", "iu_to_mm", "mil_to_iu", "iu_to_mil", "IU_PER_MM",
@@ -70,4 +103,22 @@ __all__ = [
     "KICAD_ROOT", "KICAD_BIN", "KICAD_SHARE",
     "detect_kicad", "find_kicad_cli", "find_kicad_python",
     "has_kicad_install", "get_origin_root", "get_mirror_root",
+    # lib (Layer 1)
+    "SymbolIndex", "FootprintIndex", "LibSource",
+    "extract_symbol_block", "get_pin_positions", "list_symbols_in_lib", "SymbolPin",
+    "parse_footprint_file", "list_footprints_in_lib", "FootprintInfo", "FootprintPad",
+    "mirror_sync", "mirror_status", "MirrorScope",
+    # pcb (Layer 2)
+    "Point", "BBox", "rotate_point", "distance",
+    "Board", "Footprint", "Pad", "Segment", "Via", "Arc", "Net", "NetClass", "Zone",
+    # engine (Layer 3)
+    "DRCViolation", "DRCReport", "DRCEngine", "run_drc",
+    "SEVERITY_ERROR", "SEVERITY_WARNING", "SEVERITY_INFO",
+    "GerberWriter", "write_gerber", "ExcellonWriter", "write_excellon",
+    # app (Layer 4)
+    "pcbnew_compat", "install_pcbnew_compat", "uninstall_pcbnew_compat",
+    # dao
+    "Dao", "DaoStatus", "DaoAction", "DaoResult",
+    "Feedback", "FeedbackChannel", "ConsoleFeedback", "JSONFeedback", "MultiFeedback",
+    "MCPServer", "MCPTool", "list_tools", "run_mcp_stdio", "DaoBridge",
 ]

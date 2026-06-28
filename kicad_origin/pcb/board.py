@@ -296,6 +296,19 @@ class Board:
                     )
         return None
 
+    def set_board_outline(self, x0: float, y0: float, x1: float, y1: float) -> bool:
+        """改写 Edge.Cuts 上的 gr_rect 矩形板框 (就地改 start/end). 无矩形则返回 False."""
+        for r in find_all(self.tree, "gr_rect"):
+            layer = find_first(r, "layer")
+            if layer and len(layer) >= 2 and layer[1] == "Edge.Cuts":
+                start = find_first(r, "start")
+                end = find_first(r, "end")
+                if start and end and len(start) >= 3 and len(end) >= 3:
+                    start[1], start[2] = round(float(x0), 4), round(float(y0), 4)
+                    end[1], end[2] = round(float(x1), 4), round(float(y1), 4)
+                    return True
+        return False
+
     # ── 删除 ────────────────────────────────────────────────────
     def inline_footprints(self, *, footprint_index: Any = None,
                            only_if_empty: bool = True) -> Dict[str, Any]:
