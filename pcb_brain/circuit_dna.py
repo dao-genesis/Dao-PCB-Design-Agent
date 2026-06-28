@@ -35,7 +35,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 import math
 
 
@@ -80,38 +80,73 @@ class CircuitDNA:
     def list_all(cls) -> List[str]:
         return list(cls._registry.keys())
 
+    # 念头→DNA 关键词库 (模板名 → 触发词)。每个词命中按词长加权,
+    # 长词(如 "stm32f103")比短词(如 "led")更具区分度。
+    _MATCH_KEYWORDS: Dict[str, List[str]] = {
+        "stm32f103c6_dot_matrix":  ["stm32f103", "f103c6", "点阵", "串口", "stm32f1"],
+        "esp32_servo_wifi":        ["esp32", "wifi", "舵机", "servo", "http", "无线控制"],
+        "ams1117_power":           ["ams1117", "稳压", "ldo", "电源模块", "线性稳压"],
+        "drone_flight_controller": ["drone", "无人机", "飞控", "mpu6050", "f405", "esc", "飞行控制"],
+        "drone_aerial_h743":       ["航拍", "aerial", "h743", "ardupilot", "icm42688", "ms5611", "ina226", "生产级飞控", "双imu"],
+        "led_indicator":           ["led指示", "三色led", "indicator", "状态灯", "指示灯模块"],
+        "rp2040_minimal":          ["rp2040", "pico", "树莓派", "raspberry", "raspberrypico"],
+        "stm32g031_minimal":       ["stm32g", "g031", "g0系列", "stm32g0", "现代stm32", "g031g8"],
+        "stm32h743_core":          ["stm32h7", "h743", "h7系列", "480mhz", "cortex-m7", "高性能stm32"],
+        "esp32s3_rs485_can":       ["esp32s3", "rs485", "can总线", "can bus", "隔离通信", "工业通信", "modbus"],
+        "safety_protection":       ["tvs", "esd保护", "看门狗", "保险丝", "安全保护", "过压保护", "浪涌"],
+        "industrial_power":        ["12v工业", "dc-dc", "降压buck", "mp2307", "工业电源", "多路电源"],
+        "lcd_tft_43":              ["lcd", "tft显示", "gt911", "触摸屏", "rgb接口", "dvp摄像头"],
+        "ch32v003_minimal":        ["ch32v003", "ch32v", "risc-v", "riscv", "国产单片机", "wch", "青稲"],
+        "w5500_ethernet":          ["w5500", "以太网", "ethernet", "有线网络", "lan", "rj45", "tcp/ip"],
+        "motor_driver_dual":       ["tb6612", "电机驱动", "直流电机", "h桥", "小车", "机器人驱动", "motor"],
+        "usb_c_pd_trigger":        ["ch224k", "usb-c pd", "usb pd", "pd协议", "取电", "快充", "type-c"],
+        "lora_sx1276_gateway":     ["lora", "sx1276", "ra-02", "433mhz", "lorawan", "远距离无线"],
+        "nrf52840_ble5":           ["nrf52840", "ble5", "蓝牙5", "bluetooth", "nordic", "低功耗蓝牙", "zigbee"],
+        "smartwatch_core":         ["smartwatch", "智能手表", "手表", "可穿戴", "wearable", "心率", "血氧", "运动手环", "手腕", "腕表"],
+    }
+
     @classmethod
-    def from_description(cls, desc: str) -> Optional[DNA]:
-        """根据描述关键字匹配最近模板"""
-        keywords = {
-            "stm32f103c6_dot_matrix":  ["stm32f103", "f103c6", "点阵", "串口", "stm32f1"],
-            "esp32_servo_wifi":        ["esp32", "wifi", "舵机", "servo", "http", "无线控制"],
-            "ams1117_power":           ["ams1117", "稳压", "ldo", "电源模块", "线性稳压"],
-            "drone_flight_controller": ["drone", "无人机", "飞控", "mpu6050", "f405", "esc", "飞行控制"],
-            "drone_aerial_h743":       ["航拍", "aerial", "h743", "ardupilot", "icm42688", "ms5611", "ina226", "生产级飞控", "双imu"],
-            "led_indicator":           ["led指示", "三色led", "indicator", "状态灯", "指示灯模块"],
-            "rp2040_minimal":          ["rp2040", "pico", "树莓派", "raspberry", "raspberrypico"],
-            "stm32g031_minimal":       ["stm32g", "g031", "g0系列", "stm32g0", "现代stm32", "g031g8"],
-            "stm32h743_core":          ["stm32h7", "h743", "h7系列", "480mhz", "cortex-m7", "高性能stm32"],
-            "esp32s3_rs485_can":       ["esp32s3", "rs485", "can总线", "can bus", "隔离通信", "工业通信", "modbus"],
-            "safety_protection":       ["tvs", "esd保护", "看门狗", "保险丝", "安全保护", "过压保护", "浪涌"],
-            "industrial_power":        ["12v工业", "dc-dc", "降压buck", "mp2307", "工业电源", "多路电源"],
-            "lcd_tft_43":              ["lcd", "tft显示", "gt911", "触摸屏", "rgb接口", "dvp摄像头"],
-            "ch32v003_minimal":        ["ch32v003", "ch32v", "risc-v", "riscv", "国产单片机", "wch", "青稲"],
-            "w5500_ethernet":          ["w5500", "以太网", "ethernet", "有线网络", "lan", "rj45", "tcp/ip"],
-            "motor_driver_dual":       ["tb6612", "电机驱动", "直流电机", "h桥", "小车", "机器人驱动", "motor"],
-            "usb_c_pd_trigger":        ["ch224k", "usb-c pd", "usb pd", "pd协议", "取电", "快充", "type-c"],
-            "lora_sx1276_gateway":     ["lora", "sx1276", "ra-02", "433mhz", "lorawan", "远距离无线"],
-            "nrf52840_ble5":           ["nrf52840", "ble5", "蓝牙5", "bluetooth", "nordic", "低功耗蓝牙", "zigbee"],
-            "smartwatch_core":         ["smartwatch", "智能手表", "手表", "可穿戴", "wearable", "心率", "血氧", "运动手环", "手腕", "腕表"],
-        }
+    def advise(cls, desc: str, top_n: int = 3) -> List[Dict[str, Any]]:
+        """念头→DNA 顾问: 返回按匹配度排序的候选 (透明可解释)。
+
+        每个候选: {name, score, matched, description, category}。
+        score = Σ 命中词长度 (长词更具区分度); matched = 命中的触发词。
+        空输入返回 []; 有输入但零命中则返回 [] (由 from_description 兜底)。"""
+        if not desc or not desc.strip():
+            return []
         desc_lower = desc.lower()
-        best, best_score = None, 0
-        for dna_name, kws in keywords.items():
-            score = sum(1 for kw in kws if kw in desc_lower)
-            if score > best_score:
-                best, best_score = dna_name, score
-        return cls.get(best) if best else None
+        ranked: List[Dict[str, Any]] = []
+        for dna_name, kws in cls._MATCH_KEYWORDS.items():
+            hits = [kw for kw in kws if kw.lower() in desc_lower]
+            if not hits:
+                continue
+            score = sum(len(kw) for kw in hits)
+            dna = cls.get(dna_name)
+            ranked.append({
+                "name": dna_name,
+                "score": score,
+                "matched": hits,
+                "description": dna.description if dna else "",
+                "category": dna.category if dna else "general",
+            })
+        ranked.sort(key=lambda r: (-r["score"], -len(r["matched"]), r["name"]))
+        return ranked[:top_n]
+
+    @classmethod
+    def from_description(cls, desc: str,
+                         fallback: bool = False) -> Optional[DNA]:
+        """根据描述匹配最近模板。fallback=True 时即使零命中也给出
+        最简 MCU 兜底模板(念头→板永不空手而归), 否则零命中返回 None。"""
+        ranked = cls.advise(desc, top_n=1)
+        if ranked:
+            return cls.get(ranked[0]["name"])
+        if fallback:
+            for cand in ("rp2040_minimal", "stm32g031_minimal",
+                         "ams1117_power"):
+                dna = cls.get(cand)
+                if dna:
+                    return dna
+        return None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -183,8 +218,8 @@ CircuitDNA.register(DNA(
 # ─────────────────────────────────────────────────────────────
 _esp32_components = [
     Comp("U1",  "ESP32-WROOM-32",  "RF_Module",             "ESP32-WROOM-32",             (50, 50),   "mcu",       "ESP32主模组(含WiFi/BT)"),
-    Comp("J1",  "USB_UART",        "Connector_USB",         "USB_Micro-B",                (15, 50),   "interface", "USB烧录口(CP2102/CH340)"),
-    Comp("U2",  "CP2102",          "Package_QFN",           "QFN-28_5x5mm_P0.5mm",        (15, 35),   "interface", "USB转串口"),
+    Comp("J1",  "USB_UART",        "Connector_USB",         "USB_Micro-B_GCT_USB3076-30-A",                (15, 50),   "interface", "USB烧录口(CP2102/CH340)"),
+    Comp("U2",  "CP2102",          "Package_DFN_QFN",       "QFN-28-1EP_5x5mm_P0.5mm_EP3.35x3.35mm", (15, 35), "interface", "USB转串口(CP2102 QFN-28 5x5 0.5mm)"),
     Comp("J2",  "Servo_PWM",       "Connector_PinHeader_2.54mm", "PinHeader_1x03_P2.54mm_Vertical", (75, 45), "interface", "舵机接口(PWM+5V+GND)"),
     Comp("J3",  "LED_Status",      "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical", (75, 60), "interface", "状态LED"),
     Comp("D1",  "LED_G",           "LED_SMD",               "LED_0603_1608Metric",        (70, 60),   "passive",   "WiFi连接指示"),
@@ -283,7 +318,7 @@ _drone_components = [
     Comp("C9",  "100nF",          "Capacitor_SMD",              "C_0603_1608Metric",                       (50, 40),  "passive",   "MCU去耦2"),
     Comp("C10", "100nF",          "Capacitor_SMD",              "C_0603_1608Metric",                       (52, 40),  "passive",   "MCU去耦3"),
     Comp("C11", "100nF",          "Capacitor_SMD",              "C_0603_1608Metric",                       (54, 40),  "passive",   "MCU去耦4"),
-    Comp("SW1", "SW_RESET",       "Button_Switch_SMD",          "SW_SPST_PTS645",                          (44, 58),  "interface", "复位按钮"),
+    Comp("SW1", "SW_RESET",       "Button_Switch_SMD",          "SW_SPST_PTS645Sx43SMTR92",                          (44, 58),  "interface", "复位按钮"),
     Comp("R1",  "10k",            "Resistor_SMD",               "R_0603_1608Metric",                       (44, 55),  "passive",   "复位上拉"),
     Comp("R2",  "10k",            "Resistor_SMD",               "R_0603_1608Metric",                       (44, 62),  "passive",   "BOOT0配置"),
     # 传感器
@@ -461,7 +496,7 @@ CircuitDNA.register(DNA(
 # Cortex-M0+ 64MHz, 8KB RAM, 32KB Flash, ¥2左右(立创)
 # ─────────────────────────────────────────────────────────────
 _stm32g031_components = [
-    Comp("U1",  "STM32G031G8Ux", "Package_DFN_QFN",         "UFQFPN-28_4x4mm_P0.5mm",                  (40, 40), "mcu",       "STM32G031G8U6 主控 M0+@64MHz"),
+    Comp("U1",  "STM32G031G8Ux", "Package_DFN_QFN",         "QFN-28_4x4mm_P0.5mm",                  (40, 40), "mcu",       "STM32G031G8U6 主控 M0+@64MHz"),
     Comp("U2",  "AMS1117-3.3",   "Package_TO_SOT_SMD",      "SOT-223-3_TabPin2",                        (15, 40), "power",     "3.3V LDO稳压"),
     Comp("C1",  "100nF",         "Capacitor_SMD",           "C_0402_1005Metric",                        (34, 33), "passive",   "MCU去耦1"),
     Comp("C2",  "100nF",         "Capacitor_SMD",           "C_0402_1005Metric",                        (36, 33), "passive",   "MCU去耦2"),
@@ -520,28 +555,28 @@ CircuitDNA.register(DNA(
 # DNA: STM32H743 高性能主控层 (S2)
 # ─────────────────────────────────────────────────────────────
 _stm32h743_components = [
-    Comp("U1",  "STM32H743VIT6",  "power",     (60.0, 35.0)),
-    Comp("Y1",  "25MHz",          "crystal",   (44.0, 26.0)),
-    Comp("C1",  "12pF",           "passive",   (42.0, 24.0)),
-    Comp("C2",  "12pF",           "passive",   (46.0, 24.0)),
-    Comp("Y2",  "32768Hz",        "crystal",   (44.0, 44.0)),
-    Comp("C3",  "12pF",           "passive",   (42.0, 43.0)),
-    Comp("C4",  "12pF",           "passive",   (46.0, 43.0)),
-    Comp("C5",  "100nF",          "passive",   (55.0, 25.0)),
-    Comp("C6",  "100nF",          "passive",   (57.0, 25.0)),
-    Comp("C7",  "100nF",          "passive",   (59.0, 25.0)),
-    Comp("C8",  "100nF",          "passive",   (61.0, 25.0)),
-    Comp("C9",  "4.7uF",          "passive",   (63.0, 25.0)),
-    Comp("C10", "4.7uF",          "passive",   (65.0, 25.0)),
-    Comp("R1",  "10k",            "passive",   (78.0, 25.0)),
-    Comp("C11", "100nF",          "passive",   (80.0, 25.0)),
-    Comp("SW1", "RESET_BTN",      "interface", (82.0, 20.0)),
-    Comp("R2",  "10k",            "passive",   (78.0, 44.0)),
-    Comp("J1",  "SWD_5PIN",       "interface", (88.0, 20.0)),
-    Comp("J2",  "JTAG_20PIN",     "interface", (88.0, 40.0)),
-    Comp("FB1", "BLM31PG600",     "passive",   (50.0, 20.0)),
-    Comp("FB2", "BLM31PG600",     "passive",   (50.0, 50.0)),
-    Comp("C12", "10uF",           "passive",   (52.0, 35.0)),
+    Comp("U1",  "STM32H743VIT6", "Package_QFP",                "LQFP-100_14x14mm_P0.5mm",            (60.0, 35.0), "mcu",     "STM32H743VIT6 480MHz Cortex-M7"),
+    Comp("Y1",  "25MHz",         "Crystal",                    "Crystal_SMD_3225-4Pin_3.2x2.5mm",    (44.0, 26.0), "crystal", "25MHz主晶振"),
+    Comp("C1",  "12pF",          "Capacitor_SMD",              "C_0402_1005Metric",                  (42.0, 24.0), "passive", "晶振负载电容"),
+    Comp("C2",  "12pF",          "Capacitor_SMD",              "C_0402_1005Metric",                  (46.0, 24.0), "passive", "晶振负载电容"),
+    Comp("Y2",  "32768Hz",       "Crystal",                    "Crystal_SMD_3215-2Pin_3.2x1.5mm",    (44.0, 44.0), "crystal", "RTC 32.768kHz"),
+    Comp("C3",  "12pF",          "Capacitor_SMD",              "C_0402_1005Metric",                  (42.0, 43.0), "passive", "RTC晶振负载电容"),
+    Comp("C4",  "12pF",          "Capacitor_SMD",              "C_0402_1005Metric",                  (46.0, 43.0), "passive", "RTC晶振负载电容"),
+    Comp("C5",  "100nF",         "Capacitor_SMD",              "C_0402_1005Metric",                  (55.0, 25.0), "passive", "VDD去耦"),
+    Comp("C6",  "100nF",         "Capacitor_SMD",              "C_0402_1005Metric",                  (57.0, 25.0), "passive", "VDD去耦"),
+    Comp("C7",  "100nF",         "Capacitor_SMD",              "C_0402_1005Metric",                  (59.0, 25.0), "passive", "VDD去耦"),
+    Comp("C8",  "100nF",         "Capacitor_SMD",              "C_0402_1005Metric",                  (61.0, 25.0), "passive", "VDD去耦"),
+    Comp("C9",  "4.7uF",         "Capacitor_SMD",              "C_0805_2012Metric",                  (63.0, 25.0), "passive", "VDDA滤波"),
+    Comp("C10", "4.7uF",         "Capacitor_SMD",              "C_0805_2012Metric",                  (65.0, 25.0), "passive", "VDDA滤波"),
+    Comp("R1",  "10k",           "Resistor_SMD",               "R_0402_1005Metric",                  (78.0, 25.0), "passive", "NRST上拉"),
+    Comp("C11", "100nF",         "Capacitor_SMD",              "C_0402_1005Metric",                  (80.0, 25.0), "passive", "NRST去抖"),
+    Comp("SW1", "RESET_BTN",     "Button_Switch_SMD",          "SW_SPST_SKQG_WithoutStem",           (82.0, 20.0), "interface","复位按键"),
+    Comp("R2",  "10k",           "Resistor_SMD",               "R_0402_1005Metric",                  (78.0, 44.0), "passive", "BOOT0下拉"),
+    Comp("J1",  "SWD_5PIN",      "Connector_PinHeader_2.54mm", "PinHeader_1x05_P2.54mm_Vertical",    (88.0, 20.0), "interface","SWD调试口"),
+    Comp("J2",  "JTAG_20PIN",    "Connector_PinHeader_2.54mm", "PinHeader_2x10_P2.54mm_Vertical",    (88.0, 40.0), "interface","JTAG 20Pin"),
+    Comp("FB1", "BLM31PG600",    "Inductor_SMD",               "L_1206_3216Metric",                  (50.0, 20.0), "passive", "VDD磁珠"),
+    Comp("FB2", "BLM31PG600",    "Inductor_SMD",               "L_1206_3216Metric",                  (50.0, 50.0), "passive", "VDDA磁珠"),
+    Comp("C12", "10uF",          "Capacitor_SMD",              "C_0805_2012Metric",                  (52.0, 35.0), "passive", "主电源储能"),
 ]
 _stm32h743_nets = {
     "VDD":       [("U1","VDD"),("C5","1"),("C6","1"),("C7","1"),("C8","1"),("C12","1"),("FB1","2")],
@@ -587,32 +622,32 @@ CircuitDNA.register(DNA(
 # DNA: ESP32-S3 + RS485隔离x2 + CAN通信层 (S3)
 # ─────────────────────────────────────────────────────────────
 _esp32s3_rs485_can_components = [
-    Comp("U1",  "ESP32-S3-WROOM-1",  "mcu",       (35.0, 35.0)),
-    Comp("U2",  "MAX3485EESA",        "interface", (68.0, 20.0)),
-    Comp("U3",  "MAX3485EESA",        "interface", (68.0, 48.0)),
-    Comp("U4",  "6N137",              "interface", (82.0, 20.0)),
-    Comp("U5",  "6N137",              "interface", (82.0, 48.0)),
-    Comp("U6",  "TJA1050T",           "interface", (68.0, 35.0)),
-    Comp("J1",  "RS485_A1",           "interface", (95.0, 18.0)),
-    Comp("J2",  "RS485_B1",           "interface", (95.0, 22.0)),
-    Comp("J3",  "RS485_A2",           "interface", (95.0, 46.0)),
-    Comp("J4",  "RS485_B2",           "interface", (95.0, 50.0)),
-    Comp("J5",  "CAN_H",              "interface", (95.0, 33.0)),
-    Comp("J6",  "CAN_L",              "interface", (95.0, 37.0)),
-    Comp("C1",  "100nF",              "passive",   (28.0, 25.0)),
-    Comp("C2",  "100nF",              "passive",   (30.0, 25.0)),
-    Comp("C3",  "10uF",               "passive",   (32.0, 25.0)),
-    Comp("R1",  "120",                "passive",   (95.0, 27.0)),
-    Comp("R2",  "120",                "passive",   (95.0, 43.0)),
-    Comp("R3",  "120",                "passive",   (95.0, 40.0)),
-    Comp("R4",  "470",                "passive",   (78.0, 16.0)),
-    Comp("R5",  "470",                "passive",   (78.0, 44.0)),
-    Comp("C4",  "100nF",              "passive",   (65.0, 15.0)),
-    Comp("C5",  "100nF",              "passive",   (65.0, 44.0)),
-    Comp("C6",  "100nF",              "passive",   (65.0, 32.0)),
-    Comp("J7",  "USB_C_CONN",         "interface", (12.0, 35.0)),
-    Comp("C7",  "100nF",              "passive",   (65.0, 32.0)),
-    Comp("SW1", "RESET_BTN",          "interface", (25.0, 15.0)),
+    Comp("U1",  "ESP32-S3-WROOM-1", "RF_Module",                  "ESP32-S3-WROOM-1",                 (35.0, 35.0), "mcu",      "ESP32-S3 WiFi/BLE模组"),
+    Comp("U2",  "MAX3485EESA",      "Package_SO",                 "SOIC-8_3.9x4.9mm_P1.27mm",         (68.0, 20.0), "interface","RS485收发器1"),
+    Comp("U3",  "MAX3485EESA",      "Package_SO",                 "SOIC-8_3.9x4.9mm_P1.27mm",         (68.0, 48.0), "interface","RS485收发器2"),
+    Comp("U4",  "6N137",            "Package_SO",                 "SOIC-8_3.9x4.9mm_P1.27mm",         (82.0, 20.0), "interface","光耦隔离1"),
+    Comp("U5",  "6N137",            "Package_SO",                 "SOIC-8_3.9x4.9mm_P1.27mm",         (82.0, 48.0), "interface","光耦隔离2"),
+    Comp("U6",  "TJA1050T",         "Package_SO",                 "SOIC-8_3.9x4.9mm_P1.27mm",         (68.0, 35.0), "interface","CAN收发器"),
+    Comp("J1",  "RS485_A1",         "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",  (95.0, 18.0), "interface","RS485总线1 A"),
+    Comp("J2",  "RS485_B1",         "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",  (95.0, 22.0), "interface","RS485总线1 B"),
+    Comp("J3",  "RS485_A2",         "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",  (95.0, 46.0), "interface","RS485总线2 A"),
+    Comp("J4",  "RS485_B2",         "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",  (95.0, 50.0), "interface","RS485总线2 B"),
+    Comp("J5",  "CAN_H",            "Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical",  (95.0, 33.0), "interface","CAN_H"),
+    Comp("J6",  "CAN_L",            "Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical",  (95.0, 37.0), "interface","CAN_L"),
+    Comp("C1",  "100nF",            "Capacitor_SMD",              "C_0402_1005Metric",                (28.0, 25.0), "passive",  "3V3去耦"),
+    Comp("C2",  "100nF",            "Capacitor_SMD",              "C_0402_1005Metric",                (30.0, 25.0), "passive",  "3V3去耦"),
+    Comp("C3",  "10uF",             "Capacitor_SMD",              "C_0805_2012Metric",                (32.0, 25.0), "passive",  "VBUS储能"),
+    Comp("R1",  "120",              "Resistor_SMD",               "R_0603_1608Metric",                (95.0, 27.0), "passive",  "RS485终端电阻1"),
+    Comp("R2",  "120",              "Resistor_SMD",               "R_0603_1608Metric",                (95.0, 43.0), "passive",  "RS485终端电阻2"),
+    Comp("R3",  "120",              "Resistor_SMD",               "R_0603_1608Metric",                (95.0, 40.0), "passive",  "CAN终端电阻"),
+    Comp("R4",  "470",              "Resistor_SMD",               "R_0603_1608Metric",                (78.0, 16.0), "passive",  "光耦限流1"),
+    Comp("R5",  "470",              "Resistor_SMD",               "R_0603_1608Metric",                (78.0, 44.0), "passive",  "光耦限流2"),
+    Comp("C4",  "100nF",            "Capacitor_SMD",              "C_0402_1005Metric",                (65.0, 15.0), "passive",  "隔离侧去耦"),
+    Comp("C5",  "100nF",            "Capacitor_SMD",              "C_0402_1005Metric",                (65.0, 44.0), "passive",  "隔离侧去耦"),
+    Comp("C6",  "100nF",            "Capacitor_SMD",              "C_0402_1005Metric",                (65.0, 32.0), "passive",  "CAN去耦"),
+    Comp("J7",  "USB_C_CONN",       "Connector_USB",              "USB_C_Receptacle_Amphenol_12401610E4-2A", (12.0, 35.0), "interface","USB-C供电/烧录"),
+    Comp("C7",  "100nF",            "Capacitor_SMD",              "C_0402_1005Metric",                (63.0, 32.0), "passive",  "3V3去耦"),
+    Comp("SW1", "RESET_BTN",        "Button_Switch_SMD",          "SW_SPST_SKQG_WithoutStem",         (25.0, 15.0), "interface","复位按键"),
 ]
 _esp32s3_rs485_can_nets = {
     "3V3":        [("U1","3V3"),("C1","1"),("C7","1"),("U6","VCC"),("R4","1"),("R5","1"),("C4","1"),("C5","1"),("C6","1")],
@@ -717,7 +752,7 @@ CircuitDNA.register(DNA(
 # 来源: WCH CH224K, 支持PD2.0/PD3.0/QC3.0, LCSC: C2988509
 # ─────────────────────────────────────────────────────────────
 _usb_pd_components = [
-    Comp("U1",  "CH224K",        "Package_SO",             "SOP-8_3.9x4.9mm_P1.27mm",                 (30.0, 25.0), "mcu",       "CH224K USB-C PD协议取电IC"),
+    Comp("U1",  "CH224K",        "Package_SO",             "SOIC-8_3.9x4.9mm_P1.27mm",                 (30.0, 25.0), "mcu",       "CH224K USB-C PD协议取电IC"),
     Comp("U2",  "AMS1117-3.3",   "Package_TO_SOT_SMD",     "SOT-223-3_TabPin2",                       (55.0, 25.0), "power",     "CH224K工作电源3.3V"),
     Comp("C1",  "100nF",         "Capacitor_SMD",          "C_0402_1005Metric",                        (27.0, 18.0), "passive",   "CH224K VCC去耦"),
     Comp("C2",  "10uF",          "Capacitor_SMD",          "C_0805_2012Metric",                        (22.0, 18.0), "passive",   "VBUS输入滤波"),
@@ -726,7 +761,7 @@ _usb_pd_components = [
     Comp("R1",  "0",             "Resistor_SMD",           "R_0402_1005Metric",                        (38.0, 18.0), "passive",   "CFG1: 0Ω=9V(按需换值)"),
     Comp("R2",  "0",             "Resistor_SMD",           "R_0402_1005Metric",                        (38.0, 22.0), "passive",   "CFG2: 配合CFG1/3决定电压"),
     Comp("R3",  "0",             "Resistor_SMD",           "R_0402_1005Metric",                        (38.0, 26.0), "passive",   "CFG3: 0Ω"),
-    Comp("J1",  "USB_C_IN",      "Connector",              "USB_C_Receptacle_GCT_USB4135_Vertical",    (5.0,  25.0), "interface", "USB-C母座输入"),
+    Comp("J1",  "USB_C_IN",      "Connector",              "USB_C_Receptacle_HRO_TYPE-C-31-M-12",    (5.0,  25.0), "interface", "USB-C母座输入"),
     Comp("J2",  "DC_OUT",        "Connector_PinHeader_2.54mm","PinHeader_1x02_P2.54mm_Vertical",       (70.0, 25.0), "interface", "PD取电直流输出"),
     Comp("D1",  "LED_G",         "LED_SMD",                "LED_0603_1608Metric",                      (65.0, 15.0), "passive",   "PG握手成功指示LED"),
     Comp("R4",  "1k",            "Resistor_SMD",           "R_0402_1005Metric",                        (60.0, 15.0), "passive",   "LED限流"),
@@ -764,24 +799,24 @@ CircuitDNA.register(DNA(
 # DNA: 安全保护层 TVS + ESD + 外部看门狗 (S6)
 # ─────────────────────────────────────────────────────────────
 _safety_protection_components = [
-    Comp("D1",  "SMBJ12A",       "power",     (15.0, 15.0)),
-    Comp("D2",  "SMBJ5.0A",      "power",     (15.0, 22.0)),
-    Comp("D3",  "SMAJ3.3A",      "power",     (15.0, 29.0)),
-    Comp("D4",  "MBRS340",       "power",     (15.0, 36.0)),
-    Comp("U1",  "USBLC6-2SC6",   "passive",   (35.0, 15.0)),
-    Comp("U2",  "TPD2E001",      "passive",   (35.0, 25.0)),
-    Comp("U3",  "TPD2E001",      "passive",   (35.0, 35.0)),
-    Comp("U4",  "TPS3823-33",    "misc",      (55.0, 20.0)),
-    Comp("R1",  "10k",           "passive",   (55.0, 30.0)),
-    Comp("C1",  "100nF",         "passive",   (55.0, 35.0)),
-    Comp("C2",  "10nF",          "passive",   (55.0, 40.0)),
-    Comp("F1",  "MF-MSMF150",    "power",     (8.0,  15.0)),
-    Comp("F2",  "MF-MSMF050",    "power",     (8.0,  22.0)),
-    Comp("C3",  "100nF",         "passive",   (25.0, 45.0)),
-    Comp("C4",  "100nF",         "passive",   (28.0, 45.0)),
-    Comp("R2",  "0",             "passive",   (35.0, 45.0)),
-    Comp("C5",  "100nF",         "passive",   (58.0, 20.0)),
-    Comp("C6",  "10uF",          "passive",   (60.0, 15.0)),
+    Comp("D1",  "SMBJ12A",     "Diode_SMD",         "D_SMB",                      (15.0, 15.0), "power",    "12V轨TVS"),
+    Comp("D2",  "SMBJ5.0A",    "Diode_SMD",         "D_SMB",                      (15.0, 22.0), "power",    "5V轨TVS"),
+    Comp("D3",  "SMAJ3.3A",    "Diode_SMD",         "D_SMA",                      (15.0, 29.0), "power",    "3V3轨TVS"),
+    Comp("D4",  "MBRS340",     "Diode_SMD",         "D_SMC",                      (15.0, 36.0), "power",    "反接保护肖特基"),
+    Comp("U1",  "USBLC6-2SC6", "Package_TO_SOT_SMD","SOT-23-6",                   (35.0, 15.0), "interface","USB ESD保护"),
+    Comp("U2",  "TPD2E001",    "Package_TO_SOT_SMD","SOT-23-6",                   (35.0, 25.0), "interface","RS485 ESD保护"),
+    Comp("U3",  "TPD2E001",    "Package_TO_SOT_SMD","SOT-23-6",                   (35.0, 35.0), "interface","CAN ESD保护"),
+    Comp("U4",  "TPS3823-33",  "Package_TO_SOT_SMD","SOT-23-5",                   (55.0, 20.0), "misc",     "外部看门狗"),
+    Comp("R1",  "10k",         "Resistor_SMD",      "R_0603_1608Metric",          (55.0, 30.0), "passive",  "WDI上拉"),
+    Comp("C1",  "100nF",       "Capacitor_SMD",     "C_0402_1005Metric",          (55.0, 35.0), "passive",  "3V3去耦"),
+    Comp("C2",  "10nF",        "Capacitor_SMD",     "C_0402_1005Metric",          (55.0, 40.0), "passive",  "看门狗定时电容"),
+    Comp("F1",  "MF-MSMF150",  "Fuse",              "Fuse_1812_4532Metric",       (8.0,  15.0), "power",    "1.5A自恢复保险丝"),
+    Comp("F2",  "MF-MSMF050",  "Fuse",              "Fuse_1206_3216Metric",       (8.0,  22.0), "power",    "0.5A自恢复保险丝"),
+    Comp("C3",  "100nF",       "Capacitor_SMD",     "C_0402_1005Metric",          (25.0, 45.0), "passive",  "USB去耦"),
+    Comp("C4",  "100nF",       "Capacitor_SMD",     "C_0402_1005Metric",          (28.0, 45.0), "passive",  "USB去耦"),
+    Comp("R2",  "0",           "Resistor_SMD",      "R_0603_1608Metric",          (35.0, 45.0), "passive",  "WDO跳线"),
+    Comp("C5",  "100nF",       "Capacitor_SMD",     "C_0402_1005Metric",          (58.0, 20.0), "passive",  "看门狗去耦"),
+    Comp("C6",  "10uF",        "Capacitor_SMD",     "C_0805_2012Metric",          (60.0, 15.0), "passive",  "3V3储能"),
 ]
 _safety_protection_nets = {
     "12V_IN":    [("F1","1"),("D1","A")],
@@ -826,25 +861,25 @@ CircuitDNA.register(DNA(
 # DNA: 12V工业电源层 DC-DC + 多路LDO (S1升级版)
 # ─────────────────────────────────────────────────────────────
 _industrial_power_components = [
-    Comp("U1",  "MP2307DN",     "power",   (25.0, 20.0)),
-    Comp("U2",  "AMS1117-3.3",  "power",   (50.0, 20.0)),
-    Comp("U3",  "AP2112K-1.8",  "power",   (65.0, 20.0)),
-    Comp("L1",  "4.7uH",        "power",   (25.0, 30.0)),
-    Comp("D1",  "SS34",         "power",   (20.0, 30.0)),
-    Comp("C1",  "100uF_16V",    "power",   (15.0, 20.0)),
-    Comp("C2",  "100uF_16V",    "power",   (17.0, 20.0)),
-    Comp("C3",  "10uF",         "power",   (35.0, 20.0)),
-    Comp("C4",  "100nF",        "power",   (37.0, 20.0)),
-    Comp("C5",  "10uF",         "power",   (55.0, 20.0)),
-    Comp("C6",  "100nF",        "power",   (57.0, 20.0)),
-    Comp("C7",  "10uF",         "power",   (70.0, 20.0)),
-    Comp("C8",  "100nF",        "power",   (72.0, 20.0)),
-    Comp("R1",  "100k",         "passive", (30.0, 32.0)),
-    Comp("R2",  "47k",          "passive", (30.0, 37.0)),
-    Comp("J1",  "12V_DC_IN",    "interface",(8.0, 20.0)),
-    Comp("J2",  "5V_OUT",       "interface",(80.0, 15.0)),
-    Comp("J3",  "3V3_OUT",      "interface",(80.0, 22.0)),
-    Comp("J4",  "1V8_OUT",      "interface",(80.0, 29.0)),
+    Comp("U1",  "MP2307DN",    "Package_SO",                 "SOIC-8_3.9x4.9mm_P1.27mm",         (25.0, 20.0), "power",    "3A同步降压DC-DC"),
+    Comp("U2",  "AMS1117-3.3", "Package_TO_SOT_SMD",         "SOT-223-3_TabPin2",                (50.0, 20.0), "power",    "3.3V LDO"),
+    Comp("U3",  "AP2112K-1.8", "Package_TO_SOT_SMD",         "SOT-23-5",                         (65.0, 20.0), "power",    "1.8V LDO"),
+    Comp("L1",  "4.7uH",       "Inductor_SMD",               "L_TDK_SLF6028",                    (25.0, 30.0), "power",    "降压储能电感"),
+    Comp("D1",  "SS34",        "Diode_SMD",                  "D_SMA",                            (20.0, 30.0), "power",    "续流肖特基"),
+    Comp("C1",  "100uF_16V",   "Capacitor_SMD",              "CP_Elec_6.3x5.4",                  (15.0, 20.0), "power",    "输入储能"),
+    Comp("C2",  "100uF_16V",   "Capacitor_SMD",              "CP_Elec_6.3x5.4",                  (17.0, 20.0), "power",    "输出储能"),
+    Comp("C3",  "10uF",        "Capacitor_SMD",              "C_0805_2012Metric",                (35.0, 20.0), "passive",  "输入陶瓷"),
+    Comp("C4",  "100nF",       "Capacitor_SMD",              "C_0402_1005Metric",                (37.0, 20.0), "passive",  "输入高频"),
+    Comp("C5",  "10uF",        "Capacitor_SMD",              "C_0805_2012Metric",                (55.0, 20.0), "passive",  "3V3输出"),
+    Comp("C6",  "100nF",       "Capacitor_SMD",              "C_0402_1005Metric",                (57.0, 20.0), "passive",  "3V3高频"),
+    Comp("C7",  "10uF",        "Capacitor_SMD",              "C_0805_2012Metric",                (70.0, 20.0), "passive",  "1V8输出"),
+    Comp("C8",  "100nF",       "Capacitor_SMD",              "C_0402_1005Metric",                (72.0, 20.0), "passive",  "1V8高频"),
+    Comp("R1",  "100k",        "Resistor_SMD",               "R_0603_1608Metric",                (30.0, 32.0), "passive",  "反馈上分压"),
+    Comp("R2",  "47k",         "Resistor_SMD",               "R_0603_1608Metric",                (30.0, 37.0), "passive",  "反馈下分压"),
+    Comp("J1",  "12V_DC_IN",   "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",  (8.0,  20.0), "interface","12V输入"),
+    Comp("J2",  "5V_OUT",      "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",  (80.0, 15.0), "interface","5V输出"),
+    Comp("J3",  "3V3_OUT",     "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",  (80.0, 22.0), "interface","3V3输出"),
+    Comp("J4",  "1V8_OUT",     "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",  (80.0, 29.0), "interface","1V8输出"),
 ]
 _industrial_power_nets = {
     "12V":   [("J1","1"),("C1","1"),("C2","1"),("U1","VIN")],
@@ -882,24 +917,24 @@ CircuitDNA.register(DNA(
 # DNA: 4.3寸TFT LCD + DVP摄像头 显示层 (S4)
 # ─────────────────────────────────────────────────────────────
 _lcd_tft_43_components = [
-    Comp("J1",  "FPC40_LCD",      "interface", (20.0, 25.0)),
-    Comp("J2",  "FPC24_CAMERA",   "interface", (20.0, 45.0)),
-    Comp("U1",  "GT911_TP",       "interface", (55.0, 20.0)),
-    Comp("R1",  "4.7k",           "passive",   (65.0, 16.0)),
-    Comp("R2",  "4.7k",           "passive",   (68.0, 16.0)),
-    Comp("C1",  "100nF",          "passive",   (55.0, 28.0)),
-    Comp("C2",  "10uF",           "passive",   (58.0, 28.0)),
-    Comp("U2",  "TXS0108E",       "interface", (75.0, 25.0)),
-    Comp("U3",  "TXS0108E",       "interface", (75.0, 40.0)),
-    Comp("C3",  "100nF",          "passive",   (72.0, 22.0)),
-    Comp("C4",  "100nF",          "passive",   (72.0, 38.0)),
-    Comp("R3",  "33",             "passive",   (42.0, 20.0)),
-    Comp("R4",  "33",             "passive",   (44.0, 20.0)),
-    Comp("R5",  "33",             "passive",   (46.0, 20.0)),
-    Comp("R6",  "33",             "passive",   (48.0, 20.0)),
-    Comp("Q1",  "S8050",          "interface", (85.0, 20.0)),
-    Comp("R7",  "10k",            "passive",   (83.0, 16.0)),
-    Comp("J3",  "BL_PWM",         "interface", (90.0, 20.0)),
+    Comp("J1",  "FPC40_LCD",    "Connector_FFC-FPC",          "Hirose_FH12-40S-0.5SH_1x40-1MP_P0.50mm_Horizontal", (20.0, 25.0), "interface","40P LCD FPC"),
+    Comp("J2",  "FPC24_CAMERA", "Connector_FFC-FPC",          "Hirose_FH12-24S-0.5SH_1x24-1MP_P0.50mm_Horizontal", (20.0, 45.0), "interface","24P DVP摄像头FPC"),
+    Comp("U1",  "GT911_TP",     "Package_DFN_QFN",            "QFN-28-1EP_4x4mm_P0.4mm_EP2.4x2.4mm",  (55.0, 20.0), "interface","电容触摸控制器"),
+    Comp("R1",  "4.7k",         "Resistor_SMD",               "R_0603_1608Metric",                  (65.0, 16.0), "passive",  "I2C SDA上拉"),
+    Comp("R2",  "4.7k",         "Resistor_SMD",               "R_0603_1608Metric",                  (68.0, 16.0), "passive",  "I2C SCL上拉"),
+    Comp("C1",  "100nF",        "Capacitor_SMD",              "C_0402_1005Metric",                  (55.0, 28.0), "passive",  "触摸IC去耦"),
+    Comp("C2",  "10uF",         "Capacitor_SMD",              "C_0805_2012Metric",                  (58.0, 28.0), "passive",  "触摸IC储能"),
+    Comp("U2",  "TXS0108E",     "Package_SO",                 "TSSOP-20_4.4x6.5mm_P0.65mm",         (75.0, 25.0), "interface","8位电平转换1"),
+    Comp("U3",  "TXS0108E",     "Package_SO",                 "TSSOP-20_4.4x6.5mm_P0.65mm",         (75.0, 40.0), "interface","8位电平转换2"),
+    Comp("C3",  "100nF",        "Capacitor_SMD",              "C_0402_1005Metric",                  (72.0, 22.0), "passive",  "电平转换去耦"),
+    Comp("C4",  "100nF",        "Capacitor_SMD",              "C_0402_1005Metric",                  (72.0, 38.0), "passive",  "电平转换去耦"),
+    Comp("R3",  "33",           "Resistor_SMD",               "R_0603_1608Metric",                  (42.0, 20.0), "passive",  "RGB串阻"),
+    Comp("R4",  "33",           "Resistor_SMD",               "R_0603_1608Metric",                  (44.0, 20.0), "passive",  "RGB串阻"),
+    Comp("R5",  "33",           "Resistor_SMD",               "R_0603_1608Metric",                  (46.0, 20.0), "passive",  "RGB串阻"),
+    Comp("R6",  "33",           "Resistor_SMD",               "R_0603_1608Metric",                  (48.0, 20.0), "passive",  "RGB串阻"),
+    Comp("Q1",  "S8050",        "Package_TO_SOT_SMD",         "SOT-23",                             (85.0, 20.0), "interface","背光驱动三极管"),
+    Comp("R7",  "10k",          "Resistor_SMD",               "R_0603_1608Metric",                  (83.0, 16.0), "passive",  "背光基极电阻"),
+    Comp("J3",  "BL_PWM",       "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical",    (90.0, 20.0), "interface","背光PWM输入"),
 ]
 _lcd_tft_43_nets = {
     "3V3":       [("U1","VDD"),("C1","1"),("C2","1"),("U2","VCCA"),("U3","VCCA"),("R1","1"),("R2","1"),("R7","1")],
@@ -963,12 +998,6 @@ def auto_layout(dna: DNA) -> DNA:
     usable_h = h - 2 * margin
     MIN_SPACING = max(2.5, min(4.0, w * 0.04))  # 最小元件间距mm
 
-    # 按组分类元件
-    groups: Dict[str, list] = {}
-    for comp in dna.components:
-        g = comp.group
-        groups.setdefault(g, []).append(comp)
-
     # 组的中心X位置 (0~1)
     GROUP_CX = {
         "power":     0.12,
@@ -1000,19 +1029,36 @@ def auto_layout(dna: DNA) -> DNA:
         # 找不到空位，强制放置
         return (round(cx + col_offset, 2), round(margin + cy_start * usable_h, 2))
 
-    # 布局顺序: MCU → 晶振 → 电源 → 无源/去耦 → 接口 → 其他
-    order = ["mcu", "crystal", "power", "passive", "interface", "misc"]
-    cy_start = {g: 0.15 for g in order}
+    # 知其雄守其雌·因连接生形: 模板里手工布的坐标往往已是依电路意图排好的可布线布局,
+    # 粗暴重排反而把密板挤成拥塞(实测 esp32s3_rs485_can 重排后 4 层仍剩 1 条网络布不通,
+    # 保留原坐标则 4 层 124 线全布通 drc=0)。故只动"确有问题"的元件(出界/互相重叠),
+    # 其余原样保留——最小干预, 既守住已成立的布局, 又修掉真正的冲突。
+    def _in_bounds(p) -> bool:
+        return bool(p) and 0.0 <= p[0] <= w and 0.0 <= p[1] <= h
 
-    for g in order:
+    cy_start = {g: 0.15 for g in GROUP_CX}
+    relocate: List = []
+    # 第一遍: 贪心保留合法且互不重叠的原始坐标
+    for comp in dna.components:
+        p = comp.pos
+        if _in_bounds(p) and not any(math.hypot(p[0] - px, p[1] - py) < MIN_SPACING
+                                     for px, py in placed):
+            placed.append(p)
+        else:
+            relocate.append(comp)
+
+    # 第二遍: 仅对出界/重叠的元件按功能分区另寻空位
+    reloc_groups: Dict[str, list] = {}
+    for comp in relocate:
+        reloc_groups.setdefault(comp.group, []).append(comp)
+    for g, comps in reloc_groups.items():
         cx_rel = GROUP_CX.get(g, 0.5)
-        for idx, comp in enumerate(groups.get(g, [])):
-            pos = _find_free_pos(cx_rel, cy_start[g], idx)
+        for idx, comp in enumerate(comps):
+            pos = _find_free_pos(cx_rel, cy_start.get(g, 0.15), idx)
             comp.pos = pos
             placed.append(pos)
-            cy_start[g] += (MIN_SPACING / usable_h)
+            cy_start[g] = cy_start.get(g, 0.15) + (MIN_SPACING / usable_h)
 
-    # 将DNA中components的pos更新为已计算值
     return dna
 
 
@@ -1199,7 +1245,7 @@ _w5500_components = [
     Comp("C8",  "4.7uF",          "Capacitor_SMD",           "C_0805_2012Metric",                       (50.0, 28.0), "passive",   "1.2V滤波"),
     Comp("R1",  "12k",            "Resistor_SMD",            "R_0402_1005Metric",                       (30.0, 44.0), "passive",   "PMODE0(100M全双工)"),
     Comp("R2",  "12k",            "Resistor_SMD",            "R_0402_1005Metric",                       (34.0, 44.0), "passive",   "PMODE2配置"),
-    Comp("J1",  "RJ45_MagJack",   "Connector",               "RJ45_HanRun_HR911105A",                   (70.0, 35.0), "interface", "RJ45+变压器一体座 HY911105A"),
+    Comp("J1",  "RJ45_MagJack",   "Connector",               "RJ45_Hanrun_HR911105A_Horizontal",                   (70.0, 35.0), "interface", "RJ45+变压器一体座 HY911105A"),
     Comp("J2",  "SPI_MCU",        "Connector_PinHeader_2.54mm","PinHeader_2x04_P2.54mm_Vertical",       (10.0, 35.0), "interface", "SPI口(MOSI/MISO/SCK/CSn/INT/RST/3V3/GND)"),
 ]
 _w5500_nets = {
@@ -1243,7 +1289,7 @@ CircuitDNA.register(DNA(
 # 来源: Semtech SX1276 + Ai-Thinker Ra-02模组, GitHub lorawan精华
 # ─────────────────────────────────────────────────────────────
 _lora_components = [
-    Comp("U1",  "Ra-02_LoRa",    "RF_Module",              "Ai-Thinker_Ra-02_SMD_21x15.5mm",          (35.0, 30.0), "mcu",       "Ai-Thinker Ra-02 SX1276 LoRa模组"),
+    Comp("U1",  "Ra-02_LoRa",    "RF_Module",              "Ai-Thinker-Ra-01-LoRa",                   (35.0, 30.0), "mcu",       "Ai-Thinker Ra-02 SX1276 LoRa模组(与Ra-01同封装16焊盘)"),
     Comp("U2",  "AMS1117-3.3",   "Package_TO_SOT_SMD",     "SOT-223-3_TabPin2",                       (10.0, 30.0), "power",     "3.3V LDO (Ra-02严格需3.3V)"),
     Comp("C1",  "10uF",          "Capacitor_SMD",          "C_0805_2012Metric",                        (7.0,  25.0), "passive",   "LDO输入滤波"),
     Comp("C2",  "10uF",          "Capacitor_SMD",          "C_0805_2012Metric",                        (7.0,  35.0), "passive",   "LDO输出滤波"),
@@ -1252,7 +1298,7 @@ _lora_components = [
     Comp("R2",  "1k",            "Resistor_SMD",           "R_0402_1005Metric",                        (57.0, 18.0), "passive",   "DIO0 LED限流"),
     Comp("D1",  "LED_B",         "LED_SMD",                "LED_0603_1608Metric",                      (62.0, 18.0), "passive",   "DIO0收发状态指示LED"),
     Comp("J1",  "SPI_CTRL",      "Connector_PinHeader_2.54mm","PinHeader_2x04_P2.54mm_Vertical",       (58.0, 30.0), "interface", "SPI+控制(NSS/SCK/MOSI/MISO/DIO0/DIO1/RST/3V3)"),
-    Comp("J2",  "ANT_SMA",       "Connector",              "SMA_THT_Vertical",                         (35.0, 62.0), "interface", "SMA天线(433MHz/868MHz/915MHz)"),
+    Comp("J2",  "ANT_SMA",       "Connector",              "SMA_Amphenol_132134_Vertical",                         (35.0, 62.0), "interface", "SMA天线(433MHz/868MHz/915MHz)"),
     Comp("J3",  "PWR_IN",        "Connector_PinHeader_2.54mm","PinHeader_1x02_P2.54mm_Vertical",       (5.0,  18.0), "interface", "5V/GND电源输入"),
     Comp("C4",  "100nF",         "Capacitor_SMD",          "C_0402_1005Metric",                        (13.0, 25.0), "passive",   "AMS1117输出高频去耦"),
 ]
@@ -1302,7 +1348,7 @@ _nrf52840_components = [
     Comp("SW1", "RESET",          "Button_SMD",             "SW_SPST_B3U-1000P",                       (50.0, 22.0), "interface", "复位按钮"),
     Comp("R1",  "10k",            "Resistor_SMD",           "R_0402_1005Metric",                       (44.0, 22.0), "passive",   "RESET上拉"),
     Comp("J1",  "SWD_DEBUG",      "Connector_PinHeader_2.54mm","PinHeader_1x04_P2.54mm_Vertical",      (58.0, 22.0), "interface", "SWD调试(VCC/SWDIO/SWDCLK/GND)"),
-    Comp("J2",  "USB_C",          "Connector",              "USB_C_Receptacle_GCT_USB4135_Vertical",   (5.0,  50.0), "interface", "USB-C口(nRF52840原生USB2.0全速)"),
+    Comp("J2",  "USB_C",          "Connector",              "USB_C_Receptacle_HRO_TYPE-C-31-M-12",   (5.0,  50.0), "interface", "USB-C口(nRF52840原生USB2.0全速)"),
     Comp("J3",  "GPIO_H",         "Connector_PinHeader_2.54mm","PinHeader_1x10_P2.54mm_Vertical",      (60.0, 35.0), "interface", "P0.00-P0.09(含UART/SPI/I2C复用)"),
     Comp("J4",  "GPIO_L",         "Connector_PinHeader_2.54mm","PinHeader_1x08_P2.54mm_Vertical",      (20.0, 55.0), "interface", "P0.28-P0.31+P1.00-P1.03"),
     Comp("J5",  "PWR_IN",         "Connector_PinHeader_2.54mm","PinHeader_1x02_P2.54mm_Vertical",      (5.0,  18.0), "interface", "3.3V/GND直入(绕过LDO)"),
@@ -1371,7 +1417,7 @@ _smartwatch_components = [
          "SOT-23-5",                                  (6.0,  19.0), "power",
          "3.3V 600mA超低噪声LDO-射频专用(LCSC C51118)"),
     Comp("U3",  "TP4056",            "Package_SOP",
-         "SOP-8_3.9x4.9mm_P1.27mm",                  (6.0,  32.0), "power",
+         "SOIC-8_3.9x4.9mm_P1.27mm",                  (6.0,  32.0), "power",
          "500mA LiPo线性充电管理IC(LCSC C16581)"),
     Comp("U4",  "DW01A",             "Package_TO_SOT_SMD",
          "SOT-23-6",                                  (12.0, 38.0), "power",
@@ -1439,11 +1485,11 @@ _smartwatch_components = [
          "马达续流保护二极管"),
     # ── 接口连接器 ────────────────────────────────────────────
     Comp("J1",  "USB_C_CHG",         "Connector",
-         "USB_C_Receptacle_GCT_USB4135_Vertical",      (5.0,   3.0), "interface",
+         "USB_C_Receptacle_HRO_TYPE-C-31-M-12",      (5.0,   3.0), "interface",
          "USB-C充电/供电接口"),
     Comp("J2",  "OLED_FPC_12P",      "Connector_FFC-FPC",
-         "FFC_FPC_12-Pin_P0.5mm",                     (25.0,   3.0), "interface",
-         "1.54寸OLED显示屏FPC 12Pin 0.5mm间距"),
+         "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal", (25.0, 3.0), "interface",
+         "1.54寸OLED显示屏FPC 12Pin 0.5mm间距(Hirose FH12-12S)"),
     Comp("J3",  "BATTERY_JST",       "Connector_JST",
          "JST_PH_S2B-PH-K_1x02_P2.0mm_Horizontal",   (36.0, 28.0), "interface",
          "LiPo电池JST-PH-2P连接器"),
@@ -1539,7 +1585,7 @@ CircuitDNA.register(DNA(
 # ─────────────────────────────────────────────────────────────
 _aerial_components = [
     # ── 电源输入保护 (VBAT 3S-6S: 12.6-25.2V) ────────────────
-    Comp("J1",  "XT60_FEMALE",    "Connector",               "XT60_Female_PCB_Horizontal",          ( 3, 25), "interface", "XT60电池输入(3S-6S LiPo)"),
+    Comp("J1",  "XT60_FEMALE",    "Connector_AMASS",        "AMASS_XT60-F_1x02_P7.20mm_Vertical",  ( 3, 25), "interface", "XT60电池输入(3S-6S LiPo)"),
     Comp("F1",  "FUSE_10A",       "Fuse",                    "Fuse_1812_4532Metric",                (10, 25), "power",     "主保险丝10A(坠机短路保护)"),
     Comp("TVS1","SMAJ28A",        "Diode_SMD",               "D_SMA",                               (14, 25), "power",     "TVS浪涌保护28V(防反接/过压)"),
     Comp("C1",  "470uF_35V",      "Capacitor_THT",           "CP_Radial_D10.0mm_P5.00mm",           (18, 20), "passive",   "VBAT bulk滤波470uF(ESC瞬态)"),
@@ -1571,7 +1617,7 @@ _aerial_components = [
     Comp("C15", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (22, 18), "passive",   "MCU VDD去耦"),
     Comp("C16", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (24, 18), "passive",   "MCU VDDA去耦"),
     Comp("C17", "4R7uF",          "Capacitor_SMD",           "C_0805_2012Metric",                   (26, 18), "passive",   "MCU VDDA bulk滤波"),
-    Comp("SW1", "SW_RESET",       "Button_Switch_SMD",       "SW_SPST_PTS645",                      (16, 28), "interface", "复位按键"),
+    Comp("SW1", "SW_RESET",       "Button_Switch_SMD",       "SW_SPST_PTS645Sx43SMTR92",                      (16, 28), "interface", "复位按键"),
     Comp("R2",  "10k",            "Resistor_SMD",            "R_0402_1005Metric",                   (16, 26), "passive",   "NRST上拉10k"),
     Comp("R3",  "10k",            "Resistor_SMD",            "R_0402_1005Metric",                   (16, 30), "passive",   "BOOT0下拉10k(正常启动)"),
     # ── 外部看门狗 TPS3813K50 (1.6s超时→硬件复位MCU) ─────────
@@ -1579,17 +1625,17 @@ _aerial_components = [
     Comp("C18", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (14, 37), "passive",   "WDT去耦"),
     Comp("R4",  "10k",            "Resistor_SMD",            "R_0402_1005Metric",                   (18, 37), "passive",   "WDI上拉(MCU未喂狗→复位)"),
     # ── 主IMU ICM-42688-P (SPI1, 软挂载隔振) ─────────────────
-    Comp("U6",  "ICM-42688-P",    "Package_DFN_QFN",         "QFN-24-1EP_3x3mm_P0.4mm_EP1.65x1.65mm", (38, 10), "mcu",    "主IMU ICM-42688-P(SPI1,32kHz,软挂载)"),
+    Comp("U6",  "ICM-42688-P",    "Sensor_Motion",          "InvenSense_QFN-24_3x3mm_P0.4mm", (38, 10), "mcu",    "主IMU ICM-42688-P(SPI1,32kHz,软挂载)"),
     Comp("C19", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (36,  8), "passive",   "IMU1 VDD去耦"),
     Comp("C20", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (38,  8), "passive",   "IMU1 VDDIO去耦"),
     Comp("C21", "10uF",           "Capacitor_SMD",           "C_0603_1608Metric",                   (40,  8), "passive",   "IMU1 bulk滤波"),
     Comp("R5",  "100R",           "Resistor_SMD",            "R_0402_1005Metric",                   (36, 11), "passive",   "SPI1 CLK串联电阻(EMI抑制)"),
     # ── 备份IMU ICM-20602 (SPI2, 独立失效域) ─────────────────
-    Comp("U7",  "ICM-20602",      "Package_DFN_QFN",         "QFN-16-1EP_3x3mm_P0.5mm_EP1.5x1.5mm",   (38, 22), "mcu",    "备份IMU ICM-20602(SPI2,独立芯片)"),
+    Comp("U7",  "ICM-20602",      "Package_DFN_QFN",         "HVQFN-16-1EP_3x3mm_P0.5mm_EP1.5x1.5mm",   (38, 22), "mcu",    "备份IMU ICM-20602(SPI2,独立芯片)"),
     Comp("C22", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (36, 20), "passive",   "IMU2 VDD去耦"),
     Comp("C23", "10uF",           "Capacitor_SMD",           "C_0603_1608Metric",                   (40, 20), "passive",   "IMU2 bulk滤波"),
     # ── 气压计 MS5611 (SPI3, 气密封装建议) ───────────────────
-    Comp("U8",  "MS5611-01BA03",  "Package_LCC",             "LCC-8_5x3mm",                         (38, 32), "mcu",       "气压计MS5611(SPI3,10cm精度)"),
+    Comp("U8",  "MS5611-01BA03",  "Package_LGA",             "LGA-8_3x5mm_P1.25mm",                 (38, 32), "mcu",       "气压计MS5611(SPI3,10cm精度)"),
     Comp("C24", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   (36, 30), "passive",   "气压计VDD去耦"),
     Comp("C25", "10uF",           "Capacitor_SMD",           "C_0603_1608Metric",                   (40, 30), "passive",   "气压计bulk滤波"),
     # ── I2C上拉 (外置指南针/INA226共用) ──────────────────────
@@ -1601,10 +1647,10 @@ _aerial_components = [
     Comp("R9",  "5R1k",           "Resistor_SMD",            "R_0402_1005Metric",                   ( 7, 42), "passive",   "USB CC2 5.1k"),
     Comp("C26", "100nF",          "Capacitor_SMD",           "C_0402_1005Metric",                   ( 9, 42), "passive",   "USB VBUS去耦"),
     # ── 电机输出接口 x4 (DSHOT600/PWM) ───────────────────────
-    Comp("J3",  "MOTOR1_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Horizontal", (45,  8), "interface", "电机1 ESC接口(DSHOT+5V+GND)"),
-    Comp("J4",  "MOTOR2_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Horizontal", (45, 14), "interface", "电机2 ESC接口"),
-    Comp("J5",  "MOTOR3_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Horizontal", (45, 20), "interface", "电机3 ESC接口"),
-    Comp("J6",  "MOTOR4_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Horizontal", (45, 26), "interface", "电机4 ESC接口"),
+    Comp("J3",  "MOTOR1_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Vertical", (45,  8), "interface", "电机1 ESC接口(DSHOT+5V+GND)"),
+    Comp("J4",  "MOTOR2_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Vertical", (45, 14), "interface", "电机2 ESC接口"),
+    Comp("J5",  "MOTOR3_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Vertical", (45, 20), "interface", "电机3 ESC接口"),
+    Comp("J6",  "MOTOR4_JST",     "Connector_JST",           "JST_SH_BM03B-SRSS-TB_1x03-1MP_P1.00mm_Vertical", (45, 26), "interface", "电机4 ESC接口"),
     # ── UART外设接口 (ArduPilot 6×UART) ──────────────────────
     Comp("J7",  "GPS1_JST4",      "Connector_JST",           "JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal",  (37, 35), "interface", "GPS1 UART1(Ublox M9N)"),
     Comp("J8",  "TELEM1_JST4",    "Connector_JST",           "JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal",  (37, 40), "interface", "遥测1 UART2(MAVLink地面站)"),
@@ -1629,8 +1675,8 @@ _aerial_nets = {
     "VBAT":      [("J1","1"),  ("F1","1"),  ("C1","1"),  ("C2","1"),  ("TVS1","1"), ("R1","1"),  ("U1","3"),  ("C3","1"),  ("R12","1")],
     "VBAT_FUSED":[("F1","2"),  ("TVS1","2"),("R1","2"),  ("U3","1")],
     "VCC_5V":    [("U1","2"),  ("L1","2"),  ("C4","1"),  ("C5","1"),  ("C6","1"),  ("U2","1"),  ("J3","2"),  ("J4","2"),  ("J5","2"),  ("J6","2"),  ("J7","2"),  ("J8","2"),  ("J9","2"),  ("J10","2"), ("J11","2"), ("J12","1")],
-    "VCC_3V3":   [("U2","2"),  ("C7","1"),  ("C8","1"),  ("C9","1"),  ("C10","1"), ("U4","1"),  ("U3","4"),  ("U5","1"),  ("U6","1"),  ("U7","1"),  ("U8","1"),  ("C14","1"), ("C15","1"), ("C16","1"), ("C17","1"), ("C18","1"), ("C19","1"), ("C20","1"), ("C21","1"), ("C22","1"), ("C23","1"), ("C24","1"), ("C25","1"), ("R2","1"),  ("R6","1"),  ("R7","1"),  ("D2","1"),  ("J12","2"), ("C11","1"), ("C26","1"), ("R4","1")],
-    "GND":       [("J1","2"),  ("C1","2"),  ("C2","2"),  ("TVS1","3"),("U1","1"),  ("D1","2"),  ("C3","2"),  ("C4","2"),  ("C5","2"),  ("C6","2"),  ("U2","3"),  ("C7","2"),  ("C8","2"),  ("C9","2"),  ("C10","2"), ("U3","2"),  ("U3","5"),  ("R1","2"),  ("C11","2"), ("U4","2"),  ("C12","2"), ("C13","2"), ("C14","2"), ("C15","2"), ("C16","2"), ("C17","2"), ("SW1","2"),  ("U5","2"),  ("C18","2"), ("U6","2"),  ("C19","2"), ("C20","2"), ("C21","2"), ("U7","2"),  ("C22","2"), ("C23","2"), ("U8","2"),  ("C24","2"), ("C25","2"), ("R6","2"),  ("R7","2"),  ("D2","2"),  ("D3","2"),  ("J3","3"),  ("J4","3"),  ("J5","3"),  ("J6","3"),  ("J2","4"),  ("C26","2"), ("R13","2"), ("C27","2"), ("J12","4")],
+    "VCC_3V3":   [("U2","2"),  ("C7","1"),  ("C8","1"),  ("C9","1"),  ("C10","1"), ("U4","1"),  ("U3","4"),  ("U5","1"),  ("U6","1"),  ("U7","1"),  ("U8","1"),  ("C14","1"), ("C15","1"), ("C16","1"), ("C17","1"), ("C18","1"), ("C19","1"), ("C20","1"), ("C21","1"), ("C22","1"), ("C23","1"), ("C24","1"), ("C25","1"), ("R2","1"),  ("R6","1"),  ("R7","1"),  ("D2","1"),  ("J12","2"), ("C11","1"), ("R4","1")],
+    "GND":       [("J1","2"),  ("C1","2"),  ("C2","2"),  ("TVS1","3"),("U1","1"),  ("D1","2"),  ("C3","2"),  ("C4","2"),  ("C5","2"),  ("C6","2"),  ("U2","3"),  ("C7","2"),  ("C8","2"),  ("C9","2"),  ("C10","2"), ("U3","2"),  ("U3","5"),  ("R1","2"),  ("C11","2"), ("U4","2"),  ("C12","2"), ("C13","2"), ("C14","2"), ("C15","2"), ("C16","2"), ("C17","2"), ("SW1","2"),  ("U5","2"),  ("C18","2"), ("U6","2"),  ("C19","2"), ("C20","2"), ("C21","2"), ("U7","2"),  ("C22","2"), ("C23","2"), ("U8","2"),  ("C24","2"), ("C25","2"), ("R6","2"),  ("R7","2"),  ("D2","2"),  ("D3","2"),  ("J3","3"),  ("J4","3"),  ("J5","3"),  ("J6","3"),  ("J2","GND"),  ("C26","2"), ("R13","2"), ("C27","2"), ("J12","4")],
     # ── MCU时钟 ───────────────────────────────────────────────
     "OSC_IN":    [("U4","3"),  ("Y1","1"),  ("C12","1")],
     "OSC_OUT":   [("U4","4"),  ("Y1","2"),  ("C13","1")],
@@ -1678,10 +1724,11 @@ _aerial_nets = {
     "UART4_TX":  [("U4","71"), ("J11","3")],
     "UART4_RX":  [("U4","72"), ("J11","4")],
     # ── USB ──────────────────────────────────────────────────
-    "USB_DP":    [("U4","80"), ("J2","2")],
-    "USB_DM":    [("U4","81"), ("J2","3")],
-    "USB_CC1":   [("J2","5"),  ("R8","2")],
-    "USB_CC2":   [("J2","6"),  ("R9","2")],
+    "USB_VBUS":  [("J2","VBUS"), ("C26","1")],
+    "USB_DP":    [("U4","80"), ("J2","DP")],
+    "USB_DM":    [("U4","81"), ("J2","DM")],
+    "USB_CC1":   [("J2","CC1"),  ("R8","2")],
+    "USB_CC2":   [("J2","CC2"),  ("R9","2")],
     # ── SWD调试 ───────────────────────────────────────────────
     "SWDIO":     [("U4","90"), ("J12","3")],
     "SWDCLK":    [("U4","91"), ("J12","5")],

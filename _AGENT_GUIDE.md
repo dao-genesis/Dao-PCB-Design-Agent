@@ -142,7 +142,7 @@ DNA选择 → .kicad_pcb生成 → DRC检查+自动修复 → Gerber导出 → i
 | P2 | `kicad-python` | 等PyPI稳定后替代kicad_native.py | 实时KiCad交互, 消除ABI限制 |
 | P3 | SKiDL KICAD9 | `generate_netlist(tool=KICAD9)` | 原生KiCad 9 netlist |
 
-> 详见 [`线上资源参考.md`](./线上资源参考.md)
+> 详见 [`docs/线上资源参考.md`](./docs/线上资源参考.md)
 
 ## 验证状态 (2026-04-08)
 

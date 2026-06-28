@@ -28,6 +28,8 @@ import csv
 import json
 import math
 import logging
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
@@ -35,6 +37,11 @@ from dataclasses import dataclass, field
 sys.path.insert(0, str(Path(__file__).parent))
 
 from circuit_dna import CircuitDNA, DNA, Comp
+
+try:
+    import _pcb_bootstrap
+except Exception:  # pragma: no cover - bootstrap 缺失时降级
+    _pcb_bootstrap = None
 
 log = logging.getLogger("pcb_jlcpcb")
 
@@ -343,6 +350,63 @@ class JLCPCBHelper:
                 rotation=0.0,
             ))
         return entries
+
+    def generate_cpl_from_board(self, pcb_path: str) -> Optional[List[CPLEntry]]:
+        """从真实 .kicad_pcb 用 kicad-cli 导出权威贴装坐标 (与 Gerber 同源)。
+
+        DNA 标称坐标(generate_cpl)与真实布局板器件位置不一致——直接拿去
+        JLCPCB 贴片会整板错位。此处以 `kicad-cli pcb export pos` 解析真实板,
+        保证 CPL 与 Gerber 严格同源(反者道之动: 取真实而非标称)。
+        失败返回 None, 由调用方降级到 generate_cpl。"""
+        if _pcb_bootstrap is None:
+            return None
+        try:
+            env = _pcb_bootstrap.detect_env()
+        except Exception:
+            return None
+        cli = env.get("kicad_cli") if isinstance(env, dict) else None
+        if not cli or not Path(pcb_path).is_file():
+            return None
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                out = str(Path(td) / "pos.csv")
+                r = subprocess.run(
+                    [cli, "pcb", "export", "pos", "--format", "csv",
+                     "--units", "mm", "--output", out, pcb_path],
+                    capture_output=True, text=True, timeout=60)
+                if r.returncode != 0 or not Path(out).is_file():
+                    log.warning("kicad-cli export pos 失败: %s", r.stderr.strip())
+                    return None
+                entries: List[CPLEntry] = []
+                with open(out, newline="", encoding="utf-8-sig") as f:
+                    for row in csv.DictReader(f):
+                        side = (row.get("Side") or "top").strip().lower()
+                        entries.append(CPLEntry(
+                            ref=row.get("Ref", "").strip(),
+                            mid_x=round(float(row.get("PosX", 0) or 0), 3),
+                            mid_y=round(float(row.get("PosY", 0) or 0), 3),
+                            layer="Bottom" if side == "bottom" else "Top",
+                            rotation=round(float(row.get("Rot", 0) or 0), 3),
+                        ))
+                return entries or None
+        except Exception as e:
+            log.warning("从真实板导出 CPL 异常: %s", e)
+            return None
+
+    def validate_bom(self, template_name: str) -> Dict[str, Any]:
+        """诚实校验 BOM 可制造性(宁缺毋假): 标出无 LCSC 料号匹配的器件。
+
+        返回 {total, matched, unmatched:[{ref,value}], assemblable: bool}。
+        unmatched 非空 = 还不能直接全自动 SMT 贴片, 需人工补料号。"""
+        bom = self.generate_bom(template_name)
+        unmatched = [{"ref": e.ref, "value": e.value}
+                     for e in bom if e.lcsc in ("?", "", None)]
+        return {
+            "total": len(bom),
+            "matched": len(bom) - len(unmatched),
+            "unmatched": unmatched,
+            "assemblable": len(unmatched) == 0,
+        }
 
     def export_bom_csv(self, bom: List[BOMEntry], filepath: str) -> str:
         """导出JLCPCB标准BOM.csv"""

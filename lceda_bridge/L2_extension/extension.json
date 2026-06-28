@@ -3,7 +3,7 @@
     "uuid": "c6521a48860a5c4db23dc26d229f97b3",
     "displayName": "LCEDA Bridge (道之直连)",
     "description": "嘉立创EDA ↔ Python/Windsurf 双向桥接器 — 反者道之动, 让 AI 直接驱动 EDA",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "publisher": "Dao <pcb_brain@local>",
     "engines": { "eda": "^2.2.0" },
     "license": "Apache-2.0",
@@ -13,7 +13,7 @@
     "images": { "logo": "./images/logo.png" },
     "homepage": "",
     "bugs": "",
-    "activationEvents": {},
+    "activationEvents": { "onStartupFinished": true },
     "entry": "./dist/index",
     "dependentExtensions": {},
     "headerMenus": {
@@ -24,6 +24,7 @@
                 "menuItems": [
                     { "id": "start", "title": "启动桥接 (Start)", "registerFn": "startBridge" },
                     { "id": "stop",  "title": "停止桥接 (Stop)",  "registerFn": "stopBridge" },
+                    { "id": "reconnect", "title": "重新连接 (Reconnect)", "registerFn": "reconnect" },
                     { "id": "panel", "title": "打开控制台 (Open Panel)", "registerFn": "openPanel" },
                     { "id": "ping",  "title": "测试连接 (Ping)", "registerFn": "ping" },
                     { "id": "about", "title": "关于 (About)", "registerFn": "about" }

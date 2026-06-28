@@ -1,57 +1,75 @@
 # Dao-PCB-Design-Agent
 
-> 道生一，一生二，二生三，三生万物。反者，道之动也。
->
-> 以「AI 代码化 PCB」为本源的自治设计系统：意图 → 生成 → 改板 → 布线 → 验证 → 制造 → 反馈，
-> 全链路无人工驱动**真实 EDA 内核**完成 PCB 设计。本仓库为 KiCad 全栈本源；嘉立创 EDA 方向见 `lceda_bridge/`。
+> 让 Agent 像 Cursor 写代码一样进入 EDA 底层,代替人类全流程、全模块推进 PCB 设计。
+> 道法自然 · 无为而无不为。
 
----
+一个仓库,**两条并行且互不耦合的演化路线**(鸡犬相闻,老死不相往来):各自独立入口、
+各自依赖、互不破坏,可单独演进,也可在数据层串联。
 
-## 子系统（一分多·各司其职）
-
-| 子系统 | 视角 | 是否依赖 KiCad 安装 | 产出 | 入口 |
-|------|------|------|------|------|
-| [`dao_kicad/`](./dao_kicad/) | **活体真实 KiCad 引擎**（驱动真实 pcbnew + freerouting 无头布线 + 官方 IPC 活板 + KiCad 内对话面板） | 需要 KiCad 9/10 | DRC 干净的 `.kicad_pcb` + Gerber/钻孔/贴片/STEP/SVG/BOM | `daokicad` CLI / `python verify_all.py` |
-| [`kicad_origin/`](./kicad_origin/) | KiCad 工程数据**纯 Python 本源逆向**（零依赖读写/索引/出图） | 不需要 | 解析/镜像/索引/Gerber | `python -m kicad_origin` |
-| [`pcb_brain/`](./pcb_brain/) | DNA 模板 PCB 布局优先 | 可选 | `.kicad_pcb`/Gerber/BOM/iBoM | `from pcb_core import PCB` |
-| [`schematic_dao/`](./schematic_dao/) | 原理图优先（论文级） | 可选 | SVG/PDF/PNG/MD/CSV/`.kicad_sch` | `python -m schematic_dao build <name>` |
-| [`lceda_bridge/`](./lceda_bridge/) | 嘉立创 EDA 五层直连（另一 Agent 方向） | — | 嘉立创工程读写/自动化 | 见子目录 |
-
-> **本源锚定**：上一阶段单独建的 `dao-kicad` 仓库已整体**迁移合并**进本仓库 `dao_kicad/`，
-> 作为真实 KiCad 全链路的活体引擎，统一收口于此本源。
-
----
-
-## 活体真实 KiCad 引擎（`dao_kicad/`）— 当前主推进方向
-
-不发明几何、不臆造封装：每个封装都先在安装库里证实存在才使用；每次活板改动都包成一次 KiCad
-原生可撤销 commit。一条命令从**任意原理图/网表**到 DRC 干净的真板与整套制造交付物。
-
-```bash
-cd dao_kicad
-daokicad status                       # 探测到的 KiCad/freerouting 环境
-daokicad design ams1117_regulator     # 跑一块板完整闭环（建板→布线→DRC→产出）
-daokicad build-sch any.kicad_sch      # 任意原理图一步到板
-daokicad build-netlist any.net        # 任意网表一步到板
-daokicad install-plugin               # 把对话面板装进 KiCad（Cursor 之于 VS Code）
-python verify_all.py                  # 全套体检（建板+布线+DRC+产出）
+```
+                         Dao-PCB-Design-Agent
+                                  │
+          ┌───────────────────────┴───────────────────────┐
+          ▼                                                 ▼
+  路线 A · 嘉立创EDA 直连                          路线 B · KiCad / 代码化
+  (在线 Web 编辑器, CDP 直驱)                      (本地引擎, 代码生成 PCB)
+          │                                                 │
+   lceda_bridge/                                  pcb_brain/   (21 DNA 模板 → .kicad_pcb/Gerber/BOM)
+     └ cdp_studio/  ← 冷启动底座                  schematic_dao/ (原理图道 → 四件套资料包)
+       (CDP 直驱 _EXTAPI_ROOT_ + 登录态固化)       kicad_origin/  (KiCad 本源直连)
 ```
 
-**冷启动全链路实测**（KiCad 10.0.4 + Temurin JDK 25 + freerouting 2.2.4）：
-`verify_all.py` **49/49 检查、14/14 板 DRC 全干净**。详见 [`dao_kicad/README.md`](./dao_kicad/README.md)。
+---
+
+## 路线 A · 嘉立创EDA 直连(在线 Web · CDP)
+
+经 Chrome 远程调试(CDP)在 `pro.lceda.cn/editor` 主页面上下文直接调用官方扩展 API
+(挂在 `window._EXTAPI_ROOT_`,91 个命名空间),无需安装扩展/沙箱,执行→反馈→呈现三面归一。
+
+- **冷启动底座**:[`lceda_bridge/cdp_studio/`](./lceda_bridge/cdp_studio/README.md) ——
+  全新 VM 一条命令落到"已登录、可直驱"状态:
+  ```bash
+  python lceda_bridge/cdp_studio/cold_start.py
+  ```
+  登录态/凭据走加密 secret(`JLC_PHONE` / `JLC_PASSWORD` / `JLC_SESSION_B64`)注入,
+  仓库内不存任何明文。后续会话只需手机号+密码即可承接。
+- **桥接全景**:[`lceda_bridge/README.md`](./lceda_bridge/README.md)(五层穿透)。
+
+## 路线 B · KiCad / 代码化(本地引擎)
+
+代码即电路:从 DNA 模板/原理图工程一键生成可打样的 PCB 与全套制造资料。
+
+- **PCBBrain**:[`pcb_brain/`](./pcb_brain/) —— 21 个 DNA 模板 → `.kicad_pcb`/Gerber/BOM/iBoM。
+  ```python
+  from pcb_core import PCB        # 统一门面
+  ```
+- **原理图道**:[`schematic_dao/`](./schematic_dao/) —— `SchematicProject` → 论文级四件套。
+  ```bash
+  python -m schematic_dao build <project>
+  ```
+- **KiCad 本源**:[`kicad_origin/`](./kicad_origin/)。
+
+> 两线可在数据层串联:SchematicProject(论文级)→ DNA(布局级)→ PCB 打样下单。
 
 ---
 
-## 环境（冷启动可复现）
+## 仓库导航
 
-| 工具 | 版本 | 用途 |
-|------|------|------|
-| KiCad | 9/10（实测 10.0.4） | `kicad-cli` + 自带 `pcbnew` Python，真实建板/DRC/Gerber |
-| Java (Temurin) | ≥ 25 | 跑 `freerouting.jar` |
-| freerouting | 2.2.4 | 无头自动布线（Specctra DSN↔SES） |
+| 目录 | 路线 | 说明 |
+|---|---|---|
+| `lceda_bridge/` | A | 嘉立创EDA 直连 + 冷启动底座(`cdp_studio/`) |
+| `pcb_brain/` | B | DNA 模板 + 全闭环流水线(PCB) |
+| `schematic_dao/` | B | 原理图道(四件套资料包) |
+| `kicad_origin/` | B | KiCad 本源直连 |
+| `_JLC_READY/` | 共用 | 23 个成品板模板(嘉立创打样就绪) |
+| `实战/` | 共用 | 实战项目(1500W PFC、物流车控制系统等) |
+| `docs/` | — | 总体方案与调研(全链路实现方案、线上资源参考) |
+| `_local_launchers/` | — | 用户本机桌面启动器(指向本地 `D:\`/`Z:\` 路径,仅本机可用) |
 
-> Windows 一键冷启动：`choco install kicad temurin25 -y`，并下载 `freerouting.jar`（用 `FREEROUTING_JAR` 指定）。
+- 架构与资源总览:[`_INDEX.md`](./_INDEX.md)
+- Agent 操作手册:[`_AGENT_GUIDE.md`](./_AGENT_GUIDE.md)
+- 交接说明:[`HANDOFF.md`](./HANDOFF.md)
 
----
+## 仓库内入口脚本
 
-*道法自然 · 无为而无不为 · 推进到底*
+- `lceda.cmd` / `lceda.ps1` —— LCEDA Bridge CLI(`lceda <subcmd>`,任意目录可用)。
