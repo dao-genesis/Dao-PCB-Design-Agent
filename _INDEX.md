@@ -120,7 +120,7 @@ agent_sense.py (16KB)      ← 远程Agent扩展 (:9904)
 
 ## 落地路径
 
-> 详见 [`全链路实现方案.md`](./全链路实现方案.md)
+> 详见 [`docs/全链路实现方案.md`](./docs/全链路实现方案.md)
 
 - **P-2 📐 schematic_dao 原理图道** — `python -m schematic_dao build <project>` → 一键生成 PFC 同款四件套资料包 (论文图/文档/BOM/网表/工程源文件). 当前已注册项目: `warehouse_logistics_vehicle` (仓库车间物流车控制系统设计) → [**详见 `schematic_dao/_AGENTS.md`**](./schematic_dao/_AGENTS.md)
 - **P-1 🌉 嘉立创底层直连** — `lceda_bridge/` 五层穿透 (独立脚本→扩展→iframe桥→文件→云端). 反者道之动, 让 Python/Windsurf 直接驱动嘉立创EDA → [**详见 `lceda_bridge/README.md`**](./lceda_bridge/README.md)
@@ -132,7 +132,7 @@ agent_sense.py (16KB)      ← 远程Agent扩展 (:9904)
 
 ## 开源参考
 
-> 详见 [`线上资源参考.md`](./线上资源参考.md) (2026-04-08 综合调研)
+> 详见 [`docs/线上资源参考.md`](./docs/线上资源参考.md) (2026-04-08 综合调研)
 
 | 项目 | 状态 | 集成方式 |
 |------|------|----------|
