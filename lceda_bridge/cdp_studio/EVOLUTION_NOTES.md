@@ -164,10 +164,19 @@ LCEDA Pro 的 **File→Import** 支持几乎全部工业格式,**逆向工程标
 `DXF`、`Image`、`JLCEDA(Standard)`、`JLCEDA(Professional)`、**`Altium Designer`**、
 **`Allegro/OrCAD`**、**`EAGLE`**、**`KiCad`**、**`PADS/PADS Pro`**、`Protel`、`LTspice`、`T/DISA 4001`。
 ⇒ 反向方向(拿成品板逆推)在工具层**完全被支持**:Altium/KiCad/EAGLE/Allegro/PADS/Protel 工程都能进。
-- 程序化 `importProjectByProjectFile(file)` 实测**静默无效**(无弹窗、当前工程无变化、`parts()` 空),
-  疑缺 `r/s` 形参或本就由 UI 向导(文件选择器+选项框)驱动。
-- ⇒ **可靠的逆向导入路径 = 驱动 Import 向导**(computer 工具点 File→Import→<格式>,或经 CDP 注入 File 后触发),
-  这正是"成品→可编辑器件+网络"的确定性入口,**根除鼠标放件**。
+- 程序化 `importProjectByProjectFile` 已完整反出实现:
+  ```
+  let a = await rpcCall("extensionApi.SYS_FileManager.importProjectByProjectFile",
+            {projectFile:t, fileType:i, props:n, saveTo:r, librariesImportSetting:s});
+  if(a) return await rpcCall("DMT_Project.getProjectInfo", a);   // a=新工程 uuid
+  ```
+  即 `r=saveTo`(目标文件夹/位置)、`s=librariesImportSetting`。
+- **实测穷尽**:`file`(in-page,51KB)+ `saveTo`∈{新建文件夹, 'Personal'(workspace)} 调用 →
+  rpc **恒返回 falsy**(无工程产生);且 `dmt_Folder.createFolder` 也返回 undefined。
+  ⇒ **该导入 rpc 家族在 headless CDP 上下文整体不生效**(疑 File 对象过 rpc 到后端 worker 不可序列化、
+  或需真实 user-gesture / 有效文件夹)。`createProject` 能成、`createFolder`/`import` 不成 —— 边界清晰。
+- ⇒ **可靠的逆向导入路径 = 驱动 UI Import 向导**(computer 工具点 File→Import→<格式> + CDP
+  `Page.setInterceptFileChooserDialog`/`DOM.setFileInputFiles` 喂入磁盘上的真实板文件)。这是下一步的离散任务。
 
 ### 反向路线下一步(可执行顺序)
 1. **驱动 Import 向导导入真实开源板**(KiCad/Altium 工程或 .epro2)→ 得可编辑器件+网络 →
