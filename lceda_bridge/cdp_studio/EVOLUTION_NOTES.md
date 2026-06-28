@@ -143,10 +143,36 @@ scaffold(建工程/原理图/PCB) → open sch → place(放件) → save
   ```
   网络 = 各 pin 的 `net` 同名归并;器件身份全在 `props`(Device/Footprint 为库 uuid)。
 
+### 导入入口已解剖(签名 + 文件形态 + 实测)
+- **`sys_FileManager.getProjectFileByProjectUuid(uuid)`** 返回一个 **`File`(.epro2,zip,实测 51653B)**
+  —— 即"成品工程文件"。`getProjectFile`/`getDocumentFile`/`getDocumentSource` 同族。
+- **`importProjectByProjectFile(file, format="JLCEDA Pro", options, r, s)`** 全签名:
+  ```
+  options = { importOption:"ImportDocument", viaSolderMaskExpansion:"cover",
+              boardOutlineSource:"keepout", schematicObjectStyle:"system",
+              associateFootprint:true, associate3DModel:true, importFootprintNotesLayer:true }
+  ```
+  format 形参可换别的源(Altium/KiCad/EAGLE…,具体枚举待逐一试)。
+- **逆向比对原语**(比 netlist 更直接):`sys_Tool.schematicComparison` / `pcbComparison` / `netlistComparison`。
+- **实测**:in-page 一次 evaluate 内 `file=getProjectFileByProjectUuid(src)` →
+  `await importProjectByProjectFile(file)` **返回无错(ret undefined)**;但本会话编辑器已退化
+  (`getAllProjectsUuid` 恒返回 0、当前工程停在空脚手架),**导入落点(新建工程 vs 并入当前)未能确认**。
+  ⇒ 需在**新开干净实例**上:导入后立即读返回/轮询工程列表(或走 REST `pro.lceda.cn/api` 查工程)核实落点。
+
+### ★ 导入网关已确认全格式(File→Import 菜单实拍)
+LCEDA Pro 的 **File→Import** 支持几乎全部工业格式,**逆向工程标的可直接喂入**:
+`DXF`、`Image`、`JLCEDA(Standard)`、`JLCEDA(Professional)`、**`Altium Designer`**、
+**`Allegro/OrCAD`**、**`EAGLE`**、**`KiCad`**、**`PADS/PADS Pro`**、`Protel`、`LTspice`、`T/DISA 4001`。
+⇒ 反向方向(拿成品板逆推)在工具层**完全被支持**:Altium/KiCad/EAGLE/Allegro/PADS/Protel 工程都能进。
+- 程序化 `importProjectByProjectFile(file)` 实测**静默无效**(无弹窗、当前工程无变化、`parts()` 空),
+  疑缺 `r/s` 形参或本就由 UI 向导(文件选择器+选项框)驱动。
+- ⇒ **可靠的逆向导入路径 = 驱动 Import 向导**(computer 工具点 File→Import→<格式>,或经 CDP 注入 File 后触发),
+  这正是"成品→可编辑器件+网络"的确定性入口,**根除鼠标放件**。
+
 ### 反向路线下一步(可执行顺序)
-1. **走 `importProjectByProjectFile` 做确定性建网/逆向导入**(见上判决):查清其接受的源格式枚举与
-   文件传参方式(CDP 下如何喂文件)→ 拉一块真实开源板(EasyEDA/LCEDA 工程或 KiCad)→ 导入还原
-   可编辑器件+网络 → `importChanges` 下传 PCB → 回读校验。**这一条同时作废鼠标放件并兑现逆向工程。**
+1. **驱动 Import 向导导入真实开源板**(KiCad/Altium 工程或 .epro2)→ 得可编辑器件+网络 →
+   `importChanges` 下传 PCB → `schematicComparison`/`pcbComparison`/`netlistComparison` 与参考逐层比对。
+   这一条**同时作废鼠标放件并兑现逆向工程**。(程序化 `importProjectByProjectFile` 的 r/s 形参可并行反出。)
 2. 取一块真实开源硬件板(公开 Gerber/网表/BOM)→ `importProjectByProjectFile` 或
    网表导入 → 还原可编辑设计。
 3. **FreeRouting 闭环**:导出 Specctra DSN → FreeRouting 跑线 → `importAutoRouteSesFile` 回灌。
