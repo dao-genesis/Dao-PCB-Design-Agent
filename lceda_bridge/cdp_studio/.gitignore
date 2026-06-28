@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.png
+jlc_session.json
+secret_to_upload_*
+# 生成的制造产物 / 实战导出 / 临时探针
+out/
+_gerber_check/
+Dao_Gerber*
+Dao_BOM*
+Dao_PnP*
+*.xlsx
+_*.py
+
+ne555_docs.json
+ne555_ids.json
+ne555_*.png

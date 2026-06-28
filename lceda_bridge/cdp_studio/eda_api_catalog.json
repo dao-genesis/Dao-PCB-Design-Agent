@@ -1,0 +1,3280 @@
+{
+ "method_total": 701,
+ "namespaces": {
+  "dmt_Board": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "copyBoard"
+    },
+    {
+     "arity": 2,
+     "name": "createBoard"
+    },
+    {
+     "arity": 1,
+     "name": "deleteBoard"
+    },
+    {
+     "arity": 0,
+     "name": "getAllBoardsInfo"
+    },
+    {
+     "arity": 1,
+     "name": "getBoardInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentBoardInfo"
+    },
+    {
+     "arity": 2,
+     "name": "modifyBoardName"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_EditorControl": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "activateDocument"
+    },
+    {
+     "arity": 1,
+     "name": "activateSplitScreen"
+    },
+    {
+     "arity": 1,
+     "name": "closeDocument"
+    },
+    {
+     "arity": 2,
+     "name": "createSplitScreen"
+    },
+    {
+     "arity": 5,
+     "name": "generateIndicatorMarkers"
+    },
+    {
+     "arity": 1,
+     "name": "getCurrentRenderedAreaImage"
+    },
+    {
+     "arity": 1,
+     "name": "getSplitScreenIdByTabId"
+    },
+    {
+     "arity": 0,
+     "name": "getSplitScreenTree"
+    },
+    {
+     "arity": 1,
+     "name": "getTabsBySplitScreenId"
+    },
+    {
+     "arity": 0,
+     "name": "mergeAllDocumentFromSplitScreen"
+    },
+    {
+     "arity": 2,
+     "name": "moveDocumentToSplitScreen"
+    },
+    {
+     "arity": 2,
+     "name": "openDocument"
+    },
+    {
+     "arity": 4,
+     "name": "openLibraryDocument"
+    },
+    {
+     "arity": 1,
+     "name": "removeIndicatorMarkers"
+    },
+    {
+     "arity": 0,
+     "name": "tileAllDocumentToSplitScreen"
+    },
+    {
+     "arity": 4,
+     "name": "zoomTo"
+    },
+    {
+     "arity": 1,
+     "name": "zoomToAllPrimitives"
+    },
+    {
+     "arity": 5,
+     "name": "zoomToRegion"
+    },
+    {
+     "arity": 1,
+     "name": "zoomToSelectedPrimitives"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_Event": {
+   "methods": [
+    {
+     "arity": 3,
+     "name": "addEditorTabEventListener"
+    },
+    {
+     "arity": 1,
+     "name": "isEventListenerAlreadyExist"
+    },
+    {
+     "arity": 1,
+     "name": "removeEventListener"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_Folder": {
+   "methods": [
+    {
+     "arity": 4,
+     "name": "createFolder"
+    },
+    {
+     "arity": 2,
+     "name": "deleteFolder"
+    },
+    {
+     "arity": 1,
+     "name": "getAllFoldersUuid"
+    },
+    {
+     "arity": 2,
+     "name": "getFolderInfo"
+    },
+    {
+     "arity": 3,
+     "name": "modifyFolderDescription"
+    },
+    {
+     "arity": 3,
+     "name": "modifyFolderName"
+    },
+    {
+     "arity": 3,
+     "name": "moveFolderToFolder"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_Panel": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "copyPanel"
+    },
+    {
+     "arity": 0,
+     "name": "createPanel"
+    },
+    {
+     "arity": 1,
+     "name": "deletePanel"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPanelsInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentPanelInfo"
+    },
+    {
+     "arity": 1,
+     "name": "getPanelInfo"
+    },
+    {
+     "arity": 2,
+     "name": "modifyPanelName"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_Pcb": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "copyPcb"
+    },
+    {
+     "arity": 1,
+     "name": "createPcb"
+    },
+    {
+     "arity": 1,
+     "name": "deletePcb"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPcbsInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentPcbInfo"
+    },
+    {
+     "arity": 1,
+     "name": "getPcbInfo"
+    },
+    {
+     "arity": 2,
+     "name": "modifyPcbName"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_Project": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "copyProject"
+    },
+    {
+     "arity": 5,
+     "name": "createProject"
+    },
+    {
+     "arity": 1,
+     "name": "deleteProject"
+    },
+    {
+     "arity": 3,
+     "name": "getAllProjectsUuid"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentProjectInfo"
+    },
+    {
+     "arity": 1,
+     "name": "getProjectInfo"
+    },
+    {
+     "arity": 2,
+     "name": "modifyProjectCollaborationMode"
+    },
+    {
+     "arity": 2,
+     "name": "modifyProjectDescription"
+    },
+    {
+     "arity": 2,
+     "name": "modifyProjectFriendlyName"
+    },
+    {
+     "arity": 3,
+     "name": "moveProject"
+    },
+    {
+     "arity": 2,
+     "name": "moveProjectToFolder"
+    },
+    {
+     "arity": 1,
+     "name": "openProject"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_Schematic": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "copySchematic"
+    },
+    {
+     "arity": 2,
+     "name": "copySchematicPage"
+    },
+    {
+     "arity": 1,
+     "name": "createSchematic"
+    },
+    {
+     "arity": 1,
+     "name": "createSchematicPage"
+    },
+    {
+     "arity": 1,
+     "name": "deleteSchematic"
+    },
+    {
+     "arity": 1,
+     "name": "deleteSchematicPage"
+    },
+    {
+     "arity": 0,
+     "name": "getAllSchematicPagesInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getAllSchematicsInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentSchematicAllSchematicPagesInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentSchematicInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentSchematicPageInfo"
+    },
+    {
+     "arity": 1,
+     "name": "getSchematicInfo"
+    },
+    {
+     "arity": 1,
+     "name": "getSchematicPageInfo"
+    },
+    {
+     "arity": 2,
+     "name": "modifySchematicName"
+    },
+    {
+     "arity": 2,
+     "name": "modifySchematicPageName"
+    },
+    {
+     "arity": 2,
+     "name": "modifySchematicPageTitleBlock"
+    },
+    {
+     "arity": 2,
+     "name": "reorderSchematicPages"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_SelectControl": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getCurrentDocumentInfo"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_Team": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getAllInvolvedTeamInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getAllTeamsInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentTeamInfo"
+    }
+   ],
+   "type": "object"
+  },
+  "dmt_Workspace": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getAllWorkspacesInfo"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentWorkspaceInfo"
+    },
+    {
+     "arity": 1,
+     "name": "toggleToWorkspace"
+    }
+   ],
+   "type": "object"
+  },
+  "extensionUuid": {
+   "methods": [],
+   "type": "string"
+  },
+  "lib_3DModel": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "copy"
+    },
+    {
+     "arity": 3,
+     "name": "create"
+    },
+    {
+     "arity": 2,
+     "name": "delete"
+    },
+    {
+     "arity": 2,
+     "name": "get"
+    },
+    {
+     "arity": 5,
+     "name": "modify"
+    },
+    {
+     "arity": 3,
+     "name": "search"
+    }
+   ],
+   "type": "object"
+  },
+  "lib_Cbb": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "copy"
+    },
+    {
+     "arity": 4,
+     "name": "create"
+    },
+    {
+     "arity": 2,
+     "name": "delete"
+    },
+    {
+     "arity": 2,
+     "name": "get"
+    },
+    {
+     "arity": 5,
+     "name": "modify"
+    },
+    {
+     "arity": 2,
+     "name": "openProjectInEditor"
+    },
+    {
+     "arity": 3,
+     "name": "openSymbolInEditor"
+    },
+    {
+     "arity": 3,
+     "name": "search"
+    }
+   ],
+   "type": "object"
+  },
+  "lib_Classification": {
+   "methods": [
+    {
+     "arity": 3,
+     "name": "createPrimary"
+    },
+    {
+     "arity": 4,
+     "name": "createSecondary"
+    },
+    {
+     "arity": 1,
+     "name": "deleteByIndex"
+    },
+    {
+     "arity": 2,
+     "name": "deleteByUuid"
+    },
+    {
+     "arity": 2,
+     "name": "getAllClassificationTree"
+    },
+    {
+     "arity": 4,
+     "name": "getIndexByName"
+    },
+    {
+     "arity": 1,
+     "name": "getNameByIndex"
+    },
+    {
+     "arity": 4,
+     "name": "getNameByUuid"
+    }
+   ],
+   "type": "object"
+  },
+  "lib_Device": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "copy"
+    },
+    {
+     "arity": 3,
+     "name": "create"
+    },
+    {
+     "arity": 2,
+     "name": "delete"
+    },
+    {
+     "arity": 2,
+     "name": "get"
+    },
+    {
+     "arity": 2,
+     "name": "getByLcscIds"
+    },
+    {
+     "arity": 7,
+     "name": "modify"
+    },
+    {
+     "arity": 4,
+     "name": "search"
+    },
+    {
+     "arity": 4,
+     "name": "searchByProperties"
+    }
+   ],
+   "type": "object"
+  },
+  "lib_Footprint": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "copy"
+    },
+    {
+     "arity": 4,
+     "name": "create"
+    },
+    {
+     "arity": 2,
+     "name": "delete"
+    },
+    {
+     "arity": 2,
+     "name": "get"
+    },
+    {
+     "arity": 1,
+     "name": "getRenderImage"
+    },
+    {
+     "arity": 5,
+     "name": "modify"
+    },
+    {
+     "arity": 3,
+     "name": "openInEditor"
+    },
+    {
+     "arity": 3,
+     "name": "search"
+    },
+    {
+     "arity": 3,
+     "name": "searchByProperties"
+    },
+    {
+     "arity": 3,
+     "name": "updateDocumentSource"
+    }
+   ],
+   "type": "object"
+  },
+  "lib_LibrariesList": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getAllLibrariesList"
+    },
+    {
+     "arity": 0,
+     "name": "getFavoriteLibraryUuid"
+    },
+    {
+     "arity": 0,
+     "name": "getPersonalLibraryUuid"
+    },
+    {
+     "arity": 0,
+     "name": "getProjectLibraryUuid"
+    },
+    {
+     "arity": 0,
+     "name": "getSystemLibraryUuid"
+    },
+    {
+     "arity": 2,
+     "name": "registerExtendLibrary"
+    }
+   ],
+   "type": "object"
+  },
+  "lib_PanelLibrary": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "copy"
+    },
+    {
+     "arity": 4,
+     "name": "create"
+    },
+    {
+     "arity": 2,
+     "name": "delete"
+    },
+    {
+     "arity": 2,
+     "name": "get"
+    },
+    {
+     "arity": 5,
+     "name": "modify"
+    },
+    {
+     "arity": 3,
+     "name": "openInEditor"
+    },
+    {
+     "arity": 3,
+     "name": "search"
+    }
+   ],
+   "type": "object"
+  },
+  "lib_SelectControl": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getSelectedLibraryRowInfo"
+    }
+   ],
+   "type": "object"
+  },
+  "lib_Symbol": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "copy"
+    },
+    {
+     "arity": 5,
+     "name": "create"
+    },
+    {
+     "arity": 2,
+     "name": "delete"
+    },
+    {
+     "arity": 2,
+     "name": "get"
+    },
+    {
+     "arity": 1,
+     "name": "getRenderImage"
+    },
+    {
+     "arity": 5,
+     "name": "modify"
+    },
+    {
+     "arity": 3,
+     "name": "openInEditor"
+    },
+    {
+     "arity": 4,
+     "name": "search"
+    },
+    {
+     "arity": 4,
+     "name": "searchByProperties"
+    },
+    {
+     "arity": 3,
+     "name": "updateDocumentSource"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_Document": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "clearRouting"
+    },
+    {
+     "arity": 2,
+     "name": "convertCanvasOriginToDataOrigin"
+    },
+    {
+     "arity": 2,
+     "name": "convertDataOriginToCanvasOrigin"
+    },
+    {
+     "arity": 0,
+     "name": "getCalculatingRatlineStatus"
+    },
+    {
+     "arity": 0,
+     "name": "getCanvasOrigin"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentFilterConfiguration"
+    },
+    {
+     "arity": 2,
+     "name": "getPrimitiveAtPoint"
+    },
+    {
+     "arity": 4,
+     "name": "getPrimitivesInRegion"
+    },
+    {
+     "arity": 1,
+     "name": "importAutoLayoutJsonFile"
+    },
+    {
+     "arity": 1,
+     "name": "importAutoRouteJsonFile"
+    },
+    {
+     "arity": 1,
+     "name": "importAutoRouteSesFile"
+    },
+    {
+     "arity": 1,
+     "name": "importChanges"
+    },
+    {
+     "arity": 2,
+     "name": "navigateToCoordinates"
+    },
+    {
+     "arity": 4,
+     "name": "navigateToRegion"
+    },
+    {
+     "arity": 1,
+     "name": "save"
+    },
+    {
+     "arity": 2,
+     "name": "setCanvasOrigin"
+    },
+    {
+     "arity": 0,
+     "name": "startCalculatingRatline"
+    },
+    {
+     "arity": 0,
+     "name": "stopCalculatingRatline"
+    },
+    {
+     "arity": 0,
+     "name": "zoomToBoardOutline"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_Drc": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "addNetToEqualLengthNetGroup"
+    },
+    {
+     "arity": 2,
+     "name": "addNetToNetClass"
+    },
+    {
+     "arity": 2,
+     "name": "addPadPairToPadPairGroup"
+    },
+    {
+     "arity": 0,
+     "name": "check"
+    },
+    {
+     "arity": 3,
+     "name": "createDifferentialPair"
+    },
+    {
+     "arity": 3,
+     "name": "createEqualLengthNetGroup"
+    },
+    {
+     "arity": 3,
+     "name": "createNetClass"
+    },
+    {
+     "arity": 2,
+     "name": "createPadPairGroup"
+    },
+    {
+     "arity": 1,
+     "name": "deleteDifferentialPair"
+    },
+    {
+     "arity": 1,
+     "name": "deleteEqualLengthNetGroup"
+    },
+    {
+     "arity": 1,
+     "name": "deleteNetClass"
+    },
+    {
+     "arity": 1,
+     "name": "deletePadPairGroup"
+    },
+    {
+     "arity": 1,
+     "name": "deleteRuleConfiguration"
+    },
+    {
+     "arity": 0,
+     "name": "getAllDifferentialPairs"
+    },
+    {
+     "arity": 0,
+     "name": "getAllEqualLengthNetGroups"
+    },
+    {
+     "arity": 0,
+     "name": "getAllNetClasses"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPadPairGroups"
+    },
+    {
+     "arity": 0,
+     "name": "getAllRuleConfigurations"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentRuleConfiguration"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentRuleConfigurationName"
+    },
+    {
+     "arity": 0,
+     "name": "getDefaultRuleConfigurationName"
+    },
+    {
+     "arity": 0,
+     "name": "getNetByNetRules"
+    },
+    {
+     "arity": 0,
+     "name": "getNetRules"
+    },
+    {
+     "arity": 1,
+     "name": "getPadPairGroupMinWireLength"
+    },
+    {
+     "arity": 0,
+     "name": "getRealTimeDrcStatus"
+    },
+    {
+     "arity": 0,
+     "name": "getRegionRules"
+    },
+    {
+     "arity": 1,
+     "name": "getRuleConfiguration"
+    },
+    {
+     "arity": 2,
+     "name": "modifyDifferentialPairName"
+    },
+    {
+     "arity": 2,
+     "name": "modifyDifferentialPairNegativeNet"
+    },
+    {
+     "arity": 2,
+     "name": "modifyDifferentialPairPositiveNet"
+    },
+    {
+     "arity": 2,
+     "name": "modifyEqualLengthNetGroupName"
+    },
+    {
+     "arity": 2,
+     "name": "modifyNetClassName"
+    },
+    {
+     "arity": 2,
+     "name": "modifyPadPairGroupName"
+    },
+    {
+     "arity": 1,
+     "name": "overwriteCurrentRuleConfiguration"
+    },
+    {
+     "arity": 1,
+     "name": "overwriteNetByNetRules"
+    },
+    {
+     "arity": 1,
+     "name": "overwriteNetRules"
+    },
+    {
+     "arity": 1,
+     "name": "overwriteRegionRules"
+    },
+    {
+     "arity": 2,
+     "name": "removeNetFromEqualLengthNetGroup"
+    },
+    {
+     "arity": 2,
+     "name": "removeNetFromNetClass"
+    },
+    {
+     "arity": 2,
+     "name": "removePadPairFromPadPairGroup"
+    },
+    {
+     "arity": 2,
+     "name": "renameRuleConfiguration"
+    },
+    {
+     "arity": 2,
+     "name": "saveRuleConfiguration"
+    },
+    {
+     "arity": 1,
+     "name": "setAsDefaultRuleConfiguration"
+    },
+    {
+     "arity": 0,
+     "name": "startRealTimeDrc"
+    },
+    {
+     "arity": 0,
+     "name": "stopRealTimeDrc"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_Event": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "addCrossProbeSelectEventListener"
+    },
+    {
+     "arity": 3,
+     "name": "addMouseEventListener"
+    },
+    {
+     "arity": 3,
+     "name": "addNetEventListener"
+    },
+    {
+     "arity": 3,
+     "name": "addPrimitiveEventListener"
+    },
+    {
+     "arity": 3,
+     "name": "addRealTimeDrcResultEventListener"
+    },
+    {
+     "arity": 1,
+     "name": "isEventListenerAlreadyExist"
+    },
+    {
+     "arity": 1,
+     "name": "removeEventListener"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_Layer": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "addCustomLayer"
+    },
+    {
+     "arity": 1,
+     "name": "deletePhysicalStackingConfiguration"
+    },
+    {
+     "arity": 0,
+     "name": "getAllLayers"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPhysicalStackingConfigurations"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentLayer"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentPhysicalStackingConfiguration"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentPhysicalStackingConfigurationName"
+    },
+    {
+     "arity": 0,
+     "name": "getDefaultPhysicalStackingConfigurationName"
+    },
+    {
+     "arity": 1,
+     "name": "getPhysicalStackingConfiguration"
+    },
+    {
+     "arity": 0,
+     "name": "getTheNumberOfCopperLayers"
+    },
+    {
+     "arity": 1,
+     "name": "lockLayer"
+    },
+    {
+     "arity": 2,
+     "name": "modifyLayer"
+    },
+    {
+     "arity": 1,
+     "name": "overwriteCurrentPhysicalStackingConfiguration"
+    },
+    {
+     "arity": 1,
+     "name": "removeLayer"
+    },
+    {
+     "arity": 2,
+     "name": "renamePhysicalStackingConfiguration"
+    },
+    {
+     "arity": 2,
+     "name": "savePhysicalStackingConfiguration"
+    },
+    {
+     "arity": 1,
+     "name": "selectLayer"
+    },
+    {
+     "arity": 1,
+     "name": "setAsDefaultPhysicalStackingConfiguration"
+    },
+    {
+     "arity": 0,
+     "name": "setInactiveLayerDisplayMode"
+    },
+    {
+     "arity": 1,
+     "name": "setInactiveLayerTransparency"
+    },
+    {
+     "arity": 1,
+     "name": "setLayerColorConfiguration"
+    },
+    {
+     "arity": 1,
+     "name": "setLayerInvisible"
+    },
+    {
+     "arity": 1,
+     "name": "setLayerVisible"
+    },
+    {
+     "arity": 1,
+     "name": "setPcbType"
+    },
+    {
+     "arity": 1,
+     "name": "setTheNumberOfCopperLayers"
+    },
+    {
+     "arity": 1,
+     "name": "unlockLayer"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_ManufactureData": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "deleteBomTemplate"
+    },
+    {
+     "arity": 1,
+     "name": "get3DFile"
+    },
+    {
+     "arity": 1,
+     "name": "get3DShellFile"
+    },
+    {
+     "arity": 1,
+     "name": "getAltiumDesignerFile"
+    },
+    {
+     "arity": 1,
+     "name": "getAutoLayoutJsonFile"
+    },
+    {
+     "arity": 1,
+     "name": "getAutoRouteJsonFile"
+    },
+    {
+     "arity": 1,
+     "name": "getAutoRouteJsonFileForJRouter"
+    },
+    {
+     "arity": 1,
+     "name": "getBomFile"
+    },
+    {
+     "arity": 1,
+     "name": "getBomTemplateFile"
+    },
+    {
+     "arity": 0,
+     "name": "getBomTemplates"
+    },
+    {
+     "arity": 1,
+     "name": "getDsnFile"
+    },
+    {
+     "arity": 3,
+     "name": "getDxfFile"
+    },
+    {
+     "arity": 1,
+     "name": "getFlyingProbeTestFile"
+    },
+    {
+     "arity": 1,
+     "name": "getGerberFile"
+    },
+    {
+     "arity": 1,
+     "name": "getIdxFile"
+    },
+    {
+     "arity": 1,
+     "name": "getInteractiveBomFile"
+    },
+    {
+     "arity": 1,
+     "name": "getIpc2581CFile"
+    },
+    {
+     "arity": 1,
+     "name": "getIpcD356AFile"
+    },
+    {
+     "arity": 0,
+     "name": "getManufactureData"
+    },
+    {
+     "arity": 1,
+     "name": "getNetlistFile"
+    },
+    {
+     "arity": 1,
+     "name": "getOpenDatabaseDoublePlusFile"
+    },
+    {
+     "arity": 1,
+     "name": "getPadsFile"
+    },
+    {
+     "arity": 1,
+     "name": "getPcbInfoFile"
+    },
+    {
+     "arity": 1,
+     "name": "getPdfFile"
+    },
+    {
+     "arity": 1,
+     "name": "getPickAndPlaceFile"
+    },
+    {
+     "arity": 1,
+     "name": "getTestPointFile"
+    },
+    {
+     "arity": 0,
+     "name": "place3DShellOrder"
+    },
+    {
+     "arity": 0,
+     "name": "placeComponentsOrder"
+    },
+    {
+     "arity": 0,
+     "name": "placePcbOrder"
+    },
+    {
+     "arity": 0,
+     "name": "placeSmtComponentsOrder"
+    },
+    {
+     "arity": 2,
+     "name": "uploadBomTemplateFile"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_MathPolygon": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "calculateBBoxHeight"
+    },
+    {
+     "arity": 1,
+     "name": "calculateBBoxWidth"
+    },
+    {
+     "arity": 1,
+     "name": "calculateHeight"
+    },
+    {
+     "arity": 1,
+     "name": "calculateWidth"
+    },
+    {
+     "arity": 3,
+     "name": "convertImageToComplexPolygon"
+    },
+    {
+     "arity": 1,
+     "name": "createComplexPolygon"
+    },
+    {
+     "arity": 1,
+     "name": "createPolygon"
+    },
+    {
+     "arity": 2,
+     "name": "discretize"
+    },
+    {
+     "arity": 0,
+     "name": "splitPolygon"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_Net": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getAllNetName"
+    },
+    {
+     "arity": 0,
+     "name": "getAllNets"
+    },
+    {
+     "arity": 0,
+     "name": "getAllNetsName"
+    },
+    {
+     "arity": 2,
+     "name": "getAllPrimitivesByNet"
+    },
+    {
+     "arity": 1,
+     "name": "getNet"
+    },
+    {
+     "arity": 1,
+     "name": "getNetColor"
+    },
+    {
+     "arity": 1,
+     "name": "getNetLength"
+    },
+    {
+     "arity": 0,
+     "name": "getNetlist"
+    },
+    {
+     "arity": 1,
+     "name": "highlightNet"
+    },
+    {
+     "arity": 1,
+     "name": "selectNet"
+    },
+    {
+     "arity": 2,
+     "name": "setNetColor"
+    },
+    {
+     "arity": 0,
+     "name": "setNetlist"
+    },
+    {
+     "arity": 0,
+     "name": "unhighlightAllNets"
+    },
+    {
+     "arity": 1,
+     "name": "unhighlightNet"
+    },
+    {
+     "arity": 0,
+     "name": "unselectAllNets"
+    },
+    {
+     "arity": 1,
+     "name": "unselectNet"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_Primitive": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "getPrimitiveBoardLine"
+    },
+    {
+     "arity": 1,
+     "name": "getPrimitiveByPrimitiveId"
+    },
+    {
+     "arity": 1,
+     "name": "getPrimitiveTypeByPrimitiveId"
+    },
+    {
+     "arity": 1,
+     "name": "getPrimitivesBBox"
+    },
+    {
+     "arity": 1,
+     "name": "getPrimitivesByPrimitiveId"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveArc": {
+   "methods": [
+    {
+     "arity": 10,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 3,
+     "name": "getAll"
+    },
+    {
+     "arity": 3,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveAttribute": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 3,
+     "name": "getAll"
+    },
+    {
+     "arity": 3,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveComponent": {
+   "methods": [
+    {
+     "arity": 6,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 2,
+     "name": "getAll"
+    },
+    {
+     "arity": 1,
+     "name": "getAllPinsByPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPropertyNames"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    },
+    {
+     "arity": 1,
+     "name": "placeComponentWithMouse"
+    },
+    {
+     "arity": 2,
+     "name": "placeFootprintWithMouse"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveDimension": {
+   "methods": [
+    {
+     "arity": 7,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 2,
+     "name": "getAll"
+    },
+    {
+     "arity": 2,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveFill": {
+   "methods": [
+    {
+     "arity": 6,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 3,
+     "name": "getAll"
+    },
+    {
+     "arity": 3,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveImage": {
+   "methods": [
+    {
+     "arity": 9,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 2,
+     "name": "getAll"
+    },
+    {
+     "arity": 2,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveLine": {
+   "methods": [
+    {
+     "arity": 8,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 3,
+     "name": "getAll"
+    },
+    {
+     "arity": 3,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveObject": {
+   "methods": [
+    {
+     "arity": 10,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 2,
+     "name": "getAll"
+    },
+    {
+     "arity": 2,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitivePad": {
+   "methods": [
+    {
+     "arity": 17,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 4,
+     "name": "getAll"
+    },
+    {
+     "arity": 4,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitivePolyline": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 3,
+     "name": "getAll"
+    },
+    {
+     "arity": 3,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitivePour": {
+   "methods": [
+    {
+     "arity": 9,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 3,
+     "name": "getAll"
+    },
+    {
+     "arity": 3,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitivePoured": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 0,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveRegion": {
+   "methods": [
+    {
+     "arity": 6,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 3,
+     "name": "getAll"
+    },
+    {
+     "arity": 3,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveString": {
+   "methods": [
+    {
+     "arity": 13,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 2,
+     "name": "getAll"
+    },
+    {
+     "arity": 2,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_PrimitiveVia": {
+   "methods": [
+    {
+     "arity": 9,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 2,
+     "name": "getAll"
+    },
+    {
+     "arity": 2,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_RayTracerEngine": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "dispose"
+    },
+    {
+     "arity": 1,
+     "name": "init"
+    }
+   ],
+   "type": "object"
+  },
+  "pcb_SelectControl": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "clearSelected"
+    },
+    {
+     "arity": 3,
+     "name": "doCrossProbeSelect"
+    },
+    {
+     "arity": 3,
+     "name": "doCrossProbeSelectByObject"
+    },
+    {
+     "arity": 1,
+     "name": "doSelectPrimitives"
+    },
+    {
+     "arity": 0,
+     "name": "getAllSelectedPrimitives"
+    },
+    {
+     "arity": 0,
+     "name": "getAllSelectedPrimitives_PrimitiveId"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentMousePosition"
+    },
+    {
+     "arity": 0,
+     "name": "getSelectedPrimitives"
+    }
+   ],
+   "type": "object"
+  },
+  "pnl_Document": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "save"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_Document": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "autoLayout"
+    },
+    {
+     "arity": 1,
+     "name": "autoRouting"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentFilterConfiguration"
+    },
+    {
+     "arity": 2,
+     "name": "getPrimitiveAtPoint"
+    },
+    {
+     "arity": 4,
+     "name": "getPrimitivesInRegion"
+    },
+    {
+     "arity": 0,
+     "name": "importChanges"
+    },
+    {
+     "arity": 2,
+     "name": "navigateToCoordinates"
+    },
+    {
+     "arity": 4,
+     "name": "navigateToRegion"
+    },
+    {
+     "arity": 0,
+     "name": "save"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_Drc": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "check"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_Event": {
+   "methods": [
+    {
+     "arity": 3,
+     "name": "addMouseEventListener"
+    },
+    {
+     "arity": 3,
+     "name": "addPrimitiveEventListener"
+    },
+    {
+     "arity": 3,
+     "name": "addSimulationEnginePullEventListener"
+    },
+    {
+     "arity": 1,
+     "name": "isEventListenerAlreadyExist"
+    },
+    {
+     "arity": 1,
+     "name": "removeEventListener"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_ManufactureData": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "deleteBomTemplate"
+    },
+    {
+     "arity": 0,
+     "name": "getAssemblyVariantsConfigs"
+    },
+    {
+     "arity": 1,
+     "name": "getBomFile"
+    },
+    {
+     "arity": 1,
+     "name": "getBomTemplateFile"
+    },
+    {
+     "arity": 0,
+     "name": "getBomTemplates"
+    },
+    {
+     "arity": 1,
+     "name": "getExportDocumentFile"
+    },
+    {
+     "arity": 1,
+     "name": "getNetlistFile"
+    },
+    {
+     "arity": 1,
+     "name": "getSimulationNetlistFile"
+    },
+    {
+     "arity": 0,
+     "name": "placeComponentsOrder"
+    },
+    {
+     "arity": 0,
+     "name": "placeSmtComponentsOrder"
+    },
+    {
+     "arity": 2,
+     "name": "uploadBomTemplateFile"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_Net": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getAllNets"
+    },
+    {
+     "arity": 0,
+     "name": "getAllNetsName"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentProjectAllNets"
+    },
+    {
+     "arity": 1,
+     "name": "getNet"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_Netlist": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getNetlist"
+    },
+    {
+     "arity": 0,
+     "name": "setNetlist"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_Primitive": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "getPrimitiveByPrimitiveId"
+    },
+    {
+     "arity": 1,
+     "name": "getPrimitiveTypeByPrimitiveId"
+    },
+    {
+     "arity": 1,
+     "name": "getPrimitivesBBox"
+    },
+    {
+     "arity": 1,
+     "name": "getPrimitivesByPrimitiveId"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveArc": {
+   "methods": [
+    {
+     "arity": 10,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveAttribute": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "create"
+    },
+    {
+     "arity": 3,
+     "name": "createNetLabel"
+    },
+    {
+     "arity": 0,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 1,
+     "name": "getAll"
+    },
+    {
+     "arity": 1,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveBus": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveCircle": {
+   "methods": [
+    {
+     "arity": 8,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveComponent": {
+   "methods": [
+    {
+     "arity": 3,
+     "name": "checkComponentType"
+    },
+    {
+     "arity": 8,
+     "name": "create"
+    },
+    {
+     "arity": 5,
+     "name": "createCbbSymbol"
+    },
+    {
+     "arity": 6,
+     "name": "createNetFlag"
+    },
+    {
+     "arity": 6,
+     "name": "createNetPort"
+    },
+    {
+     "arity": 4,
+     "name": "createShortCircuitFlag"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 1,
+     "name": "getAll"
+    },
+    {
+     "arity": 1,
+     "name": "getAllPinsByPrimitiveId"
+    },
+    {
+     "arity": 1,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPropertyNames"
+    },
+    {
+     "arity": 2,
+     "name": "getComponentDetail"
+    },
+    {
+     "arity": 0,
+     "name": "initUuid"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    },
+    {
+     "arity": 3,
+     "name": "placeCbbSchematicPage"
+    },
+    {
+     "arity": 2,
+     "name": "placeComponentWithMouse"
+    },
+    {
+     "arity": 3,
+     "name": "placeSymbolWithMouse"
+    },
+    {
+     "arity": 1,
+     "name": "setNetFlagComponentUuid_AnalogGround"
+    },
+    {
+     "arity": 1,
+     "name": "setNetFlagComponentUuid_Ground"
+    },
+    {
+     "arity": 1,
+     "name": "setNetFlagComponentUuid_Power"
+    },
+    {
+     "arity": 1,
+     "name": "setNetFlagComponentUuid_ProtectGround"
+    },
+    {
+     "arity": 1,
+     "name": "setNetPortComponentUuid_BI"
+    },
+    {
+     "arity": 1,
+     "name": "setNetPortComponentUuid_IN"
+    },
+    {
+     "arity": 1,
+     "name": "setNetPortComponentUuid_OUT"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveObject": {
+   "methods": [
+    {
+     "arity": 8,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitivePin": {
+   "methods": [
+    {
+     "arity": 9,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitivePolygon": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveRectangle": {
+   "methods": [
+    {
+     "arity": 11,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveText": {
+   "methods": [
+    {
+     "arity": 11,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 0,
+     "name": "getAll"
+    },
+    {
+     "arity": 0,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_PrimitiveWire": {
+   "methods": [
+    {
+     "arity": 5,
+     "name": "create"
+    },
+    {
+     "arity": 1,
+     "name": "delete"
+    },
+    {
+     "arity": 1,
+     "name": "get"
+    },
+    {
+     "arity": 1,
+     "name": "getAll"
+    },
+    {
+     "arity": 1,
+     "name": "getAllPrimitiveId"
+    },
+    {
+     "arity": 2,
+     "name": "modify"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_SelectControl": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "clearSelected"
+    },
+    {
+     "arity": 3,
+     "name": "doCrossProbeSelect"
+    },
+    {
+     "arity": 1,
+     "name": "doSelectPrimitives"
+    },
+    {
+     "arity": 0,
+     "name": "getAllSelectedPrimitives"
+    },
+    {
+     "arity": 0,
+     "name": "getAllSelectedPrimitives3"
+    },
+    {
+     "arity": 0,
+     "name": "getAllSelectedPrimitives_PrimitiveId"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentMousePosition"
+    },
+    {
+     "arity": 0,
+     "name": "getSelectedPrimitives"
+    },
+    {
+     "arity": 0,
+     "name": "getSelectedPrimitives_PrimitiveId"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_SimulationEngine": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "pushData"
+    }
+   ],
+   "type": "object"
+  },
+  "sch_Utils": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "splitLines"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_ClientUrl": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "request"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Dialog": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "createReactComponentizationDialogInterface"
+    },
+    {
+     "arity": 2,
+     "name": "insertScriptToDialog"
+    },
+    {
+     "arity": 1,
+     "name": "showConfirmationMessage"
+    },
+    {
+     "arity": 1,
+     "name": "showInformationMessage"
+    },
+    {
+     "arity": 2,
+     "name": "showInputDialog"
+    },
+    {
+     "arity": 3,
+     "name": "showSelectDialog"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Environment": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getEditorCompliedDate"
+    },
+    {
+     "arity": 0,
+     "name": "getEditorCurrentVersion"
+    },
+    {
+     "arity": 0,
+     "name": "getUserInfo"
+    },
+    {
+     "arity": 0,
+     "name": "isClient"
+    },
+    {
+     "arity": 0,
+     "name": "isEasyEDAProEdition"
+    },
+    {
+     "arity": 0,
+     "name": "isHalfOfflineMode"
+    },
+    {
+     "arity": 0,
+     "name": "isJLCEDAProEdition"
+    },
+    {
+     "arity": 0,
+     "name": "isOfflineMode"
+    },
+    {
+     "arity": 0,
+     "name": "isOnlineMode"
+    },
+    {
+     "arity": 0,
+     "name": "isProPrivateEdition"
+    },
+    {
+     "arity": 0,
+     "name": "isWeb"
+    },
+    {
+     "arity": 0,
+     "name": "setKeepProjectHasOnlyOneBoard"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_FileManager": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "extractLibInfo"
+    },
+    {
+     "arity": 1,
+     "name": "extractProjectInfo"
+    },
+    {
+     "arity": 3,
+     "name": "getCbbFileByCbbUuid"
+    },
+    {
+     "arity": 3,
+     "name": "getDeviceFileByDeviceUuid"
+    },
+    {
+     "arity": 3,
+     "name": "getDocumentFile"
+    },
+    {
+     "arity": 0,
+     "name": "getDocumentFootprintSources"
+    },
+    {
+     "arity": 0,
+     "name": "getDocumentSource"
+    },
+    {
+     "arity": 3,
+     "name": "getFootprintFileByFootprintUuid"
+    },
+    {
+     "arity": 3,
+     "name": "getPanelLibraryFileByPanelLibraryUuid"
+    },
+    {
+     "arity": 3,
+     "name": "getProjectFile"
+    },
+    {
+     "arity": 4,
+     "name": "getProjectFileByProjectUuid"
+    },
+    {
+     "arity": 3,
+     "name": "getSymbolFileBySymbolUuid"
+    },
+    {
+     "arity": 1,
+     "name": "importProjectByProjectFile"
+    },
+    {
+     "arity": 1,
+     "name": "setDocumentSource"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_FileSystem": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "deleteFileInFileSystem"
+    },
+    {
+     "arity": 0,
+     "name": "getDocumentsPath"
+    },
+    {
+     "arity": 0,
+     "name": "getEdaPath"
+    },
+    {
+     "arity": 1,
+     "name": "getExtensionFile"
+    },
+    {
+     "arity": 0,
+     "name": "getLibrariesPaths"
+    },
+    {
+     "arity": 0,
+     "name": "getProjectsPaths"
+    },
+    {
+     "arity": 1,
+     "name": "listFilesOfFileSystem"
+    },
+    {
+     "arity": 1,
+     "name": "openReadFileDialog"
+    },
+    {
+     "arity": 0,
+     "name": "openReadFolderDialog"
+    },
+    {
+     "arity": 1,
+     "name": "readFileFromFileSystem"
+    },
+    {
+     "arity": 2,
+     "name": "saveFile"
+    },
+    {
+     "arity": 3,
+     "name": "saveFileToFileSystem"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_FontManager": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "addFont"
+    },
+    {
+     "arity": 1,
+     "name": "deleteFont"
+    },
+    {
+     "arity": 0,
+     "name": "getFontsList"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_FormatConversion": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "convertAltiumDesignerLibrariesToEasyEDAMultiFiles"
+    },
+    {
+     "arity": 1,
+     "name": "convertAltiumDesignerLibrariesToEasyEDASingleFile"
+    },
+    {
+     "arity": 1,
+     "name": "convertDisaLibrariesToEasyEDAMultiFiles"
+    },
+    {
+     "arity": 1,
+     "name": "convertDisaLibrariesToEasyEDASingleFile"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_HeaderMenu": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "insertHeaderMenus"
+    },
+    {
+     "arity": 3,
+     "name": "insertSystemHeaderMenuItem"
+    },
+    {
+     "arity": 1,
+     "name": "insertSystemHeaderMenus"
+    },
+    {
+     "arity": 0,
+     "name": "removeHeaderMenus"
+    },
+    {
+     "arity": 1,
+     "name": "removeSystemHeaderMenuItem"
+    },
+    {
+     "arity": 1,
+     "name": "replaceHeaderMenus"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_I18n": {
+   "methods": [
+    {
+     "arity": 3,
+     "name": "addLanguageChangedEventListener"
+    },
+    {
+     "arity": 0,
+     "name": "getAllSupportedLanguages"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentLanguage"
+    },
+    {
+     "arity": 2,
+     "name": "importMultilingual"
+    },
+    {
+     "arity": 3,
+     "name": "importMultilingualLanguage"
+    },
+    {
+     "arity": 2,
+     "name": "importMultilingualNamespace"
+    },
+    {
+     "arity": 1,
+     "name": "isEventListenerAlreadyExist"
+    },
+    {
+     "arity": 1,
+     "name": "isLanguageSupported"
+    },
+    {
+     "arity": 1,
+     "name": "removeEventListener"
+    },
+    {
+     "arity": 3,
+     "name": "text"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_IFrame": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "closeIFrame"
+    },
+    {
+     "arity": 1,
+     "name": "hideIFrame"
+    },
+    {
+     "arity": 1,
+     "name": "isIFrameAlreadyExist"
+    },
+    {
+     "arity": 1,
+     "name": "openIFrame"
+    },
+    {
+     "arity": 1,
+     "name": "showIFrame"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_LoadingAndProgressBar": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "destroyLoading"
+    },
+    {
+     "arity": 0,
+     "name": "destroyProgressBar"
+    },
+    {
+     "arity": 0,
+     "name": "showLoading"
+    },
+    {
+     "arity": 0,
+     "name": "showProgressBar"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Log": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "add"
+    },
+    {
+     "arity": 0,
+     "name": "clear"
+    },
+    {
+     "arity": 1,
+     "name": "export"
+    },
+    {
+     "arity": 2,
+     "name": "find"
+    },
+    {
+     "arity": 1,
+     "name": "sort"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Message": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "removeFollowMouseTip"
+    },
+    {
+     "arity": 2,
+     "name": "showFollowMouseTip"
+    },
+    {
+     "arity": 1,
+     "name": "showToastMessage"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_MessageBox": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "showConfirmationMessage"
+    },
+    {
+     "arity": 1,
+     "name": "showInformationMessage"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_MessageBus": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "createPrivateMessageBus"
+    },
+    {
+     "arity": 2,
+     "name": "publish"
+    },
+    {
+     "arity": 2,
+     "name": "publishPublic"
+    },
+    {
+     "arity": 2,
+     "name": "pull"
+    },
+    {
+     "arity": 1,
+     "name": "pullAsync"
+    },
+    {
+     "arity": 1,
+     "name": "pullAsyncPublic"
+    },
+    {
+     "arity": 2,
+     "name": "pullPublic"
+    },
+    {
+     "arity": 2,
+     "name": "push"
+    },
+    {
+     "arity": 2,
+     "name": "pushPublic"
+    },
+    {
+     "arity": 0,
+     "name": "removePrivateMessageBus"
+    },
+    {
+     "arity": 3,
+     "name": "rpcCall"
+    },
+    {
+     "arity": 3,
+     "name": "rpcCallPublic"
+    },
+    {
+     "arity": 2,
+     "name": "rpcService"
+    },
+    {
+     "arity": 2,
+     "name": "rpcServicePublic"
+    },
+    {
+     "arity": 2,
+     "name": "subscribe"
+    },
+    {
+     "arity": 2,
+     "name": "subscribeOnce"
+    },
+    {
+     "arity": 2,
+     "name": "subscribeOncePublic"
+    },
+    {
+     "arity": 2,
+     "name": "subscribePublic"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_PanelControl": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "closeBottomPanel"
+    },
+    {
+     "arity": 0,
+     "name": "closeLeftPanel"
+    },
+    {
+     "arity": 0,
+     "name": "closeRightPanel"
+    },
+    {
+     "arity": 0,
+     "name": "isBottomPanelLocked"
+    },
+    {
+     "arity": 0,
+     "name": "isLeftPanelLocked"
+    },
+    {
+     "arity": 0,
+     "name": "isRightPanelLocked"
+    },
+    {
+     "arity": 1,
+     "name": "openBottomPanel"
+    },
+    {
+     "arity": 1,
+     "name": "openLeftPanel"
+    },
+    {
+     "arity": 1,
+     "name": "openRightPanel"
+    },
+    {
+     "arity": 1,
+     "name": "toggleBottomPanelLockState"
+    },
+    {
+     "arity": 1,
+     "name": "toggleLeftPanelLockState"
+    },
+    {
+     "arity": 1,
+     "name": "toggleRightPanelLockState"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_RightClickMenu": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "changeMenu"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Setting": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "restoreDefault"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_ShortcutKey": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getShortcutKeys"
+    },
+    {
+     "arity": 3,
+     "name": "registerShortcutKey"
+    },
+    {
+     "arity": 1,
+     "name": "unregisterShortcutKey"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Storage": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "clearExtensionAllUserConfigs"
+    },
+    {
+     "arity": 1,
+     "name": "deleteExtensionUserConfig"
+    },
+    {
+     "arity": 0,
+     "name": "getExtensionAllUserConfigs"
+    },
+    {
+     "arity": 1,
+     "name": "getExtensionUserConfig"
+    },
+    {
+     "arity": 1,
+     "name": "setExtensionAllUserConfigs"
+    },
+    {
+     "arity": 2,
+     "name": "setExtensionUserConfig"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Timer": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "clearIntervalTimer"
+    },
+    {
+     "arity": 1,
+     "name": "clearTimeoutTimer"
+    },
+    {
+     "arity": 3,
+     "name": "setIntervalTimer"
+    },
+    {
+     "arity": 3,
+     "name": "setTimeoutTimer"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_ToastMessage": {
+   "methods": [
+    {
+     "arity": 1,
+     "name": "showMessage"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Tool": {
+   "methods": [
+    {
+     "arity": 2,
+     "name": "netlistComparison"
+    },
+    {
+     "arity": 2,
+     "name": "pcbComparison"
+    },
+    {
+     "arity": 2,
+     "name": "schematicComparison"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Unit": {
+   "methods": [
+    {
+     "arity": 0,
+     "name": "getFrontendDataUnit"
+    },
+    {
+     "arity": 1,
+     "name": "inchToMil"
+    },
+    {
+     "arity": 1,
+     "name": "inchToMm"
+    },
+    {
+     "arity": 1,
+     "name": "milToInch"
+    },
+    {
+     "arity": 1,
+     "name": "milToMm"
+    },
+    {
+     "arity": 1,
+     "name": "mmToInch"
+    },
+    {
+     "arity": 1,
+     "name": "mmToMil"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_WebSocket": {
+   "methods": [
+    {
+     "arity": 4,
+     "name": "close"
+    },
+    {
+     "arity": 5,
+     "name": "register"
+    },
+    {
+     "arity": 3,
+     "name": "send"
+    }
+   ],
+   "type": "object"
+  },
+  "sys_Window": {
+   "methods": [
+    {
+     "arity": 3,
+     "name": "addEventListener"
+    },
+    {
+     "arity": 0,
+     "name": "getCurrentTheme"
+    },
+    {
+     "arity": 0,
+     "name": "getUrlAnchor"
+    },
+    {
+     "arity": 1,
+     "name": "getUrlParam"
+    },
+    {
+     "arity": 1,
+     "name": "open"
+    },
+    {
+     "arity": 2,
+     "name": "openUI"
+    },
+    {
+     "arity": 1,
+     "name": "removeEventListener"
+    },
+    {
+     "arity": 1,
+     "name": "urlPushState"
+    },
+    {
+     "arity": 1,
+     "name": "urlReplaceState"
+    }
+   ],
+   "type": "object"
+  }
+ },
+ "ns_count": 94,
+ "version": "JLCEDA Pro - V3.2.148"
+}
