@@ -18,6 +18,28 @@ SEVERITY_WARNING = "warning"
 SEVERITY_INFO    = "info"
 
 
+def _pad_abs(fp_pos: Any, fp_rot: float, pad: Any) -> Tuple[float, float]:
+    """焊盘绝对坐标 = 封装原点 + (本地偏移按封装朝向旋转)。
+
+    KiCad 朝向为顺时针 (Y 向下): x'=lx·cosθ+ly·sinθ, y'=-lx·sinθ+ly·cosθ。
+    旋转封装上的焊盘若不做此变换, 绝对坐标会错位, 制造大量 DRC 假阳。
+    """
+    rad = math.radians(fp_rot or 0.0)
+    c, s = math.cos(rad), math.sin(rad)
+    lx, ly = pad.position.x, pad.position.y
+    return (fp_pos.x + (lx * c + ly * s),
+            fp_pos.y + (-lx * s + ly * c))
+
+
+def _pad_extent(fp_rot: float, pad: Any) -> Tuple[float, float]:
+    """焊盘有效 AABB 半轴用的宽高 (封装+焊盘合成朝向接近 90/270 时宽高互换)。"""
+    ang = ((fp_rot or 0.0) + (getattr(pad, "rotation", 0.0) or 0.0)) % 180.0
+    w, h = pad.width, pad.height
+    if 45.0 <= ang < 135.0:
+        w, h = h, w
+    return w, h
+
+
 def _pad_cu_layers(pad: Any) -> set:
     """焊盘所在的铜层集合; '*.Cu' (通孔) 记为通配 '*'。未知时返回空集。"""
     out: set = set()
@@ -172,12 +194,12 @@ class DRCEngine:
                         # 不共享铜层的焊盘 (异面 SMD) 物理上不可能短路。
                         if not _pads_share_copper(pi, pj):
                             continue
-                        pix = pos_i.x + pi.position.x
-                        piy = pos_i.y + pi.position.y
-                        pjx = pos_j.x + pj.position.x
-                        pjy = pos_j.y + pj.position.y
-                        dx = abs(pix - pjx) - (pi.width + pj.width) / 2.0
-                        dy = abs(piy - pjy) - (pi.height + pj.height) / 2.0
+                        pix, piy = _pad_abs(pos_i, fpi.rotation, pi)
+                        pjx, pjy = _pad_abs(pos_j, fpj.rotation, pj)
+                        wi, hi = _pad_extent(fpi.rotation, pi)
+                        wj, hj = _pad_extent(fpj.rotation, pj)
+                        dx = abs(pix - pjx) - (wi + wj) / 2.0
+                        dy = abs(piy - pjy) - (hi + hj) / 2.0
                         if dx < tol and dy < tol:
                             viols.append(DRCViolation(
                                 rule="R001", severity=SEVERITY_ERROR,
@@ -255,10 +277,8 @@ class DRCEngine:
                     for pj in fpj.pads():
                         if pi.net_number == pj.net_number:
                             continue
-                        pix = pos_i.x + pi.position.x
-                        piy = pos_i.y + pi.position.y
-                        pjx = pos_j.x + pj.position.x
-                        pjy = pos_j.y + pj.position.y
+                        pix, piy = _pad_abs(pos_i, fpi.rotation, pi)
+                        pjx, pjy = _pad_abs(pos_j, fpj.rotation, pj)
                         dist = math.hypot(pix - pjx, piy - pjy)
                         min_clear = (pi.width + pj.width) / 4.0
                         if dist < min_clear:
@@ -280,8 +300,8 @@ class DRCEngine:
             pos = fp.position
             for pad in fp.pads():
                 if pad.drill > 0:
-                    pp = pad.position
-                    drills.append((pos.x + pp.x, pos.y + pp.y, pad.drill, fp.ref))
+                    ax, ay = _pad_abs(pos, fp.rotation, pad)
+                    drills.append((ax, ay, pad.drill, fp.ref))
         for i in range(len(drills)):
             for j in range(i + 1, len(drills)):
                 xi, yi, di, ri = drills[i]
@@ -346,8 +366,7 @@ class DRCEngine:
         for fp in self.board.footprints():
             pos = fp.position
             for pad in fp.pads():
-                px = pos.x + pad.position.x
-                py = pos.y + pad.position.y
+                px, py = _pad_abs(pos, fp.rotation, pad)
                 for sx, sy in silk_items:
                     if abs(px - sx) < pad.width / 2 and abs(py - sy) < pad.height / 2:
                         viols.append(DRCViolation(

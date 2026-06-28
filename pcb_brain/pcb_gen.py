@@ -118,13 +118,51 @@ def generate_pcb(dna_name: str, output_dir: str = ".") -> Dict[str, Any]:
     }
 
 
+def _route_via_kicad_python(pcb_path: str, out_dir: str,
+                            passes: int = 8) -> Optional[Dict[str, Any]]:
+    """在 KiCad 自带 python 子进程里跑 freerouting 布线闭环 (优雅降级)。
+
+    build_fab_package 跑在 devin python (无 pcbnew); 布线须经 KiCad python +
+    freerouting。工具不全则返回 None, 不影响只布局的制造产出。
+    """
+    import json as _json
+    import subprocess as _sp
+    from kicad_origin.origin.env import find_kicad_python
+
+    kpy = find_kicad_python()
+    if not kpy:
+        return None
+    root = str(Path(__file__).resolve().parents[1])
+    code = (
+        "import sys; sys.path.insert(0, r'%s');"
+        "from kicad_origin.examples import forward_route as f;"
+        "import json; print('FRROUTE'+json.dumps("
+        "f.route_board(r'%s', out_dir=r'%s', passes=%d)))"
+    ) % (root, pcb_path, out_dir, passes)
+    try:
+        cp = _sp.run([str(kpy), "-c", code], capture_output=True,
+                     text=True, timeout=900)
+    except Exception:  # noqa: BLE001
+        return None
+    for line in (cp.stdout or "").splitlines():
+        if line.startswith("FRROUTE"):
+            try:
+                return _json.loads(line[len("FRROUTE"):])
+            except Exception:  # noqa: BLE001
+                return None
+    return None
+
+
 def build_fab_package(dna_name: str, output_dir: str = "output/fab",
                       *, solve: bool = True,
-                      render: bool = True) -> Dict[str, Any]:
-    """全链路: DNA → board → (solve_drc) → save → 真实 kicad-cli 制造文件。
+                      render: bool = True,
+                      route: bool = False) -> Dict[str, Any]:
+    """全链路: DNA → board → (solve_drc) → save → (freerouting 布线) → 真实 kicad-cli 制造文件。
 
     工具在则产出真实 Gerber/钻孔/坐标/STEP/3D 渲染 + 真实 DRC; 工具不在则
-    优雅降级到纯 Python Gerber/BOM。返回每一步的结构化结果。
+    优雅降级到纯 Python Gerber/BOM。route=True 且 KiCad python+freerouting 可用时,
+    先把已布局板交给真实 freerouting 布线 (unconnected→0), 制造文件即反映布好的铜。
+    返回每一步的结构化结果。
     """
     dna = CircuitDNA.get(dna_name)
     if dna is None:
@@ -150,17 +188,25 @@ def build_fab_package(dna_name: str, output_dir: str = "output/fab",
     board.save(str(pcb_path))
 
     steps: Dict[str, Any] = {}
+    fab_path = pcb_path
+    route_info: Optional[Dict[str, Any]] = None
+    if route:
+        route_info = _route_via_kicad_python(str(pcb_path), str(out / "route"))
+        steps["route"] = route_info or {"ok": False,
+                                        "reason": "kicad-python/freerouting unavailable"}
+        if route_info and route_info.get("routed_path"):
+            fab_path = Path(route_info["routed_path"])
     steps["bom"] = save_bom(board, str(out / f"{dna_name}_bom.csv")).to_dict()
 
     used_real_tool = kc.kicad_cli_available()
     if used_real_tool:
-        steps["gerbers"] = kc.export_gerbers(str(pcb_path), str(out / "gerber")).to_dict()
-        steps["drill"] = kc.export_drill(str(pcb_path), str(out / "gerber")).to_dict()
-        steps["pos"] = kc.export_pos(str(pcb_path), str(out / f"{dna_name}_pos.csv")).to_dict()
-        steps["step"] = kc.export_step(str(pcb_path), str(out / f"{dna_name}.step")).to_dict()
+        steps["gerbers"] = kc.export_gerbers(str(fab_path), str(out / "gerber")).to_dict()
+        steps["drill"] = kc.export_drill(str(fab_path), str(out / "gerber")).to_dict()
+        steps["pos"] = kc.export_pos(str(fab_path), str(out / f"{dna_name}_pos.csv")).to_dict()
+        steps["step"] = kc.export_step(str(fab_path), str(out / f"{dna_name}.step")).to_dict()
         if render:
-            steps["render"] = kc.render_3d(str(pcb_path), str(out / f"{dna_name}.png")).to_dict()
-        steps["drc"] = kc.run_drc(str(pcb_path), str(out / f"{dna_name}_drc.json")).to_dict()
+            steps["render"] = kc.render_3d(str(fab_path), str(out / f"{dna_name}.png")).to_dict()
+        steps["drc"] = kc.run_drc(str(fab_path), str(out / f"{dna_name}_drc.json")).to_dict()
     else:
         from kicad_origin.engine.gerber import generate_gerber
         steps["gerbers"] = {"ok": generate_gerber(
@@ -171,6 +217,8 @@ def build_fab_package(dna_name: str, output_dir: str = "output/fab",
         "ok": True,
         "dna": dna_name,
         "path": str(pcb_path),
+        "fab_path": str(fab_path),
+        "routed": bool(route_info and route_info.get("routed_path")),
         "internal_drc": {"raw_errors": raw_e, "solved_errors": solved_e},
         "kicad_cli": kc.kicad_cli_version() if used_real_tool else None,
         "backend": "kicad-cli" if used_real_tool else "pure_python",

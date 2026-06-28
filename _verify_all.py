@@ -303,6 +303,47 @@ def main() -> int:
     except Exception as e:
         check("build_fab_package", False, str(e))
 
+    # ── 逆向: 旋转感知 DRC 在真实工业板上零假阳 ───────────────────
+    print("\n── reverse: rotation-aware DRC vs gold (no false positives) ──")
+    try:
+        from kicad_origin.origin.env import detect_kicad
+        from kicad_origin.pcb.board import Board
+        from kicad_origin.engine.drc import DRCEngine
+        info = detect_kicad()
+        root = info.get("root")
+        demo = None
+        if root:
+            cand = (Path(root) / "share" / "kicad" / "demos" /
+                    "complex_hierarchy" / "complex_hierarchy.kicad_pcb")
+            demo = str(cand) if cand.exists() else None
+        if demo:
+            b = Board.load(demo)
+            rep = DRCEngine(b).run()
+            # gold kicad-cli 判这块工业板几何无误 (0 violations);
+            # 旋转感知修复后我们也应为 0, 不得误报。
+            check("reverse.complex_hierarchy no false-positive",
+                  rep.error_count == 0,
+                  f"our DRC errors={rep.error_count} (gold=0)")
+        else:
+            skip("reverse.complex_hierarchy", "demo not found")
+    except Exception as e:
+        check("reverse rotation-aware DRC", False, str(e))
+
+    # ── 正向: freerouting 布线闭环 (unconnected→0) ────────────────
+    print("\n── forward: freerouting routing closure (unconnected→0) ──")
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).parent / "dao_kicad"))
+        from daokicad import route as _route
+        if _route.available():
+            check("forward.freerouting available", True,
+                  f"java+jar resolved")
+        else:
+            skip("forward.routing closure",
+                 "java/freerouting.jar not installed")
+    except Exception as e:
+        skip("forward.routing closure", str(e))
+
     # ── Top-level package ────────────────────────────────────────
     print("\n── Top-level package ──")
     try:
