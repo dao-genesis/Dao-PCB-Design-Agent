@@ -154,6 +154,14 @@ def main(argv=None):
     dr = sub.add_parser("drc", help="run DRC on a board")
     dr.add_argument("pcb")
 
+    rv = sub.add_parser("reverse",
+                        help="reverse-engineer a finished board: recover "
+                             "netlist/BOM/stackup/rules; optional round-trip")
+    rv.add_argument("pcb")
+    rv.add_argument("--roundtrip", metavar="OUT", default=None,
+                    help="rebuild from the recovered source to OUT and diff "
+                         "connectivity against the original")
+
     fu = sub.add_parser("fusion",
                         help="drive the LIVE board in a running KiCad via the IPC API")
     fu.add_argument("intent", nargs="?", default="",
@@ -196,6 +204,19 @@ def main(argv=None):
         return _build_sch(args)
     if args.cmd == "drc":
         _print(LiveKiCad().drc(args.pcb))
+        return 0
+    if args.cmd == "reverse":
+        from . import reverse as _rev
+        if args.roundtrip:
+            r = _rev.roundtrip(args.pcb, args.roundtrip)
+            _print(r)
+            return 0 if r.get("ok") and r["diff"]["connectivity_identical"] else 2
+        rep = _rev.extract(args.pcb)
+        rep.pop("placement", None)            # voluminous; keep the summary tight
+        rep["spec"] = {"footprints": len(rep["spec"]["footprints"]),
+                       "nets": len(rep["spec"]["nets"]),
+                       "connections": len(rep["spec"]["connections"])}
+        _print(rep)
         return 0
     if args.cmd == "fusion":
         from .fusion import Fusion

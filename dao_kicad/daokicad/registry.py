@@ -45,6 +45,7 @@ CAPABILITIES: tuple[str, ...] = (
     "panelize",         # array/panelize for production (KiKit)
     "sourcing",         # part availability/pricing (LCSC, Octopart)
     "render",           # board image / 3D render
+    "reverse_engineer",  # recover a finished board's source (netlist/BOM/...)
 )
 
 

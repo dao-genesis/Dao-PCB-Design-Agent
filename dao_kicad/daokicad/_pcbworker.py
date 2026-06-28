@@ -363,11 +363,17 @@ def build(spec, out_path):
     _LIB_DIRS = spec.get("fp_lib_dirs", {}) or {}
     board = pcbnew.BOARD()
 
-    # copper stackup: 2-layer by default, 4-layer (F/In1/In2/B) on request so
-    # boards can carry dedicated GND/power planes — real board engineering.
+    # copper stackup: 2-layer by default; any even count up to 32 on request so
+    # real multilayer industrial boards (6/8/12-layer GND/power planes) rebuild
+    # at their true depth instead of being silently flattened. KiCad only
+    # supports even copper-layer counts in [2, 32].
     layer_count = int(spec.get("layers", 2))
-    if layer_count not in (2, 4):
+    if layer_count < 2:
         layer_count = 2
+    if layer_count > 32:
+        layer_count = 32
+    if layer_count % 2:
+        layer_count += 1
     board.SetCopperLayerCount(layer_count)
 
     # design rules / netclass-ish defaults

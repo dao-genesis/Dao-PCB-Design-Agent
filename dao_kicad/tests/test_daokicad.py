@@ -227,6 +227,99 @@ def test_build_and_drc(tmp_path):
     assert "violations" in drc
 
 
+def test_reverse_diff_specs_connectivity_is_rename_invariant():
+    """diff_specs compares the *partition* of pins into nets, so renaming nets
+    must not register as a change, but moving a pin to another net must."""
+    from daokicad import reverse
+
+    base = {"footprints": [{"ref": "R1"}, {"ref": "R2"}],
+            "connections": [{"ref": "R1", "pad": "1", "net": "A"},
+                            {"ref": "R2", "pad": "1", "net": "A"},
+                            {"ref": "R1", "pad": "2", "net": "B"},
+                            {"ref": "R2", "pad": "2", "net": "B"}]}
+    renamed = {"footprints": [{"ref": "R1"}, {"ref": "R2"}],
+               "connections": [{"ref": "R1", "pad": "1", "net": "NET99"},
+                               {"ref": "R2", "pad": "1", "net": "NET99"},
+                               {"ref": "R1", "pad": "2", "net": "B"},
+                               {"ref": "R2", "pad": "2", "net": "B"}]}
+    assert reverse.diff_specs(base, renamed)["connectivity_identical"]
+
+    broken = {"footprints": [{"ref": "R1"}, {"ref": "R2"}],
+              "connections": [{"ref": "R1", "pad": "1", "net": "A"},
+                              {"ref": "R2", "pad": "1", "net": "B"},  # moved
+                              {"ref": "R1", "pad": "2", "net": "B"},
+                              {"ref": "R2", "pad": "2", "net": "B"}]}
+    assert not reverse.diff_specs(base, broken)["connectivity_identical"]
+
+
+@needs_script
+def test_reverse_extract_recovers_source(tmp_path):
+    """Build a known board, then walk it backwards: extract must recover every
+    footprint, the net partition, the BOM, and copper/stackup stats."""
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("voltage_divider")
+    pcb = tmp_path / "vd.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+
+    rep = reverse.extract(pcb)
+    assert rep["ok"]
+    assert {f["ref"] for f in rep["spec"]["footprints"]} >= {"J1", "R1", "R2"}
+    assert rep["counts"]["footprints"] == len(rep["spec"]["footprints"])
+    assert rep["stackup"]["copper_layers"] >= 2
+    assert sum(b["qty"] for b in rep["bom"]) == rep["counts"]["footprints"]
+
+
+@needs_script
+def test_reverse_roundtrip_preserves_connectivity(tmp_path):
+    """Round-trip a finished board through harvest→rebuild→re-extract; the
+    recovered connectivity must be identical (guards the harvest + multilayer
+    fixes that let real boards rebuild without their original libraries)."""
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("ams1117_regulator")
+    pcb = tmp_path / "src.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+
+    r = reverse.roundtrip(pcb, tmp_path / "rebuilt.kicad_pcb")
+    assert r["ok"], r
+    assert r["diff"]["connectivity_identical"], r["diff"]
+    assert r["rebuilt_counts"]["footprints"] == r["original_counts"]["footprints"]
+
+
+@needs_script
+def test_reverse_harvest_writes_kicad_mods(tmp_path):
+    """harvest_footprints must recover a .kicad_mod for every unique footprint
+    straight from the board, independent of any installed library."""
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    pcb = tmp_path / "rc.kicad_pcb"
+    assert live.build_board(dna.make("rc_lowpass"), pcb)["ok"]
+
+    pretty = tmp_path / "harvested.pretty"
+    mapping = reverse.harvest_footprints(pcb, pretty)
+    assert mapping
+    mods = list(pretty.glob("*.kicad_mod"))
+    assert len(mods) == len(set(mapping.values()))
+
+
+@needs_script
+def test_build_supports_six_copper_layers(tmp_path):
+    """The build engine must honour real multilayer stackups, not silently
+    flatten everything past 4 layers to 2 (the defect reverse-eng exposed)."""
+    import pcbnew
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("voltage_divider")
+    spec["layers"] = 6
+    pcb = tmp_path / "six.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    assert pcbnew.LoadBoard(str(pcb)).GetCopperLayerCount() == 6
+
+
 @needs_script
 def test_summary_roundtrip(tmp_path):
     live = LiveKiCad(_KENV)
