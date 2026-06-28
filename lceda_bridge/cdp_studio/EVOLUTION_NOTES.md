@@ -3,6 +3,32 @@
 > 道法自然 · 在实践中发现边界,把边界与根因如实记下,作为下一轮演化的锚。
 > 本轮(会话 2c)在「修 net 融合」的过程中,逐层挖到了**原理图侧合成鼠标操作非确定性**这一更深的根。
 
+## 〇、★ EXTAPI 程序化可达性边界图谱(会话 2d 实测·关键资产)
+
+> 反复实测得到的核心规律:**EXTAPI 分两类——"数据/生命周期"类程序化可达;"高阶向导/比对/导入"类是 UI 绑定,
+> 经 CDP 程序化调用普遍返回 undefined/falsy(由 UI 驱动并把结果写进面板,不向调用方返回)。**
+> 这张图谱本身就是用户要的"在实践中暴露的边界缺陷",直接决定下一轮该走哪条路。
+
+| 方法 | 程序化结果 | 判定 |
+|---|---|---|
+| `dmt_Project.createProject` / `scaffold` | 返回 uuid,工程真建 | ✅ 可达 |
+| `dmt_Project.getAllProjectsUuid(teamUuid,...)` | **需传 teamUuid**,否则返回 `[]`;传齐返回 90 | ✅ 可达(此前误判为退化) |
+| `dmt_Folder.createFolder(name,teamUuid,...)` | 传齐 teamUuid 返回 folder uuid | ✅ 可达 |
+| `dmt_Project.getProjectInfo` / `sys_FileManager.getProjectFileByProjectUuid` | 返回 info / `.epro2` File | ✅ 可达 |
+| place/save/modify/importChanges(自动点 Apply)/export(Gerber/BOM/PNP) | 端到端产出真实可制造件 | ✅ 可达(但放件走合成鼠标,非确定) |
+| `pcb_Net.getNetlist('JLCEDA')` | 返回 JSON 字符串(网表) | ✅ 可达 |
+| `sch_Netlist.getNetlist('JLCEDA')` | 内部 footprint 显示查询 fire-and-forget → **hang** | ⚠️ 卡死(用 pcb 侧或 .enet 导出绕) |
+| `sch/pcb_Net.setNetlist` | 返回 true 但**只设参考网表,不建器件/网络** | ❌ 非建网入口 |
+| `sys_FileManager.importProjectByProjectFile(file,...,saveTo)` | in-page File + 有效 saveTo **仍 falsy**,无工程产生 | ❌ UI 绑定(后端拒收 client File) |
+| File→Import→JLCEDA(Professional) UI 点击 | **既不触发 `<input type=file>` 也不触发 `showOpenFilePicker`**(已 monkeypatch 计数) | ⚠️ 需更精细驱动 |
+| `sys_Tool.netlistComparison(nl1,nl2)` | 传 .enet JSON 串 → **返回 undefined** | ❌ UI 绑定(疑需特定网表文件格式/写面板) |
+| `sys_Tool.schematicComparison` / `pcbComparison` | 函数体为空 `{}` | ❌ 空桩(未实现) |
+
+**战略含义**:逆向工程的"导入成品 + 自动比对"两个高阶能力在**纯 CDP 程序化层被 UI 绑定挡住**。
+要兑现逆向全链路,只剩两条真路:**(A)** 驱动真实 UI(computer 工具 / DAO Bridge browser_* / monkeypatch
+`showOpenFilePicker` 喂 File 走完整 UI 管线);**(B)** 强化已验证的**正向程序化构建 + 导出**链
+(根治放件非确定:接原生 `autoLayout`/`autoRouting`、或确定性坐标),用它产出参考件再做对比。
+
 ## 一、当前稳定可复现的能力(全链路核心环)
 
 每次运行 `build_blinker.py` 都**端到端走通并产出真实可制造文件**:
