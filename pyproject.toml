@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "dao-pcb-design-agent"
+version = "1.0.0"
+description = "PCB Design Agent - KiCad Origin + PCB Brain + 21 DNA Templates + 16 MCP Tools"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+live = ["kipy", "pywinauto"]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["kicad_origin*", "pcb_brain*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

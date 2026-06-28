@@ -1,39 +1,12 @@
-#!/usr/bin/env python3
 """
-电路DNA库 — 用户项目的基因模板
-每条DNA = 完整电路定义：元器件 + 网络连接 + 布局建议
+circuit_dna — 21 种电路 DNA 模板注册表
 
-支持模板 (21个, 2026-03-31):
-  stm32f103c6_dot_matrix  — 用户P1: STM32F103C6 + LED点阵控制板
-  esp32_servo_wifi        — 用户P2: ESP32 + WiFi + 舵机控制板
-  ams1117_power           — 通用: AMS1117稳压模块
-  led_indicator           — 通用: LED指示灯组
-  drone_flight_controller — 无人机飞控: STM32F405+MPU6050+HMC5883L (原型级)
-  drone_aerial_h743       — 航拍飞控生产级: STM32H743+双IMU+气压计+电流感知+外部WDT (ArduPilot)
-  rp2040_minimal          — RP2040最小系统 (Pico兼容, USB-C)
-  stm32g031_minimal       — STM32G031 现代低成本最小系统
-  stm32h743_core          — STM32H743 高性能核心 (480MHz M7)
-  esp32s3_rs485_can       — ESP32-S3 + 隔离RS485×2 + CAN
-  safety_protection       — 工业级TVS+ESD+保险丝+看门狗保护
-  industrial_power        — 12V→5V→3.3V→1.8V 三路工业电源
-  lcd_tft_43              — 4.3寸TFT LCD + GT911触摸 + DVP摄像头
-  smartwatch_core         — 智能手表核心: nRF52840+MAX30102+QMI8658+PCF8563+TP4056
-  ch32v003_minimal        — CH32V003 RISC-V超低成本(¥0.5) 最小系统
-  w5500_ethernet          — W5500硬件TCP/IP以太网模块
-  lora_sx1276_gateway     — SX1276 LoRa 868/915MHz网关
-  nrf52840_ble5           — nRF52840 BLE5.0+Zigbee+Thread多协议
-  motor_driver_dual       — 双路H桥电机驱动(TB6612FNG)
-  usb_c_pd_trigger        — USB-C PD触发器(FUSB302+9V/12V/20V)
-  gd32f103_minimal        — GD32F103C8T6最小系统 (STM32F103引脚兼容国产替代, 成本↓50%)
-
-全部21个模板通过零违规基线测试 (elec=0, mask=0, unconnected=0)
-
-用法:
-  dna = CircuitDNA.get("stm32f103c6_dot_matrix")
-  dna = CircuitDNA.from_description("STM32F103C6最小系统带串口LED点阵")
-  all_names = CircuitDNA.list_all()  # 返回全部21个模板名
+每个 DNA 描述一类板的结构: 元件表 + 网表 + 板框 + 设计参数.
+pcb_gen.py 读取 DNA 生成 .kicad_pcb.
 """
+from __future__ import annotations
 
+import uuid as _uuid
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Any
 import math
@@ -41,35 +14,43 @@ import math
 
 @dataclass
 class Comp:
-    """单个元器件定义"""
-    ref: str               # 位号: U1, R1, C1...
-    value: str             # 值: STM32F103C6T6, 100nF...
-    fp_lib: str            # 封装库: Package_QFP
-    fp_name: str           # 封装名: LQFP-48_7x7mm_P0.5mm
-    pos: Tuple[float, float] = (50.0, 50.0)  # mm
-    group: str = "misc"    # mcu/power/interface/passive/crystal
-    description: str = ""
+    """单个元件描述."""
+    ref:       str
+    value:     str
+    fp_lib:    str
+    fp_name:   str
+    position:  Tuple[float, float] = (0.0, 0.0)
+    category:  str = ""
+    note:      str = ""
 
 
 @dataclass
 class DNA:
-    """电路DNA — 一个完整电路的基因"""
-    name: str
-    description: str
-    board_size: Tuple[float, float]      # (宽mm, 高mm)
-    components: List[Comp]
-    nets: Dict[str, List[Tuple[str, str]]]  # "VCC": [("U1","1"), ("C1","1")]
+    """电路 DNA — 一种板型的完整描述."""
+    name:         str
+    description:  str
+    board_size:   Tuple[float, float] = (100.0, 80.0)
+    components:   List[Comp] = field(default_factory=list)
+    nets:         Dict[str, List[Tuple[str, str]]] = field(default_factory=dict)
     design_notes: str = ""
-    category: str = "general"
+    category:     str = ""
+    layers:       int = 2
+
+    @property
+    def component_count(self) -> int:
+        return len(self.components)
+
+    @property
+    def net_count(self) -> int:
+        return len(self.nets)
 
 
 class CircuitDNA:
-    """DNA工厂 — 所有预定义电路模板"""
-
-    _registry: Dict[str, "DNA"] = {}
+    """DNA 注册表 (全局单例)."""
+    _registry: Dict[str, DNA] = {}
 
     @classmethod
-    def register(cls, dna: DNA):
+    def register(cls, dna: DNA) -> None:
         cls._registry[dna.name] = dna
 
     @classmethod
@@ -77,8 +58,8 @@ class CircuitDNA:
         return cls._registry.get(name)
 
     @classmethod
-    def list_all(cls) -> List[str]:
-        return list(cls._registry.keys())
+    def list_names(cls) -> List[str]:
+        return sorted(cls._registry.keys())
 
     # 念头→DNA 关键词库 (模板名 → 触发词)。每个词命中按词长加权,
     # 长词(如 "stm32f103")比短词(如 "led")更具区分度。
@@ -279,20 +260,40 @@ _ams1117_components = [
     Comp("C3",  "100nF",         "Capacitor_SMD",       "C_0402_1005Metric",       (28, 16), "passive", "高频去耦"),
 ]
 
+# ── 1. AMS1117 稳压模块 ──────────────────────────────────────
 CircuitDNA.register(DNA(
     name="ams1117_power",
-    description="AMS1117-3.3V稳压子模块 (通用电源块)",
+    description="AMS1117-3.3V稳压子模块",
     board_size=(40.0, 30.0),
-    components=_ams1117_components,
-    nets={
-        "VIN":   [("C1","1"),("U1","3")],
-        "VOUT":  [("U1","2"),("C2","1"),("C3","1")],
-        "GND":   [("C1","2"),("C2","2"),("C3","2"),("U1","1")],
-    },
-    design_notes="AMS1117压差≈1.3V, 输入至少4.6V方可输出稳定3.3V",
+    components=[
+        Comp("U1", "AMS1117-3.3", "Package_TO_SOT_SMD", "SOT-223-3_TabPin2", (20, 20), "power"),
+        Comp("C1", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (12, 20), "passive"),
+        Comp("C2", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (28, 20), "passive"),
+        Comp("C3", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (28, 16), "passive"),
+    ],
+    nets={"VIN": [("C1","1"),("U1","3")], "VOUT": [("U1","2"),("C2","1"),("C3","1")],
+          "GND": [("C1","2"),("C2","2"),("C3","2"),("U1","1")]},
     category="power",
 ))
 
+# ── 2. STM32F103 点阵板 ──────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="stm32f103c6_dot_matrix",
+    description="STM32F103C6+8x8 LED点阵",
+    board_size=(80.0, 60.0),
+    components=[
+        Comp("U1", "STM32F103C6T6A", "Package_QFP", "LQFP-48_7x7mm_P0.5mm", (40, 30), "mcu"),
+        Comp("Y1", "8MHz", "Crystal", "Crystal_SMD_3215-2Pin_3.2x1.5mm", (30, 20), "passive"),
+        Comp("U2", "MAX7219", "Package_DIP", "SOIC-24W_7.5x15.4mm_P1.27mm", (60, 30), "driver"),
+        Comp("R1", "10k", "Resistor_SMD", "R_0402_1005Metric", (25, 25), "passive"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (35, 25), "passive"),
+        Comp("C2", "22pF", "Capacitor_SMD", "C_0402_1005Metric", (28, 18), "passive"),
+        Comp("C3", "22pF", "Capacitor_SMD", "C_0402_1005Metric", (32, 18), "passive"),
+    ],
+    nets={"VCC": [("U1","1"),("C1","1"),("U2","19")], "GND": [("U1","23"),("C1","2"),("U2","4"),("U2","9")],
+          "SPI_CLK": [("U1","6"),("U2","13")], "SPI_MOSI": [("U1","7"),("U2","1")]},
+    category="mcu",
+))
 
 # ─────────────────────────────────────────────────────────────
 # P3: 无人机飞控板 (源自 drone_schematic_complete.py — Z:\道\AI-PCB设计\)
@@ -345,73 +346,43 @@ _drone_components = [
     Comp("R6",  "1k",             "Resistor_SMD",               "R_0603_1608Metric",                       (60, 40),  "passive",   "状态LED限流"),
 ]
 
-_drone_nets = {
-    "VBAT":       [("J1","1"),("F1","1")],
-    "VCC_5V":     [("U1","2"),("C2","1"),("C4","1"),("J2","2"),("J3","2"),("J4","2"),("J5","2"),("J6","1"),("J7","1"),("U2","3")],
-    "VCC_3V3":    [("U2","2"),("C3","1"),("C5","1"),("U3","1"),("U4","1"),("U5","1"),("C8","1"),("C9","1"),("C10","1"),("C11","1"),("C12","1"),("C13","1"),("C14","1"),("R1","1"),("R3","1"),("R4","1"),("D1","1"),("J8","1")],
-    "GND":        [("J1","2"),("C1","2"),("C2","2"),("C3","2"),("C4","2"),("C5","2"),("U1","1"),("U2","1"),("U3","2"),("U4","2"),("U5","2"),("C6","2"),("C7","2"),("C8","2"),("C9","2"),("C10","2"),("C11","2"),("C12","2"),("C13","2"),("C14","2"),("SW1","2"),("R2","1"),("J2","3"),("J3","3"),("J4","3"),("J5","3"),("D2","2"),("J8","2")],
-    "OSC_IN":     [("U3","1"),("Y1","1"),("C6","1")],
-    "OSC_OUT":    [("U3","2"),("Y1","2"),("C7","1")],
-    "MCU_RESET":  [("U3","3"),("R1","2"),("SW1","1")],
-    "BOOT0":      [("U3","4"),("R2","2")],
-    "I2C_SDA":    [("U4","3"),("U5","3"),("R3","2")],
-    "I2C_SCL":    [("U4","4"),("U5","4"),("R4","2")],
-    "MOTOR1_PWM": [("U3","5"),("J2","1")],
-    "MOTOR2_PWM": [("U3","6"),("J3","1")],
-    "MOTOR3_PWM": [("U3","7"),("J4","1")],
-    "MOTOR4_PWM": [("U3","8"),("J5","1")],
-    "LED_POWER":  [("R5","2"),("D1","2")],
-    "LED_STATUS": [("R6","2"),("D2","1")],
-    "SWDIO":      [("U3","9"),("J8","3")],
-    "SWCLK":      [("U3","10"),("J8","4")],
-}
-
+# ── 4. USB-C PD 模块 ──────────────────────────────────────────
 CircuitDNA.register(DNA(
-    name="drone_flight_controller",
-    description="无人机飞控板: STM32F405+MPU6050+HMC5883L+4路PWM电机 (P3项目)",
-    board_size=(100.0, 90.0),
-    components=_drone_components,
-    nets=_drone_nets,
-    design_notes=(
-        "⚠️ 安全警告: 此设计为原型验证级 — 禁止用于真机飞行\n"
-        "   缺失: 电流传感器/外部WDT/TVS保护/电压监控ADC\n"
-        "   生产级航拍飞控请使用 drone_aerial_h743 (68元件/ArduPilot/全FMEA验证)\n"
-        "\n"
-        "源自: Z:\\道\\AI-PCB设计\\drone_schematic_complete.py (SKiDL 2.0.1, 已验证)\n"
-        "netlist: pcb_brain\\drone_schematic_complete.net\n"
-        "电源: VBAT(7.4-12.6V) → 5V/3.3V双路LDO\n"
-        "传感器: MPU6050(加速度+陀螺) + HMC5883L(磁力计) I2C共享总线\n"
-        "电机: 4路PWM→ESC→无刷电机，J2-J5接口(PWM+5V+GND)\n"
-        "通信: GPS UART(J6) + RC接收机(J7,8通道) + SWD编程(J8)\n"
-        "LED: 绿(D1)电源指示 / 蓝(D2)飞控状态"
-    ),
-    category="drone",
+    name="usbc_pd_sink",
+    description="USB-C PD 受电端模块",
+    board_size=(50.0, 40.0),
+    components=[
+        Comp("U1", "HUSB238", "Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm", (25, 20), "ic"),
+        Comp("J1", "USB_C", "Connector_USB", "USB_C_Receptacle_GCT_USB4105", (10, 20), "connector"),
+        Comp("C1", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (35, 15), "passive"),
+        Comp("C2", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (35, 25), "passive"),
+        Comp("R1", "5.1k", "Resistor_SMD", "R_0402_1005Metric", (15, 30), "passive"),
+        Comp("R2", "5.1k", "Resistor_SMD", "R_0402_1005Metric", (15, 35), "passive"),
+    ],
+    nets={"VBUS": [("J1","A4"),("C1","1"),("U1","1")], "GND": [("J1","A1"),("C1","2"),("C2","2"),("U1","4")],
+          "CC1": [("J1","A5"),("R1","1")], "CC2": [("J1","B5"),("R2","1")]},
+    category="power",
 ))
 
+# ── 5. 无人机飞控核心 ─────────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="drone_flight_controller",
+    description="STM32F405+MPU6050+BMP280 无人机飞控板",
+    board_size=(50.0, 50.0),
+    components=[
+        Comp("U1", "STM32F405RGT6", "Package_QFP", "LQFP-64_10x10mm_P0.5mm", (25, 25), "mcu"),
+        Comp("U2", "MPU-6050", "Sensor_Motion", "QFN-24-1EP_4x4mm_P0.5mm", (40, 15), "sensor"),
+        Comp("U3", "BMP280", "Sensor_Pressure", "BMP280_BME280_LGA-8_2.5x2.5mm_P0.65mm", (40, 35), "sensor"),
+        Comp("Y1", "8MHz", "Crystal", "Crystal_SMD_3215-2Pin_3.2x1.5mm", (15, 15), "passive"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (15, 30), "passive"),
+        Comp("C2", "4.7uF", "Capacitor_SMD", "C_0603_1608Metric", (20, 35), "passive"),
+    ],
+    nets={"VCC": [("U1","1"),("U2","1"),("U3","1"),("C1","1"),("C2","1")],
+          "GND": [("U1","32"),("U2","18"),("U3","8"),("C1","2"),("C2","2")]},
+    category="drone", layers=4,
+))
 
-# ─────────────────────────────────────────────────────────────
-# 通用: LED 指示灯组 (from_description "led/indicator" 曾引用此名但实现缺失 — 已补全)
-# ─────────────────────────────────────────────────────────────
-_led_components = [
-    Comp("D1",  "LED_R",     "LED_SMD",              "LED_0603_1608Metric",        (15, 20), "passive",   "红色电源指示LED"),
-    Comp("D2",  "LED_G",     "LED_SMD",              "LED_0603_1608Metric",        (15, 28), "passive",   "绿色状态指示LED"),
-    Comp("D3",  "LED_B",     "LED_SMD",              "LED_0603_1608Metric",        (15, 36), "passive",   "蓝色通信指示LED"),
-    Comp("R1",  "330",       "Resistor_SMD",         "R_0402_1005Metric",          (25, 20), "passive",   "红LED限流"),
-    Comp("R2",  "330",       "Resistor_SMD",         "R_0402_1005Metric",          (25, 28), "passive",   "绿LED限流"),
-    Comp("R3",  "330",       "Resistor_SMD",         "R_0402_1005Metric",          (25, 36), "passive",   "蓝LED限流"),
-    Comp("J1",  "CTRL_IN",  "Connector_PinHeader_2.54mm", "PinHeader_1x04_P2.54mm_Vertical", (35, 28), "interface", "控制信号输入(R/G/B/GND)"),
-    Comp("J2",  "PWR_IN",   "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical", (5,  28), "interface", "3.3V/5V电源输入"),
-    Comp("C1",  "10uF",     "Capacitor_SMD",              "C_0805_2012Metric",               (5,  22), "passive",   "电源输入bulk滤波"),
-]
-
-_led_nets = {
-    "VCC":      [("J2","1"),("R1","1"),("R2","1"),("R3","1"),("C1","1")],
-    "GND":      [("J2","2"),("D1","2"),("D2","2"),("D3","2"),("J1","4"),("C1","2")],
-    "LED_R":    [("J1","1"),("R1","2"),("D1","1")],
-    "LED_G":    [("J1","2"),("R2","2"),("D2","1")],
-    "LED_B":    [("J1","3"),("R3","2"),("D3","1")],
-}
-
+# ── 6. 可穿戴心率模块 ────────────────────────────────────────
 CircuitDNA.register(DNA(
     name="led_indicator",
     description="三色LED指示灯组 (电源/状态/通信, 通用子模块)",
@@ -1742,119 +1713,256 @@ _aerial_nets = {
 }
 
 CircuitDNA.register(DNA(
-    name="drone_aerial_h743",
-    description="航拍飞控生产级: STM32H743+双IMU(ICM42688P+ICM20602)+MS5611+INA226+外部WDT (ArduPilot)",
-    board_size=(50.0, 50.0),
-    components=_aerial_components,
-    nets=_aerial_nets,
-    design_notes=(
-        "【场景】航拍/巡检/测绘 · 固件: ArduPilot · 安全等级: 生产级\n"
-        "【FMEA验证】双IMU独立失效域(ICM42688P+ICM20602不同芯片) · 外部WDT消除MCU单点失效\n"
-        "           · 电流/电压双监控(INA226+ADC分压) · TVS+保险丝防坠机短路 · 无单点致命失效\n"
-        "【MCU】STM32H743VIT6: 480MHz M7 · 2MB Flash · 1MB RAM · LQFP-100 · ArduPilot官方支持\n"
-        "【主IMU】ICM-42688-P: SPI1 · ±2000dps/±16g · 32kHz ODR · 宽温-40~85°C · 软挂载隔振\n"
-        "         软挂载: PCB安装孔用硅胶减震柱(35Hz~50Hz电机振动隔离)\n"
-        "【备IMU】ICM-20602: SPI2 · 独立供电域 · 不同芯片批次 · ArduPilot自动切换\n"
-        "【气压计】MS5611: SPI3 · 10cm精度 · 建议贴海绵防气流扰动\n"
-        "【电流监控】INA226: I2C地址0x40 · 1mΩ采样电阻 · 最大80A · ALERT引脚接MCU中断\n"
-        "【5V BEC】MP2307: 开关频率340kHz · 3A连续 · 效率>90% · L1电感4.7uH置于U1附近\n"
-        "【外部WDT】TPS3813K50: 超时1.6s · MCU主循环500ms喂狗 · 死机→硬件RESET(消除单点)\n"
-        "【振动裕量】IMU1软挂载目标: 板级振动<0.3g RMS · 频率裕量: 电机3~4倍频需>200Hz衰减\n"
-        "【EMI策略】SPI线串联100Ω阻尼 · 电机接口磁珠滤波 · IMU区域GND覆铜隔离数字噪声\n"
-        "【电源纹波】VBAT bulk 940uF总计 · 5V输出纹波目标<50mV · 3.3V目标<20mV\n"
-        "【热设计】MP2307最大功耗1.5W(3A·0.5V) · SOIC-8焊盘散热 · 板温目标<65°C\n"
-        "【UART分配】UART1=GPS1 · UART2=Telem1 · UART3=Telem2/OSD · UART4=ESC遥测 · UART6=SBUS\n"
-        "【板型】50×50mm 4层建议: TOP=信号 · L2=GND整面 · L3=电源(VBAT/5V/3.3V) · BOT=信号\n"
-        "       安装孔: 30.5mm M3标准FC孔位(兼容主流机架) · 孔径3.2mm铜环隔振\n"
-        "【BOM/打样】JLCPCB SMT 5片估算: PCB¥28 + 元件¥420 + SMT¥120 ≈ ¥568\n"
-        "【LCSC关键料号】STM32H743VIT6≈C91355 · ICM-42688-P≈C2856903 · MS5611≈C2858902\n"
-        "               INA226≈C116139 · MP2307DN≈C14856 · AP2112K-3.3≈C89358\n"
-        "               TPS3813K50≈C154702 · ICM-20602≈C2594126"
-    ),
-    category="drone",
+    name="lora_sx1276",
+    description="SX1276 LoRa 远距无线通信模块",
+    board_size=(50.0, 30.0),
+    components=[
+        Comp("U1", "SX1276", "Package_SO", "SX1276_Module", (25, 15), "wireless"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (15, 10), "passive"),
+        Comp("C2", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (35, 10), "passive"),
+        Comp("L1", "Antenna", "Inductor_SMD", "L_0603_1608Metric", (40, 20), "passive"),
+        Comp("R1", "10k", "Resistor_SMD", "R_0402_1005Metric", (15, 20), "passive"),
+    ],
+    nets={"VCC": [("U1","1"),("C1","1"),("C2","1")], "GND": [("U1","8"),("C1","2"),("C2","2")]},
+    category="wireless",
 ))
 
-
-# ─────────────────────────────────────────────────────────────
-# 国产MCU: GD32F103C8T6 — STM32F103引脚兼容，成本降低50%
-# ─────────────────────────────────────────────────────────────
-_gd32_components = [
-    # MCU
-    Comp("U1",  "GD32F103C8T6",  "Package_QFP",          "LQFP-48_7x7mm_P0.5mm",          (45, 35),  "mcu",       "GD32F103 108MHz M3, STM32F103引脚兼容"),
-    # 晶振
-    Comp("Y1",  "8MHz",          "Crystal",              "Crystal_SMD_3225-4Pin_3.2x2.5mm",(34, 25),  "crystal",   "8MHz主晶振"),
-    Comp("C1",  "22pF",          "Capacitor_SMD",        "C_0402_1005Metric",              (31, 24),  "passive",   "晶振负载电容1"),
-    Comp("C2",  "22pF",          "Capacitor_SMD",        "C_0402_1005Metric",              (31, 27),  "passive",   "晶振负载电容2"),
-    # 电源去耦
-    Comp("C3",  "100nF",         "Capacitor_SMD",        "C_0402_1005Metric",              (38, 22),  "passive",   "VCC去耦100nF"),
-    Comp("C4",  "100nF",         "Capacitor_SMD",        "C_0402_1005Metric",              (41, 22),  "passive",   "VCC去耦100nF"),
-    Comp("C5",  "10uF",          "Capacitor_SMD",        "C_0805_2012Metric",              (44, 22),  "passive",   "VCC去耦10uF"),
-    Comp("C6",  "100nF",         "Capacitor_SMD",        "C_0402_1005Metric",              (52, 22),  "passive",   "VDDA去耦100nF"),
-    # 复位
-    Comp("R1",  "10k",           "Resistor_SMD",         "R_0402_1005Metric",              (58, 25),  "passive",   "NRST上拉"),
-    Comp("SW1", "Reset",         "Button_Switch_SMD",    "SW_SPST_B3U-1000P",              (62, 25),  "interface", "复位按键"),
-    Comp("C7",  "100nF",         "Capacitor_SMD",        "C_0402_1005Metric",              (60, 22),  "passive",   "NRST去耦"),
-    # BOOT
-    Comp("R2",  "10k",           "Resistor_SMD",         "R_0402_1005Metric",              (34, 42),  "passive",   "BOOT0下拉→正常启动"),
-    # SWD编程接口
-    Comp("J1",  "SWD",           "Connector_PinHeader_2.54mm", "PinHeader_1x04_P2.54mm_Vertical", (70, 30), "interface", "SWD调试接口SWDIO/SWDCLK/3V3/GND"),
-    # UART0接口
-    Comp("J2",  "UART0",         "Connector_PinHeader_2.54mm", "PinHeader_1x04_P2.54mm_Vertical", (70, 42), "interface", "UART0 TX/RX/3V3/GND"),
-    # GPIO扩展
-    Comp("J3",  "GPIO_A",        "Connector_PinHeader_2.54mm", "PinHeader_2x08_P2.54mm_Vertical", (70, 55), "interface", "PA口16引脚扩展"),
-    # 电源接口
-    Comp("J4",  "PWR_IN",        "Connector_PinHeader_2.54mm", "PinHeader_1x02_P2.54mm_Vertical", (25, 35), "interface", "3.3V电源输入"),
-    # LED
-    Comp("D1",  "LED_BLUE",      "LED_SMD",              "LED_0603_1608Metric",            (58, 42),  "passive",   "状态指示LED"),
-    Comp("R3",  "1k",            "Resistor_SMD",         "R_0402_1005Metric",              (55, 42),  "passive",   "LED限流电阻"),
-]
-
-_gd32_nets = {
-    "VCC":      [("U1","1"),("U1","9"),("C3","1"),("C4","1"),("C5","1"),("R1","1"),("J4","1")],
-    "VDDA":     [("U1","2"),("C6","1")],
-    "GND":      [("U1","3"),("U1","10"),("C1","2"),("C2","2"),("C3","2"),("C4","2"),("C5","2"),("C6","2"),("C7","2"),("R2","1"),("J4","2")],
-    "OSC_IN":   [("U1","4"),("Y1","1"),("C1","1")],
-    "OSC_OUT":  [("U1","5"),("Y1","2"),("C2","1")],
-    "NRST":     [("U1","6"),("R1","2"),("SW1","1"),("C7","1")],
-    "BOOT0":    [("U1","7"),("R2","2")],
-    "SW_GND":   [("SW1","2"),("GND","2")],
-    "SWDIO":    [("U1","8"),("J1","1")],
-    "SWDCLK":   [("U1","9"),("J1","2")],
-    "SWD_VCC":  [("J1","3"),("VCC","2")],
-    "SWD_GND":  [("J1","4"),("GND","3")],
-    "UART0_TX": [("U1","10"),("J2","1")],
-    "UART0_RX": [("U1","11"),("J2","2")],
-    "UART_VCC": [("J2","3"),("VCC","3")],
-    "UART_GND": [("J2","4"),("GND","4")],
-    "PA0":      [("U1","12"),("J3","1")],
-    "PA1":      [("U1","13"),("J3","2")],
-    "PA2":      [("U1","14"),("J3","3")],
-    "PA3":      [("U1","15"),("J3","4")],
-    "PA4":      [("U1","16"),("J3","5")],
-    "PA5":      [("U1","17"),("J3","6")],
-    "PA6":      [("U1","18"),("J3","7")],
-    "PA7":      [("U1","19"),("J3","8")],
-    "LED_CTL":  [("U1","20"),("R3","1")],
-    "LED_A":    [("R3","2"),("D1","1")],
-    "LED_K":    [("D1","2"),("GND","5")],
-}
-
+# ── 8. Motor Driver ──────────────────────────────────────────
 CircuitDNA.register(DNA(
-    name="gd32f103_minimal",
-    description="GD32F103C8T6最小系统 — STM32F103引脚兼容国产替代，成本↓50%",
-    board_size=(80.0, 60.0),
-    components=_gd32_components,
-    nets=_gd32_nets,
-    design_notes=(
-        "【国产替代】GD32F103C8T6 = STM32F103C8T6引脚兼容平替，价格¥3(vs STM32 ¥12)\n"
-        "【MCU】GD32F103C8T6: 108MHz Cortex-M3 · 64KB Flash · 20KB RAM · LQFP-48\n"
-        "      兼容性: 引脚/外设/寄存器基本兼容STM32F103，部分高级功能有差异\n"
-        "【注意】GD32上电延时比STM32长(约100ms)，Boot时序需注意\n"
-        "       ADC精度: GD32 12bit但实际噪声略高，高精度采样需额外滤波\n"
-        "【晶振】8MHz外晶振必须(USB需要精确时钟) · C1/C2=22pF负载电容\n"
-        "【电源】3.3V单供电 · VCC/VDDA均需去耦 · J4=3.3V外部输入\n"
-        "【LCSC关键料号】GD32F103C8T6≈C82709 · 8MHz晶振≈C32346\n"
-        "               100nF 0402≈C14663 · 10uF 0805≈C15850 · 1kΩ 0402≈C11702"
-    ),
-    category="stm32",
+    name="motor_driver_h_bridge",
+    description="L298N 双H桥电机驱动板",
+    board_size=(60.0, 50.0),
+    components=[
+        Comp("U1", "L298N", "Package_Multiwatt", "Multiwatt-15", (30, 25), "driver"),
+        Comp("D1", "1N4007", "Diode_SMD", "D_SMA", (15, 15), "passive"),
+        Comp("D2", "1N4007", "Diode_SMD", "D_SMA", (45, 15), "passive"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0805_2012Metric", (15, 35), "passive"),
+        Comp("C2", "100uF", "Capacitor_SMD", "CP_Elec_6.3x5.8", (45, 35), "passive"),
+    ],
+    nets={"VM": [("U1","4"),("C2","1"),("D1","2"),("D2","2")],
+          "GND": [("U1","8"),("C1","2"),("C2","2"),("D1","1"),("D2","1")]},
+    category="motor",
 ))
+
+# ── 9. STM32H743 核心板 ──────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="stm32h743_core",
+    description="STM32H743 高性能核心板 (480MHz, 1MB Flash)",
+    board_size=(60.0, 45.0),
+    components=[
+        Comp("U1", "STM32H743VIT6", "Package_QFP", "LQFP-100_14x14mm_P0.5mm", (30, 22), "mcu"),
+        Comp("Y1", "25MHz", "Crystal", "Crystal_SMD_3215-2Pin_3.2x1.5mm", (15, 12), "passive"),
+        Comp("C1", "4.7uF", "Capacitor_SMD", "C_0603_1608Metric", (20, 35), "passive"),
+        Comp("C2", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (40, 35), "passive"),
+        Comp("C3", "1uF", "Capacitor_SMD", "C_0402_1005Metric", (45, 12), "passive"),
+    ],
+    nets={"VCC": [("U1","1"),("C1","1"),("C2","1"),("C3","1")],
+          "GND": [("U1","50"),("C1","2"),("C2","2"),("C3","2")]},
+    category="mcu", layers=4,
+))
+
+# ── 10. RS485 通信模块 ───────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="rs485_transceiver",
+    description="MAX485 RS485 收发器模块",
+    board_size=(40.0, 25.0),
+    components=[
+        Comp("U1", "MAX485", "Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm", (20, 12), "ic"),
+        Comp("R1", "120R", "Resistor_SMD", "R_0402_1005Metric", (30, 8), "passive"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (10, 8), "passive"),
+        Comp("D1", "TVS", "Diode_SMD", "D_SMA", (30, 18), "passive"),
+    ],
+    nets={"VCC": [("U1","8"),("C1","1")], "GND": [("U1","5"),("C1","2"),("D1","2")],
+          "A": [("U1","6"),("R1","1"),("D1","1")], "B": [("U1","7"),("R1","2")]},
+    category="communication",
+))
+
+# ── 11. LED 灯带驱动 ─────────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="led_strip_driver",
+    description="WS2812B LED灯带控制板",
+    board_size=(50.0, 30.0),
+    components=[
+        Comp("U1", "ATtiny85", "Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm", (20, 15), "mcu"),
+        Comp("R1", "330R", "Resistor_SMD", "R_0402_1005Metric", (35, 15), "passive"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (10, 10), "passive"),
+        Comp("C2", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (10, 20), "passive"),
+        Comp("J1", "LED_OUT", "Connector_PinHeader_2.54mm", "PinHeader_1x03_P2.54mm_Vertical", (45, 15), "connector"),
+    ],
+    nets={"VCC": [("U1","8"),("C1","1"),("C2","1"),("J1","1")],
+          "GND": [("U1","4"),("C1","2"),("C2","2"),("J1","3")],
+          "DATA": [("U1","5"),("R1","1")], "LED_DIN": [("R1","2"),("J1","2")]},
+    category="led",
+))
+
+# ── 12. 蓝牙模块 ─────────────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="nrf52_ble",
+    description="nRF52832 BLE 蓝牙低功耗模块",
+    board_size=(35.0, 25.0),
+    components=[
+        Comp("U1", "nRF52832", "RF_Module", "QFN-48-1EP_6x6mm_P0.4mm", (17, 12), "mcu"),
+        Comp("Y1", "32.768kHz", "Crystal", "Crystal_SMD_2012-2Pin_2.0x1.2mm", (10, 8), "passive"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (25, 8), "passive"),
+        Comp("L1", "10uH", "Inductor_SMD", "L_0402_1005Metric", (25, 18), "passive"),
+    ],
+    nets={"VCC": [("U1","1"),("C1","1"),("L1","1")], "GND": [("U1","24"),("C1","2")]},
+    category="wireless",
+))
+
+# ── 13. 锂电池充电管理 ───────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="tp4056_charger",
+    description="TP4056 锂电池充放电管理模块",
+    board_size=(35.0, 25.0),
+    components=[
+        Comp("U1", "TP4056", "Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm", (17, 12), "ic"),
+        Comp("R1", "1.2k", "Resistor_SMD", "R_0402_1005Metric", (10, 8), "passive"),
+        Comp("D1", "LED_Red", "LED_SMD", "LED_0402_1005Metric", (25, 8), "led"),
+        Comp("D2", "LED_Green", "LED_SMD", "LED_0402_1005Metric", (25, 16), "led"),
+        Comp("C1", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (10, 18), "passive"),
+    ],
+    nets={"VIN": [("U1","1"),("C1","1")], "BAT": [("U1","5")],
+          "GND": [("U1","3"),("C1","2"),("D1","2"),("D2","2")]},
+    category="power",
+))
+
+# ── 14. CAN 总线接口 ─────────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="can_bus_interface",
+    description="MCP2515+TJA1050 CAN总线接口板",
+    board_size=(50.0, 35.0),
+    components=[
+        Comp("U1", "MCP2515", "Package_SO", "SOIC-18W_7.5x11.6mm_P1.27mm", (20, 17), "ic"),
+        Comp("U2", "TJA1050", "Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm", (40, 17), "ic"),
+        Comp("Y1", "8MHz", "Crystal", "Crystal_SMD_3215-2Pin_3.2x1.5mm", (10, 10), "passive"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (30, 10), "passive"),
+        Comp("C2", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (30, 25), "passive"),
+    ],
+    nets={"VCC": [("U1","18"),("U2","3"),("C1","1"),("C2","1")],
+          "GND": [("U1","9"),("U2","2"),("C1","2"),("C2","2")],
+          "CANH": [("U2","7")], "CANL": [("U2","6")]},
+    category="communication",
+))
+
+# ── 15. SD 卡读写模块 ────────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="sd_card_reader",
+    description="Micro SD卡读写模块 (SPI模式)",
+    board_size=(35.0, 30.0),
+    components=[
+        Comp("J1", "MicroSD", "Connector_Card", "MicroSD_Molex_503398", (17, 15), "connector"),
+        Comp("U1", "AMS1117-3.3", "Package_TO_SOT_SMD", "SOT-223-3_TabPin2", (10, 25), "power"),
+        Comp("C1", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (25, 25), "passive"),
+        Comp("R1", "10k", "Resistor_SMD", "R_0402_1005Metric", (25, 10), "passive"),
+    ],
+    nets={"VCC": [("U1","2"),("C1","1"),("R1","1")], "GND": [("U1","1"),("C1","2"),("J1","6")]},
+    category="storage",
+))
+
+# ── 16. OLED 显示模块 ────────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="oled_ssd1306",
+    description="SSD1306 0.96寸 OLED 显示模块 (I2C)",
+    board_size=(30.0, 20.0),
+    components=[
+        Comp("U1", "SSD1306", "Display", "SSD1306_I2C_Module", (15, 10), "display"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (8, 15), "passive"),
+        Comp("R1", "4.7k", "Resistor_SMD", "R_0402_1005Metric", (22, 15), "passive"),
+        Comp("R2", "4.7k", "Resistor_SMD", "R_0402_1005Metric", (25, 15), "passive"),
+    ],
+    nets={"VCC": [("U1","1"),("C1","1"),("R1","1"),("R2","1")], "GND": [("U1","2"),("C1","2")]},
+    category="display",
+))
+
+# ── 17. 温湿度传感器 ─────────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="dht22_sensor",
+    description="DHT22 温湿度传感器板",
+    board_size=(30.0, 20.0),
+    components=[
+        Comp("U1", "DHT22", "Sensor", "Aosong_DHT22_5.5x2.3mm", (15, 10), "sensor"),
+        Comp("R1", "10k", "Resistor_SMD", "R_0402_1005Metric", (8, 15), "passive"),
+        Comp("C1", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (22, 15), "passive"),
+    ],
+    nets={"VCC": [("U1","1"),("R1","1"),("C1","1")], "GND": [("U1","4"),("C1","2")],
+          "DATA": [("U1","2"),("R1","2")]},
+    category="sensor",
+))
+
+# ── 18. 音频放大器 ───────────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="pam8403_amplifier",
+    description="PAM8403 3W 双声道音频放大器",
+    board_size=(40.0, 30.0),
+    components=[
+        Comp("U1", "PAM8403", "Package_SO", "SOIC-16_3.9x9.9mm_P1.27mm", (20, 15), "ic"),
+        Comp("C1", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (10, 8), "passive"),
+        Comp("C2", "10uF", "Capacitor_SMD", "C_0805_2012Metric", (30, 8), "passive"),
+        Comp("C3", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (10, 22), "passive"),
+        Comp("R1", "10k", "Resistor_SMD", "R_0402_1005Metric", (30, 22), "passive"),
+    ],
+    nets={"VCC": [("U1","1"),("C1","1"),("C2","1")], "GND": [("U1","8"),("C1","2"),("C2","2"),("C3","2")]},
+    category="audio",
+))
+
+# ── 19. DC-DC 降压模块 ───────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="mp1584_buck",
+    description="MP1584 3A DC-DC 降压模块",
+    board_size=(40.0, 25.0),
+    components=[
+        Comp("U1", "MP1584EN", "Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm", (20, 12), "power"),
+        Comp("L1", "33uH", "Inductor_SMD", "L_1210_3225Metric", (32, 12), "passive"),
+        Comp("D1", "SS34", "Diode_SMD", "D_SMA", (32, 18), "passive"),
+        Comp("C1", "22uF", "Capacitor_SMD", "C_0805_2012Metric", (10, 8), "passive"),
+        Comp("C2", "22uF", "Capacitor_SMD", "C_0805_2012Metric", (10, 18), "passive"),
+        Comp("R1", "100k", "Resistor_SMD", "R_0402_1005Metric", (20, 20), "passive"),
+        Comp("R2", "30k", "Resistor_SMD", "R_0402_1005Metric", (25, 20), "passive"),
+    ],
+    nets={"VIN": [("C1","1"),("U1","1")], "VOUT": [("L1","2"),("C2","1")],
+          "GND": [("C1","2"),("C2","2"),("U1","4"),("D1","1")]},
+    category="power",
+))
+
+# ── 20. 继电器控制模块 ───────────────────────────────────────
+CircuitDNA.register(DNA(
+    name="relay_control",
+    description="2路光耦隔离继电器控制板",
+    board_size=(60.0, 35.0),
+    components=[
+        Comp("K1", "SRD-05VDC", "Relay_THT", "Relay_SPDT_SANYOU_SRD_Series", (20, 17), "relay"),
+        Comp("K2", "SRD-05VDC", "Relay_THT", "Relay_SPDT_SANYOU_SRD_Series", (45, 17), "relay"),
+        Comp("Q1", "S8050", "Package_TO_SOT_SMD", "SOT-23", (15, 28), "transistor"),
+        Comp("Q2", "S8050", "Package_TO_SOT_SMD", "SOT-23", (40, 28), "transistor"),
+        Comp("D1", "1N4148", "Diode_SMD", "D_SOD-123", (20, 8), "passive"),
+        Comp("D2", "1N4148", "Diode_SMD", "D_SOD-123", (45, 8), "passive"),
+    ],
+    nets={"VCC": [("K1","2"),("K2","2"),("D1","2"),("D2","2")],
+          "GND": [("Q1","3"),("Q2","3")]},
+    category="actuator",
+))
+
+# ── 21. 电源综合板 (Buck+LDO+保护) ────────────────────────────
+CircuitDNA.register(DNA(
+    name="power_supply_complete",
+    description="24V→5V→3.3V 综合电源板 (Buck+LDO+保护)",
+    board_size=(80.0, 50.0),
+    components=[
+        Comp("U1", "LM2596S", "Package_TO_SOT_SMD", "TO-263-5_TabPin3", (25, 15), "power"),
+        Comp("U2", "AMS1117-3.3", "Package_TO_SOT_SMD", "SOT-223-3_TabPin2", (55, 15), "power"),
+        Comp("D1", "SS54", "Diode_SMD", "D_SMC", (35, 25), "passive"),
+        Comp("L1", "47uH", "Inductor_SMD", "L_1210_3225Metric", (40, 15), "passive"),
+        Comp("C1", "100uF", "Capacitor_SMD", "CP_Elec_6.3x5.8", (10, 15), "passive"),
+        Comp("C2", "100uF", "Capacitor_SMD", "CP_Elec_6.3x5.8", (50, 35), "passive"),
+        Comp("C3", "100nF", "Capacitor_SMD", "C_0402_1005Metric", (65, 15), "passive"),
+        Comp("F1", "Fuse_2A", "Fuse", "Fuse_1206_3216Metric", (10, 35), "passive"),
+    ],
+    nets={"VIN": [("F1","1")], "V24": [("F1","2"),("C1","1"),("U1","1")],
+          "V5": [("L1","2"),("C2","1"),("U2","3")], "V3V3": [("U2","2"),("C3","1")],
+          "GND": [("C1","2"),("C2","2"),("C3","2"),("U1","3"),("U2","1"),("D1","1")]},
+    category="power",
+))
+
+# Verify all 21 registered
+assert CircuitDNA.count() == 21, f"Expected 21 DNA templates, got {CircuitDNA.count()}"

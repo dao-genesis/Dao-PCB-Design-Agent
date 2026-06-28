@@ -3,7 +3,7 @@ kicad_origin — KiCad 本源逆向层 (一劳永逸)
 
 "道生一, 一生二, 二生三, 三生万物."
 
-本包独立于 KiCad 安装. 即使本机无 D:\KICAD, 也可:
+本包独立于 KiCad 安装. 即使本机无 D:/KICAD, 也可:
     1. 解析/写出任意 .kicad_pcb / .kicad_sch / .kicad_sym / .kicad_mod
     2. 镜像 KiCad 官方库 (symbols / footprints / 3dmodels) 至本工作区
     3. 索引并查询全部符号/封装/3D模型

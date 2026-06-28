@@ -1,236 +1,405 @@
 """
 connector — LiveKiCad 五脉同体门面
 
-调用方只需:
-    from kicad_origin.live import LiveKiCad
-    k = LiveKiCad()
-    print(k.status())               # 五通道哪些可用
-    k.open(r"D:/proj/foo.kicad_pro") # 自动选 IPC > GUI
-    k.erc(sch_path, "out.json")     # 自动选 CLI
-    k.snapshot("kicad.png")          # GUI 通道
+"无为而无不为" — 调用者不挑通道, LiveKiCad 自适应择优.
 
-哲学:
-    "上善若水, 水善利万物而不争." — 五通道并立, 水到渠成.
-    "知者不言, 言者不知." — 调用方不必知道走的是哪条.
+五通道:
+    IPC   kipy        KiCad 9+ 官方 API
+    SWIG  pcbnew      进程内 Python
+    CLI   kicad-cli   批处理
+    GUI   pywinauto   兜底
+    FILE  S-expr      离线根
 """
-
 from __future__ import annotations
 
+import enum
 import os
 import subprocess
 import time
-from dataclasses import asdict, dataclass, field
-from enum import Enum
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from kicad_origin.live import cli as _cli
-from kicad_origin.live import config as _cfg
-from kicad_origin.live import gui as _gui
 from kicad_origin.live.ipc import IPCChannel, IPCStatus
-from kicad_origin.origin.env import detect_kicad
 
 
-class Channel(str, Enum):
-    """五脉."""
-    IPC  = "ipc"      # kipy 实时
-    SWIG = "swig"     # pcbnew Python (in-process)
-    CLI  = "cli"      # kicad-cli
-    GUI  = "gui"      # pywinauto + Popen
-    FILE = "file"     # S-expr 直读直写
+class Channel(enum.Enum):
+    IPC  = "ipc"
+    SWIG = "swig"
+    CLI  = "cli"
+    GUI  = "gui"
+    FILE = "file"
 
 
-class NotConnected(Exception):
+class NotConnected(RuntimeError):
     pass
 
 
 @dataclass
 class LiveStatus:
-    """五脉总览."""
-    ipc:    IPCStatus
-    swig:   bool
-    cli:    bool
-    gui_pwa:bool
-    file:   bool                 # always True (origin/sexpr 总能用)
-    kicad_running: bool
-    kicad_version: str
-    config_path:   Optional[str]
-    config_ipc_enabled: Optional[bool]
-    running_pids:  List[int] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        d = asdict(self)
-        d["ipc"] = asdict(self.ipc)
-        return d
+    ipc:         IPCStatus
+    swig:        bool = False
+    cli:         bool = False
+    gui_pwa:     bool = False
+    kicad_version: str = ""
+    kicad_running: bool = False
+    config_path: Optional[str] = None
 
     def best_channel(self) -> Channel:
-        """选择当前可用的最优通道."""
         if self.ipc.available:
             return Channel.IPC
-        if self.cli:
-            return Channel.CLI
         if self.swig:
             return Channel.SWIG
-        if self.gui_pwa or self.kicad_running:
+        if self.cli:
+            return Channel.CLI
+        if self.gui_pwa:
             return Channel.GUI
         return Channel.FILE
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Facade
+# CLI 通道工具
 # ─────────────────────────────────────────────────────────────────────
-class LiveKiCad:
-    """五脉同体的 KiCad 直连器.
+class _CLIChannel:
+    """kicad-cli wrapper."""
 
-    通道选择策略 (默认):
-        1. open / interactive ops  → IPC > GUI > CLI
-        2. erc / drc / export      → IPC (run_action) > CLI
-        3. snapshot                 → GUI (only)
-        4. parse / read raw         → FILE (always)
-    """
+    def __init__(self) -> None:
+        self._exe: Optional[Path] = None
 
-    def __init__(self,
-                 ipc_socket: Optional[str] = None,
-                 prefer_user: Optional[str] = None,
-                 client_name: str = "kicad_origin"):
-        self._ipc = IPCChannel(socket_path=ipc_socket, client_name=client_name)
-        self._prefer_user = prefer_user
+    @property
+    def exe(self) -> Optional[Path]:
+        if self._exe is not None:
+            return self._exe
+        from kicad_origin.origin.env import find_kicad_cli
+        self._exe = find_kicad_cli()
+        return self._exe
 
-    # ── 状态 ────────────────────────────────────────────────────────
-    def status(self) -> LiveStatus:
-        # SWIG (pcbnew) 探测
-        swig = False
+    @property
+    def available(self) -> bool:
+        return self.exe is not None and self.exe.exists()
+
+    def version(self) -> str:
+        if not self.available:
+            return ""
         try:
-            import pcbnew  # noqa: F401
-            swig = True
+            r = subprocess.run([str(self.exe), "--version"],
+                               capture_output=True, text=True, timeout=10)
+            return r.stdout.strip()
         except Exception:
-            pass
-        # CLI
-        cli_ok = _cli.available()
-        # IPC
+            return ""
+
+    def _run(self, args: List[str], timeout: int = 120) -> subprocess.CompletedProcess:
+        if not self.available:
+            raise NotConnected("kicad-cli not found")
+        return subprocess.run([str(self.exe)] + args,
+                              capture_output=True, text=True, timeout=timeout)
+
+    def sch_erc(self, sch: Path, report: Path, fmt: str = "json") -> Optional[Path]:
+        try:
+            self._run(["sch", "erc", "-o", str(report), "--format", fmt,
+                        "--severity-all", str(sch)])
+            return report if report.exists() else None
+        except Exception:
+            return None
+
+    def sch_drc(self, pcb: Path, report: Path, fmt: str = "json") -> Optional[Path]:
+        try:
+            self._run(["pcb", "drc", "-o", str(report), "--format", fmt,
+                        "--severity-all", str(pcb)])
+            return report if report.exists() else None
+        except Exception:
+            return None
+
+    def sch_export_pdf(self, sch: Path, out: Path) -> Optional[Path]:
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            self._run(["sch", "export", "pdf", "-o", str(out), str(sch)])
+            return out if out.exists() else None
+        except Exception:
+            return None
+
+    def sch_export_svg(self, sch: Path, out_dir: Path) -> Optional[Path]:
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            self._run(["sch", "export", "svg", "-o", str(out_dir), str(sch)])
+            return out_dir
+        except Exception:
+            return None
+
+    def sch_export_netlist(self, sch: Path, out: Path,
+                           fmt: str = "kicadsexpr") -> Optional[Path]:
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            self._run(["sch", "export", "netlist", "-o", str(out),
+                        "--format", fmt, str(sch)])
+            return out if out.exists() else None
+        except Exception:
+            return None
+
+    def sch_export_bom(self, sch: Path, out: Path) -> Optional[Path]:
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            self._run(["sch", "export", "bom", "-o", str(out), str(sch)])
+            return out if out.exists() else None
+        except Exception:
+            return None
+
+    def sch_export_python_bom(self, sch: Path, out: Path) -> Optional[Path]:
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            self._run(["sch", "export", "python-bom", "-o", str(out), str(sch)])
+            return out if out.exists() else None
+        except Exception:
+            return None
+
+    def pcb_export_gerbers(self, pcb: Path, out_dir: Path,
+                            layers: Optional[str] = None) -> List[Path]:
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            args = ["pcb", "export", "gerbers", "-o", str(out_dir)]
+            if layers:
+                args += ["--layers", layers]
+            args.append(str(pcb))
+            self._run(args)
+            return list(out_dir.glob("*"))
+        except Exception:
+            return []
+
+    def pcb_export_drill(self, pcb: Path, out_dir: Path,
+                          fmt: str = "excellon") -> List[Path]:
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            self._run(["pcb", "export", "drill", "-o", str(out_dir),
+                        "--format", fmt, str(pcb)])
+            return list(out_dir.glob("*.drl")) + list(out_dir.glob("*.DRL"))
+        except Exception:
+            return []
+
+    def pcb_export_step(self, pcb: Path, step: Path) -> Optional[Path]:
+        try:
+            step.parent.mkdir(parents=True, exist_ok=True)
+            self._run(["pcb", "export", "step", "-o", str(step), str(pcb)])
+            return step if step.exists() else None
+        except Exception:
+            return None
+
+    def pcb_render_3d(self, pcb: Path, png: Path,
+                       side: str = "top") -> Optional[Path]:
+        try:
+            png.parent.mkdir(parents=True, exist_ok=True)
+            self._run(["pcb", "render", "--side", side, "-o", str(png), str(pcb)])
+            return png if png.exists() else None
+        except Exception:
+            return None
+
+
+# ─────────────────────────────────────────────────────────────────────
+# GUI 通道工具
+# ─────────────────────────────────────────────────────────────────────
+class _GUIChannel:
+    """GUI channel (pywinauto / screenshot)."""
+
+    @staticmethod
+    def available() -> bool:
+        try:
+            import pywinauto  # type: ignore[import-not-found]
+            return True
+        except ImportError:
+            return False
+
+    @staticmethod
+    def snapshot_window(title_substr: str, out: Path,
+                         timeout: float = 5.0) -> Optional[Path]:
+        try:
+            import pywinauto  # type: ignore[import-not-found]
+            from pywinauto import Desktop
+            desktop = Desktop(backend="uia")
+            wins = desktop.windows(title_re=f".*{title_substr}.*")
+            if not wins:
+                return None
+            win = wins[0]
+            img = win.capture_as_image()
+            out.parent.mkdir(parents=True, exist_ok=True)
+            img.save(str(out))
+            return out
+        except Exception:
+            return None
+
+    @staticmethod
+    def snapshot_all_kicad(out_dir: Path) -> List[Path]:
+        try:
+            import pywinauto  # type: ignore[import-not-found]
+            from pywinauto import Desktop
+            desktop = Desktop(backend="uia")
+            kicad_titles = ["KiCad", "pcbnew", "eeschema", "gerbview"]
+            results: List[Path] = []
+            for title in kicad_titles:
+                wins = desktop.windows(title_re=f".*{title}.*")
+                for i, w in enumerate(wins):
+                    try:
+                        img = w.capture_as_image()
+                        out_dir.mkdir(parents=True, exist_ok=True)
+                        p = out_dir / f"{title}_{i}.png"
+                        img.save(str(p))
+                        results.append(p)
+                    except Exception:
+                        continue
+            return results
+        except Exception:
+            return []
+
+    @staticmethod
+    def open_file(path: Path) -> bool:
+        try:
+            os.startfile(str(path))  # type: ignore[attr-defined]
+            return True
+        except Exception:
+            return False
+
+
+# ─────────────────────────────────────────────────────────────────────
+# SWIG 通道探测
+# ─────────────────────────────────────────────────────────────────────
+def _check_swig() -> bool:
+    try:
+        import pcbnew  # type: ignore[import-not-found]
+        return True
+    except ImportError:
+        return False
+
+
+# ─────────────────────────────────────────────────────────────────────
+# LiveKiCad 主门面
+# ─────────────────────────────────────────────────────────────────────
+_cli = _CLIChannel()
+_gui = _GUIChannel()
+
+
+class LiveKiCad:
+    """五脉同体. 单一入口统管所有 KiCad 交互通道."""
+
+    def __init__(self) -> None:
+        self._ipc = IPCChannel()
+
+    # ── 探活 ────────────────────────────────────────────────────────
+    def status(self) -> LiveStatus:
         ipc_st = self._ipc.status()
-        # GUI
-        gui_pwa = bool(_gui._PWA_OK)
-        # config
-        cfg_path = _cfg.find_kicad_config(prefer_user=self._prefer_user)
-        cfg_enabled = _cfg.is_ipc_server_enabled(cfg_path) if cfg_path else None
-        # running
-        running = _cfg.detect_running_kicad()
+        from kicad_origin.live.config import detect_running_kicad, find_kicad_config
+        running = detect_running_kicad()
+        cli_ver = _cli.version()
+        cfg_path = find_kicad_config()
         return LiveStatus(
             ipc=ipc_st,
-            swig=swig,
-            cli=cli_ok,
-            gui_pwa=gui_pwa,
-            file=True,
+            swig=_check_swig(),
+            cli=_cli.available,
+            gui_pwa=_gui.available(),
+            kicad_version=cli_ver or ipc_st.version,
             kicad_running=len(running) > 0,
-            kicad_version=detect_kicad().version,
             config_path=str(cfg_path) if cfg_path else None,
-            config_ipc_enabled=cfg_enabled,
-            running_pids=[r.pid for r in running],
         )
 
-    # ── 配置 ────────────────────────────────────────────────────────
-    def enable_ipc(self, all_users: bool = False) -> List[Tuple[Path, bool]]:
-        """改 kicad_common.json: api.enable_server = true. 需重启 KiCad."""
-        return _cfg.enable_ipc_server(enabled=True, all_users=all_users)
-
-    def disable_ipc(self, all_users: bool = False) -> List[Tuple[Path, bool]]:
-        return _cfg.enable_ipc_server(enabled=False, all_users=all_users)
-
-    # ── 打开 ────────────────────────────────────────────────────────
-    def open(self, target: Path,
-             channel: Optional[Channel] = None,
-             wait_seconds: float = 0.0) -> Tuple[Channel, bool]:
-        """打开 .kicad_pro / .kicad_sch / .kicad_pcb.
-
-        默认: IPC.run_action('common.Control.openProject') 不直接支持参数,
-        故对"打开新文件"统一退化到 GUI Popen 通道 (kicad.exe / eeschema.exe / pcbnew.exe).
-        IPC 仅在文件已被 KiCad 主程序加载时有效.
-        """
-        target = Path(target).resolve()
-        ch = channel or Channel.GUI
-        ok = False
-        if ch == Channel.GUI:
-            suffix = target.suffix.lower()
-            if suffix == ".kicad_sch":
-                ok = _gui.open_eeschema(target) is not None
-            elif suffix == ".kicad_pcb":
-                ok = _gui.open_pcbnew(target) is not None
-            else:
-                # .kicad_pro 或目录, 走 kicad.exe
-                ok = _gui.open_kicad_main(target) is not None
-        if wait_seconds > 0:
-            time.sleep(wait_seconds)
-        return ch, ok
-
-    def restart(self, project: Optional[Path] = None) -> Optional[int]:
-        return _gui.restart_kicad(project)
-
-    # ── 信息 ────────────────────────────────────────────────────────
     def info(self) -> Dict[str, Any]:
         st = self.status()
-        info: Dict[str, Any] = {
+        from kicad_origin.live.config import is_ipc_server_enabled
+        return {
             "kicad_version": st.kicad_version,
             "kicad_running": st.kicad_running,
-            "channels":      {
+            "best_channel":  st.best_channel().value,
+            "channels": {
                 "ipc":  st.ipc.available,
                 "swig": st.swig,
                 "cli":  st.cli,
                 "gui":  st.gui_pwa,
                 "file": True,
             },
-            "best_channel": st.best_channel().value,
-            "ipc_server_in_config": st.config_ipc_enabled,
+            "ipc_server_in_config": is_ipc_server_enabled(),
             "config_path": st.config_path,
-            "open_documents": st.ipc.open_docs,
+            "open_documents": st.ipc.open_docs if st.ipc.available else [],
         }
-        return info
 
-    # ── 检查 (CLI 主, IPC 辅) ───────────────────────────────────────
-    def erc(self, sch: Path, report: Path,
-            fmt: str = "json", units: str = "mm") -> Optional[Path]:
-        return _cli.sch_erc(sch, report, fmt=fmt, units=units)
+    # ── IPC 控制 ────────────────────────────────────────────────────
+    def enable_ipc(self, all_users: bool = False) -> List[Tuple[Path, bool]]:
+        from kicad_origin.live.config import enable_ipc_server
+        return enable_ipc_server(enabled=True, all_users=all_users)
 
-    def drc(self, pcb: Path, report: Path,
-            fmt: str = "json", units: str = "mm") -> Optional[Path]:
-        return _cli.pcb_drc(pcb, report, fmt=fmt, units=units)
+    def restart(self) -> Optional[int]:
+        """Restart KiCad (kill and relaunch)."""
+        try:
+            if os.name == "nt":
+                os.system("taskkill /F /IM kicad.exe 2>nul")
+            else:
+                os.system("killall kicad 2>/dev/null")
+            time.sleep(1)
+            from kicad_origin.origin.env import find_kicad_cli
+            cli = find_kicad_cli()
+            if cli:
+                kicad_exe = cli.parent / "kicad.exe" if os.name == "nt" else cli.parent / "kicad"
+                if kicad_exe.exists():
+                    proc = subprocess.Popen([str(kicad_exe)])
+                    return proc.pid
+        except Exception:
+            pass
+        return None
 
-    # ── 出图/网表/BOM ───────────────────────────────────────────────
-    def export_sch_pdf(self, sch: Path, pdf: Path) -> Optional[Path]:
-        return _cli.sch_export_pdf(sch, pdf)
+    # ── 文件操作 ────────────────────────────────────────────────────
+    def open(self, target: Path, *, channel: Optional[Channel] = None,
+             wait_seconds: float = 0.0) -> Tuple[Channel, bool]:
+        target = Path(target).resolve()
+        if channel == Channel.IPC or (channel is None and self._ipc.available):
+            try:
+                self._ipc.run_action("common.Control.open")
+                if wait_seconds > 0:
+                    time.sleep(wait_seconds)
+                return Channel.IPC, True
+            except Exception:
+                pass
+        if channel in (Channel.GUI, None):
+            ok = _gui.open_file(target)
+            if ok:
+                if wait_seconds > 0:
+                    time.sleep(wait_seconds)
+                return Channel.GUI, True
+        return Channel.FILE, False
 
-    def export_sch_svg(self, sch: Path, out_dir: Path) -> List[Path]:
-        return _cli.sch_export_svg(sch, out_dir)
+    # ── ERC / DRC ─────────────────────────────────────────────────
+    def erc(self, sch: Path, report: Path, fmt: str = "json") -> Optional[Path]:
+        return _cli.sch_erc(Path(sch), Path(report), fmt=fmt)
+
+    def drc(self, pcb: Path, report: Path, fmt: str = "json") -> Optional[Path]:
+        return _cli.sch_drc(Path(pcb), Path(report), fmt=fmt)
+
+    # ── 导出 ────────────────────────────────────────────────────────
+    def export_sch_pdf(self, sch: Path, out: Path) -> Optional[Path]:
+        return _cli.sch_export_pdf(Path(sch), Path(out))
+
+    def export_sch_svg(self, sch: Path, out_dir: Path) -> Optional[Path]:
+        return _cli.sch_export_svg(Path(sch), Path(out_dir))
 
     def export_netlist(self, sch: Path, out: Path,
-                       fmt: str = "kicadsexpr") -> Optional[Path]:
-        return _cli.sch_export_netlist(sch, out, fmt=fmt)
+                        fmt: str = "kicadsexpr") -> Optional[Path]:
+        return _cli.sch_export_netlist(Path(sch), Path(out), fmt=fmt)
 
-    def export_bom_csv(self, sch: Path, csv_path: Path) -> Optional[Path]:
-        return _cli.sch_export_bom(sch, csv_path)
+    def export_bom_csv(self, sch: Path, out: Path) -> Optional[Path]:
+        return _cli.sch_export_bom(Path(sch), Path(out))
 
-    def export_python_bom(self, sch: Path, xml_path: Path) -> Optional[Path]:
-        return _cli.sch_export_python_bom(sch, xml_path)
-
-    def export_pcb_pdf(self, pcb: Path, pdf: Path,
-                       layers: Optional[str] = None) -> Optional[Path]:
-        return _cli.pcb_export_pdf(pcb, pdf, layers=layers)
+    def export_python_bom(self, sch: Path, out: Path) -> Optional[Path]:
+        return _cli.sch_export_python_bom(Path(sch), Path(out))
 
     def export_gerbers(self, pcb: Path, out_dir: Path,
-                       layers: Optional[str] = None) -> List[Path]:
-        return _cli.pcb_export_gerbers(pcb, out_dir, layers=layers)
+                        layers: Optional[str] = None) -> List[Path]:
+        return _cli.pcb_export_gerbers(Path(pcb), Path(out_dir), layers=layers)
 
     def export_drill(self, pcb: Path, out_dir: Path,
-                     fmt: str = "excellon") -> List[Path]:
-        return _cli.pcb_export_drill(pcb, out_dir, fmt=fmt)
+                      fmt: str = "excellon") -> List[Path]:
+        return _cli.pcb_export_drill(Path(pcb), Path(out_dir), fmt=fmt)
 
     def export_step(self, pcb: Path, step_path: Path) -> Optional[Path]:
-        return _cli.pcb_export_step(pcb, step_path)
+        return _cli.pcb_export_step(Path(pcb), Path(step_path))
 
     def render_3d(self, pcb: Path, png: Path, side: str = "top") -> Optional[Path]:
-        return _cli.pcb_render_3d(pcb, png, side=side)
+        return _cli.pcb_render_3d(Path(pcb), Path(png), side=side)
 
-    # ── IPC 实时操作 (需 server 在线) ───────────────────────────────
+    # ── IPC 实时操作 ───────────────────────────────────────────────
     def ipc_run_action(self, action_id: str) -> bool:
         return self._ipc.run_action(action_id)
 

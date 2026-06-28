@@ -1,23 +1,9 @@
 """
-footprint — 板上元件实例 (.kicad_pcb 中 (footprint "Lib:Name" ...) 节点)
-
-(footprint "Package_QFP:LQFP-48_7x7mm_P0.5mm"
-    (layer "F.Cu")
-    (uuid "...")
-    (at X Y [ROT])
-    (property "Reference" "U1" ...)
-    (property "Value" "STM32F103" ...)
-    (property "Footprint" "Lib:Name" ...)
-    (pad "1" smd rect ...)
-    (fp_line ...)
-    (fp_text ...)
-    (model "..." ...)
-)
+footprint — Footprint view wrapping an S-expr (footprint ...) node
 """
-
 from __future__ import annotations
 
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, List, Optional
 
 from kicad_origin.origin.sexpr import Symbol, find_first, find_all
 from kicad_origin.pcb.geometry import Point, BBox
@@ -25,52 +11,48 @@ from kicad_origin.pcb.pad import Pad
 
 
 class Footprint:
-    """对 (footprint ...) 节点的视图."""
+    """对一个 (footprint ...) S-expr 节点的视图. 改属性即改底层 list."""
 
     __slots__ = ("_node",)
 
     def __init__(self, node: List[Any]):
         self._node = node
 
-    # ── 基本属性 ────────────────────────────────────────────────
+    # ── lib_id / lib_name ─────────────────────────────────────────
     @property
     def lib_id(self) -> str:
-        """形如 'Package_QFP:LQFP-48_7x7mm_P0.5mm'."""
-        if len(self._node) > 1 and isinstance(self._node[1], str):
+        n = find_first(self._node, "lib_id")
+        if n and len(n) >= 2 and isinstance(n[1], str):
+            return n[1]
+        if len(self._node) >= 2 and isinstance(self._node[1], str):
             return self._node[1]
         return ""
 
-    @lib_id.setter
-    def lib_id(self, v: str) -> None:
-        if len(self._node) > 1:
-            self._node[1] = str(v)
-
     @property
-    def lib(self) -> str:
-        return self.lib_id.split(":", 1)[0] if ":" in self.lib_id else ""
+    def lib_name(self) -> str:
+        n = find_first(self._node, "lib_name")
+        if n and len(n) >= 2 and isinstance(n[1], str):
+            return n[1]
+        return ""
 
-    @property
-    def name(self) -> str:
-        return self.lib_id.split(":", 1)[1] if ":" in self.lib_id else self.lib_id
-
+    # ── 层 ──────────────────────────────────────────────────────
     @property
     def layer(self) -> str:
         n = find_first(self._node, "layer")
-        if n and len(n) >= 2 and isinstance(n[1], str):
-            return n[1]
-        return "F.Cu"
+        return str(n[1]) if n and len(n) >= 2 else "F.Cu"
 
     @layer.setter
-    def layer(self, v: str) -> None:
+    def layer(self, value: str) -> None:
         n = find_first(self._node, "layer")
-        if n:
-            if len(n) >= 2: n[1] = str(v)
+        if n and len(n) >= 2:
+            n[1] = str(value)
 
+    # ── UUID ──────────────────────────────────────────────────────
     @property
     def uuid(self) -> str:
-        n = find_first(self._node, "uuid")
-        if n and len(n) >= 2 and isinstance(n[1], str):
-            return n[1]
+        u = find_first(self._node, "uuid")
+        if u and len(u) >= 2 and isinstance(u[1], str):
+            return u[1]
         return ""
 
     # ── 位置 ────────────────────────────────────────────────────
@@ -117,7 +99,7 @@ class Footprint:
     def properties(self) -> Dict[str, str]:
         out: Dict[str, str] = {}
         for p in self._node:
-            if isinstance(p, list) and p and p[0] == "property":
+            if isinstance(p, list) and p and str(p[0]) == "property":
                 if len(p) >= 3 and isinstance(p[1], str) and isinstance(p[2], str):
                     out[p[1]] = p[2]
         return out
@@ -127,12 +109,11 @@ class Footprint:
 
     def set_property(self, name: str, value: str) -> None:
         for p in self._node:
-            if (isinstance(p, list) and p and p[0] == "property"
+            if (isinstance(p, list) and p and str(p[0]) == "property"
                 and len(p) >= 2 and p[1] == name):
                 if len(p) >= 3:
                     p[2] = str(value)
                 return
-        # 不存在: 追加最简形式
         self._node.append([Symbol("property"), name, str(value)])
 
     @property
@@ -162,12 +143,12 @@ class Footprint:
     # ── 焊盘 ────────────────────────────────────────────────────
     def pads(self) -> List[Pad]:
         return [Pad(p) for p in self._node
-                if isinstance(p, list) and p and p[0] == "pad"]
+                if isinstance(p, list) and p and str(p[0]) == "pad"]
 
     @property
     def pad_count(self) -> int:
         return sum(1 for p in self._node
-                   if isinstance(p, list) and p and p[0] == "pad")
+                   if isinstance(p, list) and p and str(p[0]) == "pad")
 
     def pad_by_number(self, num: str) -> Optional[Pad]:
         for p in self.pads():
@@ -191,27 +172,26 @@ class Footprint:
             half_h = pad.height / 2.0
             b.expand(Point(center.x + pp.x - half_w, center.y + pp.y - half_h))
             b.expand(Point(center.x + pp.x + half_w, center.y + pp.y + half_h))
+        if b.empty:
+            b.expand(center)
         return b
 
     # ── 输出 ────────────────────────────────────────────────────
-    def to_dict(self) -> Dict[str, Any]:
-        p = self.position
-        bb = self.bbox
+    def to_dict(self) -> dict:
+        pos = self.position
         return {
-            "lib_id":   self.lib_id,
-            "ref":      self.ref,
-            "value":    self.value,
-            "layer":    self.layer,
-            "x":        p.x,
-            "y":        p.y,
-            "rotation": self.rotation,
-            "uuid":     self.uuid,
+            "ref":       self.ref,
+            "value":     self.value,
+            "lib_id":    self.lib_id,
+            "x_mm":      pos.x,
+            "y_mm":      pos.y,
+            "rotation":  self.rotation,
+            "layer":     self.layer,
             "pad_count": self.pad_count,
-            "bbox":     bb.to_tuple() if not bb.empty else None,
-            "properties": self.properties(),
+            "uuid":      self.uuid,
         }
 
     def __repr__(self) -> str:
         p = self.position
-        return (f"Footprint({self.ref}={self.lib_id} "
-                f"@({p.x},{p.y}) layer={self.layer} pads={self.pad_count})")
+        return (f"Footprint({self.ref} '{self.value}' @({p.x},{p.y}) "
+                f"layer={self.layer} pads={self.pad_count})")
