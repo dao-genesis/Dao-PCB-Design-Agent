@@ -18,6 +18,32 @@ SEVERITY_WARNING = "warning"
 SEVERITY_INFO    = "info"
 
 
+def _pad_cu_layers(pad: Any) -> set:
+    """焊盘所在的铜层集合; '*.Cu' (通孔) 记为通配 '*'。未知时返回空集。"""
+    out: set = set()
+    try:
+        layers = pad.layers or []
+    except Exception:
+        return out
+    for l in layers:
+        ls = str(l)
+        if ls in ("*.Cu",) or ls.startswith("*."):
+            return {"*"}
+        if ls.endswith(".Cu"):
+            out.add(ls)
+    return out
+
+
+def _pads_share_copper(a: Any, b: Any) -> bool:
+    """两焊盘是否共享铜层 (不共享则物理上不可能短路)。信息缺失时保守判 True。"""
+    A, B = _pad_cu_layers(a), _pad_cu_layers(b)
+    if not A or not B:
+        return True
+    if "*" in A or "*" in B:
+        return True
+    return bool(A & B)
+
+
 @dataclass
 class DRCViolation:
     """单条违规."""
@@ -138,6 +164,14 @@ class DRCEngine:
                 pos_i, pos_j = fpi.position, fpj.position
                 for pi in fpi.pads():
                     for pj in fpj.pads():
+                        # 同一真实网络的焊盘交叠 = 有意的连接 (非短路),
+                        # 与 KiCad 一致予以豁免; net 0 (未分配) 仍判重叠,
+                        # 以驱动布局闭环把占位焊盘推开。
+                        if pi.net_number == pj.net_number and pi.net_number != 0:
+                            continue
+                        # 不共享铜层的焊盘 (异面 SMD) 物理上不可能短路。
+                        if not _pads_share_copper(pi, pj):
+                            continue
                         pix = pos_i.x + pi.position.x
                         piy = pos_i.y + pi.position.y
                         pjx = pos_j.x + pj.position.x
