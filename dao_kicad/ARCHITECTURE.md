@@ -34,7 +34,7 @@
 
 | 能力域 | builtin（自带·恒在） | 继承的最优工具（license） | 可选云后端（需 API key） |
 |---|---|---|---|
-| design_as_code | DNA 参数模板 | **SKiDL**(MIT)、atopile(MIT, `ato`) | — |
+| design_as_code | DNA 参数模板 | **SKiDL**(MIT) ✅已贯通、atopile(MIT, `ato`) | — |
 | schematic_import | — | **kicad-skip**(GPL2)、官方 IPC `kipy`(GPL3) | — |
 | netlist | kicad-cli | SKiDL | — |
 | place | 连通度+力导+长宽比竞选布局 | （下一步：DREAMPlace/解析式合法化） | — |
@@ -63,8 +63,10 @@
 ## 现状（本机实测）
 
 `python -m daokicad capabilities` → **11/12 能力域已有在线后端**（仅 sourcing 待
-API key），14/21 个后端在本机点亮。`registry().run("interactive_bom", pcb)` 已对
-真实 ecc83 板产出可点击 HTML BOM——继承链路真实贯通，非纸面声明。
+API key），14/21 个后端在本机点亮。两条继承链已端到端贯通（非纸面声明）：
+- `registry().run("interactive_bom", pcb)` → 真实 ecc83 板产出可点击 HTML BOM；
+- `registry().run("design_as_code", "examples/skidl_divider.py", net)` → SKiDL
+  代码出网表 → `build-netlist` → 3 件布局、8 走线、**DRC 0/0 干净**、产出 fab。
 
 ## 下一步（持续演化·不停）
 

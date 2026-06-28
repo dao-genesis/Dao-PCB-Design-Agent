@@ -83,6 +83,40 @@ def _ibom(pcb, *, dest_dir=None, dark=True, **kw) -> dict:
             "reason": "" if ok else (cp.stderr or cp.stdout)[-200:]}
 
 
+def _symbol_dir() -> Optional[str]:
+    from . import env
+    e = env.detect()
+    return str(e.symbols) if e.symbols else None
+
+
+def _skidl(script, netlist=None, *, symbol_dir=None, timeout=120, **kw) -> dict:
+    """Run a SKiDL script (design-as-code) and capture its KiCad netlist.
+
+    The script receives the destination netlist path as ``sys.argv[1]`` and is
+    run with KiCad's own interpreter; the symbol-library dir is wired in so
+    ``Part("Device","R")`` resolves without manual env setup (继承 SKiDL).
+    """
+    import os
+    import subprocess
+    from . import env
+    script = Path(script)
+    netlist = Path(netlist) if netlist else script.with_suffix(".net")
+    netlist.parent.mkdir(parents=True, exist_ok=True)
+    py = env.detect().python
+    if not py:
+        return {"ok": False, "reason": "KiCad bundled python not found"}
+    envv = dict(os.environ)
+    sym = symbol_dir or _symbol_dir()
+    if sym:
+        for k in ("KICAD_SYMBOL_DIR", "KICAD8_SYMBOL_DIR", "KICAD9_SYMBOL_DIR"):
+            envv[k] = sym
+    cp = subprocess.run([str(py), str(script), str(netlist)],
+                        capture_output=True, text=True, timeout=timeout, env=envv)
+    ok = netlist.is_file() and netlist.stat().st_size > 0
+    return {"ok": ok, "netlist": str(netlist) if ok else None,
+            "reason": "" if ok else (cp.stderr or cp.stdout)[-300:]}
+
+
 def default_registry() -> Registry:
     """Build the registry of every capability backend this project knows about.
 
@@ -96,7 +130,7 @@ def default_registry() -> Registry:
         "skidl", "design_as_code",
         "Python-described schematics/netlists (textual circuits).",
         "MIT", "https://github.com/devbisme/skidl",
-        Probe("python", module="skidl"), priority=60))
+        Probe("python", module="skidl"), priority=60, invoke=_skidl))
     reg.register(Backend(
         "atopile", "design_as_code",
         "Modular hardware-as-code toolchain (.ato), git-friendly.",

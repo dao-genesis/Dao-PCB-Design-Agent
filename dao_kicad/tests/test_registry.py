@@ -1,6 +1,8 @@
 """Tests for the capability registry / adapter spine (pure logic, no tools)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from daokicad import adapters
 from daokicad.registry import (CAPABILITIES, Backend, CapabilityError, Probe,
                                Registry)
@@ -76,3 +78,38 @@ def test_default_registry_covers_every_capability():
 def test_describe_is_json_safe():
     import json
     json.dumps(adapters.default_registry().describe())  # must not raise
+
+
+def test_skidl_adapter_wires_symbol_dir_and_returns_netlist(tmp_path, monkeypatch):
+    """The SKiDL adapter must run the script with KiCad's python, inject the
+    symbol-lib dir, and report the netlist it produced — without needing skidl
+    or KiCad actually present (we mock the interpreter call)."""
+    from daokicad import adapters as A
+    from daokicad import env as _env
+
+    script = tmp_path / "design.py"
+    script.write_text("# skidl design")
+    net = tmp_path / "out" / "design.net"
+
+    class FakeEnv:
+        python = tmp_path / "py.exe"
+        symbols = tmp_path / "symbols"
+    monkeypatch.setattr(_env, "detect", lambda *a, **k: FakeEnv())
+
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"] = cmd
+        seen["env"] = kw.get("env", {})
+        Path(cmd[2]).write_text("(export (components))")  # pretend skidl wrote it
+
+        class CP:
+            stdout = stderr = ""
+        return CP()
+    monkeypatch.setattr(A.subprocess if hasattr(A, "subprocess") else __import__("subprocess"),
+                        "run", fake_run)
+
+    out = A._skidl(script, net)
+    assert out["ok"] and Path(out["netlist"]) == net and net.is_file()
+    assert seen["cmd"][2] == str(net)                         # netlist path passed as argv
+    assert seen["env"].get("KICAD_SYMBOL_DIR") == str(FakeEnv.symbols)  # lib dir wired
