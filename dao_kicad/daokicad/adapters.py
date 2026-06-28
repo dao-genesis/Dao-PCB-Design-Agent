@@ -188,6 +188,36 @@ def _kikit_panelize(pcb, out=None, *, rows=2, cols=2, space="2mm",
             "reason": "" if ok else (cp.stderr or cp.stdout)[-300:]}
 
 
+def _render(pcb, out=None, *, side="top", width=1600, height=1000,
+            quality="high", background="opaque", timeout=180, **kw) -> dict:
+    """Render a board to a PNG via ``kicad-cli pcb render`` (ray-traced 3D).
+
+    ``out`` may be a directory (a ``<board>_<side>.png`` is created inside) or
+    an explicit ``.png`` path. Builtin engine — always present when KiCad is.
+    """
+    import subprocess
+    from . import env
+    pcb = Path(pcb)
+    cli = env.detect().cli
+    if not cli:
+        return {"ok": False, "reason": "kicad-cli not found"}
+    out = Path(out) if out else pcb.parent / "render"
+    if out.suffix.lower() in (".png", ".jpg", ".jpeg"):
+        png = out
+        png.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        out.mkdir(parents=True, exist_ok=True)
+        png = out / f"{pcb.stem}_{side}.png"
+    cp = subprocess.run([str(cli), "pcb", "render", "--side", side,
+                         "--quality", quality, "--background", background,
+                         "-w", str(width), "-h", str(height),
+                         "-o", str(png), str(pcb)],
+                        capture_output=True, text=True, timeout=timeout)
+    ok = png.is_file() and png.stat().st_size > 0
+    return {"ok": ok, "png": str(png) if ok else None,
+            "reason": "" if ok else (cp.stderr or cp.stdout)[-300:]}
+
+
 def default_registry() -> Registry:
     """Build the registry of every capability backend this project knows about.
 
@@ -325,7 +355,8 @@ def default_registry() -> Registry:
         "kicad-render", "render",
         "Board PNG/SVG and ray-traced 3D via kicad-cli (builtin engine).",
         "GPL-3.0", "kicad-cli", Probe("func", func=_kicad_ready,
-                                      label="kicad-cli present"), priority=55))
+                                      label="kicad-cli present"), priority=55,
+        invoke=_render))
 
     return reg
 

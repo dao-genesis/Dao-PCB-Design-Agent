@@ -178,3 +178,37 @@ def test_kibot_fab_writes_default_config_and_reports_gerbers(tmp_path, monkeypat
     assert out["ok"] and out["gerbers"] == 2
     assert seen["cmd"][1:3] == ["-m", "kibot"]
     assert (outdir / "kibot_fab.yaml").is_file()        # default board-only config written
+
+
+def test_render_adapter_invokes_kicad_cli_and_reports_png(tmp_path, monkeypatch):
+    """The render backend must drive 'kicad-cli pcb render' to a PNG and report
+    it — mocked, no KiCad needed. Guards the previously-missing invoke wiring."""
+    from daokicad import adapters as A
+    from daokicad import env as _env
+
+    pcb = tmp_path / "b.kicad_pcb"
+    pcb.write_text("(kicad_pcb)")
+    outdir = tmp_path / "render"
+
+    class FakeEnv:
+        cli = tmp_path / "kicad-cli.exe"
+    monkeypatch.setattr(_env, "detect", lambda *a, **k: FakeEnv())
+
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"] = cmd
+        png = cmd[cmd.index("-o") + 1]
+        Path(png).parent.mkdir(parents=True, exist_ok=True)
+        Path(png).write_bytes(b"\x89PNG")
+
+        class CP:
+            stdout = stderr = ""
+        return CP()
+    monkeypatch.setattr(__import__("subprocess"), "run", fake_run)
+
+    out = A._render(pcb, outdir, side="bottom")
+    assert out["ok"] and Path(out["png"]).is_file()
+    assert seen["cmd"][1:3] == ["pcb", "render"]
+    assert "bottom" in seen["cmd"]                      # side override passed through
+    assert Path(out["png"]).name == "b_bottom.png"      # <board>_<side>.png in a dir

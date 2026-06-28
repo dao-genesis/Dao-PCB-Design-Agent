@@ -45,7 +45,7 @@
 | interactive_bom | — | **InteractiveHtmlBom**(MIT) ✅已贯通 | — |
 | panelize | — | **KiKit**(MIT) ✅已贯通 | — |
 | sourcing | — | — | LCSC、Octopart/Nexar |
-| render | kicad-cli(PNG/SVG/3D) | — | — |
+| render | kicad-cli(PNG/SVG/光追 3D) ✅已贯通 | — | — |
 
 > license 纪律：copyleft 工具（KiBot=AGPL、freerouting=GPL）一律以**子进程/CLI**
 > 形式调用（编排，不静态链接，避免传染）；MIT 工具（SKiDL/IBOM/KiKit）import 或
@@ -64,14 +64,18 @@
 ## 现状（本机实测）
 
 `python -m daokicad capabilities` → **11/12 能力域已有在线后端**（仅 sourcing 待
-API key），16/21 个后端在本机点亮。四条继承链已端到端贯通（非纸面声明）：
+API key），16/21 个后端在本机点亮。**六条**继承链已端到端贯通（非纸面声明）：
+- **真实复杂板全链路**：KiCad 官方 `complex_hierarchy`（68 件分层原理图）经
+  `build-sch` 一键 导网表→布局→freerouting 布线(391 走线)→**DRC 0/0 干净**→fab，
+  再叠加 IBOM(可点 HTML)+KiKit(2×2 拼板)+KiBot(24 gerber)+光追 3D 渲染，全程无人手；
 - `registry().run("interactive_bom", pcb)` → 真实 ecc83 板产出可点击 HTML BOM；
 - `registry().run("design_as_code", "examples/skidl_divider.py", net)` → SKiDL
   代码出网表 → `build-netlist` → 3 件布局、8 走线、**DRC 0/0 干净**、产出 fab；
 - `registry().run("panelize", board, panel, rows=2, cols=2)` → KiKit 出 2×2 拼板
   （含边框 + 鼠咬桥），可直接送厂；
 - `registry().run("fabricate", board, dir, prefer="kibot")` → KiBot 出 24 张 gerber
-  + drill + 贴装坐标 CSV（CI 级、板级即可、无需原理图）。
+  + drill + 贴装坐标 CSV（CI 级、板级即可、无需原理图）；
+- `registry().run("render", board, dir, side="top")` → kicad-cli 光追 3D 出 PNG。
 
 ## place 域：合法化 2D floorplan（opt-in 竞选后端）
 
