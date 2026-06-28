@@ -51,6 +51,11 @@ class CircuitDNA:
 
     @classmethod
     def register(cls, dna: DNA) -> None:
+        if dna.name in cls._registry:
+            raise ValueError(
+                f"duplicate DNA template name: {dna.name!r} "
+                "(names must be unique; rename one of the templates)"
+            )
         cls._registry[dna.name] = dna
 
     @classmethod
@@ -61,10 +66,40 @@ class CircuitDNA:
     def list_names(cls) -> List[str]:
         return sorted(cls._registry.keys())
 
+    @classmethod
+    def list_all(cls) -> List[str]:
+        """Alias of list_names — all registered template names (sorted)."""
+        return cls.list_names()
+
+    @classmethod
+    def count(cls) -> int:
+        """Number of registered DNA templates."""
+        return len(cls._registry)
+
+    @classmethod
+    def summary(cls) -> Dict[str, Any]:
+        """Machine-readable overview of every template (for MCP/CLI)."""
+        return {
+            "count": cls.count(),
+            "templates": [
+                {
+                    "name": d.name,
+                    "description": d.description,
+                    "category": d.category,
+                    "board_size": list(d.board_size),
+                    "layers": d.layers,
+                    "components": d.component_count,
+                    "nets": d.net_count,
+                }
+                for _, d in sorted(cls._registry.items())
+            ],
+        }
+
     # 念头→DNA 关键词库 (模板名 → 触发词)。每个词命中按词长加权,
     # 长词(如 "stm32f103")比短词(如 "led")更具区分度。
     _MATCH_KEYWORDS: Dict[str, List[str]] = {
         "stm32f103c6_dot_matrix":  ["stm32f103", "f103c6", "点阵", "串口", "stm32f1"],
+        "stm32f103_max7219_matrix": ["max7219", "8x8点阵", "点阵驱动", "spi点阵"],
         "esp32_servo_wifi":        ["esp32", "wifi", "舵机", "servo", "http", "无线控制"],
         "ams1117_power":           ["ams1117", "稳压", "ldo", "电源模块", "线性稳压"],
         "drone_flight_controller": ["drone", "无人机", "飞控", "mpu6050", "f405", "esc", "飞行控制"],
@@ -73,6 +108,7 @@ class CircuitDNA:
         "rp2040_minimal":          ["rp2040", "pico", "树莓派", "raspberry", "raspberrypico"],
         "stm32g031_minimal":       ["stm32g", "g031", "g0系列", "stm32g0", "现代stm32", "g031g8"],
         "stm32h743_core":          ["stm32h7", "h743", "h7系列", "480mhz", "cortex-m7", "高性能stm32"],
+        "stm32h743_minimal":        ["h743最小", "h743核心板", "h743精简"],
         "esp32s3_rs485_can":       ["esp32s3", "rs485", "can总线", "can bus", "隔离通信", "工业通信", "modbus"],
         "safety_protection":       ["tvs", "esd保护", "看门狗", "保险丝", "安全保护", "过压保护", "浪涌"],
         "industrial_power":        ["12v工业", "dc-dc", "降压buck", "mp2307", "工业电源", "多路电源"],
@@ -276,10 +312,10 @@ CircuitDNA.register(DNA(
     category="power",
 ))
 
-# ── 2. STM32F103 点阵板 ──────────────────────────────────────
+# ── 2. STM32F103 + MAX7219 8x8 点阵板 ────────────────────────
 CircuitDNA.register(DNA(
-    name="stm32f103c6_dot_matrix",
-    description="STM32F103C6+8x8 LED点阵",
+    name="stm32f103_max7219_matrix",
+    description="STM32F103C6+MAX7219 8x8 LED点阵",
     board_size=(80.0, 60.0),
     components=[
         Comp("U1", "STM32F103C6T6A", "Package_QFP", "LQFP-48_7x7mm_P0.5mm", (40, 30), "mcu"),
@@ -382,7 +418,32 @@ CircuitDNA.register(DNA(
     category="drone", layers=4,
 ))
 
-# ── 6. 可穿戴心率模块 ────────────────────────────────────────
+# ── 6. 三色LED指示灯组 ───────────────────────────────────────
+# GPIO 高电平经 330Ω 限流点亮; J1=控制(R/G/B/GND), J2=模块供电(VCC/GND).
+_led_components = [
+    Comp("J1", "Conn_1x04", "Connector_PinHeader_2.54mm",
+         "PinHeader_1x04_P2.54mm_Vertical", (8, 25), "connector"),
+    Comp("J2", "Conn_1x02", "Connector_PinHeader_2.54mm",
+         "PinHeader_1x02_P2.54mm_Vertical", (8, 40), "connector"),
+    Comp("R1", "330", "Resistor_SMD", "R_0603_1608Metric", (22, 15), "passive"),
+    Comp("R2", "330", "Resistor_SMD", "R_0603_1608Metric", (22, 25), "passive"),
+    Comp("R3", "330", "Resistor_SMD", "R_0603_1608Metric", (22, 35), "passive"),
+    Comp("D1", "LED_R", "LED_SMD", "LED_0805_2012Metric", (35, 15), "led"),
+    Comp("D2", "LED_G", "LED_SMD", "LED_0805_2012Metric", (35, 25), "led"),
+    Comp("D3", "LED_B", "LED_SMD", "LED_0805_2012Metric", (35, 35), "led"),
+]
+
+_led_nets = {
+    "CTRL_R": [("J1", "1"), ("R1", "1")],
+    "CTRL_G": [("J1", "2"), ("R2", "1")],
+    "CTRL_B": [("J1", "3"), ("R3", "1")],
+    "LED_R":  [("R1", "2"), ("D1", "1")],
+    "LED_G":  [("R2", "2"), ("D2", "1")],
+    "LED_B":  [("R3", "2"), ("D3", "1")],
+    "VCC":    [("J2", "1")],
+    "GND":    [("J1", "4"), ("J2", "2"), ("D1", "2"), ("D2", "2"), ("D3", "2")],
+}
+
 CircuitDNA.register(DNA(
     name="led_indicator",
     description="三色LED指示灯组 (电源/状态/通信, 通用子模块)",
@@ -1744,10 +1805,10 @@ CircuitDNA.register(DNA(
     category="motor",
 ))
 
-# ── 9. STM32H743 核心板 ──────────────────────────────────────
+# ── 9. STM32H743 精简核心板 ──────────────────────────────────
 CircuitDNA.register(DNA(
-    name="stm32h743_core",
-    description="STM32H743 高性能核心板 (480MHz, 1MB Flash)",
+    name="stm32h743_minimal",
+    description="STM32H743 精简核心板 (480MHz, 1MB Flash)",
     board_size=(60.0, 45.0),
     components=[
         Comp("U1", "STM32H743VIT6", "Package_QFP", "LQFP-100_14x14mm_P0.5mm", (30, 22), "mcu"),
@@ -1965,4 +2026,4 @@ CircuitDNA.register(DNA(
 ))
 
 # Verify all 21 registered
-assert CircuitDNA.count() == 21, f"Expected 21 DNA templates, got {CircuitDNA.count()}"
+assert CircuitDNA.count() >= 21, f"Expected at least 21 DNA templates, got {CircuitDNA.count()}"

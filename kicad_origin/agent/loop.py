@@ -279,3 +279,21 @@ class PcbAgent:
             except Exception:
                 pass
         return report
+
+    # ── 布局优化 (geometric placement) ────────────────────────────
+    def optimize_placement(self, spacing_mm: float = 2.0,
+                           max_iters: Optional[int] = None) -> AgentReport:
+        """优化封装布局: 用 spacing_mm 作推开步长, 跑同一几何闭环消解重叠/间距类
+        ERROR。'万物负阴而抱阳' —— 把挤在一起的元件推到彼此留白。
+
+        与 solve_drc 同源 (都靠 perceive→plan→act→verify 闭环), 仅以 spacing_mm
+        设定推开半径, 目标聚焦于几何可分离的布局冲突。返回结构化轨迹。
+        """
+        prev_nudge = self.base_nudge_mm
+        self.base_nudge_mm = max(float(spacing_mm), 0.1)
+        try:
+            report = self.solve_drc(max_iters=max_iters)
+        finally:
+            self.base_nudge_mm = prev_nudge
+        report.goal = "optimize_placement"
+        return report

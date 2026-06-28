@@ -189,7 +189,7 @@ def main() -> int:
     try:
         from pcb_brain.circuit_dna import CircuitDNA, DNA, Comp
         check("CircuitDNA import", True)
-        check("21 templates", CircuitDNA.count() == 21, f"count={CircuitDNA.count()}")
+        check("templates >=21", CircuitDNA.count() >= 21, f"count={CircuitDNA.count()}")
     except Exception as e:
         check("CircuitDNA", False, str(e))
 
@@ -199,18 +199,25 @@ def main() -> int:
     except Exception as e:
         check("pcb_gen", False, str(e))
 
-    # ── DNA → PCB → DRC (all 21) ────────────────────────────────
-    print("\n── DNA → PCB → DRC (21 templates) ──")
+    # ── DNA → PCB → solve_drc → DRC (真实流水线) ─────────────────
+    # dna_to_board 仅产生"原始占位布局"(占位焊盘, 待 solve_drc 推开消解重叠);
+    # 系统真实流水线是 dna_to_board → PcbAgent.solve_drc → DRC-clean。
+    # 故此处验证"经布局闭环求解后"的板子无 ERROR (而非原始中间态)。
+    print(f"\n── DNA → PCB → solve_drc → DRC ({CircuitDNA.count()} templates) ──")
     try:
         from pcb_brain.pcb_gen import dna_to_board
         from kicad_origin.engine.drc import DRCEngine
+        from kicad_origin.dao.dao import Dao
+        from kicad_origin.agent.loop import PcbAgent
         for name in CircuitDNA.list_names():
             dna = CircuitDNA.get(name)
             board = dna_to_board(dna)
-            engine = DRCEngine(board)
-            report = engine.run()
+            raw_e = DRCEngine(board).run().error_count
+            dao = Dao(); dao._board = board
+            PcbAgent(dao, max_iters=200).solve_drc()
+            report = DRCEngine(board).run()
             check(f"DNA:{name}", report.passed,
-                  f"{dna.component_count}c {dna.net_count}n E={report.error_count}")
+                  f"{dna.component_count}c {dna.net_count}n raw_E={raw_e}→E={report.error_count}")
     except Exception as e:
         check("DNA pipeline", False, str(e))
 

@@ -14,6 +14,21 @@ from kicad_origin.pcb.board import Board
 from pcb_brain.circuit_dna import CircuitDNA, DNA, Comp
 
 
+def _fp_property(key: str, value: str, layer: str,
+                 px: float, py: float) -> List[Any]:
+    """KiCad 10 结构化 footprint property (含 at/layer/uuid/effects)。"""
+    return [
+        Symbol("property"), key, value,
+        [Symbol("at"), px, py, 0],
+        [Symbol("layer"), layer],
+        [Symbol("uuid"), str(_uuid.uuid4())],
+        [Symbol("effects"),
+         [Symbol("font"),
+          [Symbol("size"), 1.0, 1.0],
+          [Symbol("thickness"), 0.15]]],
+    ]
+
+
 def dna_to_board(dna: DNA) -> Board:
     """Convert a DNA template to a Board with footprints and nets."""
     board = Board.empty()
@@ -46,11 +61,10 @@ def dna_to_board(dna: DNA) -> Board:
         node: List[Any] = [
             Symbol("footprint"), lib_id,
             [Symbol("layer"), "F.Cu"],
-            [Symbol("at"), x, y],
-            [Symbol("lib_id"), lib_id],
-            [Symbol("property"), "Reference", comp.ref],
-            [Symbol("property"), "Value", comp.value],
             [Symbol("uuid"), str(_uuid.uuid4())],
+            [Symbol("at"), x, y],
+            _fp_property("Reference", comp.ref, "F.SilkS", 0.0, -2.0),
+            _fp_property("Value", comp.value, "F.Fab", 0.0, 2.0),
         ]
 
         # Find which nets this component's pads connect to
