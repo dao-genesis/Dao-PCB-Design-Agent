@@ -195,3 +195,29 @@
    importChanges(自动确认) → 画板框矩形(GUI) → **save+reload** →
    prepare_pcb_nets → **autoroute_gui()** → drc_check → export_all
    (Gerber/BOM/PnP)。这是首块从 0 到送厂文件、**全自动布线**的真实多器件板。
+
+## 十一、最后一处 GUI 依赖被消除:**程序化板框**(全链路 0→送厂全程序化)
+
+承接第十章。上个会话末尾攻克、本会话**固化并端到端硬验证**:板框可以**纯程序化**创建,
+布线前不再需要任何 GUI 手动步骤。NE555 实测(全新工程)55 条铜线 + 5 过孔、DRC 通过、
+Gerber/BOM/贴片坐标全导出。
+
+1. **程序化板框的正确姿势**(`Flow.board_outline_rect` / `auto_board_outline`):
+   - `pcb_PrimitivePolyline.create` **不能**直接吃 `["R",x,y,w,h,0,0]`(报"无法创建多边形图元")。
+   - 必须先 `pcb_MathPolygon.createPolygon(["R",x,y,w,h,0,0])` 造出 **Polygon 活对象**,
+     再 `pcb_PrimitivePolyline.create("", 11, poly, 10, false)`。
+   - Polygon 是浏览器内**活对象**,无法经 CDP RPC 序列化往返 → 两步必须放进**同一段
+     in-page eval**(`d.evaluate(ws, js, await_promise=True)`),不能拆成两次 `eda.call`。
+
+2. **矩形坐标系(易错)**:`["R", x, y, w, h, 0, 0]` 的 **(x,y)=左上角**,h 向 **−y(向下)**
+   延伸,末两个 0=圆角半径。故从焊盘 bbox 估板框时,top-left 的 y 取 **max_pad_y + margin**
+   (取 min 会把板框落到器件**下方**、器件全在框外 → 自动布线 0 条铜线)。
+
+3. **板框生效仍需 save + 整页 reload**:`Flow.reload_and_reopen(project, pcb)` 在 reload 后
+   **重连 CDP**(旧执行上下文随 reload 失效)+ 重开工程/文档。这修掉了上个会话"reload 后
+   autoroute 得 0 tracks"的真因:reload 后还用旧 ws 点 Run,点了个废上下文。
+
+4. **全程序化落地流水线**(`build_ne555.py`,零 GUI):
+   scaffold(REST+extapi) → place(7 件) → wire(逃逸+横轨,6 网) → importChanges(自动确认)
+   → **auto_board_outline()**(程序化板框) → save → **reload_and_reopen()** → prepare_pcb_nets
+   → **autoroute_gui()** → drc_check(True) → export_all(Gerber/BOM/PnP)。

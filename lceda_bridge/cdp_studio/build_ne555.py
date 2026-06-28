@@ -17,6 +17,7 @@
 本脚本可分阶段运行:scaffold / place / wire / sync / verify。
 """
 import json
+import os
 import sys
 import time
 
@@ -203,27 +204,26 @@ def sync_verify():
 
 
 def route_export():
-    """布线闭环:确认板框 → reload → 自动布线(GUI) → DRC → 导出制造包。
+    """布线闭环(**全程序化、零 GUI 前置**):自动板框 → save → reload → 自动布线 → DRC → 制造包。
 
-    前置:已有板框(Place→Board Outline→Rectangle 画的闭合 Polyline)。本会话发现:
-    extapi 无法程序化创建该 Polyline(签名未试出)且无可用 DSN 导出,自动布线只能走
-    GUI;新建板框后必须整页 reload 引擎才认。详见 PHASE4_FINDINGS 第十章。"""
+    本会话攻克的最后一处 GUI 依赖——板框:用 `auto_board_outline()` 从焊盘 bbox 程序化
+    创建 layer11 闭合 Polyline(`pcb_MathPolygon.createPolygon(["R",...])` + `PrimitivePolyline
+    .create("",11,poly,10,false)`,单段 in-page eval),再 save+reload 让引擎认其为闭合板框。
+    自动布线本身仍是编辑器原生(extapi 无可用布线/DSN 导出),走 `autoroute_gui()`。"""
     f = eda_flow.Flow()
     f.open_project(_docs()["project"])
     f.open_document(_docs()["pcb"])
     time.sleep(2)
     if not f.has_board_outline():
-        print("!! 没有板框 Polyline — 请先在编辑器 Place→Board Outline→Rectangle 画一个再跑")
-        return None
-    # 整页 reload 让布线引擎识别板框
-    f.ws.cmd("Page.reload", {}, timeout=10)
-    time.sleep(8)
-    f.open_project(_docs()["project"])
-    f.open_document(_docs()["pcb"])
-    time.sleep(3)
+        bo = f.auto_board_outline(margin=60)
+        print("auto board outline:", bo)
+        f.eda.call("pcb_Document.save", timeout=20)
+        time.sleep(1)
+    # 整页 reload + 重连 + 重开,让布线引擎识别板框
+    f.reload_and_reopen(_docs()["project"], _docs()["pcb"])
     f.prepare_pcb_nets()
     time.sleep(2)
-    res = f.autoroute_gui(wait=12)
+    res = f.autoroute_gui(wait=16)
     print("autoroute:", res)
     try:
         print("drc:", f.drc_check(timeout=90))

@@ -286,6 +286,72 @@ class Flow:
         """板框 = layer11 闭合 Polyline。返回是否存在板框 Polyline。"""
         return bool(self.eda.call("pcb_PrimitivePolyline.getAllPrimitiveId", timeout=12) or [])
 
+    def board_outline_rect(self, x, y, w, h):
+        """**程序化**创建矩形板框(layer11 闭合 Polyline),彻底去掉布线前的 GUI 一步。
+
+        本会话攻克的边界(已硬验证):板框是 layer11 的**闭合 Polyline**,底层结构
+          {"polygon":{"polygon":["R", x, y, w, h, 0, 0]}, "lineWidth":10}
+        其中 ["R",x,y,w,h,0,0] = 矩形:**(x,y)=左上角**、w=宽、h=高(高度向 **−y** 延伸,
+        即向下)、末两个 0=圆角半径。`pcb_PrimitivePolyline.create` 不能直接吃 ["R",...]
+        (报"无法创建多边形图元");正确姿势是先用 `pcb_MathPolygon.createPolygon(["R",...])`
+        造出 Polygon **活对象**,再 `create("", 11, poly, 10, false)`。Polygon 是浏览器内活
+        对象,无法经 RPC 序列化往返 → 必须把两步放进**同一段 in-page eval**。
+
+        返回 {"id": <primitiveId>, "layer": 11};失败抛 FlowError。
+        """
+        R = "window._EXTAPI_ROOT_"
+        rect = json.dumps(["R", x, y, w, h, 0, 0])
+        js = ("(async()=>{try{var R=%s;"
+              "var poly=R.pcb_MathPolygon.createPolygon(%s);"
+              "if(!poly)return JSON.stringify({err:'createPolygon undefined'});"
+              "var r=await R.pcb_PrimitivePolyline.create('',11,poly,10,false);"
+              "return JSON.stringify({ok:!!r,id:r&&r.primitiveId,layer:r&&r.layer});"
+              "}catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,80)})}})()"
+              % (R, rect))
+        v, e = d.evaluate(self.ws, js, await_promise=True, timeout=25)
+        if e:
+            raise FlowError("board_outline_rect eval: " + e)
+        o = json.loads(v)
+        if o.get("err") or not o.get("ok"):
+            raise FlowError("board_outline_rect: " + str(o.get("err") or o))
+        return {"id": o.get("id"), "layer": o.get("layer")}
+
+    def auto_board_outline(self, margin=60):
+        """从 PCB 焊盘 bbox **自动**算出并程序化创建矩形板框(无需 GUI、无需手填尺寸)。
+
+        坐标系坑(已硬验证):矩形 ["R",x,y,w,h,..] 的 (x,y) 是**左上角**,h 向 **−y**(向下)
+        延伸。故 top-left 的 y 取 **max_pad_y + margin**(不是 min),否则板框落到器件**下方**、
+        把器件框在外面,自动布线得 0 条铜线。
+        """
+        pads = self.eda.call("pcb_PrimitivePad.getAllPrimitiveId", timeout=15) or []
+        if not pads:
+            raise FlowError("auto_board_outline: 没有焊盘,无法估板框(先 importChanges?)")
+        xs, ys = [], []
+        for p in pads:
+            g = self.eda.call("pcb_PrimitivePad.get", p, timeout=8)
+            if g and "x" in g and "y" in g:
+                xs.append(g["x"]); ys.append(g["y"])
+        if not xs:
+            raise FlowError("auto_board_outline: 焊盘无坐标")
+        x = min(xs) - margin
+        top_y = max(ys) + margin
+        w = (max(xs) - min(xs)) + 2 * margin
+        h = (max(ys) - min(ys)) + 2 * margin
+        return self.board_outline_rect(x, top_y, w, h)
+
+    def reload_and_reopen(self, project_uuid, pcb_uuid, settle=8):
+        """整页 reload(让布线引擎识别新建板框)后,重开工程+PCB 文档并等加载完。
+        新建板框后必须 save + reload,引擎才认其为闭合板框(否则自动布线报 not closed)。"""
+        self.ws.cmd("Page.reload", {}, timeout=10)
+        time.sleep(settle)
+        # reload 后旧 CDP 连接的执行上下文失效,重连编辑器
+        self.ws = d.connect_editor(d.CDP_PORT)
+        self.eda = eda_api.EDA(validate=False)
+        self.open_project(project_uuid)
+        self.open_document(pcb_uuid)
+        time.sleep(2)
+        return self.has_board_outline()
+
     # --- 原理图 → PCB 同步(importChanges + 自动确认) ---
     def update_pcb_from_schematic(self, pcb_uuid, timeout=40):
         self.eda.call("pcb_Document.importChanges", pcb_uuid, timeout=timeout)

@@ -15,3 +15,6 @@ _*.py
 ne555_docs.json
 ne555_ids.json
 ne555_*.png
+
+ne555_fab/
+*_fab/
