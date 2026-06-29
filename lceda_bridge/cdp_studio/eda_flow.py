@@ -159,6 +159,39 @@ class Flow:
     def search_device(self, query, timeout=25):
         return self.eda.call("lib_Device.search", query, timeout=timeout)
 
+    # --- 社区/共享库正向整合(阴阳之"阳":接入嘉立创海量 LCSC/系统库)---
+    def lib_search(self, key, library=None, classification=None, symbol_type=None,
+                   page_size=10, page=1, timeout=30):
+        """按关键词检索器件库(逆出真实签名:
+        `lib_Device.search(key, libraryUuid, classification, symbolType, itemsOfPage, page)`)。
+        library=None 时跨全部库(含嘉立创**系统/社区库**);传 `system`/`personal`/具体 uuid
+        可定向。返回器件记录列表(每项可直接喂给 `place_device_det`)。
+        """
+        lib = library
+        if library == "system":
+            lib = self.eda.call("lib_LibrariesList.getSystemLibraryUuid", timeout=15)
+        elif library == "personal":
+            lib = self.eda.call("lib_LibrariesList.getPersonalLibraryUuid", timeout=15)
+        return self.eda.call("lib_Device.search", key, lib, classification,
+                             symbol_type, page_size, page, timeout=timeout)
+
+    def device_by_lcsc(self, lcsc_ids, timeout=30):
+        """按 **LCSC 立创编号**(如 C25804)直取器件记录——元器件的通用唯一标识,
+        比关键词更精确。lcsc_ids: str 或 list。返回记录列表。"""
+        ids = [lcsc_ids] if isinstance(lcsc_ids, str) else list(lcsc_ids)
+        return self.eda.call("lib_Device.getByLcscIds", ids, timeout=timeout)
+
+    def place_by_lcsc(self, lcsc_id, x, y, designator=None, **kw):
+        """**社区件直放**(阴阳贯通):LCSC 编号 → 取库记录 → `place_device_det` 确定性落件。
+        一行把嘉立创千万级共享库的任一元件按数据坐标精确放到图纸上。返回器件 id。"""
+        rec = self.device_by_lcsc(lcsc_id)
+        if not rec:
+            raise FlowError("place_by_lcsc: 未找到 LCSC=%s" % lcsc_id)
+        d0 = rec[0]
+        device = {"uuid": d0["uuid"], "libraryUuid": d0["libraryUuid"],
+                  "name": d0.get("name")}
+        return self.place_device_det(device, x, y, designator=designator, **kw)
+
     def place_device(self, device, x=500, y=350, settle=2):
         """放置一个器件(device 为 lib_Device.search 的一项)。进入跟随态后点画布落子。"""
         sub = device.get("subLibraryId") or device.get("classification", {}).get("primaryClassificationUuid") or ""
