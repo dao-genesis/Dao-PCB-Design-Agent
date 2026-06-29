@@ -183,6 +183,37 @@ class Router:
         self.board.BuildConnectivity()
         self.conn = self.board.GetConnectivity()
 
+    def _pad_dims(self) -> dict:
+        """Cache (ref, pad_name) -> min pad dimension in mm."""
+        if getattr(self, "_pad_dim_cache", None) is not None:
+            return self._pad_dim_cache
+        d = {}
+        for fp in self.board.GetFootprints():
+            ref = fp.GetReference()
+            for pad in fp.Pads():
+                sz = pad.GetSize()
+                d[(ref, pad.GetPadName())] = min(
+                    pcbnew.ToMM(sz.x), pcbnew.ToMM(sz.y))
+        self._pad_dim_cache = d
+        return d
+
+    def _clamp_width_to_pads(self, pair: RoutePair, w: float) -> float:
+        """Neck a track down to the smaller pad it terminates on.
+
+        A 1.5mm power trace cannot enter a 0.6mm decoupling-cap pad without
+        spilling onto that part's neighbouring (GND) pad — the dominant
+        remaining short. A trace is physically meaningless wider than the pad
+        it lands on, so clamp to the smaller endpoint pad. The fat trunk width
+        is still honoured between large pads (connectors, regulators).
+        """
+        dims = self._pad_dims()
+        cands = [dims.get((pair.ref_a, pair.pad_a)),
+                 dims.get((pair.ref_b, pair.pad_b))]
+        cands = [c for c in cands if c]
+        if not cands:
+            return w
+        return min(w, max(min(cands), self.clearance_mm))
+
     def _seed_pads(self, clearance_mm: Optional[float] = None,
                    plane_nets: Optional[set[str]] = None):
         """Mark every pad's footprint into the spatial index under its net.
@@ -538,6 +569,7 @@ class Router:
                 w = power_width_mm
             else:
                 w = width_mm
+            w = self._clamp_width_to_pads(pair, w)
             try:
                 ok = route_fn(pair, width_mm=w, layer=layer)
                 if ok:
@@ -609,6 +641,7 @@ class Router:
                 w = power_width_mm
             else:
                 w = width_mm
+            w = self._clamp_width_to_pads(pair, w)
 
             net = self.board.FindNet(pair.net_name)
             if not net:
