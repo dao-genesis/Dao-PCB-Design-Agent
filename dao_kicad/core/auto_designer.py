@@ -193,9 +193,14 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
         cu_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
     inner_layers = [ly for ly in cu_layers
                     if ly not in (pcbnew.F_Cu, pcbnew.B_Cu)]
+    # Order rails by fanout, then by name so ties resolve identically every
+    # run. ``pn`` is a set, so without the name tie-break two equal-fanout
+    # rails (e.g. 12V/5V/3V3 each driving the same decap count) would swap
+    # which one owns a given plane layer between runs — the only remaining
+    # source of run-to-run DRC variance once placement/routing are pinned.
     rail_cands = sorted(
         (n for n in pn if n != "GND" and pad_net_counts.get(n, 0) >= 4),
-        key=lambda n: -pad_net_counts[n])
+        key=lambda n: (-pad_net_counts[n], n))
     layer_net: dict = {}  # copper layer -> plane net (GND is the default)
     if inner_layers:
         # Signals only ever route on the outer layers (route_multilayer floods
