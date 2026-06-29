@@ -69,6 +69,17 @@ class DesignSpec:
     # names whose routed lengths should be equalized (matched bus / byte lane).
     # Empty by default, so the default design/DRC path is unchanged.
     match_length_groups: list[list[str]] = field(default_factory=list)
+    # Opt-in multi-layer signal routing budget: how many *interior* inner
+    # layers (those sandwiched between the first and last inner copper, i.e.
+    # the stackup's designated signal layers) to reserve for signal routing
+    # instead of power planes. 0 (default) keeps every inner layer as a plane,
+    # so the standard design/DRC path is byte-unchanged. On a congested big
+    # board (many inter-IC buses crammed onto the two outer layers) raising
+    # this spreads the buses onto free inner copper, cutting the dominant
+    # clearance / solder_mask_bridge / tracks_crossing / shorting violations.
+    # 2L/4L boards have no interior inner layer, so this is inherently a no-op
+    # there regardless of value.
+    signal_inner_layers: int = 0
 
 
 @dataclass
@@ -99,6 +110,66 @@ class DesignResult:
                 f"{self.layers}L, {self.routes_completed}/{self.routes_total} routed, "
                 f"{self.vias}V, {self.drc_errors}E/{self.drc_warnings}W, "
                 f"{self.mfg_files} mfg, d={self.density:.4f}{dp}")
+
+
+def _stitch_plane_pads(b, plane_nets, plane_layers, cl: float,
+                       via_size: float = 0.45, via_drill: float = 0.2) -> int:
+    """Drop a stitch via on every plane-net pad that needs one to reach its
+    plane, dodging neighbouring foreign pads.
+
+    An SMD pad whose own layer already carries its plane needs nothing; one on
+    a layer without its plane (e.g. an F_Cu GND pad over a B_Cu-only GND plane,
+    or any rail pad over an inner plane) gets a via. Through-hole pads span
+    every layer so already touch their plane. We try the pad centre first, then
+    small in-pad offsets, staying on the pad's own copper so the via keeps its
+    galvanic bite on the pad while edging away from a neighbour's pad/hole
+    (hole_clearance / shorting / clearance).
+
+    Called *before* routing so each via is seeded into the router's spatial
+    index and signal tracks are routed around it. Returns the via count.
+    """
+    via_r = via_size / 2
+    foreign = []  # (x, y, half_extent, net)
+    for fp in b.board.GetFootprints():
+        for p in fp.Pads():
+            ps = p.GetSize()
+            foreign.append((
+                pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y),
+                max(pcbnew.ToMM(ps.x), pcbnew.ToMM(ps.y)) / 2,
+                p.GetNetname()))
+
+    def _via_clear(vx, vy, net):
+        for fx, fy, fr, fnet in foreign:
+            if fnet == net:
+                continue
+            if abs(vx - fx) < via_r + fr + cl and abs(vy - fy) < via_r + fr + cl:
+                return False
+        return True
+
+    n = 0
+    for fp in b.board.GetFootprints():
+        for p in fp.Pads():
+            net = p.GetNetname()
+            if net not in plane_nets:
+                continue
+            if p.GetDrillSize().x > 0:
+                continue  # through-hole: spans layers, already on its plane
+            if any(p.IsOnLayer(ly) for ly in plane_layers.get(net, ())):
+                continue  # pad's layer already carries this plane
+            pos = p.GetPosition()
+            cx, cy = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
+            psz = p.GetSize()
+            room = max(0.0, min(pcbnew.ToMM(psz.x),
+                                pcbnew.ToMM(psz.y)) / 2 - via_r)
+            spot = (cx, cy)
+            for ddx, ddy in ((0, 0), (room, 0), (-room, 0),
+                             (0, room), (0, -room)):
+                if _via_clear(cx + ddx, cy + ddy, net):
+                    spot = (cx + ddx, cy + ddy)
+                    break
+            b.add_via(spot[0], spot[1], via_size, via_drill, net)
+            n += 1
+    return n
 
 
 def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
@@ -211,16 +282,26 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
     rail_cands = sorted(
         (n for n in pn if n != "GND" and pad_net_counts.get(n, 0) >= 4),
         key=lambda n: (-pad_net_counts[n], n))
+    # Reserve interior inner layers for signal routing (opt-in). The first and
+    # last inner layers stay as reference planes bracketing the signal layers
+    # (textbook stackup: GND / SIG / SIG / GND), so a reserved signal layer
+    # always has an adjacent return plane. Capped at the interior count, so
+    # 2L/4L boards (no interior inner layer) reserve nothing.
+    interior_inner = inner_layers[1:-1]
+    n_sig = max(0, min(spec.signal_inner_layers, len(interior_inner)))
+    sig_inner_layers = interior_inner[:n_sig]
+    plane_inner_layers = [ly for ly in inner_layers if ly not in sig_inner_layers]
+
     layer_net: dict = {}  # copper layer -> plane net (GND is the default)
-    if inner_layers:
+    if plane_inner_layers:
         # Signals only ever route on the outer layers (route_multilayer floods
         # F_Cu then overflows to B_Cu), and GND is always poured as fill on the
         # outer layers too, so every inner layer is free for a power plane —
         # promoting all high-fanout rails removes their tracks from the decap
         # fields. GND keeps its outer pours (stitched via per-pad vias).
-        nrails = min(len(rail_cands), len(inner_layers))
+        nrails = min(len(rail_cands), len(plane_inner_layers))
         for i in range(nrails):
-            layer_net[inner_layers[i]] = rail_cands[i]
+            layer_net[plane_inner_layers[i]] = rail_cands[i]
         extra_planes = rail_cands[:nrails]
     elif rail_cands:
         # 2-layer: no inner layer to spare, so deliver the dominant rail as a
@@ -279,9 +360,15 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
             skip.update((d.p_net, d.n_net))
 
     if layers >= 4:
+        # Signals route on the outer layers plus any reserved interior inner
+        # layer. Reserved inner layers are still GND-poured (reference plane),
+        # so bus tracks there run over a return plane and, being interior,
+        # carry no solder mask — moving congested buses off the two outer
+        # layers removes their mask bridges outright.
+        signal_layers = [pcbnew.F_Cu, *sig_inner_layers, pcbnew.B_Cu]
         r = Router(b.board, min_clearance_mm=cl).route_multilayer(
             width_mm=tw, power_width_mm=0.3, power_nets=pn, net_widths=nw,
-            skip_nets=skip)
+            skip_nets=skip, signal_layers=signal_layers)
     else:
         r = Router(b.board, min_clearance_mm=cl).route_all(
             strategy="manhattan", width_mm=tw, power_width_mm=0.4,
@@ -299,9 +386,10 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
             Router(b.board, min_clearance_mm=cl).tune_length_group(present)
             result.tuned_groups += 1
 
-    # Step 7: Pour planes and stitch. GND owns the outer layers and any inner
-    # layer not assigned to another rail; each extra power rail owns one inner
-    # layer. One zone per (layer, net) avoids zones_intersect.
+    # Step 7: Pour planes, then stitch plane-net pads down to their plane. GND
+    # owns the outer layers and any inner layer not assigned to another rail;
+    # each extra power rail owns one inner layer. One zone per (layer, net)
+    # avoids zones_intersect.
     m = 0.5
     corners = [(m, m), (W - m, m), (W - m, H - m), (m, H - m)]
     for ly in cu_layers:
@@ -311,53 +399,7 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
     plane_layers: dict = {}
     for ly in cu_layers:
         plane_layers.setdefault(layer_net.get(ly, 'GND'), set()).add(ly)
-
-    # Stitch plane-net pads down to their plane with a via. An SMD pad whose
-    # own layer already carries its plane needs nothing; one on a layer without
-    # its plane (e.g. an F_Cu GND pad over a B_Cu-only GND plane, or any rail
-    # pad over an inner plane) gets a via. Through-hole pads span every layer
-    # so already touch their plane. Foreign-pad geometry lets the via dodge a
-    # neighbour's pad/hole (hole_clearance / shorting): we try the pad centre
-    # first, then small in-pad offsets, staying on the pad's own copper.
-    via_r = 0.45 / 2
-    foreign = []  # (x, y, half_extent, net)
-    for fp in b.board.GetFootprints():
-        for p in fp.Pads():
-            ps = p.GetSize()
-            foreign.append((
-                pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y),
-                max(pcbnew.ToMM(ps.x), pcbnew.ToMM(ps.y)) / 2,
-                p.GetNetname()))
-
-    def _via_clear(vx, vy, net):
-        for fx, fy, fr, fnet in foreign:
-            if fnet == net:
-                continue
-            if abs(vx - fx) < via_r + fr + cl and abs(vy - fy) < via_r + fr + cl:
-                return False
-        return True
-
-    for fp in b.board.GetFootprints():
-        for p in fp.Pads():
-            net = p.GetNetname()
-            if net not in plane_nets:
-                continue
-            if p.GetDrillSize().x > 0:
-                continue  # through-hole: spans layers, already on its plane
-            if any(p.IsOnLayer(ly) for ly in plane_layers.get(net, ())):
-                continue  # pad's layer already carries this plane
-            pos = p.GetPosition()
-            cx, cy = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
-            psz = p.GetSize()
-            room = max(0.0, min(pcbnew.ToMM(psz.x),
-                                pcbnew.ToMM(psz.y)) / 2 - via_r)
-            spot = (cx, cy)
-            for ddx, ddy in ((0, 0), (room, 0), (-room, 0),
-                             (0, room), (0, -room)):
-                if _via_clear(cx + ddx, cy + ddy, net):
-                    spot = (cx + ddx, cy + ddy)
-                    break
-            b.add_via(spot[0], spot[1], 0.45, 0.2, net)
+    _stitch_plane_pads(b, plane_nets, plane_layers, cl)
 
     # Step 8: Save, then reload and fill. ZONE_FILLER segfaults on a
     # freshly-built in-memory board, so we round-trip through disk first;

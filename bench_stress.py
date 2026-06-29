@@ -20,6 +20,29 @@ DECAP_PER_IC = 24          # 96 decaps total
 BUS = 12                   # inter-IC signal lines per hop
 
 
+def _attrib(errs):
+    from collections import Counter
+    c = Counter()
+    for v in errs:
+        t = (v.description or "") + " " + " ".join(v.items or [])
+        via = "Via [" in t
+        ntrack = t.count("Track [")
+        pad = "Pad " in t
+        if via and ntrack:
+            c["via<->track"] += 1
+        elif via and pad:
+            c["via<->pad"] += 1
+        elif via:
+            c["via<->other"] += 1
+        elif ntrack >= 2:
+            c["track<->track"] += 1
+        elif ntrack and pad:
+            c["track<->pad"] += 1
+        else:
+            c["other"] += 1
+    return c
+
+
 def build():
     nets = ["GND"] + RAILS
     comps, asn = [], []
@@ -66,18 +89,29 @@ def build():
                       nets=nets, components=comps, assignments=asn)
 
 
-def main():
+def run(sig_inner):
     spec = build()
-    r = auto_design(spec, "/tmp/stress_big")
+    spec.signal_inner_layers = sig_inner
+    spec.name = f"stress_big_s{sig_inner}"
+    r = auto_design(spec, f"/tmp/stress_big_s{sig_inner}")
     res = DrcEngine().check(r.board_path)
-    cats = Counter(v.rule for v in res.violations if v.severity == "error")
+    errs = [v for v in res.violations if v.severity == "error"]
+    cats = Counter(v.rule for v in errs)
     rpct = r.routes_completed / r.routes_total * 100 if r.routes_total else 0
-    print(f"parts={r.parts} nets={r.nets_count} layers={r.layers} "
-          f"route={r.routes_completed}/{r.routes_total} ({rpct:.0f}%) "
-          f"DRC={r.drc_errors} mfg={r.mfg_files}")
-    print("unconnected_items:", cats.get("unconnected_items", 0))
+    print(f"[signal_inner_layers={sig_inner}] parts={r.parts} nets={r.nets_count} "
+          f"layers={r.layers} route={r.routes_completed}/{r.routes_total} "
+          f"({rpct:.0f}%) DRC={r.drc_errors} vias={r.vias} mfg={r.mfg_files}")
     for k, v in cats.most_common():
-        print(f"  {k}: {v}")
+        print(f"    {k}: {v}")
+    print("    attrib:", dict(_attrib(errs).most_common()))
+    return r.drc_errors
+
+
+def main():
+    import sys
+    budgets = [int(x) for x in sys.argv[1:]] or [0, 1, 2]
+    for s in budgets:
+        run(s)
 
 
 if __name__ == "__main__":
