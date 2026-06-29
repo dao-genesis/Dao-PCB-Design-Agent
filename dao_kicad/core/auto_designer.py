@@ -229,12 +229,43 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
         b.add_zone(corners, net_name=layer_net.get(ly, 'GND'), layer=ly,
                    solid_connection=True)
     # Stitch each inner-plane rail's pads down to its plane with a via.
+    # Foreign-pad geometry (other nets) so a stitching via doesn't land on a
+    # neighbour's through-hole/pad (hole_clearance / shorting). For each rail
+    # pad we try the centre first, then small in-pad offsets, keeping the via
+    # on its own pad copper while dodging foreign pads.
+    via_r = 0.45 / 2
+    foreign = []  # (x, y, half_extent, net)
+    for fp in b.board.GetFootprints():
+        for p in fp.Pads():
+            ps = p.GetSize()
+            foreign.append((
+                pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y),
+                max(pcbnew.ToMM(ps.x), pcbnew.ToMM(ps.y)) / 2,
+                p.GetNetname()))
+
+    def _via_clear(vx, vy, net):
+        for fx, fy, fr, fnet in foreign:
+            if fnet == net:
+                continue
+            if abs(vx - fx) < via_r + fr + cl and abs(vy - fy) < via_r + fr + cl:
+                return False
+        return True
+
     for fp in b.board.GetFootprints():
         for p in fp.Pads():
             if p.GetNetname() in extra_planes:
                 pos = p.GetPosition()
-                b.add_via(pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y),
-                          0.45, 0.2, p.GetNetname())
+                cx, cy = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
+                psz = p.GetSize()
+                room = max(0.0, min(pcbnew.ToMM(psz.x),
+                                    pcbnew.ToMM(psz.y)) / 2 - via_r)
+                spot = (cx, cy)
+                for ddx, ddy in ((0, 0), (room, 0), (-room, 0),
+                                 (0, room), (0, -room)):
+                    if _via_clear(cx + ddx, cy + ddy, p.GetNetname()):
+                        spot = (cx + ddx, cy + ddy)
+                        break
+                b.add_via(spot[0], spot[1], 0.45, 0.2, p.GetNetname())
 
     # Step 8: Save, then reload and fill. ZONE_FILLER segfaults on a
     # freshly-built in-memory board, so we round-trip through disk first;
