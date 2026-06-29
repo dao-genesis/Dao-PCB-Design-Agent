@@ -300,6 +300,9 @@ class _Timing:
         self._result: Any = None
         self._artifacts: List[str] = []
         self._notes: List[str] = []
+        self._ok: bool = True
+        self._error: Optional[str] = None
+        self._was_set: bool = False
 
     def __enter__(self) -> "_Timing":
         self._t0 = time.time()
@@ -313,20 +316,39 @@ class _Timing:
                           error=f"{exc_type.__name__}: {exc_val}",
                           notes=self._notes)
             return False  # re-raise
-        self.fb.emit(self.action, channel=self._channel, ok=True,
+        # 道法自然: 真实反映结果. with 体内若未 set() 即返回 (前置校验失败的
+        # 提前 return), 视为失败 — 不再一律打 ✓ 误导用户/agent.
+        if self._was_set:
+            ok, error = self._ok, self._error
+        else:
+            ok, error = False, "提前返回: 未产出结果 (疑似前置校验失败)"
+        self.fb.emit(self.action, channel=self._channel, ok=ok,
                       seconds=sec, args=self.args,
                       result=self._result, artifacts=self._artifacts,
-                      notes=self._notes)
+                      error=error, notes=self._notes)
         return False
 
     # 调用方在 with 体内填充
     def set(self, *, channel: str = "", result: Any = None,
             artifacts: Optional[List[str]] = None,
-            notes: Optional[List[str]] = None) -> "_Timing":
+            notes: Optional[List[str]] = None,
+            ok: Optional[bool] = None,
+            error: Optional[str] = None) -> "_Timing":
+        self._was_set = True
         if channel: self._channel = channel
         if result is not None: self._result = result
         if artifacts: self._artifacts.extend(artifacts)
         if notes: self._notes.extend(notes)
+        if ok is not None: self._ok = ok
+        if error is not None: self._error = error
+        return self
+
+    def fail(self, error: str, *, channel: str = "") -> "_Timing":
+        """显式把本步标记为失败 (with 体内提前 return 前调用)。"""
+        self._was_set = True
+        self._ok = False
+        self._error = error
+        if channel: self._channel = channel
         return self
 
     def add_artifact(self, p: str) -> None:

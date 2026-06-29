@@ -636,7 +636,10 @@ class Dao:
                        f"{len(gers)} gerbers · {len(drls)} drills")
             t.set(channel="engine",
                   result={"summary": summary},
-                  artifacts=artifacts[:5])
+                  artifacts=artifacts[:5],
+                  ok=rep.passed,
+                  error=(None if rep.passed
+                         else f"DRC {rep.error_count} error(s)"))
             return DaoResult(ok=rep.passed, action="export_fab",
                               channel="engine",
                               result={
@@ -1120,11 +1123,14 @@ class Dao:
 
             summary = (f"export_all: {ok_total} ok / {fail_total} fail · "
                        f"{len(artifacts)} artifacts → {out}")
+            _all_ok = (fail_total == 0 and ok_total > 0)
             t.set(channel="cli+engine",
                   result={"summary": summary},
-                  artifacts=artifacts[:5])
+                  artifacts=artifacts[:5],
+                  ok=_all_ok,
+                  error=(None if _all_ok else f"{fail_total} 步失败"))
             return DaoResult(
-                ok=(fail_total == 0 and ok_total > 0),
+                ok=_all_ok,
                 action="export_all",
                 channel="cli+engine",
                 result={"steps": results,
