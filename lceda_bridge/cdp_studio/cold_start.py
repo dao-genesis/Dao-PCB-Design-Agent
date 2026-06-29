@@ -108,16 +108,15 @@ def cold_start():
             steps.append({"after": "heal_sw", **d.heal_service_workers(_editor_ws(navigate=False))})
             return {"ok": True, "stage": "session_restore", "state": st, "steps": steps}
 
-    # 4: 账号密码登录
+    # 4: 健壮账号密码登录(含滑块验证码自动解)
     phone = os.environ.get("JLC_PHONE"); pwd = os.environ.get("JLC_PASSWORD")
     if phone and pwd:
         try:
-            jlc_login.op_open(); time.sleep(2)
-            jlc_login.op_tab("账号"); time.sleep(1)
-            jlc_login.op_pwd(phone, pwd); time.sleep(4)
-            steps.append({"after": "password_login", "submitted": True})
+            lr = jlc_login.op_pwd_robust(phone, pwd)
+            steps.append({"after": "password_login_robust", **lr})
         except Exception as ex:
-            steps.append({"after": "password_login", "err": str(ex)})
+            steps.append({"after": "password_login_robust", "err": str(ex)})
+        time.sleep(3)
         st = login_state(); steps.append({"after": "password_check", **st})
         if st.get("loggedIn"):
             try: jlc_session.save(SESSION_FILE)
@@ -125,7 +124,7 @@ def cold_start():
             steps.append({"after": "heal_sw", **d.heal_service_workers(_editor_ws(navigate=False))})
             return {"ok": True, "stage": "password_login", "state": st, "steps": steps}
         return {"ok": False, "stage": "password_login",
-                "hint": "可能触发滑块/短信风控, 需一次人工短信验证(见 jlc_login.py)",
+                "hint": "密码登录+滑块验证码均已尝试, 可能需短信验证(见 jlc_login.py)",
                 "state": st, "steps": steps}
 
     return {"ok": False, "stage": "no_credentials",

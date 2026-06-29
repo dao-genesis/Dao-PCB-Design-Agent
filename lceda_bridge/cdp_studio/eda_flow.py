@@ -617,30 +617,108 @@ class Flow:
                 k += 1
         return out
 
-    def pcb_route_layers(self, width=10, top=1, bottom=2, escape=1000):
-        """**2 层避让布线**(密集/交叉拓扑的归一解):各多脚网**轮流分到顶层/底层**,
-        且每网都走**逃逸走廊**(escape,离开焊盘行)。两重正交自由度叠加:
-          ① 走廊离开焊盘行 → 不撞**本层**任何焊盘(解决「直线横穿中间脚」的 Pad-to-Track);
-          ② 顶/底分层 → **异层网几何交叉不触发 clearance**(解决「两网必相交」)。
-        故即便两网在 xy 上高度共线/十字交叉,也零违规。底层网每脚落过孔接顶层焊盘。
-        走廊按层分侧(顶层走下方、底层走上方)并按 |escape| 递增错开。
+    def pcb_route_layers(self, width=10, top=1, bottom=2, escape=1000, skip_nets=None):
+        """**2 层避让布线(pad-aware)**:走廊位于板外区域,不穿越任何焊盘。
+        先扫描全板焊盘 Y 范围,顶层走廊放在 min_y 下方,底层走廊放在 max_y 上方,
+        每网用独立走廊 Y 值(间距=escape),确保 track-to-track 也零冲突。
+        skip_nets: 跳过的网名集(如 GND 由覆铜连接)。
         返回 {net: {'layer':层, 'segs':段数}}。"""
+        skip = set(skip_nets or [])
         by = self.pcb_pins_by_net()
+
+        # Collect ALL pad positions (including un-netted)
+        all_xs, all_ys = [], []
+        for cid in (self.pcb_component_ids() or []):
+            for p in (self.pcb_component_pins(cid) or []):
+                all_xs.append(p.get("x", 0))
+                all_ys.append(p.get("y", 0))
+        if not all_ys:
+            return {}
+        pad_min_y = min(all_ys)
+        pad_max_y = max(all_ys)
+
+        # Read board outline from document source to constrain corridors inside board
+        board_lo_y = 0   # default
+        board_hi_y = pad_max_y + 2000  # default
+        try:
+            boards = self.eda.call("dmt_Board.getAllBoardsInfo", timeout=10) or []
+            if boards:
+                src = self.get_document_source(boards[0]["pcb"]["uuid"])
+                items = self.parse_document_source(src)
+                for item in items:
+                    data = item.get("data", {})
+                    if data.get("layerId") == 11 and "path" in data:
+                        path = data["path"]
+                        if len(path) >= 5 and path[0] == "R":
+                            # Rectangle: R, x, y, w, h, rx, ry
+                            board_hi_y = path[2]
+                            board_lo_y = path[2] - path[4]
+        except Exception:
+            pass
+
+        outline_margin = 15  # ~12mil for board outline clearance
+        # Available corridor zones: [board_lo_y + margin, pad_min_y - spacing] (below pads)
+        #                           [pad_max_y + spacing, board_hi_y - margin] (above pads)
+        below_zone = (board_lo_y + outline_margin, pad_min_y - 50)
+        above_zone = (pad_max_y + 50, board_hi_y - outline_margin)
+
+        # Sort by pin count ascending: small signal nets first, large power nets last
+        sorted_nets = sorted(((n, p) for n, p in by.items() if n and len(p) >= 2),
+                             key=lambda x: len(x[1]))
+        # Count non-skipped nets to calculate corridor spacing
+        active_nets = [n for n, p in sorted_nets if n not in skip]
+        n_top = (len(active_nets) + 1) // 2  # nets on top layer (below zone)
+        n_bot = len(active_nets) - n_top       # nets on bottom layer (above zone)
+
+        below_space = below_zone[1] - below_zone[0]
+        above_space = above_zone[1] - above_zone[0]
+        top_spacing = max(30, below_space / max(n_top, 1))
+        bot_spacing = max(30, above_space / max(n_bot, 1))
+
         out = {}
         kt = kb = 0
-        for net, pts in by.items():
-            if not (net and len(pts) >= 2):
+        for net, pts in sorted_nets:
+            if net in skip:
+                out[net] = {"layer": 0, "segs": 0, "skipped": True}
                 continue
-            if (kt + kb) % 2 == 0:                 # 偶数网→顶层、走廊朝下
-                lyr, esc = top, escape * (kt + 1)
+            if (kt + kb) % 2 == 0:
+                # Top layer: corridor in below zone (between board bottom edge and pad area)
+                lyr = top
+                corridor_y = below_zone[0] + top_spacing * (kt + 0.5)
+                corridor_y = max(below_zone[0], min(corridor_y, below_zone[1]))
                 kt += 1
-            else:                                   # 奇数网→底层(过孔)、走廊朝上
-                lyr, esc = bottom, -escape * (kb + 1)
+            else:
+                # Bottom layer: corridor in above zone
+                lyr = bottom
+                corridor_y = above_zone[0] + bot_spacing * (kb + 0.5)
+                corridor_y = max(above_zone[0], min(corridor_y, above_zone[1]))
                 kb += 1
-            segs = self.pcb_route_net(net, lyr, width, orthogonal=True,
-                                      escape=esc, via=(lyr != top))
-            out[net] = {"layer": lyr, "segs": len(segs)}
+            segs = self._route_net_corridor(net, lyr, width, corridor_y,
+                                            via=(lyr != top))
+            out[net] = {"layer": lyr, "segs": len(segs), "corridor_y": corridor_y}
         return out
+
+    def _route_net_corridor(self, net, layer, width, corridor_y, via=False):
+        """Route a net via an external corridor at a fixed Y.
+        For each pin pair: pin→vertical→corridor→horizontal→vertical→pin."""
+        pts = self.pcb_pins_by_net(net).get(net, [])
+        ids = []
+        if via and layer != 1:
+            for (px, py) in pts:
+                self.pcb_via(net, px, py)
+        for i in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+            segs = [(x0, y0, x0, corridor_y),      # pin A → vertical escape
+                    (x0, corridor_y, x1, corridor_y),  # horizontal in corridor
+                    (x1, corridor_y, x1, y1)]       # vertical → pin B
+            for sx, sy, ex, ey in segs:
+                if sx == ex and sy == ey:
+                    continue
+                r = self.eda.call("pcb_PrimitiveLine.create", net, layer,
+                                  sx, sy, ex, ey, width, False, timeout=20)
+                pid = r.get("primitiveId") if isinstance(r, dict) else None
+                ids.append(pid)
+        return ids
 
     # --- 原生自动布线(GUI:Route → Auto Routing → Run) ---
     def autoroute_gui(self, wait=12):
@@ -919,11 +997,13 @@ class Flow:
 
     # --- 原理图 → PCB 同步(importChanges + 自动确认) ---
     def update_pcb_from_schematic(self, pcb_uuid, timeout=40):
-        self.eda.call("pcb_Document.importChanges", pcb_uuid, timeout=timeout)
+        raw = self.eda.call("pcb_Document.importChanges", pcb_uuid, timeout=timeout)
         time.sleep(2)
         clicked = ui_click_text(self.ws, ["Apply Changes", "应用更改", "应用修改", "应用"])
         time.sleep(3)
-        return {"dialog_confirmed": clicked, "pcb_components": self.pcb_component_ids()}
+        pcb_ids = self.pcb_component_ids()
+        return {"import_raw": raw, "dialog_confirmed": clicked,
+                "pcb_components": pcb_ids}
 
     # --- DRC ---
     def drc_check(self, strict=True, verbose=True, timeout=60):
@@ -1122,6 +1202,940 @@ class Flow:
         with open(out_path, "wb") as f:
             f.write(base64.b64decode(data))
         return out_path
+
+
+    # ========== 深融新前沿:Net-class / 差分对 / 等长组 / 电源符号 / 层叠 / Freerouting ==========
+
+    # --- Net-class 管理 ---
+    def create_net_class(self, name, nets, color=None):
+        """创建网络分类(net-class),将指定网络归组。
+        pcb_Drc.createNetClass(netClassName, nets, color)
+        """
+        return self.eda.call("pcb_Drc.createNetClass", name, nets, color, timeout=20)
+
+    def delete_net_class(self, name):
+        return self.eda.call("pcb_Drc.deleteNetClass", name, timeout=15)
+
+    def add_net_to_net_class(self, class_name, net):
+        return self.eda.call("pcb_Drc.addNetToNetClass", class_name, net, timeout=15)
+
+    def remove_net_from_net_class(self, class_name, net):
+        return self.eda.call("pcb_Drc.removeNetFromNetClass", class_name, net, timeout=15)
+
+    def get_all_net_classes(self):
+        return self.eda.call("pcb_Drc.getAllNetClasses", timeout=15) or []
+
+    # --- 等长网络组(DDR/高速总线等要求组内网络等长) ---
+    def create_equal_length_group(self, name, nets, color=None):
+        """创建等长网络组。pcb_Drc.createEqualLengthNetGroup(name, nets, color)"""
+        return self.eda.call("pcb_Drc.createEqualLengthNetGroup", name, nets, color, timeout=20)
+
+    def delete_equal_length_group(self, name):
+        return self.eda.call("pcb_Drc.deleteEqualLengthNetGroup", name, timeout=15)
+
+    def add_net_to_equal_length_group(self, group_name, net):
+        return self.eda.call("pcb_Drc.addNetToEqualLengthNetGroup", group_name, net, timeout=15)
+
+    def get_all_equal_length_groups(self):
+        return self.eda.call("pcb_Drc.getAllEqualLengthNetGroups", timeout=15) or []
+
+    # --- 设计规则配置(Design Rule Configuration) ---
+    def get_rule_configuration(self):
+        return self.eda.call("pcb_Drc.getCurrentRuleConfiguration", timeout=15) or {}
+
+    def get_all_rule_configs(self):
+        return self.eda.call("pcb_Drc.getAllRuleConfigurations", timeout=15) or []
+
+    def save_rule_configuration(self, name):
+        return self.eda.call("pcb_Drc.saveRuleConfiguration", name, timeout=15)
+
+    def get_net_rules(self):
+        return self.eda.call("pcb_Drc.getNetRules", timeout=15) or []
+
+    def overwrite_net_rules(self, rules):
+        return self.eda.call("pcb_Drc.overwriteNetRules", rules, timeout=20)
+
+    def get_region_rules(self):
+        return self.eda.call("pcb_Drc.getRegionRules", timeout=15) or []
+
+    def overwrite_region_rules(self, rules):
+        return self.eda.call("pcb_Drc.overwriteRegionRules", rules, timeout=20)
+
+    def get_net_by_net_rules(self):
+        return self.eda.call("pcb_Drc.getNetByNetRules", timeout=15) or []
+
+    def overwrite_net_by_net_rules(self, rules):
+        return self.eda.call("pcb_Drc.overwriteNetByNetRules", rules, timeout=20)
+
+    # --- 实时DRC ---
+    def start_realtime_drc(self):
+        return self.eda.call("pcb_Drc.startRealTimeDrc", timeout=10)
+
+    def stop_realtime_drc(self):
+        return self.eda.call("pcb_Drc.stopRealTimeDrc", timeout=10)
+
+    def realtime_drc_status(self):
+        return self.eda.call("pcb_Drc.getRealTimeDrcStatus", timeout=10)
+
+    # --- 原理图:电源/地符号(Net Flag) ---
+    def create_net_flag(self, flag_type, net_name, x, y, rotation=0, mirror=False):
+        """在原理图上放置电源/地符号(需当前在原理图页上下文)。
+        flag_type: 'Power'|'Ground'|'AnalogGround'|'ProtectGround'
+        createNetFlag(type, netName, x, y, rotation, mirror)
+        """
+        js = ("(async()=>{try{var R=window._EXTAPI_ROOT_;"
+              "var r=await R.sch_PrimitiveComponent.createNetFlag(%s,%s,%d,%d,%d,%s);"
+              "return JSON.stringify({ok:true,result:r});"
+              "}catch(e){return JSON.stringify({err:String(e).substring(0,200)})}})()"
+              % (json.dumps(flag_type), json.dumps(net_name), x, y, rotation,
+                 "true" if mirror else "false"))
+        v, e = d.evaluate(self.ws, js, await_promise=True, timeout=25)
+        if e:
+            raise FlowError("createNetFlag: " + str(e))
+        return json.loads(v) if v else None
+
+    # --- 原理图:网络端口(Net Port) ---
+    def create_net_port(self, port_type, net_name, x, y, rotation=0, mirror=False):
+        """放置网络端口标志(需当前在原理图页上下文)。port_type: 'IN'|'OUT'|'BI'"""
+        js = ("(async()=>{try{var R=window._EXTAPI_ROOT_;"
+              "var r=await R.sch_PrimitiveComponent.createNetPort(%s,%s,%d,%d,%d,%s);"
+              "return JSON.stringify({ok:true,result:r});"
+              "}catch(e){return JSON.stringify({err:String(e).substring(0,200)})}})()"
+              % (json.dumps(port_type), json.dumps(net_name), x, y, rotation,
+                 "true" if mirror else "false"))
+        v, e = d.evaluate(self.ws, js, await_promise=True, timeout=25)
+        if e:
+            raise FlowError("createNetPort: " + str(e))
+        return json.loads(v) if v else None
+
+    # --- 原理图:网络标签 ---
+    def create_net_label(self, text, x, y):
+        return self.eda.call("sch_PrimitiveAttribute.createNetLabel",
+                             text, x, y, timeout=15, await_promise=True)
+
+    # --- 原理图:CBB 复用电路块 ---
+    def create_cbb_symbol(self, cbb_uuid, x, y, rotation=0, mirror=False):
+        return self.eda.call("sch_PrimitiveComponent.createCbbSymbol",
+                             cbb_uuid, x, y, rotation, mirror,
+                             timeout=25, await_promise=True)
+
+    # --- PCB 层叠管理 ---
+    def get_copper_layer_count(self):
+        return self.eda.call("pcb_Layer.getTheNumberOfCopperLayers", timeout=10)
+
+    def set_copper_layer_count(self, count):
+        """设置铜层数(2~32,偶数)。"""
+        return self.eda.call("pcb_Layer.setTheNumberOfCopperLayers", count, timeout=15)
+
+    def get_all_layers(self):
+        return self.eda.call("pcb_Layer.getAllLayers", timeout=10) or []
+
+    def get_current_layer(self):
+        return self.eda.call("pcb_Layer.getCurrentLayer", timeout=10)
+
+    def select_layer(self, layer):
+        return self.eda.call("pcb_Layer.selectLayer", layer, timeout=10)
+
+    def add_custom_layer(self, name, layer_type=None):
+        return self.eda.call("pcb_Layer.addCustomLayer", name, layer_type, timeout=15)
+
+    def get_physical_stacking(self):
+        return self.eda.call("pcb_Layer.getCurrentPhysicalStackingConfiguration", timeout=10) or {}
+
+    def get_all_physical_stackings(self):
+        return self.eda.call("pcb_Layer.getAllPhysicalStackingConfigurations", timeout=10) or []
+
+    # --- PCB 网络管理 ---
+    def pcb_all_nets(self):
+        return self.eda.call("pcb_Net.getAllNets", timeout=10) or []
+
+    def pcb_all_net_names(self):
+        return self.eda.call("pcb_Net.getAllNetsName", timeout=10) or []
+
+    def pcb_net_length(self, net):
+        return self.eda.call("pcb_Net.getNetLength", net, timeout=10)
+
+    def pcb_net_color(self, net, color=None):
+        if color is not None:
+            return self.eda.call("pcb_Net.setNetColor", net, color, timeout=10)
+        return self.eda.call("pcb_Net.getNetColor", net, timeout=10)
+
+    def pcb_highlight_net(self, net):
+        return self.eda.call("pcb_Net.highlightNet", net, timeout=10)
+
+    def pcb_select_net(self, net):
+        return self.eda.call("pcb_Net.selectNet", net, timeout=10)
+
+    def pcb_get_netlist(self, fmt="JLCEDA"):
+        return self.eda.call("pcb_Net.getNetlist", fmt, timeout=15)
+
+    def pcb_set_netlist(self, fmt="JLCEDA", netlist=None):
+        return self.eda.call("pcb_Net.setNetlist", fmt, netlist, timeout=15)
+
+    # --- SCH 网表 ---
+    def sch_get_netlist(self, fmt="JLCEDA"):
+        return self.eda.call("sch_Netlist.getNetlist", fmt, timeout=15, await_promise=True)
+
+    def sch_set_netlist(self, fmt="JLCEDA", netlist=None):
+        return self.eda.call("sch_Netlist.setNetlist", fmt, netlist, timeout=15)
+
+    # --- PCB 清除布线 ---
+    def pcb_clear_routing(self, scope="all"):
+        return self.eda.call("pcb_Document.clearRouting", scope, timeout=15)
+
+    # --- Freerouting 闭环 (DSN → 外部布线 → SES 回灌) ---
+    def freerouting_round_trip(self, dsn_path, ses_path, settle=4):
+        """导出 DSN → (外部 Freerouting) → 回灌 SES → 重建 vias。
+        调用方需在 dsn_path 导出后、ses_path 灌入前,自行运行 Freerouting。
+        本方法用于灌入后的后处理(重建 via 连通性)。
+        """
+        ok = self.import_ses(ses_path, settle=settle)
+        if ok:
+            self.rebuild_imported_vias()
+        return ok
+
+    # --- 制造数据:扩展导出格式 ---
+    def export_3d(self, out_path, name="3D"):
+        return self._export(
+            "R.pcb_ManufactureData.get3DFile(%s)" % json.dumps(name or "3D"),
+            out_path)
+
+    def export_dxf(self, out_path, name="DXF"):
+        return self._export(
+            "R.pcb_ManufactureData.getDxfFile(%s)" % json.dumps(name or "DXF"),
+            out_path)
+
+    def export_ipc_d356a(self, out_path, name="IPC"):
+        return self._export(
+            "R.pcb_ManufactureData.getIpcD356AFile(%s)" % json.dumps(name or "IPC"),
+            out_path)
+
+    def export_ipc_2581c(self, out_path, name="IPC2581"):
+        return self._export(
+            "R.pcb_ManufactureData.getIpc2581CFile(%s)" % json.dumps(name or "IPC2581"),
+            out_path)
+
+    def export_odb(self, out_path, name="ODB"):
+        return self._export(
+            "R.pcb_ManufactureData.getOpenDatabaseDoublePlusFile(%s)" % json.dumps(name or "ODB"),
+            out_path)
+
+    def export_ibom(self, out_path, name="iBOM"):
+        return self._export(
+            "R.pcb_ManufactureData.getInteractiveBomFile(%s)" % json.dumps(name or "iBOM"),
+            out_path)
+
+    def export_altium(self, out_path, name="AD"):
+        return self._export(
+            "R.pcb_ManufactureData.getAltiumDesignerFile(%s)" % json.dumps(name or "AD"),
+            out_path)
+
+    def export_test_point(self, out_path, name="TestPoint"):
+        return self._export(
+            "R.pcb_ManufactureData.getTestPointFile(%s)" % json.dumps(name or "TestPoint"),
+            out_path)
+
+    def export_autoroute_json(self, out_path, name="AutoRoute"):
+        return self._export(
+            "R.pcb_ManufactureData.getAutoRouteJsonFile(%s)" % json.dumps(name or "AutoRoute"),
+            out_path)
+
+    # --- 工程管理 ---
+    def list_all_projects(self):
+        uuids = self.eda.call("dmt_Project.getAllProjectsUuid", timeout=15) or []
+        return [self.eda.call("dmt_Project.getProjectInfo", u, timeout=10) for u in uuids]
+
+    # open_project defined at line 119 with robust retry/validation logic
+    # DO NOT override here — the robust version handles dialogs + load verification
+
+    def create_project(self, name):
+        return self.eda.call("dmt_Project.createProject", name, timeout=20)
+
+    # --- 事件监听(PCB/SCH) ---
+    def add_pcb_mouse_listener(self, callback_id):
+        return self.eda.call("pcb_Event.addMouseEventListener", callback_id, timeout=10)
+
+    def add_pcb_primitive_listener(self, callback_id):
+        return self.eda.call("pcb_Event.addPrimitiveEventListener", callback_id, timeout=10)
+
+    # --- 系统工具 ---
+    def get_editor_version(self):
+        return self.eda.call("sys_Environment.getEditorCurrentVersion", timeout=10)
+
+    def get_user_info(self):
+        return self.eda.call("sys_Environment.getUserInfo", timeout=10)
+
+    def get_eda_paths(self):
+        return self.eda.call("sys_FileSystem.getEdaPath", timeout=10)
+
+    def get_shortcuts(self):
+        return self.eda.call("sys_ShortcutKey.getShortcutKeys", timeout=10) or []
+
+    def netlist_comparison(self):
+        return self.eda.call("sys_Tool.netlistComparison", timeout=20)
+
+    def schematic_comparison(self):
+        return self.eda.call("sys_Tool.schematicComparison", timeout=20)
+
+    def pcb_comparison(self):
+        return self.eda.call("sys_Tool.pcbComparison", timeout=20)
+
+    # --- 坐标转换 ---
+    def canvas_to_data(self, x, y):
+        return self.eda.call("pcb_Document.convertCanvasOriginToDataOrigin", x, y, timeout=10)
+
+    def data_to_canvas(self, x, y):
+        return self.eda.call("pcb_Document.convertDataOriginToCanvasOrigin", x, y, timeout=10)
+
+    # --- 格式转换 ---
+    def convert_altium_lib(self, file_path):
+        return self.eda.call("sys_FormatConversion.convertAltiumDesignerLibrariesToEasyEDASingleFile",
+                             file_path, timeout=30)
+
+
+    # ==================== 文档源操作(最深融合层) ====================
+
+    def get_document_source(self, uuid=None):
+        """获取**当前活动文档**原始源(pipe-delimited 格式)。
+        API实际不接受UUID参数(argCount=0),始终返回活动文档。
+        若需读取非活动文档,先用 dmt_EditorControl.openDocument(uuid) 切换。
+        返回完整文档字符串,可解析出 COMPONENT/LINE/VIA/POUR/NET/PAD_NET 等所有元素。"""
+        return self.eda.call("sys_FileManager.getDocumentSource", timeout=30)
+
+    def set_document_source(self, source):
+        """写回修改后的文档源到**当前活动文档**。
+        API只接受1个参数(source string),写入当前活动文档。
+        **已验证可用**:修改后 getDocumentSource 可回读确认。"""
+        return self.eda.call("sys_FileManager.setDocumentSource", source, timeout=30)
+
+    def parse_document_source(self, source):
+        """解析 pipe-delimited 文档源为结构化列表。
+        每行格式: {type:...}||{data...}|  → 返回 [{type, ticket, id, data}, ...]"""
+        items = []
+        for line in source.split("\n"):
+            parts = [p.strip() for p in line.split("|") if p.strip()]
+            objs = []
+            for p in parts:
+                if p.startswith("{"):
+                    try:
+                        objs.append(json.loads(p))
+                    except json.JSONDecodeError:
+                        pass
+            if objs:
+                header = objs[0] if objs else {}
+                data = objs[1] if len(objs) > 1 else {}
+                items.append({"type": header.get("type", "UNKNOWN"),
+                              "ticket": header.get("ticket"),
+                              "id": header.get("id"),
+                              "data": data})
+        return items
+
+    # ==================== DocumentSourceEditor: 结构化文档修改 ====================
+
+    def doc_read(self):
+        """读取并解析当前活动文档源,返回 (raw_source, parsed_items)。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        return src, items
+
+    def doc_modify(self, source, modifications):
+        """批量修改文档源中的元素,返回修改后的源字符串。
+        使用精确字符串替换保持原始格式(双管道分隔符、字段顺序、浮点精度)。
+        modifications: [{match: {type,net,...}, set: {field:value,...}}, ...]"""
+        import re
+        lines = source.split("\n")
+        new_lines = []
+        total_mods = 0
+        for line in lines:
+            # Parse without destroying original format
+            segments = line.split("||")
+            if len(segments) >= 2:
+                header_seg = segments[0].strip().strip("|")
+                data_seg = segments[1].strip().strip("|")
+                try:
+                    header = json.loads(header_seg)
+                    data = json.loads(data_seg)
+                except (json.JSONDecodeError, ValueError):
+                    new_lines.append(line)
+                    continue
+                modified = False
+                for mod in modifications:
+                    match = mod.get("match", {})
+                    if all(
+                        (header.get(k) == v or data.get(k) == v)
+                        for k, v in match.items()
+                    ):
+                        for field, value in mod.get("set", {}).items():
+                            if field in data:
+                                old_val = data[field]
+                                # Literal string replacement (not regex)
+                                if isinstance(old_val, (int, float)):
+                                    pattern = f'"{field}":{json.dumps(old_val)}'
+                                    replacement = f'"{field}":{json.dumps(value)}'
+                                else:
+                                    pattern = f'"{field}":{json.dumps(old_val, ensure_ascii=False)}'
+                                    replacement = f'"{field}":{json.dumps(value, ensure_ascii=False)}'
+                                new_line = line.replace(pattern, replacement, 1)
+                                if new_line != line:
+                                    line = new_line
+                                    modified = True
+                                    total_mods += 1
+                                    data[field] = value
+            new_lines.append(line)
+        return "\n".join(new_lines), total_mods
+
+    def doc_write(self, source):
+        """写回修改后的文档源到当前活动文档。返回 True/False。"""
+        return self.set_document_source(source)
+
+    def doc_batch_track_width(self, net_name, new_width):
+        """批量修改指定网络所有铜线宽度。"""
+        src = self.get_document_source()
+        new_src, n = self.doc_modify(src, [
+            {"match": {"type": "LINE", "netName": net_name}, "set": {"width": new_width}}
+        ])
+        if n > 0:
+            self.set_document_source(new_src)
+        return n
+
+    def doc_move_component(self, comp_index, dx, dy):
+        """通过文档源移动组件(comp_index: 从0开始的组件序号)。
+        使用精确字符串替换保持原始格式。"""
+        src = self.get_document_source()
+        lines = src.split("\n")
+        comp_count = 0
+        for i, line in enumerate(lines):
+            if '"type":"COMPONENT"' in line:
+                if comp_count == comp_index:
+                    segments = line.split("||")
+                    if len(segments) >= 2:
+                        data_seg = segments[1].strip().strip("|")
+                        try:
+                            data = json.loads(data_seg)
+                            old_x, old_y = data.get("x", 0), data.get("y", 0)
+                            new_x, new_y = old_x + dx, old_y + dy
+                            new_line = line.replace(
+                                f'"x":{json.dumps(old_x)}', f'"x":{json.dumps(new_x)}', 1
+                            ).replace(
+                                f'"y":{json.dumps(old_y)}', f'"y":{json.dumps(new_y)}', 1
+                            )
+                            lines[i] = new_line
+                            new_src = "\n".join(lines)
+                            self.set_document_source(new_src)
+                            return {"moved": True, "new_x": new_x, "new_y": new_y}
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                comp_count += 1
+        return {"moved": False}
+
+    def doc_get_components(self):
+        """获取文档源中所有组件及其位置。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        comps = []
+        for item in items:
+            if item["type"] == "COMPONENT":
+                d = item["data"]
+                comps.append({
+                    "id": item.get("id"),
+                    "x": d.get("x"), "y": d.get("y"),
+                    "rotation": d.get("rotation"),
+                    "layer": d.get("layerId"),
+                    "locked": d.get("locked"),
+                })
+        return comps
+
+    def doc_get_nets(self):
+        """获取文档源中所有网络定义。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        nets = {}
+        for item in items:
+            if item["type"] == "NET":
+                d = item["data"]
+                nets[d.get("netName", "")] = d
+        return nets
+
+    def doc_get_tracks(self, net_name=None):
+        """获取文档源中所有铜线(可按网络过滤)。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        tracks = []
+        for item in items:
+            if item["type"] == "LINE":
+                d = item["data"]
+                if net_name and d.get("netName") != net_name:
+                    continue
+                tracks.append({
+                    "id": item.get("id"),
+                    "net": d.get("netName"),
+                    "layer": d.get("layerId"),
+                    "width": d.get("width"),
+                    "start": (d.get("startX"), d.get("startY")),
+                    "end": (d.get("endX"), d.get("endY")),
+                })
+        return tracks
+
+    def doc_get_pours(self):
+        """获取文档源中所有覆铜区。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        pours = []
+        for item in items:
+            if item["type"] in ("POUR", "POURED"):
+                pours.append({"type": item["type"], "id": item.get("id"),
+                              "data": item["data"]})
+        return pours
+
+    def doc_statistics(self):
+        """获取文档源统计:元素类型计数、网络数、组件数等。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        from collections import Counter
+        type_counts = Counter(item["type"] for item in items)
+        net_names = set()
+        for item in items:
+            nn = item.get("data", {}).get("netName")
+            if nn:
+                net_names.add(nn)
+        return {
+            "total_items": len(items),
+            "source_bytes": len(src),
+            "types": dict(type_counts),
+            "nets": sorted(net_names),
+            "net_count": len(net_names),
+            "component_count": type_counts.get("COMPONENT", 0),
+            "track_count": type_counts.get("LINE", 0),
+        }
+
+    def get_project_file(self, project_uuid=None):
+        """获取项目文件(完整项目 JSON)。"""
+        if project_uuid:
+            return self.eda.call("sys_FileManager.getProjectFileByProjectUuid",
+                                 project_uuid, timeout=30)
+        return self.eda.call("sys_FileManager.getProjectFile", timeout=30)
+
+    def import_project(self, file_data):
+        """从文件数据导入项目。"""
+        return self.eda.call("sys_FileManager.importProjectByProjectFile",
+                             file_data, timeout=30)
+
+    # ==================== 总线 / 网络标签(原理图高级元素) ====================
+
+    def create_bus(self, name, x1, y1, x2, y2):
+        """创建总线(如 DATA[0..7])。"""
+        return self.eda.call("sch_PrimitiveBus.create", name, x1, y1, x2, y2, timeout=15)
+
+    def get_all_buses(self):
+        """获取当前原理图页所有总线。"""
+        return self.eda.call("sch_PrimitiveBus.getAll", timeout=15) or []
+
+    def get_netlist(self):
+        """获取原理图网表(需在原理图页面)。"""
+        return self.eda.call("sch_Netlist.getNetlist", timeout=20)
+
+    def set_netlist(self, netlist):
+        """设置原理图网表。"""
+        return self.eda.call("sch_Netlist.setNetlist", netlist, timeout=20)
+
+    # ==================== PCB 自动布线导入/导出 ====================
+
+    def clear_routing(self):
+        """清除 PCB 所有布线(需在 PCB 页面)。"""
+        return self.eda.call("pcb_Document.clearRouting", timeout=20)
+
+    def import_autoroute_ses(self, ses_content):
+        """导入 Freerouting .ses 自动布线结果。"""
+        return self.eda.call("pcb_Document.importAutoRouteSesFile",
+                             ses_content, timeout=30)
+
+    def import_autoroute_json(self, json_content):
+        """导入 JSON 自动布线结果。"""
+        return self.eda.call("pcb_Document.importAutoRouteJsonFile",
+                             json_content, timeout=30)
+
+    def import_autolayout_json(self, json_content):
+        """导入 JSON 自动布局结果。"""
+        return self.eda.call("pcb_Document.importAutoLayoutJsonFile",
+                             json_content, timeout=30)
+
+    def get_dsn_file(self):
+        """导出 DSN 文件(Specctra 格式,用于 Freerouting)。仅客户端模式可用。"""
+        return self.eda.call("pcb_ManufactureData.getDsnFile", timeout=30)
+
+    def get_autoroute_json(self):
+        """导出自动布线 JSON 文件。"""
+        return self.eda.call("pcb_ManufactureData.getAutoRouteJsonFile", timeout=30)
+
+    # ==================== PCB 选择 / 事件 ====================
+
+    def get_selected_primitives(self):
+        """获取当前选中的图元 ID 列表。"""
+        return self.eda.call("pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId",
+                             timeout=10) or []
+
+    def select_primitives(self, ids):
+        """选中指定图元。"""
+        return self.eda.call("pcb_SelectControl.doSelectPrimitives", ids, timeout=10)
+
+    def clear_selection(self):
+        """取消所有选中。"""
+        return self.eda.call("pcb_SelectControl.clearSelected", timeout=10)
+
+    def get_mouse_position(self):
+        """获取当前鼠标在 PCB 中的坐标。"""
+        return self.eda.call("pcb_SelectControl.getCurrentMousePosition", timeout=10)
+
+    # ==================== 原理图自动布局/布线 ====================
+
+    def sch_auto_layout(self, uuids=None, netlist=None):
+        """原理图自动布局。"""
+        return self.eda.call("sch_Document.autoLayout",
+                             {"uuids": uuids, "netlist": netlist}, timeout=30)
+
+    def sch_auto_routing(self, uuids=None, netlist=None):
+        """原理图自动布线。"""
+        return self.eda.call("sch_Document.autoRouting",
+                             {"uuids": uuids, "netlist": netlist}, timeout=30)
+
+    # ==================== 多页原理图 ====================
+
+    def create_schematic_page(self, name):
+        """创建新的原理图页面。"""
+        return self.eda.call("dmt_Schematic.createSchematicPage", name, timeout=20)
+
+    def get_all_schematic_pages(self):
+        """获取当前原理图所有页面信息。"""
+        return self.eda.call("dmt_Schematic.getAllSchematicPagesInfo", timeout=15) or []
+
+    def get_current_page_info(self):
+        """获取当前页面信息。"""
+        return self.eda.call("dmt_Schematic.getCurrentSchematicPageInfo", timeout=15)
+
+    def rename_schematic_page(self, uuid, name):
+        """重命名原理图页面。"""
+        return self.eda.call("dmt_Schematic.modifySchematicPageName",
+                             uuid, name, timeout=15)
+
+    # ==================== 工作区/团队管理 ====================
+
+    def get_workspaces(self):
+        """获取所有工作区。"""
+        return self.eda.call("dmt_Workspace.getAllWorkspacesInfo", timeout=15) or []
+
+    def get_current_workspace(self):
+        """获取当前工作区。"""
+        return self.eda.call("dmt_Workspace.getCurrentWorkspaceInfo", timeout=15)
+
+    def switch_workspace(self, uuid):
+        """切换工作区。"""
+        return self.eda.call("dmt_Workspace.toggleToWorkspace", uuid, timeout=15)
+
+    def get_teams(self):
+        """获取所有团队信息。"""
+        return self.eda.call("dmt_Team.getAllTeamsInfo", timeout=15) or []
+
+    # ==================== PCB 物理层叠 / 制造数据 ====================
+
+    def get_pcb_info(self):
+        """获取 PCB 制造信息(层叠、网络、规则的完整信息)。"""
+        return self.eda.call("pcb_ManufactureData.getPcbInfoFile", timeout=20)
+
+    def zoom_to_board(self):
+        """缩放视图至板框区域。"""
+        return self.eda.call("pcb_Document.zoomToBoardOutline", timeout=10)
+
+    def get_ratline_status(self):
+        """获取飞线计算状态。"""
+        return self.eda.call("pcb_Document.getCalculatingRatlineStatus", timeout=10)
+
+    def start_ratline(self):
+        """开始计算飞线。"""
+        return self.eda.call("pcb_Document.startCalculatingRatline", timeout=10)
+
+    def stop_ratline(self):
+        """停止计算飞线。"""
+        return self.eda.call("pcb_Document.stopCalculatingRatline", timeout=10)
+
+    # ==================== PCB 文档高级操作 ====================
+
+    def pcb_clear_routing(self):
+        """清除 PCB 所有布线(tracks + vias)。"""
+        return self.eda.call("pcb_Document.clearRouting", timeout=15)
+
+    def pcb_navigate_to(self, x, y):
+        """导航/缩放到指定坐标。"""
+        return self.eda.call("pcb_Document.navigateToCoordinates", x, y, timeout=10)
+
+    def pcb_navigate_to_region(self, x1, y1, x2, y2):
+        """导航/缩放到指定区域。"""
+        return self.eda.call("pcb_Document.navigateToRegion", x1, y1, x2, y2, timeout=10)
+
+    def pcb_get_filter_config(self):
+        """获取 PCB 显示过滤配置(COMPONENT/TRACK/VIA/POUR 等可见性)。"""
+        return self.eda.call("pcb_Document.getCurrentFilterConfiguration", timeout=10)
+
+    def pcb_get_canvas_origin(self):
+        """获取画布原点。"""
+        return self.eda.call("pcb_Document.getCanvasOrigin", timeout=10)
+
+    def pcb_set_canvas_origin(self, x, y):
+        """设置画布原点。"""
+        return self.eda.call("pcb_Document.setCanvasOrigin", x, y, timeout=10)
+
+    def pcb_import_autoroute_json(self, data):
+        """导入自动布线 JSON 数据(来自外部路由器)。"""
+        return self.eda.call("pcb_Document.importAutoRouteJsonFile", data, timeout=30)
+
+    def pcb_import_dsn_ses(self, data):
+        """导入 DSN SES 布线结果(来自 Freerouting 等外部路由器)。"""
+        return self.eda.call("pcb_Document.importAutoRouteSesFile", data, timeout=30)
+
+    # ==================== pcb_Primitive (图元查询) ====================
+
+    def pcb_get_primitive_type(self, prim_id):
+        """获取图元类型(COMPONENT/LINE/VIA/PAD/POUR 等)。"""
+        return self.eda.call("pcb_Primitive.getPrimitiveTypeByPrimitiveId", prim_id, timeout=10)
+
+    def pcb_get_primitive(self, prim_id):
+        """获取图元完整数据。"""
+        return self.eda.call("pcb_Primitive.getPrimitiveByPrimitiveId", prim_id, timeout=10)
+
+    def pcb_get_primitives_bbox(self, prim_ids):
+        """获取多个图元的包围盒 {minX, minY, maxX, maxY}。"""
+        return self.eda.call("pcb_Primitive.getPrimitivesBBox", prim_ids, timeout=10)
+
+    def pcb_get_board_bbox(self):
+        """获取整板包围盒(所有组件的 BBox)。"""
+        cids = self.pcb_component_ids()
+        if not cids:
+            return None
+        return self.eda.call("pcb_Primitive.getPrimitivesBBox", cids, timeout=10)
+
+    # ==================== 库分类管理 ====================
+
+    def get_classification_tree(self):
+        """获取完整的元器件分类树。"""
+        return self.eda.call("lib_Classification.getAllClassificationTree", timeout=20) or []
+
+    def get_all_libraries(self):
+        """获取所有库列表(系统/个人/项目/收藏)。"""
+        return self.eda.call("lib_LibrariesList.getAllLibrariesList", timeout=15) or []
+
+    def get_system_library_uuid(self):
+        """获取系统库 UUID。"""
+        return self.eda.call("lib_LibrariesList.getSystemLibraryUuid", timeout=10)
+
+    def get_personal_library_uuid(self):
+        """获取个人库 UUID。"""
+        return self.eda.call("lib_LibrariesList.getPersonalLibraryUuid", timeout=10)
+
+
+    # ==================== pcb_Net(网络操作——可视化/选择/高亮) ====================
+
+    def pcb_get_all_nets(self):
+        """获取 PCB 所有网络信息。"""
+        return self.eda.call("pcb_Net.getAllNets", timeout=15) or []
+
+    def pcb_get_all_net_names(self):
+        """获取 PCB 所有网络名称列表。"""
+        return self.eda.call("pcb_Net.getAllNetsName", timeout=15) or []
+
+    def pcb_get_net(self, net_name):
+        """获取指定网络详情。"""
+        return self.eda.call("pcb_Net.getNet", net_name, timeout=15)
+
+    def pcb_get_net_length(self, net_name):
+        """获取指定网络布线总长度。"""
+        return self.eda.call("pcb_Net.getNetLength", net_name, timeout=15)
+
+    def pcb_highlight_net(self, net_name):
+        """高亮指定网络。"""
+        return self.eda.call("pcb_Net.highlightNet", net_name, timeout=10)
+
+    def pcb_unhighlight_all_nets(self):
+        """取消所有网络高亮。"""
+        return self.eda.call("pcb_Net.unhighlightAllNets", timeout=10)
+
+    def pcb_select_net(self, net_name):
+        """选中指定网络的所有图元。"""
+        return self.eda.call("pcb_Net.selectNet", net_name, timeout=10)
+
+    def pcb_get_net_color(self, net_name):
+        """获取网络颜色。"""
+        return self.eda.call("pcb_Net.getNetColor", net_name, timeout=10)
+
+    def pcb_set_net_color(self, net_name, color):
+        """设置网络颜色(如 '#ff0000')。"""
+        return self.eda.call("pcb_Net.setNetColor", net_name, color, timeout=10)
+
+    def pcb_get_primitives_by_net(self, net_name):
+        """获取指定网络所有图元 ID。"""
+        return self.eda.call("pcb_Net.getAllPrimitivesByNet", net_name, timeout=15) or []
+
+    def pcb_get_pcb_netlist(self):
+        """获取 PCB 网表。"""
+        return self.eda.call("pcb_Net.getNetlist", timeout=20)
+
+    # ==================== pcb_Drc(DRC 规则管理——46方法全量) ====================
+
+    def pcb_drc_check(self):
+        """执行一次 DRC 检查。"""
+        return self.eda.call("pcb_Drc.check", timeout=30)
+
+    def pcb_drc_realtime_status(self):
+        """获取实时 DRC 状态。"""
+        return self.eda.call("pcb_Drc.getRealTimeDrcStatus", timeout=10)
+
+    def pcb_drc_start_realtime(self):
+        """启动实时 DRC。"""
+        return self.eda.call("pcb_Drc.startRealTimeDrc", timeout=10)
+
+    def pcb_drc_stop_realtime(self):
+        """停止实时 DRC。"""
+        return self.eda.call("pcb_Drc.stopRealTimeDrc", timeout=10)
+
+    def pcb_drc_get_current_rule(self):
+        """获取当前 DRC 规则配置。"""
+        return self.eda.call("pcb_Drc.getCurrentRuleConfiguration", timeout=15)
+
+    def pcb_drc_get_all_rules(self):
+        """获取所有 DRC 规则配置。"""
+        return self.eda.call("pcb_Drc.getAllRuleConfigurations", timeout=15) or []
+
+    def pcb_drc_save_rule(self, name, config):
+        """保存 DRC 规则配置。"""
+        return self.eda.call("pcb_Drc.saveRuleConfiguration", name, config, timeout=15)
+
+    def pcb_drc_overwrite_current_rule(self, config):
+        """覆写当前 DRC 规则配置(直接修改设计规则)。"""
+        return self.eda.call("pcb_Drc.overwriteCurrentRuleConfiguration", config, timeout=15)
+
+    def pcb_drc_get_net_rules(self):
+        """获取网络级规则。"""
+        return self.eda.call("pcb_Drc.getNetRules", timeout=15)
+
+    def pcb_drc_overwrite_net_rules(self, rules):
+        """覆写网络级规则。"""
+        return self.eda.call("pcb_Drc.overwriteNetRules", rules, timeout=15)
+
+    def pcb_drc_get_region_rules(self):
+        """获取区域规则。"""
+        return self.eda.call("pcb_Drc.getRegionRules", timeout=15)
+
+    def pcb_drc_overwrite_region_rules(self, rules):
+        """覆写区域规则。"""
+        return self.eda.call("pcb_Drc.overwriteRegionRules", rules, timeout=15)
+
+    def pcb_drc_get_net_by_net_rules(self):
+        """获取网对网规则(net-to-net specific rules)。"""
+        return self.eda.call("pcb_Drc.getNetByNetRules", timeout=15)
+
+    def pcb_drc_overwrite_net_by_net_rules(self, rules):
+        """覆写网对网规则。"""
+        return self.eda.call("pcb_Drc.overwriteNetByNetRules", rules, timeout=15)
+
+    # ==================== PCB 网络类 / 差分对 / 等长组 ====================
+
+    def pcb_get_all_net_classes(self):
+        """获取所有网络类。"""
+        return self.eda.call("pcb_Drc.getAllNetClasses", timeout=10) or []
+
+    def pcb_create_net_class(self, name, nets=None):
+        """创建网络类(可选初始网络列表)。"""
+        return self.eda.call("pcb_Drc.createNetClass", name, nets or [], timeout=10)
+
+    def pcb_add_net_to_class(self, class_name, net_name):
+        """将网络加入网络类。"""
+        return self.eda.call("pcb_Drc.addNetToNetClass", class_name, net_name, timeout=10)
+
+    def pcb_remove_net_from_class(self, class_name, net_name):
+        """将网络从网络类移除。"""
+        return self.eda.call("pcb_Drc.removeNetFromNetClass", class_name, net_name, timeout=10)
+
+    def pcb_delete_net_class(self, name):
+        """删除网络类。"""
+        return self.eda.call("pcb_Drc.deleteNetClass", name, timeout=10)
+
+    def pcb_get_all_diff_pairs(self):
+        """获取所有差分对。"""
+        return self.eda.call("pcb_Drc.getAllDifferentialPairs", timeout=10) or []
+
+    def pcb_create_diff_pair(self, name, pos_net, neg_net):
+        """创建差分对(正/负网络)。"""
+        return self.eda.call("pcb_Drc.createDifferentialPair", name, pos_net, neg_net, timeout=10)
+
+    def pcb_delete_diff_pair(self, name):
+        """删除差分对。"""
+        return self.eda.call("pcb_Drc.deleteDifferentialPair", name, timeout=10)
+
+    def pcb_get_all_equal_length_groups(self):
+        """获取所有等长组。"""
+        return self.eda.call("pcb_Drc.getAllEqualLengthNetGroups", timeout=10) or []
+
+    def pcb_create_equal_length_group(self, name, nets=None):
+        """创建等长组,可选初始网络列表。"""
+        return self.eda.call("pcb_Drc.createEqualLengthNetGroup", name, nets or [], timeout=10)
+
+    def pcb_delete_equal_length_group(self, name):
+        """删除等长组。"""
+        return self.eda.call("pcb_Drc.deleteEqualLengthNetGroup", name, timeout=10)
+
+    # ==================== PCB 层管理 ====================
+
+    def pcb_get_all_layers(self):
+        """获取 PCB 所有层信息。"""
+        return self.eda.call("pcb_Layer.getAllLayers", timeout=10) or []
+
+    def pcb_get_copper_layer_count(self):
+        """获取铜层数量。"""
+        return self.eda.call("pcb_Layer.getTheNumberOfCopperLayers", timeout=10)
+
+    def pcb_set_copper_layer_count(self, count):
+        """设置铜层数量(2/4/6/8...)。"""
+        return self.eda.call("pcb_Layer.setTheNumberOfCopperLayers", count, timeout=10)
+
+    def pcb_select_layer(self, layer_id):
+        """选择/切换活动层。"""
+        return self.eda.call("pcb_Layer.selectLayer", layer_id, timeout=10)
+
+    def pcb_set_layer_visible(self, layer_id):
+        """设置层可见。"""
+        return self.eda.call("pcb_Layer.setLayerVisible", layer_id, timeout=10)
+
+    def pcb_set_layer_invisible(self, layer_id):
+        """设置层不可见。"""
+        return self.eda.call("pcb_Layer.setLayerInvisible", layer_id, timeout=10)
+
+    def pcb_lock_layer(self, layer_id):
+        """锁定层。"""
+        return self.eda.call("pcb_Layer.lockLayer", layer_id, timeout=10)
+
+    def pcb_unlock_layer(self, layer_id):
+        """解锁层。"""
+        return self.eda.call("pcb_Layer.unlockLayer", layer_id, timeout=10)
+
+    def pcb_set_layer_color(self, config):
+        """设置层颜色配置。"""
+        return self.eda.call("pcb_Layer.setLayerColorConfiguration", config, timeout=10)
+
+    def pcb_add_custom_layer(self, name, layer_type="MECHANICAL"):
+        """添加自定义层。"""
+        return self.eda.call("pcb_Layer.addCustomLayer", name, layer_type, timeout=10)
+
+    # ==================== sch_Net ====================
+
+    def sch_get_all_nets(self):
+        """获取原理图所有网络。"""
+        return self.eda.call("sch_Net.getAllNets", timeout=15) or []
+
+    def sch_get_all_net_names(self):
+        """获取原理图所有网络名称。"""
+        return self.eda.call("sch_Net.getAllNetsName", timeout=15) or []
+
+    def sch_get_project_nets(self):
+        """获取项目所有网络(跨页)。"""
+        return self.eda.call("sch_Net.getCurrentProjectAllNets", timeout=15) or []
 
 
 if __name__ == "__main__":
