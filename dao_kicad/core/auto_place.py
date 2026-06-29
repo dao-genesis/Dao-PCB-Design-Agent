@@ -18,6 +18,10 @@ from dataclasses import dataclass
 
 import pcbnew
 
+# Keep component bodies this far inside the board edge (mm). Comfortably
+# exceeds the default 0.3mm copper_edge_clearance DRC rule.
+EDGE_KEEPOUT_MM = 0.8
+
 
 @dataclass
 class PlacementConstraint:
@@ -153,8 +157,20 @@ def optimize_placement(
                 positions[r][0] = max(c.min_x, min(c.max_x, positions[r][0]))
                 positions[r][1] = max(c.min_y, min(c.max_y, positions[r][1]))
             else:
-                positions[r][0] = max(cx_offset + 1, min(cx_offset + bw - 1, positions[r][0]))
-                positions[r][1] = max(cy_offset + 1, min(cy_offset + bh - 1, positions[r][1]))
+                # Footprint-aware edge clamp: keep the whole body (and its
+                # pads) inside the outline with clearance, so copper never sits
+                # within the board-edge clearance rule (copper_edge_clearance).
+                fw, fh = fp_sizes.get(r, (1.0, 1.0))
+                mx = fw / 2 + EDGE_KEEPOUT_MM
+                my = fh / 2 + EDGE_KEEPOUT_MM
+                lo_x, hi_x = cx_offset + mx, cx_offset + bw - mx
+                lo_y, hi_y = cy_offset + my, cy_offset + bh - my
+                if lo_x > hi_x:
+                    lo_x = hi_x = cx_offset + bw / 2
+                if lo_y > hi_y:
+                    lo_y = hi_y = cy_offset + bh / 2
+                positions[r][0] = max(lo_x, min(hi_x, positions[r][0]))
+                positions[r][1] = max(lo_y, min(hi_y, positions[r][1]))
 
     # Apply final positions
     result = {}
