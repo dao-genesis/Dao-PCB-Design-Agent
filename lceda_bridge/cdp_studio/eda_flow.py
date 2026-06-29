@@ -1968,6 +1968,106 @@ class Flow:
         """获取区域规则。"""
         return self.eda.call("pcb_Drc.getRegionRules", timeout=15)
 
+    def pcb_drc_overwrite_region_rules(self, rules):
+        """覆写区域规则。"""
+        return self.eda.call("pcb_Drc.overwriteRegionRules", rules, timeout=15)
+
+    def pcb_drc_get_net_by_net_rules(self):
+        """获取网对网规则(net-to-net specific rules)。"""
+        return self.eda.call("pcb_Drc.getNetByNetRules", timeout=15)
+
+    def pcb_drc_overwrite_net_by_net_rules(self, rules):
+        """覆写网对网规则。"""
+        return self.eda.call("pcb_Drc.overwriteNetByNetRules", rules, timeout=15)
+
+    # ==================== PCB 网络类 / 差分对 / 等长组 ====================
+
+    def pcb_get_all_net_classes(self):
+        """获取所有网络类。"""
+        return self.eda.call("pcb_Drc.getAllNetClasses", timeout=10) or []
+
+    def pcb_create_net_class(self, name, nets=None):
+        """创建网络类(可选初始网络列表)。"""
+        return self.eda.call("pcb_Drc.createNetClass", name, nets or [], timeout=10)
+
+    def pcb_add_net_to_class(self, class_name, net_name):
+        """将网络加入网络类。"""
+        return self.eda.call("pcb_Drc.addNetToNetClass", class_name, net_name, timeout=10)
+
+    def pcb_remove_net_from_class(self, class_name, net_name):
+        """将网络从网络类移除。"""
+        return self.eda.call("pcb_Drc.removeNetFromNetClass", class_name, net_name, timeout=10)
+
+    def pcb_delete_net_class(self, name):
+        """删除网络类。"""
+        return self.eda.call("pcb_Drc.deleteNetClass", name, timeout=10)
+
+    def pcb_get_all_diff_pairs(self):
+        """获取所有差分对。"""
+        return self.eda.call("pcb_Drc.getAllDifferentialPairs", timeout=10) or []
+
+    def pcb_create_diff_pair(self, name, pos_net, neg_net):
+        """创建差分对(正/负网络)。"""
+        return self.eda.call("pcb_Drc.createDifferentialPair", name, pos_net, neg_net, timeout=10)
+
+    def pcb_delete_diff_pair(self, name):
+        """删除差分对。"""
+        return self.eda.call("pcb_Drc.deleteDifferentialPair", name, timeout=10)
+
+    def pcb_get_all_equal_length_groups(self):
+        """获取所有等长组。"""
+        return self.eda.call("pcb_Drc.getAllEqualLengthNetGroups", timeout=10) or []
+
+    def pcb_create_equal_length_group(self, name, nets=None):
+        """创建等长组,可选初始网络列表。"""
+        return self.eda.call("pcb_Drc.createEqualLengthNetGroup", name, nets or [], timeout=10)
+
+    def pcb_delete_equal_length_group(self, name):
+        """删除等长组。"""
+        return self.eda.call("pcb_Drc.deleteEqualLengthNetGroup", name, timeout=10)
+
+    # ==================== PCB 层管理 ====================
+
+    def pcb_get_all_layers(self):
+        """获取 PCB 所有层信息。"""
+        return self.eda.call("pcb_Layer.getAllLayers", timeout=10) or []
+
+    def pcb_get_copper_layer_count(self):
+        """获取铜层数量。"""
+        return self.eda.call("pcb_Layer.getTheNumberOfCopperLayers", timeout=10)
+
+    def pcb_set_copper_layer_count(self, count):
+        """设置铜层数量(2/4/6/8...)。"""
+        return self.eda.call("pcb_Layer.setTheNumberOfCopperLayers", count, timeout=10)
+
+    def pcb_select_layer(self, layer_id):
+        """选择/切换活动层。"""
+        return self.eda.call("pcb_Layer.selectLayer", layer_id, timeout=10)
+
+    def pcb_set_layer_visible(self, layer_id):
+        """设置层可见。"""
+        return self.eda.call("pcb_Layer.setLayerVisible", layer_id, timeout=10)
+
+    def pcb_set_layer_invisible(self, layer_id):
+        """设置层不可见。"""
+        return self.eda.call("pcb_Layer.setLayerInvisible", layer_id, timeout=10)
+
+    def pcb_lock_layer(self, layer_id):
+        """锁定层。"""
+        return self.eda.call("pcb_Layer.lockLayer", layer_id, timeout=10)
+
+    def pcb_unlock_layer(self, layer_id):
+        """解锁层。"""
+        return self.eda.call("pcb_Layer.unlockLayer", layer_id, timeout=10)
+
+    def pcb_set_layer_color(self, config):
+        """设置层颜色配置。"""
+        return self.eda.call("pcb_Layer.setLayerColorConfiguration", config, timeout=10)
+
+    def pcb_add_custom_layer(self, name, layer_type="MECHANICAL"):
+        """添加自定义层。"""
+        return self.eda.call("pcb_Layer.addCustomLayer", name, layer_type, timeout=10)
+
     # ==================== sch_Net ====================
 
     def sch_get_all_nets(self):
