@@ -1,19 +1,32 @@
 """
-PCB Design Wisdom — Distilled from 150 Practice Boards
+PCB Design Wisdom — Distilled from 250 Practice Boards
 
 为学者日益，闻道者日损。损之又损，以至于无为，无为而无不为。
 
 This module captures the essential patterns discovered through
-150 board designs spanning every category of PCB:
+250 board designs spanning every category of PCB:
 
-  Power (PSU, BMS, BLDC, MPPT, VFD, PoE, Solar, Qi, TEC, EV-BMS)
-  Digital (MCU, FPGA, Server BMC, RISC-V SoC, Drone ESC)
-  Mixed-Signal (ADC, DAC, Audio, ECG, Stethoscope, LiDAR, Ultrasonic)
-  RF (LoRa, Radar, SDR, GPS, UWB, NFC, Satellite, BLE)
-  High-Speed (DDR3/4, PCIe, USB3, MIPI, Machine Vision, MEGA-3)
-  Industrial (PLC, CAN, RS-485, DALI, Smart Meter, Protocol Translator)
-  Wearable (Smartwatch, Pulse Oximeter, IMU, Flex Band)
-  Automotive (LIN, CAN-FD, Gateway, Robot Joint Controller)
+  Power (PSU, BMS, BLDC, MPPT, VFD, PoE, Solar, Qi, TEC, EV-BMS,
+         WPT-Tx, Induction Heater, Supercap UPS, MPPT-30A, Piezo HV,
+         Peltier PID, LED Dimmer, ESC 6-FET, DC Motor, LED Strip)
+  Digital (MCU, FPGA-ICE40, Server BMC, RISC-V SoC, Drone ESC,
+           RTC, Keypad, IR Remote, MIDI Controller)
+  Mixed-Signal (ADC, DAC, Audio, ECG, Stethoscope, LiDAR, Ultrasonic,
+                Bioimpedance, Strain Gauge, ESR Meter, Acoustic Modem,
+                Smoke Detector, Load Cell 4ch, I2S Amp, PLC Modem,
+                USB DAC Hi-Res, Power Quality Analyzer, TDC Picosecond)
+  RF (LoRa, Radar, SDR, GPS, UWB, NFC, Satellite, BLE, Thread,
+      Lightning Detector, Programmable Attenuator, LoRa Mesh+GPS)
+  High-Speed (DDR3/4, PCIe, USB3, MIPI, Machine Vision, MEGA-3,
+              MEGA-4 164p, MEGA-5 94p, LVDS Display, Camera ISP,
+              Multi-spectral, Ethernet Switch 5-port)
+  Industrial (PLC, CAN, RS-485, DALI, Smart Meter, Protocol Translator,
+              EtherCAT, DMX-512, ARINC-429, BiSS-C Encoder, Stepper CL,
+              Servo Robotics, HVAC 6-zone, Solenoid 8ch, PWM Fan 6ch,
+              Modbus WiFi, Solar Tracker)
+  Wearable (Smartwatch, Pulse Oximeter, IMU, Flex Band, PPG Heart Rate,
+            Touch Array, PIR+BLE, ToF+BLE, Env Sensor Mesh, Dosimeter)
+  Automotive (LIN, CAN-FD, Gateway, Robot Joint, OBD2+BLE)
 
 Every rule below was EARNED through a specific practice failure,
 not assumed from textbooks. This is living wisdom, not dead knowledge.
@@ -66,12 +79,12 @@ LAYER_RULES = {
 @dataclass
 class DrcScalingLaw:
     """DRC error count scales with these factors."""
-    # From 150 boards: errors correlate with component density, not area
+    # From 250 boards: errors correlate with component density, not area
     # E ≈ k * parts * density_factor * category_factor
 
     # Density factor: errors per mm² of occupied area
-    # Measured from P1-P150:
-    density_k: float = 140.0  # refined from 150.0 with more data
+    # Measured from P1-P250:
+    density_k: float = 135.0  # refined from 140.0 with 250-board dataset
 
     # Category multipliers (from practice observations)
     category_factors: dict = None
@@ -79,15 +92,15 @@ class DrcScalingLaw:
     def __post_init__(self):
         if self.category_factors is None:
             self.category_factors = {
-                "power": 2.5,       # P64 BLDC, P107 PSU, P147 VFD: wide traces conflict
-                "rf": 1.8,          # P93 Radar, P132 UWB, P146 SDR: tight spacing
-                "high_speed": 1.5,  # P91 FPGA, P121 RISC-V, P150 MEGA-3: BGA+DDR
-                "mixed_signal": 1.3,  # P81 ADC, P128 Sci-ADC, P142 ECG
+                "power": 2.5,       # P64,P107,P147,P190,P228: wide trace conflicts
+                "rf": 1.8,          # P93,P132,P146,P208,P249: tight spacing
+                "high_speed": 1.6,  # P91,P121,P150,P200,P250: BGA+DDR (raised from 1.5)
+                "mixed_signal": 1.3,  # P81,P128,P142,P216,P227: analog+digital mix
                 "digital": 1.0,     # P80 FPGA: baseline
-                "industrial": 0.8,  # P94 PLC, P145 PLC, P136 CNC: relaxed
-                "wearable": 4.0,    # P106 wearable, P123 SpO2: extreme density
-                "automotive": 1.2,  # P108 GW, P122 Robot: moderate
-                "simple": 0.5,      # P79 TC, P143 DALI: easy boards
+                "industrial": 0.8,  # P94,P145,P193,P214: relaxed spacing
+                "wearable": 4.0,    # P106,P123,P218,P239: extreme density
+                "automotive": 1.2,  # P108,P122,P229,P241,P243: CAN/LIN moderate
+                "simple": 0.5,      # P79,P143,P221: easy boards
             }
 
     def estimate_errors(self, parts: int, board_area_mm2: float,
@@ -244,7 +257,7 @@ def recommend_layers(parts: int, nets: int, category: str = "digital") -> int:
 def recommend_board_size(parts: int, layers: int,
                          category: str = "digital") -> tuple[float, float]:
     """Recommend board dimensions based on component count and category."""
-    # Target density ranges from 100 practices:
+    # Target density ranges from 250 practices:
     # Simple 2L: 0.003-0.006 parts/mm²
     # Dense 4L: 0.005-0.010 parts/mm²
     # Extreme: 0.015-0.025 parts/mm² (wearable)
