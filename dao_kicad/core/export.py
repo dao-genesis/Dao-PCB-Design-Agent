@@ -110,7 +110,13 @@ class ExportEngine:
         return sorted(output_dir.glob("*.drl"))
 
     def bom(self, output_path: Path) -> Path:
-        """Export Bill of Materials."""
+        """Export Bill of Materials.
+
+        Honours KiCad's per-footprint ``Exclude from bill of materials``
+        attribute, so mechanical items (mounting holes, fiducials, logos,
+        test points) never pollute the BOM — matching what KiCad's own BOM
+        export emits.
+        """
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -118,6 +124,8 @@ class ExportEngine:
         seen = {}
 
         for fp in self.board.GetFootprints():
+            if fp.IsExcludedFromBOM():
+                continue
             ref = fp.GetReference()
             value = fp.GetValue()
             fpid = fp.GetFPID().GetUniStringLibItemName()
@@ -141,6 +149,11 @@ class ExportEngine:
 
         lines = ["Ref,Val,Package,PosX,PosY,Rot,Side"]
         for fp in self.board.GetFootprints():
+            # Skip parts a fab must not place: those flagged "exclude from
+            # position files" (mounting holes, fiducials, logos) and DNP
+            # (do-not-populate) parts, exactly as KiCad's own CPL export does.
+            if fp.IsExcludedFromPosFiles() or fp.IsDNP():
+                continue
             pos = fp.GetPosition()
             side = "top" if fp.GetLayer() == pcbnew.F_Cu else "bottom"
             lines.append(

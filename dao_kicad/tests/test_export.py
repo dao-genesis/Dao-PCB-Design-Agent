@@ -85,6 +85,29 @@ class TestExportEngine:
         assert "U1" in content
         assert "R1" in content
 
+    def test_bom_honours_exclude_from_bom(self, sample_board, tmp_path):
+        """A footprint flagged 'exclude from BOM' (mounting hole, fiducial,
+        logo, test point) must not appear in the BOM."""
+        engine = ExportEngine(sample_board)
+        fp = next(f for f in sample_board.GetFootprints()
+                  if f.GetReference() == "R1")
+        fp.SetExcludedFromBOM(True)
+        content = engine.bom(tmp_path / "bom.csv").read_text()
+        assert "U1" in content
+        assert "R1" not in content
+
+    def test_placement_skips_excluded_and_dnp(self, sample_board, tmp_path):
+        """CPL must skip parts flagged 'exclude from position files' and DNP
+        parts — a fab places neither."""
+        engine = ExportEngine(sample_board)
+        fps = {f.GetReference(): f for f in sample_board.GetFootprints()}
+        fps["R1"].SetExcludedFromPosFiles(True)
+        fps["C1"].SetDNP(True)
+        content = engine.placement(tmp_path / "placement.csv").read_text()
+        assert "U1" in content
+        assert "R1" not in content
+        assert "C1" not in content
+
     def test_placement_export(self, sample_board, tmp_path):
         engine = ExportEngine(sample_board)
         pos_path = engine.placement(tmp_path / "placement.csv")
