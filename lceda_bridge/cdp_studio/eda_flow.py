@@ -476,6 +476,48 @@ class Flow:
     def pcb_via(self, net, x, y):
         return self.eda.call("pcb_PrimitiveVia.create", net, x, y, timeout=20)
 
+    # --- 程序化铜布线(net 级,绕过 GUI 自动布线器的板框前置)---
+    def pcb_pins_by_net(self, net=None):
+        """从 PCB 各器件引脚汇出 {网名: [(x,y)...]}(逆出:网络绑定在**器件引脚**上,
+        `pcb_PrimitiveComponent.getAllPinsByPrimitiveId` 的每脚带 net/x/y;独立 pad
+        `pcb_PrimitivePad.getAll` 仅含自由焊盘,器件脚不在其中)。net 非空则只取该网。"""
+        out = {}
+        for c in (self.pcb_component_ids() or []):
+            for p in (self.pcb_component_pins(c) or []):
+                nm = p.get("net") or ""
+                if not nm or (net is not None and nm != net):
+                    continue
+                out.setdefault(nm, []).append((p["x"], p["y"]))
+        return out
+
+    def pcb_route_net(self, net, layer=1, width=10, orthogonal=True):
+        """把一个网的引脚用**实铜走线**串接(菊花链)。orthogonal=True 走 L 形(曼哈顿,
+        先水平后竖直,中点拐角),否则直连。返回创建的走线 primitiveId 列表。
+        无需板框、不经 GUI——纯 extapi `pcb_PrimitiveLine.create` 落铜。"""
+        pts = self.pcb_pins_by_net(net).get(net, [])
+        ids = []
+        for i in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+            segs = ([(x0, y0, x1, y0), (x1, y0, x1, y1)]
+                    if orthogonal and x0 != x1 and y0 != y1
+                    else [(x0, y0, x1, y1)])
+            for sx, sy, ex, ey in segs:
+                r = self.eda.call("pcb_PrimitiveLine.create", net, layer,
+                                  sx, sy, ex, ey, width, False, timeout=20)
+                pid = r.get("primitiveId") if isinstance(r, dict) else None
+                ids.append(pid)
+        return ids
+
+    def pcb_route_all(self, layer=1, width=10, orthogonal=True):
+        """对 PCB 上所有**多脚网**逐一铜布线;返回 {net: 走线段数}。
+        校验建议:布线后 `pcb_Net.getNetLength(net)` > 0 即该网已落实铜。"""
+        by = self.pcb_pins_by_net()
+        out = {}
+        for net, pts in by.items():
+            if net and len(pts) >= 2:
+                out[net] = len(self.pcb_route_net(net, layer, width, orthogonal))
+        return out
+
     # --- 原生自动布线(GUI:Route → Auto Routing → Run) ---
     def autoroute_gui(self, wait=12):
         """用编辑器**原生自动布线**把飞线全部变实铜(2层:顶红/底蓝 + 过孔)。
