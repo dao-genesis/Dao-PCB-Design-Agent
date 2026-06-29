@@ -150,6 +150,25 @@ def main() -> int:
         check("Dao import", True)
         dao = Dao()
         check("Dao instantiate", dao is not None)
+        # 回归: feedback timing 必须真实反映结果 (修复前: 前置校验失败的提前
+        # return 仍打 ✓). 无当前板时 run_drc 应 ok=False 且 emit ✗。
+        import io as _io
+        from kicad_origin.dao.feedback import (Feedback as _FB,
+                                               FileFeedback as _FF)
+        import tempfile as _tf
+        _tmp = _tf.NamedTemporaryFile("w+", suffix=".jsonl", delete=False)
+        _tmp.close()
+        _probe = Dao(feedback=_FB(_FF(_tmp.name)))
+        _r = _probe.run_drc()  # 无板 → 提前 return
+        check("feedback: early-return marks ✗ (no false ✓)",
+              _r.ok is False)
+        import json as _json
+        _events = [_json.loads(ln) for ln in open(_tmp.name)
+                   if ln.strip()]
+        _drc_ev = [e for e in _events if e.get("action") == "run_drc"]
+        check("feedback: emit ok=False on guard return",
+              bool(_drc_ev) and _drc_ev[-1]["ok"] is False,
+              f"{len(_drc_ev)} event(s)")
     except Exception as e:
         check("Dao", False, str(e))
 
