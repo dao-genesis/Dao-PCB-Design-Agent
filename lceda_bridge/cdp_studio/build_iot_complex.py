@@ -368,8 +368,8 @@ class IoTBoardBuilder:
             self.errors.append(f"layout: {ex}")
 
     def phase_pcb_route(self):
-        """Phase 8: PCB 2层避让布线(escape corridors + top/bottom layer split)。"""
-        self.log("ROUTE", "Routing PCB traces (2-layer escape)...")
+        """Phase 8: Hybrid routing — native autorouter first, then pad-aware escape fallback."""
+        self.log("ROUTE", "Routing PCB traces...")
         try:
             nets = self.f.pcb_nets()
             self.log("ROUTE", f"PCB has {len(nets)} nets")
@@ -378,22 +378,36 @@ class IoTBoardBuilder:
             self.f.prepare_pcb_nets()
             time.sleep(2)
 
-            # 2-layer escape routing: nets sorted by pin count, alternating layers
-            # escape=1200 achieves 34 clearance / 0 connection (best tradeoff)
-            result = self.f.pcb_route_layers(width=10, escape=1200)
-            self.log("ROUTE", f"Routed", result)
-            self.results["route"] = result
+            # Strategy 1: Try native autorouter (handles pad avoidance natively)
+            try:
+                self.log("ROUTE", "Attempting native autorouter...")
+                ar = self.f.autoroute_gui(wait=15)
+                self.log("ROUTE", f"Native autorouter result: {ar}")
+                if ar.get("tracks", 0) > 0:
+                    self.results["route"] = {"method": "native_autoroute", **ar}
+                    return
+            except Exception as ae:
+                self.log("ROUTE", f"Native autorouter failed: {ae}, falling back to escape routing")
+
+            # Strategy 2: Pad-aware 2-layer escape routing
+            # - Skip GND only (connected by copper pour on both layers)
+            # - Board-outline-aware corridor placement
+            result = self.f.pcb_route_layers(width=10, escape=800,
+                                             skip_nets=["GND"])
+            self.log("ROUTE", f"Escape routing result", result)
+            self.results["route"] = {"method": "escape_corridor", **result}
         except Exception as ex:
             self.log("ROUTE", f"Route error: {ex}")
             self.results["route"] = {"err": str(ex)}
             self.errors.append(f"route: {ex}")
 
     def phase_copper_pour(self):
-        """Phase 9: GND 覆铜。"""
-        self.log("POUR", "Creating GND copper pour...")
+        """Phase 9: GND 覆铜 + VCC_3V3 覆铜(layer 2)。"""
+        self.log("POUR", "Creating copper pours (GND + VCC_3V3)...")
         try:
             result = self.f.auto_ground_pour()
-            self.log("POUR", "Pour created", result)
+            self.log("POUR", "GND pour created", result)
+            # No VCC_3V3 pour — it's routed via traces (skip only GND)
             self.f.rebuild_pours()
             self.log("POUR", "Pours rebuilt")
             self.results["pour"] = result

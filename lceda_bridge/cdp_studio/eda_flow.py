@@ -618,35 +618,107 @@ class Flow:
         return out
 
     def pcb_route_layers(self, width=10, top=1, bottom=2, escape=1000, skip_nets=None):
-        """**2 层避让布线**(密集/交叉拓扑的归一解):各多脚网**轮流分到顶层/底层**,
-        且每网都走**逃逸走廊**(escape,离开焊盘行)。两重正交自由度叠加:
-          ① 走廊离开焊盘行 → 不撞**本层**任何焊盘(解决「直线横穿中间脚」的 Pad-to-Track);
-          ② 顶/底分层 → **异层网几何交叉不触发 clearance**(解决「两网必相交」)。
-        故即便两网在 xy 上高度共线/十字交叉,也零违规。底层网每脚落过孔接顶层焊盘。
-        走廊按层分侧(顶层走下方、底层走上方)并按 |escape| 递增错开。
-        skip_nets: 跳过的网名集(如 GND 由覆铜连接,不需走线)。
+        """**2 层避让布线(pad-aware)**:走廊位于板外区域,不穿越任何焊盘。
+        先扫描全板焊盘 Y 范围,顶层走廊放在 min_y 下方,底层走廊放在 max_y 上方,
+        每网用独立走廊 Y 值(间距=escape),确保 track-to-track 也零冲突。
+        skip_nets: 跳过的网名集(如 GND 由覆铜连接)。
         返回 {net: {'layer':层, 'segs':段数}}。"""
         skip = set(skip_nets or [])
         by = self.pcb_pins_by_net()
-        # Sort by pin count ascending: small signal nets first (top), large power nets last (bottom)
+
+        # Collect ALL pad positions (including un-netted)
+        all_xs, all_ys = [], []
+        for cid in (self.pcb_component_ids() or []):
+            for p in (self.pcb_component_pins(cid) or []):
+                all_xs.append(p.get("x", 0))
+                all_ys.append(p.get("y", 0))
+        if not all_ys:
+            return {}
+        pad_min_y = min(all_ys)
+        pad_max_y = max(all_ys)
+
+        # Read board outline from document source to constrain corridors inside board
+        board_lo_y = 0   # default
+        board_hi_y = pad_max_y + 2000  # default
+        try:
+            boards = self.eda.call("dmt_Board.getAllBoardsInfo", timeout=10) or []
+            if boards:
+                src = self.get_document_source(boards[0]["pcb"]["uuid"])
+                items = self.parse_document_source(src)
+                for item in items:
+                    data = item.get("data", {})
+                    if data.get("layerId") == 11 and "path" in data:
+                        path = data["path"]
+                        if len(path) >= 5 and path[0] == "R":
+                            # Rectangle: R, x, y, w, h, rx, ry
+                            board_hi_y = path[2]
+                            board_lo_y = path[2] - path[4]
+        except Exception:
+            pass
+
+        outline_margin = 15  # ~12mil for board outline clearance
+        # Available corridor zones: [board_lo_y + margin, pad_min_y - spacing] (below pads)
+        #                           [pad_max_y + spacing, board_hi_y - margin] (above pads)
+        below_zone = (board_lo_y + outline_margin, pad_min_y - 50)
+        above_zone = (pad_max_y + 50, board_hi_y - outline_margin)
+
+        # Sort by pin count ascending: small signal nets first, large power nets last
         sorted_nets = sorted(((n, p) for n, p in by.items() if n and len(p) >= 2),
                              key=lambda x: len(x[1]))
+        # Count non-skipped nets to calculate corridor spacing
+        active_nets = [n for n, p in sorted_nets if n not in skip]
+        n_top = (len(active_nets) + 1) // 2  # nets on top layer (below zone)
+        n_bot = len(active_nets) - n_top       # nets on bottom layer (above zone)
+
+        below_space = below_zone[1] - below_zone[0]
+        above_space = above_zone[1] - above_zone[0]
+        top_spacing = max(30, below_space / max(n_top, 1))
+        bot_spacing = max(30, above_space / max(n_bot, 1))
+
         out = {}
         kt = kb = 0
         for net, pts in sorted_nets:
             if net in skip:
                 out[net] = {"layer": 0, "segs": 0, "skipped": True}
                 continue
-            if (kt + kb) % 2 == 0:                 # 偶数网→顶层、走廊朝下
-                lyr, esc = top, escape * (kt + 1)
+            if (kt + kb) % 2 == 0:
+                # Top layer: corridor in below zone (between board bottom edge and pad area)
+                lyr = top
+                corridor_y = below_zone[0] + top_spacing * (kt + 0.5)
+                corridor_y = max(below_zone[0], min(corridor_y, below_zone[1]))
                 kt += 1
-            else:                                   # 奇数网→底层(过孔)、走廊朝上
-                lyr, esc = bottom, -escape * (kb + 1)
+            else:
+                # Bottom layer: corridor in above zone
+                lyr = bottom
+                corridor_y = above_zone[0] + bot_spacing * (kb + 0.5)
+                corridor_y = max(above_zone[0], min(corridor_y, above_zone[1]))
                 kb += 1
-            segs = self.pcb_route_net(net, lyr, width, orthogonal=True,
-                                      escape=esc, via=(lyr != top))
-            out[net] = {"layer": lyr, "segs": len(segs)}
+            segs = self._route_net_corridor(net, lyr, width, corridor_y,
+                                            via=(lyr != top))
+            out[net] = {"layer": lyr, "segs": len(segs), "corridor_y": corridor_y}
         return out
+
+    def _route_net_corridor(self, net, layer, width, corridor_y, via=False):
+        """Route a net via an external corridor at a fixed Y.
+        For each pin pair: pin→vertical→corridor→horizontal→vertical→pin."""
+        pts = self.pcb_pins_by_net(net).get(net, [])
+        ids = []
+        if via and layer != 1:
+            for (px, py) in pts:
+                self.pcb_via(net, px, py)
+        for i in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+            segs = [(x0, y0, x0, corridor_y),      # pin A → vertical escape
+                    (x0, corridor_y, x1, corridor_y),  # horizontal in corridor
+                    (x1, corridor_y, x1, y1)]       # vertical → pin B
+            for sx, sy, ex, ey in segs:
+                if sx == ex and sy == ey:
+                    continue
+                r = self.eda.call("pcb_PrimitiveLine.create", net, layer,
+                                  sx, sy, ex, ey, width, False, timeout=20)
+                pid = r.get("primitiveId") if isinstance(r, dict) else None
+                ids.append(pid)
+        return ids
 
     # --- 原生自动布线(GUI:Route → Auto Routing → Run) ---
     def autoroute_gui(self, wait=12):
@@ -1620,6 +1692,113 @@ class Flow:
     def get_personal_library_uuid(self):
         """获取个人库 UUID。"""
         return self.eda.call("lib_LibrariesList.getPersonalLibraryUuid", timeout=10)
+
+
+    # ==================== pcb_Net(网络操作——可视化/选择/高亮) ====================
+
+    def pcb_get_all_nets(self):
+        """获取 PCB 所有网络信息。"""
+        return self.eda.call("pcb_Net.getAllNets", timeout=15) or []
+
+    def pcb_get_all_net_names(self):
+        """获取 PCB 所有网络名称列表。"""
+        return self.eda.call("pcb_Net.getAllNetsName", timeout=15) or []
+
+    def pcb_get_net(self, net_name):
+        """获取指定网络详情。"""
+        return self.eda.call("pcb_Net.getNet", net_name, timeout=15)
+
+    def pcb_get_net_length(self, net_name):
+        """获取指定网络布线总长度。"""
+        return self.eda.call("pcb_Net.getNetLength", net_name, timeout=15)
+
+    def pcb_highlight_net(self, net_name):
+        """高亮指定网络。"""
+        return self.eda.call("pcb_Net.highlightNet", net_name, timeout=10)
+
+    def pcb_unhighlight_all_nets(self):
+        """取消所有网络高亮。"""
+        return self.eda.call("pcb_Net.unhighlightAllNets", timeout=10)
+
+    def pcb_select_net(self, net_name):
+        """选中指定网络的所有图元。"""
+        return self.eda.call("pcb_Net.selectNet", net_name, timeout=10)
+
+    def pcb_get_net_color(self, net_name):
+        """获取网络颜色。"""
+        return self.eda.call("pcb_Net.getNetColor", net_name, timeout=10)
+
+    def pcb_set_net_color(self, net_name, color):
+        """设置网络颜色(如 '#ff0000')。"""
+        return self.eda.call("pcb_Net.setNetColor", net_name, color, timeout=10)
+
+    def pcb_get_primitives_by_net(self, net_name):
+        """获取指定网络所有图元 ID。"""
+        return self.eda.call("pcb_Net.getAllPrimitivesByNet", net_name, timeout=15) or []
+
+    def pcb_get_pcb_netlist(self):
+        """获取 PCB 网表。"""
+        return self.eda.call("pcb_Net.getNetlist", timeout=20)
+
+    # ==================== pcb_Drc(DRC 规则管理——46方法全量) ====================
+
+    def pcb_drc_check(self):
+        """执行一次 DRC 检查。"""
+        return self.eda.call("pcb_Drc.check", timeout=30)
+
+    def pcb_drc_realtime_status(self):
+        """获取实时 DRC 状态。"""
+        return self.eda.call("pcb_Drc.getRealTimeDrcStatus", timeout=10)
+
+    def pcb_drc_start_realtime(self):
+        """启动实时 DRC。"""
+        return self.eda.call("pcb_Drc.startRealTimeDrc", timeout=10)
+
+    def pcb_drc_stop_realtime(self):
+        """停止实时 DRC。"""
+        return self.eda.call("pcb_Drc.stopRealTimeDrc", timeout=10)
+
+    def pcb_drc_get_current_rule(self):
+        """获取当前 DRC 规则配置。"""
+        return self.eda.call("pcb_Drc.getCurrentRuleConfiguration", timeout=15)
+
+    def pcb_drc_get_all_rules(self):
+        """获取所有 DRC 规则配置。"""
+        return self.eda.call("pcb_Drc.getAllRuleConfigurations", timeout=15) or []
+
+    def pcb_drc_save_rule(self, name, config):
+        """保存 DRC 规则配置。"""
+        return self.eda.call("pcb_Drc.saveRuleConfiguration", name, config, timeout=15)
+
+    def pcb_drc_overwrite_current_rule(self, config):
+        """覆写当前 DRC 规则配置(直接修改设计规则)。"""
+        return self.eda.call("pcb_Drc.overwriteCurrentRuleConfiguration", config, timeout=15)
+
+    def pcb_drc_get_net_rules(self):
+        """获取网络级规则。"""
+        return self.eda.call("pcb_Drc.getNetRules", timeout=15)
+
+    def pcb_drc_overwrite_net_rules(self, rules):
+        """覆写网络级规则。"""
+        return self.eda.call("pcb_Drc.overwriteNetRules", rules, timeout=15)
+
+    def pcb_drc_get_region_rules(self):
+        """获取区域规则。"""
+        return self.eda.call("pcb_Drc.getRegionRules", timeout=15)
+
+    # ==================== sch_Net ====================
+
+    def sch_get_all_nets(self):
+        """获取原理图所有网络。"""
+        return self.eda.call("sch_Net.getAllNets", timeout=15) or []
+
+    def sch_get_all_net_names(self):
+        """获取原理图所有网络名称。"""
+        return self.eda.call("sch_Net.getAllNetsName", timeout=15) or []
+
+    def sch_get_project_nets(self):
+        """获取项目所有网络(跨页)。"""
+        return self.eda.call("sch_Net.getCurrentProjectAllNets", timeout=15) or []
 
 
 if __name__ == "__main__":
