@@ -224,6 +224,43 @@ class Flow:
         p = pm[str(pin)]
         return int(round(p["x"])), int(round(p["y"]))
 
+    def route_by_name(self, net_map, stub=40):
+        """**连接即命名 · 任意拓扑零串扰布线**(会话 3,task 9 的归一解)。
+
+        逆向实测确立的融合判据被本会话进一步收紧:不只共线重叠/穿过他网引脚,
+        **任意两线几何相交(含正交十字)即被 EDA 判为相连而融合**——故"物理拉线
+        连通"在密集/跨侧拓扑下无解(必然出现交叉)。
+
+        归一解(无为):同名导线**连接即命名**——给每个引脚一段**短引线**(stub)
+        并赋该网名;实测**互不接触的同名 stub 仍被归为同一网**(connect-by-name)。
+        于是:同网靠"名"相连、无需物理走线;不同网各自只在自己引脚处留极短 stub、
+        **永不共享任何几何** → 任意拓扑下零交叉、零融合。已活体验证(NET_P/NET_Q
+        两网各连一左一右、纯 lane 必融的拓扑下,本法 PCB 两网俱存)。
+
+        stub 方向取**背离器件引脚质心**(自然引线外伸向),长度 `stub`;net_map:
+        {网名: [(comp_id, pinNumber), ...]}。返回 {net: [(x,y)...]}(各引脚坐标)。
+        """
+        out = {}
+        for net, terminals in net_map.items():
+            pts = []
+            # 该网各引脚按所属器件分组求质心,使 stub 背离器件本体外伸
+            for c, p in terminals:
+                x, y = self._pin_xy_det(c, p)
+                pins = self.component_pins(c) or []
+                cx = sum(int(round(q["x"])) for q in pins) / len(pins) if pins else x
+                cy = sum(int(round(q["y"])) for q in pins) / len(pins) if pins else y
+                dx, dy = x - cx, y - cy
+                if abs(dx) >= abs(dy) and dx != 0:        # 引线沿主轴外伸
+                    ex, ey = x + (stub if dx > 0 else -stub), y
+                elif dy != 0:
+                    ex, ey = x, y + (stub if dy > 0 else -stub)
+                else:
+                    ex, ey = x, y - stub                  # 退化:默认上挑
+                self.wire(x, y, ex, ey, net)
+                pts.append((x, y))
+            out[net] = pts
+        return out
+
     def net_route_det(self, terminals, net, lane_x):
         """把同网多引脚经一条**该网专属**竖直 lane(x=lane_x)汇接(会话 2k)。
 
@@ -273,6 +310,73 @@ class Flow:
                     self.wire(x, y, lane_x, y, net)           # 各脚水平接入 lane
             lanes[net] = lane_x
         return lanes
+
+    def route_orthogonal(self, net_map, lane_gap=80, corridor_gap=80):
+        """**通用正交布线器**(task 9):在 `auto_route_det` 之上处理**跨侧网 / 任意拓扑**。
+
+        融合的两条充要途径(逆向实测):① 不同网线段**共线重叠**;② 某网导线**穿过
+        他网引脚**(正交十字交叉**不**连接,EDA 交叉处无自动节点)。本法据此规避:
+
+          · 每网一条**唯一竖直 lane**(x 唯一,绝不共线)。
+          · lane 取在该网引脚**多数侧**。处于多数侧的引脚 → 直接水平接入(其 y 行上
+            无他网引脚即安全)。
+          · **少数侧(错侧)引脚** → 经一条**专属水平走廊**(corridor_y,落在器件
+            bbox 之外、其上无任何引脚)逃逸:引脚竖直到走廊 → 沿走廊水平到 lane_x →
+            由 lane 主干接入。如此错侧引脚也绝不横穿器件体、不穿他网引脚。
+
+        判据是**逐引脚 foreign-pin-aware**:仅当某脚的直接水平接入段会**夹到他网引脚**
+        (同 y、x 落在脚与 lane 之间)时才改走走廊;否则直接水平接入,布线最简。
+        走廊 y 全局唯一(在 bbox 上方逐条外推)。返回 {net: {"lane","direct","escaped"}}。
+        """
+        coords = {net: [(self._pin_xy_det(c, p)) for c, p in ts]
+                  for net, ts in net_map.items()}
+        # 全部引脚点(带所属网),用于 foreign-pin 碰撞判定
+        owner = {}
+        for net, cs in coords.items():
+            for pt in cs:
+                owner[pt] = net
+        all_pts = list(owner.keys())
+        xs = [x for x, _ in all_pts]
+        ys = [y for _, y in all_pts]
+        lo_x, hi_x = (min(xs), max(xs)) if xs else (0, 0)
+        center = (lo_x + hi_x) / 2.0
+        top_y = min(ys) if ys else 0
+
+        def clips_foreign(net, x, y, lane_x):
+            x0, x1 = (x, lane_x) if x <= lane_x else (lane_x, x)
+            for (fx, fy), fnet in owner.items():
+                if fnet != net and fy == y and x0 < fx < x1:
+                    return True
+            return False
+
+        out = {}
+        nl = nr = 0
+        corridor_k = 0
+        for net, cs in coords.items():
+            mean_x = sum(x for x, _ in cs) / len(cs)
+            if mean_x >= center:
+                nr += 1; lane_x = hi_x + nr * lane_gap
+            else:
+                nl += 1; lane_x = lo_x - nl * lane_gap
+            direct_ys, corr_ys = [], []
+            n_direct = n_esc = 0
+            for x, y in cs:
+                if clips_foreign(net, x, y, lane_x):
+                    corridor_k += 1
+                    cy = top_y - corridor_k * corridor_gap
+                    self.wire(x, y, x, cy, net)        # 竖直逃逸到专属走廊(走廊在 bbox 外,其上无脚)
+                    self.wire(x, cy, lane_x, cy, net)  # 沿走廊水平到 lane
+                    corr_ys.append(cy); n_esc += 1
+                else:
+                    direct_ys.append(y); n_direct += 1
+            trunk_ys = direct_ys + corr_ys
+            if trunk_ys:
+                self.wire(lane_x, min(trunk_ys), lane_x, max(trunk_ys), net)  # 竖直主干
+            for x, y in cs:
+                if y in direct_ys and x != lane_x:
+                    self.wire(x, y, lane_x, y, net)    # 直接水平接入
+            out[net] = {"lane": lane_x, "direct": n_direct, "escaped": n_esc}
+        return out
 
     def schematic_component_ids(self):
         return self.eda.call("sch_PrimitiveComponent.getAllPrimitiveId", timeout=20)
