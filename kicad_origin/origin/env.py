@@ -117,26 +117,53 @@ def find_kicad_cli() -> Optional[Path]:
     return None
 
 
+@lru_cache(maxsize=64)
+def _python_has_pcbnew(py: str) -> bool:
+    """该解释器能否 `import pcbnew` (真能起 SWIG 原生层)。探测一次, 缓存。"""
+    try:
+        r = subprocess.run([py, "-c", "import pcbnew"],
+                           capture_output=True, timeout=30)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+@lru_cache(maxsize=1)
 def find_kicad_python() -> Optional[Path]:
-    """Find KiCad's bundled Python (needed for pcbnew SWIG)."""
-    if KICAD_BIN:
-        py = KICAD_BIN / "python.exe"
-        if py.exists():
-            return py
-        py = KICAD_BIN / "python"
-        if py.exists():
-            return py
+    """Find a Python interpreter that can `import pcbnew` (SWIG native layer).
+
+    "道生一" — 不写死: Windows 用 KiCad 自带 python.exe; Linux/mac 上 pcbnew 装进
+    系统 python 的 dist-packages, 故逐一探测候选解释器, 取第一个真能 import pcbnew 的,
+    而非盲信某个路径 (不依赖 /usr/bin/python 符号链一定存在)。
+    """
+    cands: List[Path] = []
+    # 1. 显式 env 最高优先
     env = os.environ.get("KICAD_PYTHON")
     if env:
-        p = Path(env)
-        if p.exists():
-            return p
-    for cand in [
+        cands.append(Path(env))
+    # 2. KiCad bin 内 (Windows 自带 python)
+    if KICAD_BIN:
+        cands += [KICAD_BIN / "python.exe", KICAD_BIN / "python",
+                  KICAD_BIN / "python3"]
+    # 3. Windows 固定候选
+    cands += [
         Path(r"C:\Program Files\KiCad\9.0\bin\python.exe"),
         Path(r"C:\Program Files\KiCad\8.0\bin\python.exe"),
-    ]:
-        if cand.exists():
-            return cand
+    ]
+    # 4. Linux/mac: PATH 上的解释器 (pcbnew 装在系统 site-packages)
+    for name in ("python3", "python3.12", "python3.11", "python3.10",
+                 "python3.9", "python"):
+        w = shutil.which(name)
+        if w:
+            cands.append(Path(w))
+    seen: set = set()
+    for p in cands:
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        if p.exists() and _python_has_pcbnew(str(p)):
+            return p
     return None
 
 
