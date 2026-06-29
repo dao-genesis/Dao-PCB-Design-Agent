@@ -1495,14 +1495,18 @@ class Flow:
 
     # ==================== 文档源操作(最深融合层) ====================
 
-    def get_document_source(self, uuid):
-        """获取文档原始源(pipe-delimited 格式)——PCB/原理图/面板均可。
+    def get_document_source(self, uuid=None):
+        """获取**当前活动文档**原始源(pipe-delimited 格式)。
+        API实际不接受UUID参数(argCount=0),始终返回活动文档。
+        若需读取非活动文档,先用 dmt_EditorControl.openDocument(uuid) 切换。
         返回完整文档字符串,可解析出 COMPONENT/LINE/VIA/POUR/NET/PAD_NET 等所有元素。"""
-        return self.eda.call("sys_FileManager.getDocumentSource", uuid, timeout=30)
+        return self.eda.call("sys_FileManager.getDocumentSource", timeout=30)
 
-    def set_document_source(self, uuid, source):
-        """写回修改后的文档源——直接操作文档数据,绕过所有 API 限制。"""
-        return self.eda.call("sys_FileManager.setDocumentSource", uuid, source, timeout=30)
+    def set_document_source(self, source):
+        """写回修改后的文档源到**当前活动文档**。
+        API只接受1个参数(source string),写入当前活动文档。
+        **已验证可用**:修改后 getDocumentSource 可回读确认。"""
+        return self.eda.call("sys_FileManager.setDocumentSource", source, timeout=30)
 
     def parse_document_source(self, source):
         """解析 pipe-delimited 文档源为结构化列表。
@@ -1525,6 +1529,184 @@ class Flow:
                               "id": header.get("id"),
                               "data": data})
         return items
+
+    # ==================== DocumentSourceEditor: 结构化文档修改 ====================
+
+    def doc_read(self):
+        """读取并解析当前活动文档源,返回 (raw_source, parsed_items)。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        return src, items
+
+    def doc_modify(self, source, modifications):
+        """批量修改文档源中的元素,返回修改后的源字符串。
+        使用精确字符串替换保持原始格式(双管道分隔符、字段顺序、浮点精度)。
+        modifications: [{match: {type,net,...}, set: {field:value,...}}, ...]"""
+        import re
+        lines = source.split("\n")
+        new_lines = []
+        total_mods = 0
+        for line in lines:
+            # Parse without destroying original format
+            segments = line.split("||")
+            if len(segments) >= 2:
+                header_seg = segments[0].strip().strip("|")
+                data_seg = segments[1].strip().strip("|")
+                try:
+                    header = json.loads(header_seg)
+                    data = json.loads(data_seg)
+                except (json.JSONDecodeError, ValueError):
+                    new_lines.append(line)
+                    continue
+                modified = False
+                for mod in modifications:
+                    match = mod.get("match", {})
+                    if all(
+                        (header.get(k) == v or data.get(k) == v)
+                        for k, v in match.items()
+                    ):
+                        for field, value in mod.get("set", {}).items():
+                            if field in data:
+                                old_val = data[field]
+                                # Literal string replacement (not regex)
+                                if isinstance(old_val, (int, float)):
+                                    pattern = f'"{field}":{json.dumps(old_val)}'
+                                    replacement = f'"{field}":{json.dumps(value)}'
+                                else:
+                                    pattern = f'"{field}":{json.dumps(old_val, ensure_ascii=False)}'
+                                    replacement = f'"{field}":{json.dumps(value, ensure_ascii=False)}'
+                                new_line = line.replace(pattern, replacement, 1)
+                                if new_line != line:
+                                    line = new_line
+                                    modified = True
+                                    total_mods += 1
+                                    data[field] = value
+            new_lines.append(line)
+        return "\n".join(new_lines), total_mods
+
+    def doc_write(self, source):
+        """写回修改后的文档源到当前活动文档。返回 True/False。"""
+        return self.set_document_source(source)
+
+    def doc_batch_track_width(self, net_name, new_width):
+        """批量修改指定网络所有铜线宽度。"""
+        src = self.get_document_source()
+        new_src, n = self.doc_modify(src, [
+            {"match": {"type": "LINE", "netName": net_name}, "set": {"width": new_width}}
+        ])
+        if n > 0:
+            self.set_document_source(new_src)
+        return n
+
+    def doc_move_component(self, comp_index, dx, dy):
+        """通过文档源移动组件(comp_index: 从0开始的组件序号)。
+        使用精确字符串替换保持原始格式。"""
+        src = self.get_document_source()
+        lines = src.split("\n")
+        comp_count = 0
+        for i, line in enumerate(lines):
+            if '"type":"COMPONENT"' in line:
+                if comp_count == comp_index:
+                    segments = line.split("||")
+                    if len(segments) >= 2:
+                        data_seg = segments[1].strip().strip("|")
+                        try:
+                            data = json.loads(data_seg)
+                            old_x, old_y = data.get("x", 0), data.get("y", 0)
+                            new_x, new_y = old_x + dx, old_y + dy
+                            new_line = line.replace(
+                                f'"x":{json.dumps(old_x)}', f'"x":{json.dumps(new_x)}', 1
+                            ).replace(
+                                f'"y":{json.dumps(old_y)}', f'"y":{json.dumps(new_y)}', 1
+                            )
+                            lines[i] = new_line
+                            new_src = "\n".join(lines)
+                            self.set_document_source(new_src)
+                            return {"moved": True, "new_x": new_x, "new_y": new_y}
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                comp_count += 1
+        return {"moved": False}
+
+    def doc_get_components(self):
+        """获取文档源中所有组件及其位置。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        comps = []
+        for item in items:
+            if item["type"] == "COMPONENT":
+                d = item["data"]
+                comps.append({
+                    "id": item.get("id"),
+                    "x": d.get("x"), "y": d.get("y"),
+                    "rotation": d.get("rotation"),
+                    "layer": d.get("layerId"),
+                    "locked": d.get("locked"),
+                })
+        return comps
+
+    def doc_get_nets(self):
+        """获取文档源中所有网络定义。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        nets = {}
+        for item in items:
+            if item["type"] == "NET":
+                d = item["data"]
+                nets[d.get("netName", "")] = d
+        return nets
+
+    def doc_get_tracks(self, net_name=None):
+        """获取文档源中所有铜线(可按网络过滤)。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        tracks = []
+        for item in items:
+            if item["type"] == "LINE":
+                d = item["data"]
+                if net_name and d.get("netName") != net_name:
+                    continue
+                tracks.append({
+                    "id": item.get("id"),
+                    "net": d.get("netName"),
+                    "layer": d.get("layerId"),
+                    "width": d.get("width"),
+                    "start": (d.get("startX"), d.get("startY")),
+                    "end": (d.get("endX"), d.get("endY")),
+                })
+        return tracks
+
+    def doc_get_pours(self):
+        """获取文档源中所有覆铜区。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        pours = []
+        for item in items:
+            if item["type"] in ("POUR", "POURED"):
+                pours.append({"type": item["type"], "id": item.get("id"),
+                              "data": item["data"]})
+        return pours
+
+    def doc_statistics(self):
+        """获取文档源统计:元素类型计数、网络数、组件数等。"""
+        src = self.get_document_source()
+        items = self.parse_document_source(src)
+        from collections import Counter
+        type_counts = Counter(item["type"] for item in items)
+        net_names = set()
+        for item in items:
+            nn = item.get("data", {}).get("netName")
+            if nn:
+                net_names.add(nn)
+        return {
+            "total_items": len(items),
+            "source_bytes": len(src),
+            "types": dict(type_counts),
+            "nets": sorted(net_names),
+            "net_count": len(net_names),
+            "component_count": type_counts.get("COMPONENT", 0),
+            "track_count": type_counts.get("LINE", 0),
+        }
 
     def get_project_file(self, project_uuid=None):
         """获取项目文件(完整项目 JSON)。"""
