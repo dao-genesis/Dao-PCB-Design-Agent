@@ -26,6 +26,29 @@ class TestBoardBuilder:
         assert pcbnew.ToMM(ds.m_MinClearance) == pytest.approx(0.1)
         assert pcbnew.ToMM(ds.m_TrackMinWidth) == pytest.approx(0.1)
 
+    def test_rules_align_netclass_and_hole_clearance(self):
+        """The default netclass + hole clearance must follow the declared board
+        rule, not KiCad's 0.2/0.25mm defaults — otherwise DRC checks a stricter
+        clearance than the routers ever target and reports phantom violations."""
+        builder = BoardBuilder.new(copper_layers=6)
+        builder.set_rules(min_clearance_mm=0.10, min_track_mm=0.08)
+        ds = builder.board.GetDesignSettings()
+        assert pcbnew.ToMM(
+            ds.m_NetSettings.GetDefaultNetclass().GetClearance()
+        ) == pytest.approx(0.10)
+        assert pcbnew.ToMM(ds.m_HoleClearance) == pytest.approx(0.10)
+
+    def test_rules_never_tighten_clearance(self):
+        """Alignment only relaxes toward the declared rule; a coarse board rule
+        must never raise the existing clearances."""
+        builder = BoardBuilder.new(copper_layers=2)
+        ds = builder.board.GetDesignSettings()
+        before_nc = ds.m_NetSettings.GetDefaultNetclass().GetClearance()
+        before_hole = ds.m_HoleClearance
+        builder.set_rules(min_clearance_mm=0.30, min_track_mm=0.25)
+        assert ds.m_NetSettings.GetDefaultNetclass().GetClearance() == before_nc
+        assert ds.m_HoleClearance == before_hole
+
     def test_add_nets(self):
         builder = BoardBuilder.new()
         builder.add_nets("GND", "VCC", "3V3", "SDA", "SCL")

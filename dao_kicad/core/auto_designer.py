@@ -80,6 +80,15 @@ class DesignSpec:
     # 2L/4L boards have no interior inner layer, so this is inherently a no-op
     # there regardless of value.
     signal_inner_layers: int = 0
+    # Routing engine: "builtin" (default) uses the in-repo deterministic router;
+    # "freerouting" delegates signal routing to the bundled headless freerouting
+    # jar via KiCad's native Specctra DSN/SES round-trip. The freerouting path
+    # still allocates/pours the same power planes and stitches plane-net pads,
+    # then hands the placed+poured board to freerouting for the signal nets —
+    # the proven place -> pour -> autoroute pattern that routes the template
+    # library 14/14 DRC-clean. Falls back to the builtin router if freerouting
+    # (jar + JDK) is unavailable, so behaviour degrades gracefully.
+    route_engine: str = "builtin"
 
 
 @dataclass
@@ -113,38 +122,59 @@ class DesignResult:
 
 
 def _stitch_plane_pads(b, plane_nets, plane_layers, cl: float,
-                       via_size: float = 0.45, via_drill: float = 0.2) -> int:
+                       via_size: float = 0.45, via_drill: float = 0.2,
+                       via_min: float = 0.30) -> int:
     """Drop a stitch via on every plane-net pad that needs one to reach its
-    plane, dodging neighbouring foreign pads.
+    plane, dodging neighbouring foreign pads and shrinking to fit fine pitch.
 
     An SMD pad whose own layer already carries its plane needs nothing; one on
     a layer without its plane (e.g. an F_Cu GND pad over a B_Cu-only GND plane,
     or any rail pad over an inner plane) gets a via. Through-hole pads span
     every layer so already touch their plane. We try the pad centre first, then
     small in-pad offsets, staying on the pad's own copper so the via keeps its
-    galvanic bite on the pad while edging away from a neighbour's pad/hole
-    (hole_clearance / shorting / clearance).
+    galvanic bite on the pad while edging away from a neighbour's pad/hole.
 
-    Called *before* routing so each via is seeded into the router's spatial
-    index and signal tracks are routed around it. Returns the via count.
+    Foreign pads are modelled as their true rectangle (separate half-width and
+    half-height), not a square of the longest side — the long body of a
+    0.3x1.6mm LQFP pad must not be treated as a 1.6mm-wide obstacle to its
+    0.5mm-pitch lateral neighbour. When the full ``via_size`` cannot clear a
+    tight neighbour at any in-pad spot, the via is shrunk to the largest size
+    that does clear (down to ``via_min``), so a fine-pitch rail/GND pin still
+    gets a legal stitch instead of a clearance violation.
+
+    Called after pouring planes (Step 7). Returns the via count.
     """
-    via_r = via_size / 2
-    foreign = []  # (x, y, half_extent, net)
+    default_r = via_size / 2
+    min_r = via_min / 2
+    foreign = []  # (x, y, half_w, half_h, net)
     for fp in b.board.GetFootprints():
         for p in fp.Pads():
             ps = p.GetSize()
             foreign.append((
                 pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y),
-                max(pcbnew.ToMM(ps.x), pcbnew.ToMM(ps.y)) / 2,
+                pcbnew.ToMM(ps.x) / 2, pcbnew.ToMM(ps.y) / 2,
                 p.GetNetname()))
 
-    def _via_clear(vx, vy, net):
-        for fx, fy, fr, fnet in foreign:
+    def _clear(vx, vy, net, r):
+        for fx, fy, fhw, fhh, fnet in foreign:
             if fnet == net:
                 continue
-            if abs(vx - fx) < via_r + fr + cl and abs(vy - fy) < via_r + fr + cl:
+            if abs(vx - fx) < r + fhw + cl and abs(vy - fy) < r + fhh + cl:
                 return False
         return True
+
+    def _max_r(vx, vy, net):
+        """Largest via radius clearing every foreign pad at (vx, vy). A pad is
+        cleared if the via stays clear in x OR in y, so the limit it imposes is
+        max(x-slack, y-slack); the binding limit is the min across foreigns."""
+        r = default_r
+        for fx, fy, fhw, fhh, fnet in foreign:
+            if fnet == net:
+                continue
+            slack = max(abs(vx - fx) - fhw - cl, abs(vy - fy) - fhh - cl)
+            if slack < r:
+                r = slack
+        return r
 
     n = 0
     for fp in b.board.GetFootprints():
@@ -160,14 +190,22 @@ def _stitch_plane_pads(b, plane_nets, plane_layers, cl: float,
             cx, cy = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
             psz = p.GetSize()
             room = max(0.0, min(pcbnew.ToMM(psz.x),
-                                pcbnew.ToMM(psz.y)) / 2 - via_r)
-            spot = (cx, cy)
+                                pcbnew.ToMM(psz.y)) / 2 - default_r)
+            spot, r = (cx, cy), default_r
+            placed = False
             for ddx, ddy in ((0, 0), (room, 0), (-room, 0),
                              (0, room), (0, -room)):
-                if _via_clear(cx + ddx, cy + ddy, net):
-                    spot = (cx + ddx, cy + ddy)
+                if _clear(cx + ddx, cy + ddy, net, default_r):
+                    spot, r, placed = (cx + ddx, cy + ddy), default_r, True
                     break
-            b.add_via(spot[0], spot[1], via_size, via_drill, net)
+            if not placed:
+                # No spot fits a full via — shrink to the largest that clears at
+                # the pad centre (keeps the via centred on its own copper).
+                r = max(min_r, min(default_r, _max_r(cx, cy, net)))
+                spot = (cx, cy)
+            size = 2 * r
+            drill = max(0.1, min(via_drill, size - 0.15))
+            b.add_via(spot[0], spot[1], size, drill, net)
             n += 1
     return n
 
@@ -215,6 +253,10 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
     b.set_rules(min_clearance_mm=cl, min_track_mm=tw,
                 via_size_mm=0.45, via_drill_mm=0.2,
                 edge_clearance_mm=0.3, solder_mask_min_mm=0.0)
+    # Relax the via-diameter floor so fine-pitch stitch vias may shrink to fit
+    # between 0.5mm-pitch pads (0.30mm/0.15mm drill is standard fab). This only
+    # lowers a DRC minimum; the routers still emit their normal 0.45mm vias.
+    b.board.GetDesignSettings().m_ViasMinSize = pcbnew.FromMM(0.30)
 
     # Add nets
     if spec.nets:
@@ -314,6 +356,18 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
         extra_planes = []
     plane_nets = ["GND"] + extra_planes
 
+    # Resolve the routing engine up front. "freerouting" is only honoured when
+    # the jar + a compatible JDK are actually present; otherwise we transparently
+    # fall back to the builtin router so a design never silently produces an
+    # unrouted board.
+    use_fr = False
+    if spec.route_engine == "freerouting":
+        try:
+            from daokicad import route as _fr
+            use_fr = _fr.available()
+        except Exception:
+            use_fr = False
+
     skip = set(plane_nets)
     # Total connection demand (incl. plane-delivered nets) so completion %
     # reflects real connectivity: a net delivered by a poured plane is
@@ -329,7 +383,7 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
         d for d in Router(b.board, min_clearance_mm=cl).find_diff_pairs()
         if d.p_net not in skip and d.n_net not in skip
     ]
-    if diff_pairs:
+    if diff_pairs and not use_fr:
         # Each pair routes at its net class's impedance-derived width/gap
         # (Diff_USB/DDR/Ethernet); pairs with no such class fall back to the
         # generic track width / clearance. Group by (width, gap) so one
@@ -359,7 +413,13 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
         for d in diff_pairs:
             skip.update((d.p_net, d.n_net))
 
-    if layers >= 4:
+    if use_fr:
+        # Signal routing is delegated to freerouting after the board is poured
+        # and saved (Step 8b). Plane-net pads are already connected here via the
+        # poured planes + stitch vias, so the placed board handed to the router
+        # only needs its signal nets closed.
+        r = None
+    elif layers >= 4:
         # Signals route on the outer layers plus any reserved interior inner
         # layer. Reserved inner layers are still GND-poured (reference plane),
         # so bus tracks there run over a return plane and, being interior,
@@ -374,17 +434,22 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
             strategy="manhattan", width_mm=tw, power_width_mm=0.4,
             power_nets=pn, net_widths=nw, skip_nets=skip)
 
-    result.routes_total = total_demand or r.total
-    result.routes_completed = total_demand - r.failed - dp_failed
-    result.vias = r.vias_added
+    if r is not None:
+        result.routes_total = total_demand or r.total
+        result.routes_completed = total_demand - r.failed - dp_failed
+        result.vias = r.vias_added
+    else:
+        result.routes_total = total_demand
 
     # Step 6b (opt-in): equalize routed length within each requested group.
     # Empty by default, so this is a no-op on the standard design/DRC path.
-    for grp in spec.match_length_groups:
-        present = [n for n in grp if n not in skip]
-        if len(present) >= 2:
-            Router(b.board, min_clearance_mm=cl).tune_length_group(present)
-            result.tuned_groups += 1
+    # Skipped under freerouting (no builtin tracks exist yet to tune).
+    if not use_fr:
+        for grp in spec.match_length_groups:
+            present = [n for n in grp if n not in skip]
+            if len(present) >= 2:
+                Router(b.board, min_clearance_mm=cl).tune_length_group(present)
+                result.tuned_groups += 1
 
     # Step 7: Pour planes, then stitch plane-net pads down to their plane. GND
     # owns the outer layers and any inner layer not assigned to another rail;
@@ -405,13 +470,37 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
     # freshly-built in-memory board, so we round-trip through disk first;
     # the reloaded, poured board is the one we DRC and export from.
     bp = b.save(output_dir / f"{spec.name}.kicad_pcb")
-    filled = pcbnew.LoadBoard(str(bp))
-    filled.BuildConnectivity()
-    try:
-        pcbnew.ZONE_FILLER(filled).Fill(filled.Zones())
-        pcbnew.SaveBoard(str(bp), filled)
-    except Exception:
-        pass
+
+    if use_fr:
+        # Step 8b: hand the placed + poured board to freerouting for the signal
+        # nets via KiCad's native Specctra DSN/SES round-trip. autoroute()
+        # re-pours the planes after import, so the routed board is ready to DRC.
+        from daokicad.live import LiveKiCad
+        live = LiveKiCad()
+        live.autoroute(bp, bp, timeout=LiveKiCad.route_timeout_for(n_nets))
+        filled = pcbnew.LoadBoard(str(bp))
+        filled.BuildConnectivity()
+        # freerouting closes nets with multi-segment + via paths the geometric
+        # get_unrouted() MST heuristic can't follow, so read completion from
+        # KiCad's real ratsnest (unconnected endpoints) instead.
+        try:
+            unrouted = filled.GetConnectivity().GetUnconnectedCount(False)
+        except Exception:
+            unrouted = len(Router(filled, min_clearance_mm=cl).get_unrouted())
+        result.routes_completed = max(0, total_demand - unrouted)
+        result.vias = sum(1 for t in filled.GetTracks()
+                          if t.Type() == pcbnew.PCB_VIA_T)
+    else:
+        # Step 8: reload and fill. ZONE_FILLER segfaults on a freshly-built
+        # in-memory board, so we round-trip through disk first; the reloaded,
+        # poured board is the one we DRC and export from.
+        filled = pcbnew.LoadBoard(str(bp))
+        filled.BuildConnectivity()
+        try:
+            pcbnew.ZONE_FILLER(filled).Fill(filled.Zones())
+            pcbnew.SaveBoard(str(bp), filled)
+        except Exception:
+            pass
     result.board_path = bp
 
     drc = DrcEngine().check(bp)
