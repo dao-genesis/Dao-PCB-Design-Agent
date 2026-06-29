@@ -80,15 +80,19 @@ class DesignSpec:
     # 2L/4L boards have no interior inner layer, so this is inherently a no-op
     # there regardless of value.
     signal_inner_layers: int = 0
-    # Routing engine: "builtin" (default) uses the in-repo deterministic router;
-    # "freerouting" delegates signal routing to the bundled headless freerouting
-    # jar via KiCad's native Specctra DSN/SES round-trip. The freerouting path
-    # still allocates/pours the same power planes and stitches plane-net pads,
-    # then hands the placed+poured board to freerouting for the signal nets —
-    # the proven place -> pour -> autoroute pattern that routes the template
-    # library 14/14 DRC-clean. Falls back to the builtin router if freerouting
-    # (jar + JDK) is unavailable, so behaviour degrades gracefully.
-    route_engine: str = "builtin"
+    # Routing engine:
+    #   "auto" (default) routes simple boards on the fast builtin router and
+    #     hands dense boards (where builtin congestion dominates DRC) to
+    #     freerouting — the best available engine per board, automatically.
+    #   "builtin" always uses the in-repo deterministic router.
+    #   "freerouting" always delegates signal routing to the bundled headless
+    #     freerouting jar via KiCad's native Specctra DSN/SES round-trip.
+    # The freerouting path still allocates/pours the same power planes and
+    # stitches plane-net pads, then hands the placed+poured board to freerouting
+    # for the signal nets — the proven place -> pour -> autoroute pattern. Any
+    # mode falls back to the builtin router when the jar + JDK are unavailable,
+    # so behaviour degrades gracefully and stays deterministic without them.
+    route_engine: str = "auto"
 
 
 @dataclass
@@ -208,6 +212,33 @@ def _stitch_plane_pads(b, plane_nets, plane_layers, cl: float,
             b.add_via(spot[0], spot[1], size, drill, net)
             n += 1
     return n
+
+
+# Density thresholds at which the builtin router starts trading DRC for
+# completion, so freerouting earns its ~minute of runtime. Measured on the
+# fixture library: the whole 14-board template set (all DRC-clean + instant on
+# builtin) sits comfortably below these, while the 256-net / 6-layer stress
+# board (442 -> 0 DRC under freerouting) is far above them.
+_FR_DENSE_DEMAND = 120
+_FR_DENSE_LAYERS = 6
+_FR_DENSE_PARTS = 40
+
+
+def _resolve_route_engine(engine, total_demand, layers, parts, fr_available):
+    """Decide whether to route signals with freerouting.
+
+    "freerouting" always uses it when the jar/JDK are present; "auto" only
+    does so on dense boards where builtin congestion dominates DRC; "builtin"
+    (or anything else) never does. Freerouting is never selected when it is
+    unavailable, so any mode falls back to the deterministic builtin router.
+    """
+    if engine == "freerouting":
+        return fr_available()
+    if engine == "auto":
+        dense = total_demand >= _FR_DENSE_DEMAND or (
+            layers >= _FR_DENSE_LAYERS and parts >= _FR_DENSE_PARTS)
+        return dense and fr_available()
+    return False
 
 
 def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
@@ -356,23 +387,31 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
         extra_planes = []
     plane_nets = ["GND"] + extra_planes
 
-    # Resolve the routing engine up front. "freerouting" is only honoured when
-    # the jar + a compatible JDK are actually present; otherwise we transparently
-    # fall back to the builtin router so a design never silently produces an
-    # unrouted board.
-    use_fr = False
-    if spec.route_engine == "freerouting":
-        try:
-            from daokicad import route as _fr
-            use_fr = _fr.available()
-        except Exception:
-            use_fr = False
-
     skip = set(plane_nets)
     # Total connection demand (incl. plane-delivered nets) so completion %
     # reflects real connectivity: a net delivered by a poured plane is
     # connected even though it routes zero point-to-point tracks.
     total_demand = len(Router(b.board, min_clearance_mm=cl).get_unrouted())
+
+    # Resolve the routing engine now that board density is known.
+    #   "builtin"     — always the in-repo deterministic router.
+    #   "freerouting" — delegate signal nets to the bundled headless jar.
+    #   "auto"        — (default) use freerouting on dense boards where the
+    #                   builtin router's congestion dominates DRC, but stay on
+    #                   the fast builtin router for simple boards. Both modes
+    #                   only honour freerouting when the jar + JDK are actually
+    #                   present; otherwise they fall back to builtin so a design
+    #                   never silently produces an unrouted board and CI without
+    #                   the jar stays deterministic.
+    def _fr_available() -> bool:
+        try:
+            from daokicad import route as _fr
+            return _fr.available()
+        except Exception:
+            return False
+
+    use_fr = _resolve_route_engine(
+        spec.route_engine, total_demand, layers, result.parts, _fr_available)
 
     # Differential pairs (USB/HDMI/LVDS/Ethernet …) detected by net-name
     # convention are routed first as coupled, length-matched parallel traces,

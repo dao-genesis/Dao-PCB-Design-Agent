@@ -76,8 +76,13 @@ class ExportEngine:
             devnull = os.open(os.devnull, os.O_WRONLY)
             os.dup2(devnull, 2)
             try:
-                plot_ctrl.OpenPlotfile(suffix, pcbnew.PLOT_FORMAT_GERBER, suffix)
+                # SetLayer must precede OpenPlotfile: with Protel extensions on,
+                # KiCad derives each file's extension (.gtl/.gbl/.g1 …) from the
+                # controller's *current* layer at OpenPlotfile time. Opening
+                # first assigns the previous layer's extension, mislabelling
+                # every Gerber by one layer (B_Cu emitted as .gtl, etc.).
                 plot_ctrl.SetLayer(layer_id)
+                plot_ctrl.OpenPlotfile(suffix, pcbnew.PLOT_FORMAT_GERBER, suffix)
                 plot_ctrl.PlotLayer()
                 plot_ctrl.ClosePlot()
             finally:
