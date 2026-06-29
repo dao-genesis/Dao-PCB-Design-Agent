@@ -18,33 +18,75 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+_TOOLS = Path(__file__).resolve().parent.parent / "tools"
+
 _FR_CANDIDATES = [
-    Path(__file__).resolve().parent.parent / "tools" / "freerouting.jar",
+    _TOOLS / "freerouting.jar",
     Path("tools/freerouting.jar"),
 ]
+
+# freerouting 2.x jars are compiled for a recent JRE (2.2.x => Java 25).
+# Running them on an older JVM fails with UnsupportedClassVersionError, so we
+# must actively pick the newest available JDK rather than the first 'java' on
+# PATH (which on Linux is often an older system JRE).
+_JAVA_GLOBS = (
+    # Windows
+    r"C:\Program Files\Eclipse Adoptium\jdk*\bin\java.exe",
+    r"C:\Program Files\Java\*\bin\java.exe",
+    # Linux (distro JVMs, manual tarballs, sdkman)
+    "/usr/lib/jvm/*/bin/java",
+    "/opt/*/bin/java",
+    str(Path.home() / "jdk*/bin/java"),
+    str(Path.home() / ".sdkman/candidates/java/*/bin/java"),
+    # macOS
+    "/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java",
+    # vendored alongside freerouting.jar (see tools/install_freerouting.py)
+    str(_TOOLS / "jdk" / "bin" / "java"),
+)
+
+
+@lru_cache(maxsize=256)
+def _java_major(java: str) -> int:
+    """Return the major version of a java executable (0 if unknown)."""
+    import re
+    try:
+        cp = subprocess.run([java, "-version"], capture_output=True,
+                            text=True, timeout=15)
+    except Exception:
+        return 0
+    out = (cp.stderr or "") + (cp.stdout or "")
+    m = re.search(r'version "?(\d+)(?:\.(\d+))?', out)
+    if not m:
+        return 0
+    major = int(m.group(1))
+    # Legacy "1.8" style → 8
+    if major == 1 and m.group(2):
+        return int(m.group(2))
+    return major
 
 
 @lru_cache(maxsize=1)
 def find_java() -> Optional[str]:
-    # Prefer the newest installed JDK (freerouting 2.x needs Java >= 25),
-    # then fall back to whatever 'java' is on PATH.
+    """Locate the newest JDK. Prefers FREEROUTING_JAVA, else the highest
+    major version discovered across well-known install locations + PATH."""
     import glob
     import os
     env = os.environ.get("FREEROUTING_JAVA")
     if env and Path(env).is_file():
         return env
-    hits: list[str] = []
-    for pat in (r"C:\Program Files\Eclipse Adoptium\jdk*\bin\java.exe",
-                r"C:\Program Files\Java\*\bin\java.exe"):
-        hits += glob.glob(pat)
-    if hits:
-        # sort by the numeric version embedded in the path, newest last
-        def _ver(p: str):
-            import re
-            m = re.search(r"jdk[-_]?(\d+)", p)
-            return int(m.group(1)) if m else 0
-        return sorted(hits, key=_ver)[-1]
-    return shutil.which("java")
+    candidates: list[str] = []
+    for pat in _JAVA_GLOBS:
+        candidates += glob.glob(pat)
+    on_path = shutil.which("java")
+    if on_path:
+        candidates.append(on_path)
+    if not candidates:
+        return None
+    # dedupe preserving order, then pick the highest major version
+    seen: set[str] = set()
+    uniq = [c for c in candidates if not (c in seen or seen.add(c))]
+    best = max(uniq, key=_java_major)
+    return best if _java_major(best) > 0 else (on_path or uniq[0])
 
 
 @lru_cache(maxsize=1)

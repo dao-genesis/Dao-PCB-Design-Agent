@@ -58,12 +58,29 @@
 ## 安装
 
 需要本机已安装 **KiCad 9/10**(提供 `kicad-cli` 与自带 `pcbnew` 的 Python)。
-自动布线另需 **Java ≥ 25** 与 `freerouting.jar`(放在 `tools/` 或用 `FREEROUTING_JAR` 指定)。
 
 ```bash
 pip install -e .
 daokicad status        # 查看探测到的 KiCad 环境
 ```
+
+### 自动布线(freerouting 闭环)
+
+自动布线经 KiCad 原生 Specctra 通道接 **freerouting**(headless),它需要
+`freerouting.jar` + **Java ≥ 25**(2.2.x 为 class 69 字节码)。一键自备(产物落在
+git-ignore 的 `tools/`,不入库):
+
+```bash
+python tools/install_freerouting.py   # 下载 jar;若无 Java≥25 则就地 vendor 一个 Temurin JDK
+python verify_all.py                   # 体检:期望 14/14 板 DRC-clean
+```
+
+`daokicad.route.find_java()` 会自动挑选**最新**的 JDK(扫 `/usr/lib/jvm`、
+`~/jdk*`、sdkman、Adoptium 等),因此装好后无需手动设 `FREEROUTING_JAVA`;
+仍可用 `FREEROUTING_JAVA` / `FREEROUTING_JAR` 显式覆盖。
+
+> 实测(KiCad 9.0.9 + freerouting 2.2.4 + Temurin 25,Linux):14 个 DNA 模板
+> 板全部 1 轮收敛、0 DRC 违规;**未接 freerouting 时回退布线器仅 1/14 干净**。
 
 ## 用法
 
