@@ -244,3 +244,38 @@ class TestDiffPairValidation:
         rep = reports["D"]
         assert rep.routed
         assert rep.length_skew_pct < 1.0
+
+
+class TestSquareMeander:
+    def test_added_length_is_exact(self):
+        """Square meander adds exactly the requested length, any orientation."""
+        import math
+        for (x0, y0, x1, y1, add) in [
+            (0, 0, 20, 0, 8.0), (0, 0, 0, 15, 3.3), (0, 0, 12, 9, 5.0)]:
+            pts = Router._square_meander(x0, y0, x1, y1, add, 1.0, 0.2)
+            poly = sum(math.hypot(pts[i + 1][0] - pts[i][0],
+                                  pts[i + 1][1] - pts[i][1])
+                       for i in range(len(pts) - 1))
+            base = math.hypot(x1 - x0, y1 - y0)
+            assert abs(poly - (base + add)) < 1e-6
+
+
+class TestLengthTuning:
+    def test_tune_matches_group_to_longest(self):
+        """A short net is serpentined up to the group's longest length."""
+        b = _make_board(layers=4, w=70, h=40)
+        b.add_nets("BUS0", "BUS1", "GND")
+        # Two single-segment routes of different length on F_Cu.
+        net0 = b.board.FindNet("BUS0")
+        net1 = b.board.FindNet("BUS1")
+        r = Router(b.board, min_clearance_mm=0.15)
+        r._add_track_seg(5, 10, 25, 10, 0.2, pcbnew.F_Cu, net0)   # 20mm
+        r._add_track_seg(5, 25, 55, 25, 0.2, pcbnew.F_Cu, net1)   # 50mm
+        before = r._net_lengths({"BUS0", "BUS1"})
+        assert abs(before["BUS0"] - 20) < 0.5
+        assert abs(before["BUS1"] - 50) < 0.5
+
+        after = r.tune_length_group(["BUS0", "BUS1"])
+        # Both now match the longest (50mm) within tolerance.
+        assert abs(after["BUS0"] - after["BUS1"]) < 0.2
+        assert abs(after["BUS0"] - 50) < 0.2

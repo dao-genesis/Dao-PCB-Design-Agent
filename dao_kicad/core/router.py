@@ -1050,6 +1050,111 @@ class Router:
                 p_len_mm=pl, n_len_mm=nl, routed=(pl > 0 and nl > 0)))
         return out
 
+    def _net_lengths(self, nets: set[str]) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for track in self.board.GetTracks():
+            if track.GetClass() != "PCB_TRACK":
+                continue
+            n = track.GetNet()
+            name = n.GetNetname() if n else ""
+            if name not in nets:
+                continue
+            s, e = track.GetStart(), track.GetEnd()
+            out[name] = out.get(name, 0.0) + math.hypot(
+                pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+        return out
+
+    def tune_length_group(
+        self, nets: list[str], target_len_mm: Optional[float] = None,
+        amplitude_mm: float = 1.0, tolerance_mm: float = 0.1,
+    ) -> dict[str, float]:
+        """Equalize routed length across a group of nets (opt-in).
+
+        For each net shorter than the group's longest (or an explicit
+        ``target_len_mm``), the net's longest straight track is replaced with a
+        square-wave serpentine that adds exactly the length deficit: ``k``
+        perpendicular excursions of amplitude ``A`` add ``2*A*k`` (the along-
+        baseline travel is preserved), so the added length is exact by
+        construction. Returns ``{net: final_length_mm}``.
+
+        Read-only of any default path — :func:`auto_design` never calls this, so
+        it cannot move the DRC benchmarks. It is the natural follow-on to
+        :meth:`validate_diff_pairs`: that *measures* skew, this *removes* it for
+        a matched bus/group.
+        """
+        want = set(nets)
+        lengths = self._net_lengths(want)
+        target = target_len_mm if target_len_mm is not None else max(
+            lengths.values(), default=0.0)
+
+        for net in nets:
+            cur = lengths.get(net, 0.0)
+            delta = target - cur
+            if delta <= tolerance_mm or cur <= 0:
+                continue
+            longest = None
+            for track in self.board.GetTracks():
+                if track.GetClass() != "PCB_TRACK":
+                    continue
+                tn = track.GetNet()
+                if not tn or tn.GetNetname() != net:
+                    continue
+                s, e = track.GetStart(), track.GetEnd()
+                ln = math.hypot(pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+                if longest is None or ln > longest[0]:
+                    longest = (ln, track)
+            if longest is None:
+                continue
+            _, track = longest
+            s, e = track.GetStart(), track.GetEnd()
+            x0, y0 = pcbnew.ToMM(s.x), pcbnew.ToMM(s.y)
+            x1, y1 = pcbnew.ToMM(e.x), pcbnew.ToMM(e.y)
+            width_mm = pcbnew.ToMM(track.GetWidth())
+            layer = track.GetLayer()
+            net_obj = track.GetNet()
+            pts = self._square_meander(
+                x0, y0, x1, y1, delta, amplitude_mm, width_mm)
+            self.board.Remove(track)
+            for i in range(len(pts) - 1):
+                self._add_track_seg(pts[i][0], pts[i][1], pts[i + 1][0],
+                                    pts[i + 1][1], width_mm, layer, net_obj)
+
+        return self._net_lengths(want)
+
+    @staticmethod
+    def _square_meander(x0, y0, x1, y1, add_mm, amplitude_mm, width_mm):
+        """Square-wave detour from (x0,y0)->(x1,y1) that adds ``add_mm`` length.
+
+        ``k`` bumps each add ``2*A`` (two perpendicular legs); amplitude is
+        recomputed to ``add_mm/(2k)`` so the total is exact. Bumps alternate
+        sides and are spaced by their own width so they never overlap.
+        """
+        baseline = math.hypot(x1 - x0, y1 - y0)
+        if baseline <= 0 or add_mm <= 0:
+            return [(x0, y0), (x1, y1)]
+        ux, uy = (x1 - x0) / baseline, (y1 - y0) / baseline
+        nx, ny = -uy, ux  # perpendicular unit
+        k = max(1, round(add_mm / (2.0 * amplitude_mm)))
+        amp = add_mm / (2.0 * k)  # exact added length = 2*amp*k = add_mm
+        bump_w = max(2.0 * width_mm, baseline / (k + 1))
+        if k * bump_w > baseline:  # keep bumps inside the baseline
+            bump_w = baseline / k
+        span = k * bump_w
+        start = (baseline - span) / 2.0
+
+        def at(dist, off):
+            return (x0 + ux * dist + nx * off, y0 + uy * dist + ny * off)
+
+        pts = [(x0, y0), at(start, 0.0)]
+        for i in range(k):
+            side = amp if i % 2 == 0 else -amp
+            p = start + i * bump_w
+            pts.append(at(p, side))
+            pts.append(at(p + bump_w, side))
+            pts.append(at(p + bump_w, 0.0))
+        pts.append((x1, y1))
+        return pts
+
     def export_dsn(self, output_path: str | Path) -> bool:
         """Export board to Specctra DSN format for external routing.
 
