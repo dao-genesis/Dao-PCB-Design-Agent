@@ -1,19 +1,19 @@
 """
-PCB Design Wisdom — Distilled from 100 Practice Boards
+PCB Design Wisdom — Distilled from 150 Practice Boards
 
 为学者日益，闻道者日损。损之又损，以至于无为，无为而无不为。
 
 This module captures the essential patterns discovered through
-100 board designs spanning every category of PCB:
+150 board designs spanning every category of PCB:
 
-  Power (PSU, BMS, BLDC, MPPT)
-  Digital (MCU, FPGA, Server BMC)
-  Mixed-Signal (ADC, DAC, Audio)
-  RF (LoRa, Radar, SDR, GPS)
-  High-Speed (DDR3/4, PCIe, USB, Ethernet)
-  Industrial (PLC, CAN, RS-485, LIN)
-  Wearable (Smartwatch, ultra-compact)
-  Automotive (LIN, CAN-FD)
+  Power (PSU, BMS, BLDC, MPPT, VFD, PoE, Solar, Qi, TEC, EV-BMS)
+  Digital (MCU, FPGA, Server BMC, RISC-V SoC, Drone ESC)
+  Mixed-Signal (ADC, DAC, Audio, ECG, Stethoscope, LiDAR, Ultrasonic)
+  RF (LoRa, Radar, SDR, GPS, UWB, NFC, Satellite, BLE)
+  High-Speed (DDR3/4, PCIe, USB3, MIPI, Machine Vision, MEGA-3)
+  Industrial (PLC, CAN, RS-485, DALI, Smart Meter, Protocol Translator)
+  Wearable (Smartwatch, Pulse Oximeter, IMU, Flex Band)
+  Automotive (LIN, CAN-FD, Gateway, Robot Joint Controller)
 
 Every rule below was EARNED through a specific practice failure,
 not assumed from textbooks. This is living wisdom, not dead knowledge.
@@ -66,12 +66,12 @@ LAYER_RULES = {
 @dataclass
 class DrcScalingLaw:
     """DRC error count scales with these factors."""
-    # From 100 boards: errors correlate with component density, not area
+    # From 150 boards: errors correlate with component density, not area
     # E ≈ k * parts * density_factor * category_factor
 
     # Density factor: errors per mm² of occupied area
-    # Measured from P1-P100:
-    density_k: float = 150.0  # base scaling constant
+    # Measured from P1-P150:
+    density_k: float = 140.0  # refined from 150.0 with more data
 
     # Category multipliers (from practice observations)
     category_factors: dict = None
@@ -79,13 +79,15 @@ class DrcScalingLaw:
     def __post_init__(self):
         if self.category_factors is None:
             self.category_factors = {
-                "power": 2.5,       # P64 BLDC: 689E/35p, wide traces conflict
-                "rf": 1.8,          # P93 Radar: 142E/28p, tight spacing
-                "high_speed": 1.5,  # P91 FPGA: 230E/40p, fine pitch BGA
-                "mixed_signal": 1.3,  # P81 ADC: 154E/18p, analog isolation
-                "digital": 1.0,     # P80 FPGA: 229E/31p, baseline
-                "industrial": 0.8,  # P94 PLC: 189E/40p, relaxed rules
-                "simple": 0.5,      # P79 TC: 27E/11p, easy boards
+                "power": 2.5,       # P64 BLDC, P107 PSU, P147 VFD: wide traces conflict
+                "rf": 1.8,          # P93 Radar, P132 UWB, P146 SDR: tight spacing
+                "high_speed": 1.5,  # P91 FPGA, P121 RISC-V, P150 MEGA-3: BGA+DDR
+                "mixed_signal": 1.3,  # P81 ADC, P128 Sci-ADC, P142 ECG
+                "digital": 1.0,     # P80 FPGA: baseline
+                "industrial": 0.8,  # P94 PLC, P145 PLC, P136 CNC: relaxed
+                "wearable": 4.0,    # P106 wearable, P123 SpO2: extreme density
+                "automotive": 1.2,  # P108 GW, P122 Robot: moderate
+                "simple": 0.5,      # P79 TC, P143 DALI: easy boards
             }
 
     def estimate_errors(self, parts: int, board_area_mm2: float,
