@@ -18,6 +18,150 @@ SEVERITY_WARNING = "warning"
 SEVERITY_INFO    = "info"
 
 
+def _pad_abs(fp_pos: Any, fp_rot: float, pad: Any) -> Tuple[float, float]:
+    """焊盘绝对坐标 = 封装原点 + (本地偏移按封装朝向旋转)。
+
+    KiCad 朝向为顺时针 (Y 向下): x'=lx·cosθ+ly·sinθ, y'=-lx·sinθ+ly·cosθ。
+    旋转封装上的焊盘若不做此变换, 绝对坐标会错位, 制造大量 DRC 假阳。
+    """
+    rad = math.radians(fp_rot or 0.0)
+    c, s = math.cos(rad), math.sin(rad)
+    lx, ly = pad.position.x, pad.position.y
+    return (fp_pos.x + (lx * c + ly * s),
+            fp_pos.y + (-lx * s + ly * c))
+
+
+def _pad_extent(fp_rot: float, pad: Any) -> Tuple[float, float]:
+    """焊盘有效 AABB 半轴用的宽高 (封装+焊盘合成朝向接近 90/270 时宽高互换)。"""
+    ang = ((fp_rot or 0.0) + (getattr(pad, "rotation", 0.0) or 0.0)) % 180.0
+    w, h = pad.width, pad.height
+    if 45.0 <= ang < 135.0:
+        w, h = h, w
+    return w, h
+
+
+def _pad_cu_layers(pad: Any) -> set:
+    """焊盘所在的铜层集合; '*.Cu' (通孔) 记为通配 '*'。未知时返回空集。
+
+    注意: 只有 '*.Cu' 才是全铜层通配; '*.Mask'/'*.Paste' 等非铜通配不计入。
+    """
+    out: set = set()
+    try:
+        layers = pad.layers or []
+    except Exception:
+        return out
+    for l in layers:
+        ls = str(l)
+        if ls == "*.Cu":
+            return {"*"}
+        if ls.endswith(".Cu"):
+            out.add(ls)
+    return out
+
+
+def _pad_is_copper(pad: Any) -> bool:
+    """该焊盘是否参与铜层 DRC。
+
+    仅含 paste/mask 的"钢网开孔"(如晶振 Y1 的 num='' 焊盘, layers 只有 *.Paste)
+    无铜、无网络, 物理上不可能短路/重叠——KiCad 不对其做铜层间距检查, 本系统
+    若纳入则产生假阳 (逆向解构 stickhub 暴露)。判定: 有铜层即铜; 显式声明了
+    层但无铜层 = 非铜 (钢网/阻焊开孔); 完全无层信息时按类型回退 (NPTH 视为非铜)。
+    """
+    if _pad_cu_layers(pad):
+        return True
+    try:
+        layers = list(pad.layers or [])
+    except Exception:
+        layers = []
+    if layers:                       # 显式声明了层却无铜层 → paste/mask 开孔
+        return False
+    return str(getattr(pad, "type", "smd")) != "np_thru_hole"
+
+
+def _pads_share_copper(a: Any, b: Any) -> bool:
+    """两焊盘是否共享铜层 (不共享则物理上不可能短路, 如一面 F.Cu 一面 B.Cu)。
+
+    仅当某一焊盘"显式有层信息但无任何铜层"时不应进入本判定 (调用方已用
+    _pad_is_copper 滤除)。两边铜层集均非空时按交集判定; 任一为通孔通配 '*'
+    则视为可能共层; 信息缺失 (空集) 时保守判 True。
+    """
+    A, B = _pad_cu_layers(a), _pad_cu_layers(b)
+    if not A or not B:
+        return True
+    if "*" in A or "*" in B:
+        return True
+    return bool(A & B)
+
+
+def _bbox_grid_pairs(items: List[Any], bbox_of: Any,
+                     cell: float = 10.0) -> Any:
+    """均匀网格空间索引: 仅产出"包围盒可能交叠"的候选对, 把 O(n²) 降到近 O(n)。
+
+    每个 item 按其 bbox 跨越的所有网格单元登记; 同单元内两两为候选 (调用方仍
+    精确复核 bbox.overlaps, 故结果与暴力两两完全一致)。这是逆向解构大板
+    (如 jetson 数千封装) 暴露的可伸缩性缺陷的根因修复。
+    """
+    from collections import defaultdict
+    if cell <= 0:
+        cell = 10.0
+    buckets: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+    boxes = []
+    for idx, it in enumerate(items):
+        bb = bbox_of(it)
+        boxes.append(bb)
+        if bb is None or bb.empty:
+            continue
+        cx0, cx1 = int(bb.x_min // cell), int(bb.x_max // cell)
+        cy0, cy1 = int(bb.y_min // cell), int(bb.y_max // cell)
+        for cx in range(cx0, cx1 + 1):
+            for cy in range(cy0, cy1 + 1):
+                buckets[(cx, cy)].append(idx)
+    seen: set = set()
+    for cell_items in buckets.values():
+        m = len(cell_items)
+        if m < 2:
+            continue
+        for a in range(m):
+            ia = cell_items[a]
+            for b in range(a + 1, m):
+                ib = cell_items[b]
+                key = (ia, ib) if ia < ib else (ib, ia)
+                if key in seen:
+                    continue
+                seen.add(key)
+                yield items[key[0]], items[key[1]]
+
+
+def _point_grid_pairs(items: List[Any], xy_of: Any, reach: float) -> Any:
+    """点集邻域网格: 仅产出相互距离 < reach 的候选对 (3×3 邻域), O(n) 近似。
+
+    用于钻孔间距等"点-点"规则; cell = reach, 任何相距 < reach 的两点必落入
+    同一或相邻单元。调用方仍做精确距离判定。
+    """
+    from collections import defaultdict
+    if reach <= 0:
+        reach = 1.0
+    grid: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+    for idx, it in enumerate(items):
+        x, y = xy_of(it)
+        grid[(int(x // reach), int(y // reach))].append(idx)
+    seen: set = set()
+    for (cx, cy), idxs in grid.items():
+        neigh: List[int] = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                neigh.extend(grid.get((cx + dx, cy + dy), ()))
+        for ia in idxs:
+            for ib in neigh:
+                if ia == ib:
+                    continue
+                key = (ia, ib) if ia < ib else (ib, ia)
+                if key in seen:
+                    continue
+                seen.add(key)
+                yield items[key[0]], items[key[1]]
+
+
 @dataclass
 class DRCViolation:
     """单条违规."""
@@ -127,9 +271,7 @@ class DRCEngine:
         viols: List[DRCViolation] = []
         fps = list(self.board.footprints())
         tol = self.pad_overlap_tol
-        for i in range(len(fps)):
-            for j in range(i + 1, len(fps)):
-                fpi, fpj = fps[i], fps[j]
+        for fpi, fpj in _bbox_grid_pairs(fps, lambda fp: fp.bbox):
                 bbi, bbj = fpi.bbox, fpj.bbox
                 if bbi.empty or bbj.empty:
                     continue
@@ -137,13 +279,26 @@ class DRCEngine:
                     continue
                 pos_i, pos_j = fpi.position, fpj.position
                 for pi in fpi.pads():
+                    if not _pad_is_copper(pi):
+                        continue
                     for pj in fpj.pads():
-                        pix = pos_i.x + pi.position.x
-                        piy = pos_i.y + pi.position.y
-                        pjx = pos_j.x + pj.position.x
-                        pjy = pos_j.y + pj.position.y
-                        dx = abs(pix - pjx) - (pi.width + pj.width) / 2.0
-                        dy = abs(piy - pjy) - (pi.height + pj.height) / 2.0
+                        # 钢网/阻焊开孔 (无铜焊盘) 不参与铜层重叠判定。
+                        if not _pad_is_copper(pj):
+                            continue
+                        # 同一真实网络的焊盘交叠 = 有意的连接 (非短路),
+                        # 与 KiCad 一致予以豁免; net 0 (未分配) 仍判重叠,
+                        # 以驱动布局闭环把占位焊盘推开。
+                        if pi.net_number == pj.net_number and pi.net_number != 0:
+                            continue
+                        # 不共享铜层的焊盘 (异面 SMD) 物理上不可能短路。
+                        if not _pads_share_copper(pi, pj):
+                            continue
+                        pix, piy = _pad_abs(pos_i, fpi.rotation, pi)
+                        pjx, pjy = _pad_abs(pos_j, fpj.rotation, pj)
+                        wi, hi = _pad_extent(fpi.rotation, pi)
+                        wj, hj = _pad_extent(fpj.rotation, pj)
+                        dx = abs(pix - pjx) - (wi + wj) / 2.0
+                        dy = abs(piy - pjy) - (hi + hj) / 2.0
                         if dx < tol and dy < tol:
                             viols.append(DRCViolation(
                                 rule="R001", severity=SEVERITY_ERROR,
@@ -210,21 +365,26 @@ class DRCEngine:
         """检测不同网络的焊盘之间的距离过近 (短路嫌疑)."""
         viols: List[DRCViolation] = []
         fps = list(self.board.footprints())
-        for i in range(len(fps)):
-            for j in range(i + 1, len(fps)):
-                fpi, fpj = fps[i], fps[j]
+        for fpi, fpj in _bbox_grid_pairs(fps, lambda fp: fp.bbox):
                 bbi, bbj = fpi.bbox, fpj.bbox
                 if bbi.empty or bbj.empty or not bbi.overlaps(bbj):
                     continue
                 pos_i, pos_j = fpi.position, fpj.position
                 for pi in fpi.pads():
+                    if not _pad_is_copper(pi):
+                        continue
                     for pj in fpj.pads():
                         if pi.net_number == pj.net_number:
                             continue
-                        pix = pos_i.x + pi.position.x
-                        piy = pos_i.y + pi.position.y
-                        pjx = pos_j.x + pj.position.x
-                        pjy = pos_j.y + pj.position.y
+                        # 钢网/阻焊开孔无铜, 且异面焊盘 (F.Cu vs B.Cu) 不可能
+                        # 短路——必须共享铜层才检间距 (逆向解构 stickhub 暴露:
+                        # 原 R005 漏判层, 把正反面焊盘误报为过近)。
+                        if not _pad_is_copper(pj):
+                            continue
+                        if not _pads_share_copper(pi, pj):
+                            continue
+                        pix, piy = _pad_abs(pos_i, fpi.rotation, pi)
+                        pjx, pjy = _pad_abs(pos_j, fpj.rotation, pj)
                         dist = math.hypot(pix - pjx, piy - pjy)
                         min_clear = (pi.width + pj.width) / 4.0
                         if dist < min_clear:
@@ -246,12 +406,12 @@ class DRCEngine:
             pos = fp.position
             for pad in fp.pads():
                 if pad.drill > 0:
-                    pp = pad.position
-                    drills.append((pos.x + pp.x, pos.y + pp.y, pad.drill, fp.ref))
-        for i in range(len(drills)):
-            for j in range(i + 1, len(drills)):
-                xi, yi, di, ri = drills[i]
-                xj, yj, dj, rj = drills[j]
+                    ax, ay = _pad_abs(pos, fp.rotation, pad)
+                    drills.append((ax, ay, pad.drill, fp.ref))
+        _maxd = max((t[2] for t in drills), default=0.0)
+        _reach = _maxd + self.min_drill_spacing + 0.001
+        for (xi, yi, di, ri), (xj, yj, dj, rj) in _point_grid_pairs(
+                drills, lambda t: (t[0], t[1]), _reach):
                 center_dist = math.hypot(xi - xj, yi - yj)
                 edge_dist = center_dist - (di + dj) / 2.0
                 if edge_dist < self.min_drill_spacing:
@@ -312,8 +472,7 @@ class DRCEngine:
         for fp in self.board.footprints():
             pos = fp.position
             for pad in fp.pads():
-                px = pos.x + pad.position.x
-                py = pos.y + pad.position.y
+                px, py = _pad_abs(pos, fp.rotation, pad)
                 for sx, sy in silk_items:
                     if abs(px - sx) < pad.width / 2 and abs(py - sy) < pad.height / 2:
                         viols.append(DRCViolation(

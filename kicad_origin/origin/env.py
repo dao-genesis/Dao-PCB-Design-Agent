@@ -42,7 +42,10 @@ _CANDIDATES_CLI: List[Path] = [
 # ─────────────────────────────────────────────────────────────────────
 @lru_cache(maxsize=1)
 def _find_root() -> Optional[Path]:
-    """搜索 KiCad 根目录. 优先 env, 然后候选."""
+    """搜索 KiCad 根目录. 优先 env, 然后候选, 再按版本号自动发现, 最后从 PATH 反推.
+
+    "道生一" — 不写死版本号: 任何已装版本 (8/9/10/未来) 皆自动找到。
+    """
     env = os.environ.get("KICAD_ROOT")
     if env and Path(env).exists():
         return Path(env)
@@ -51,6 +54,21 @@ def _find_root() -> Optional[Path]:
             return p
         if p.exists() and (p / "share" / "kicad").exists():
             return p
+    # 按版本号自动发现 (取最高版本), 免去写死 10.0/11.0/...
+    for base in (Path(r"C:\Program Files\KiCad"),
+                 Path(r"C:\Program Files (x86)\KiCad")):
+        if base.exists():
+            subs = sorted((d for d in base.iterdir()
+                           if d.is_dir() and (d / "bin").exists()),
+                          key=lambda d: d.name, reverse=True)
+            if subs:
+                return subs[0]
+    # 从 PATH 上的 kicad-cli 反推根目录 (bin/kicad-cli -> root)
+    w = shutil.which("kicad-cli")
+    if w:
+        root = Path(w).resolve().parent.parent
+        if (root / "bin").exists() or (root / "share").exists():
+            return root
     return None
 
 
@@ -172,3 +190,35 @@ def get_3d_dir() -> Optional[Path]:
         if d.exists():
             return d
     return None
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 镜像缓存子目录 (本地库镜像, 与已装 KiCad 解耦)
+# ─────────────────────────────────────────────────────────────────────
+def get_mirror_symbols() -> Path:
+    """Mirror cache directory for symbol libraries."""
+    return get_mirror_root() / "symbols"
+
+
+def get_mirror_footprints() -> Path:
+    """Mirror cache directory for footprint libraries."""
+    return get_mirror_root() / "footprints"
+
+
+def get_mirror_3dmodels() -> Path:
+    """Mirror cache directory for 3D models."""
+    return get_mirror_root() / "3dmodels"
+
+
+def get_mirror_templates() -> Path:
+    """Mirror cache directory for project templates."""
+    return get_mirror_root() / "templates"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 模块级常量 (库目录, 供 lib.index / lib.mirror 直接导入)
+# "道生一" — 探测一次, 全局可用; 未装 KiCad 时为 None, 调用方需判空.
+# ─────────────────────────────────────────────────────────────────────
+KICAD_FP_DIR: Optional[Path] = get_fp_dir()
+KICAD_SYM_DIR: Optional[Path] = get_sym_dir()
+KICAD_3D_DIR: Optional[Path] = get_3d_dir()

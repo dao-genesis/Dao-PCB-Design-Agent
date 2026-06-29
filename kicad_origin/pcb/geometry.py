@@ -1,11 +1,26 @@
 """
-geometry — 几何基元 (Point, BBox)
+geometry — 几何基元 (Point, BBox, rotate_point, distance)
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
 from typing import Tuple
+
+
+def distance(a: "Point", b: "Point") -> float:
+    """Euclidean distance between two points (mm)."""
+    return math.hypot(a.x - b.x, a.y - b.y)
+
+
+def rotate_point(p: "Point", angle_deg: float,
+                 origin: "Point | None" = None) -> "Point":
+    """Rotate point `p` by `angle_deg` (CCW) about `origin` (default 0,0)."""
+    ox, oy = (origin.x, origin.y) if origin is not None else (0.0, 0.0)
+    rad = math.radians(angle_deg)
+    c, s = math.cos(rad), math.sin(rad)
+    dx, dy = p.x - ox, p.y - oy
+    return Point(ox + dx * c - dy * s, oy + dx * s + dy * c)
 
 
 @dataclass

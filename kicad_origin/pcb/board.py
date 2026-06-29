@@ -164,6 +164,15 @@ class Board:
                 names.append(str(item[1]))
         return names
 
+    def bbox(self) -> BBox:
+        """所有 footprint 的并集包围盒 (mm). 无 footprint 时返回空 BBox。"""
+        box = BBox()
+        for fp in self.footprints():
+            fb = fp.bbox
+            if not fb.empty:
+                box = box.union(fb)
+        return box
+
     # ── Board outline ─────────────────────────────────────────────
     def board_outline(self) -> Optional[BBox]:
         """Edge.Cuts 上的 gr_rect (若有), 通常代表板子物理边界."""
