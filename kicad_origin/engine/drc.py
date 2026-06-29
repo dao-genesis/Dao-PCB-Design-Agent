@@ -483,3 +483,12 @@ class DRCEngine:
                         ))
                         break
         return viols
+
+
+def run_drc(board: "Board", **kwargs) -> DRCReport:
+    """便利包装: 构造 DRCEngine 跑全规则, 返回 DRCReport。
+
+    历来上层 (dao 门面/示例) 调 ``run_drc(board)``; 5 层重构后引擎以 ``DRCEngine``
+    类暴露, 此处一处归一恢复函数式入口, 既不改散落各处的调用面, 又不另起炉灶。
+    """
+    return DRCEngine(board, **kwargs).run()

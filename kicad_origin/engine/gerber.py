@@ -177,3 +177,15 @@ def generate_gerber(board: "Board", output_dir: str, *,
 
     except Exception as e:
         return GerberResult(ok=False, error=str(e), elapsed=time.time() - t0)
+
+
+def write_gerber(board: "Board", output_dir: str, **kwargs) -> List[str]:
+    """便利包装: 出 Gerber 并返回文件路径列表 (历来上层调 ``write_gerber``)。
+
+    5 层重构后引擎主入口为 ``generate_gerber`` (返回 ``GerberResult``); 此处薄封一层
+    返回 ``.files``, 与旧调用面对齐, 失败则抛出以便上层感知。
+    """
+    res = generate_gerber(board, output_dir, **kwargs)
+    if not res.ok:
+        raise RuntimeError(res.error or "generate_gerber failed")
+    return res.files

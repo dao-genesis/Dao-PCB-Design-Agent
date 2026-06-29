@@ -1,9 +1,9 @@
 """engine — DRC/Gerber/Excellon/BOM/Specctra/Netlist/Visualize (Layer 3)"""
 from kicad_origin.engine.drc import (
-    DRCEngine, DRCReport, DRCViolation,
+    DRCEngine, DRCReport, DRCViolation, run_drc,
     SEVERITY_ERROR, SEVERITY_WARNING, SEVERITY_INFO,
 )
-from kicad_origin.engine.gerber import generate_gerber, GerberResult
+from kicad_origin.engine.gerber import generate_gerber, write_gerber, GerberResult
 from kicad_origin.engine.excellon import write_excellon, ExcellonWriter
 from kicad_origin.engine.bom import generate_bom, save_bom, bom_to_csv, BOMResult
 from kicad_origin.engine.specctra import generate_dsn, run_freerouting, DSNResult
@@ -16,9 +16,9 @@ from kicad_origin.engine.kicad_cli import (
 )
 
 __all__ = [
-    "DRCEngine", "DRCReport", "DRCViolation",
+    "DRCEngine", "DRCReport", "DRCViolation", "run_drc",
     "SEVERITY_ERROR", "SEVERITY_WARNING", "SEVERITY_INFO",
-    "generate_gerber", "GerberResult",
+    "generate_gerber", "write_gerber", "GerberResult",
     "write_excellon", "ExcellonWriter",
     "generate_bom", "save_bom", "bom_to_csv", "BOMResult",
     "generate_dsn", "run_freerouting", "DSNResult",
