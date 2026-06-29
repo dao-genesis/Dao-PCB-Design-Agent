@@ -279,3 +279,30 @@ class TestLengthTuning:
         # Both now match the longest (50mm) within tolerance.
         assert abs(after["BUS0"] - after["BUS1"]) < 0.2
         assert abs(after["BUS0"] - 50) < 0.2
+
+    def test_auto_design_opt_in_group(self, tmp_path):
+        """auto_design equalizes a requested group end-to-end (opt-in)."""
+        from dao_kicad.core.auto_designer import (
+            auto_design, DesignSpec, ComponentSpec, NetAssignment)
+        from dao_kicad.core.netclass import BoardCategory
+        from dao_kicad.core.router import Router
+        comps = [
+            ComponentSpec("Connector_PinHeader_2.54mm",
+                          "PinHeader_1x04_P2.54mm_Vertical", "J1", x=12, y=20),
+            ComponentSpec("Package_QFP", "LQFP-48_7x7mm_P0.5mm", "U1",
+                          x=48, y=22),
+        ]
+        asg = [NetAssignment("J1", str(i + 1), f"D{i}") for i in range(3)]
+        asg.append(NetAssignment("J1", "4", "GND"))
+        asg += [NetAssignment("U1", str(i + 1), f"D{i}") for i in range(3)]
+        asg.append(NetAssignment("U1", "4", "GND"))
+        spec = DesignSpec(name="bus_match", category=BoardCategory.HIGH_SPEED,
+                          nets=["D0", "D1", "D2", "GND"], components=comps,
+                          assignments=asg, width_mm=70, height_mm=45, layers=4,
+                          match_length_groups=[["D0", "D1", "D2"]])
+        res = auto_design(spec, tmp_path / "out")
+        assert res.tuned_groups == 1
+        lens = Router(__import__("pcbnew").LoadBoard(str(res.board_path)),
+                      min_clearance_mm=0.15)._net_lengths({"D0", "D1", "D2"})
+        assert len(lens) == 3
+        assert max(lens.values()) - min(lens.values()) < 0.3

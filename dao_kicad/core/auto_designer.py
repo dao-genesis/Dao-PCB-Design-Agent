@@ -65,6 +65,10 @@ class DesignSpec:
     layers: Optional[int] = None
     min_clearance_mm: Optional[float] = None
     min_track_mm: Optional[float] = None
+    # Opt-in high-speed length matching: each inner list is a group of net
+    # names whose routed lengths should be equalized (matched bus / byte lane).
+    # Empty by default, so the default design/DRC path is unchanged.
+    match_length_groups: list[list[str]] = field(default_factory=list)
 
 
 @dataclass
@@ -86,6 +90,7 @@ class DesignResult:
     density: float = 0.0
     diff_pairs: int = 0
     diff_pair_max_skew_pct: float = 0.0
+    tuned_groups: int = 0
 
     def summary(self) -> str:
         dp = (f", {self.diff_pairs}dp@{self.diff_pair_max_skew_pct:.1f}%skew"
@@ -285,6 +290,14 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
     result.routes_total = total_demand or r.total
     result.routes_completed = total_demand - r.failed - dp_failed
     result.vias = r.vias_added
+
+    # Step 6b (opt-in): equalize routed length within each requested group.
+    # Empty by default, so this is a no-op on the standard design/DRC path.
+    for grp in spec.match_length_groups:
+        present = [n for n in grp if n not in skip]
+        if len(present) >= 2:
+            Router(b.board, min_clearance_mm=cl).tune_length_group(present)
+            result.tuned_groups += 1
 
     # Step 7: Pour planes and stitch. GND owns the outer layers and any inner
     # layer not assigned to another rail; each extra power rail owns one inner
