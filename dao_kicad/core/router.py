@@ -433,19 +433,23 @@ class Router:
         return cost
 
     def _clear_via_spot(self, x: float, y: float, net_name: str,
-                        via_mm: float):
-        """Find a via location near (x, y) clear of foreign copper on both
-        outer layers, trying the centre then small offsets — so layer-transition
-        vias stop landing on a neighbour's pad/hole (the hole_clearance class)."""
+                        via_mm: float, extra_layer: Optional[int] = None):
+        """Find a via location near (x, y) clear of foreign copper, trying the
+        centre then small offsets — so layer-transition vias stop landing on a
+        neighbour's pad/hole (the hole_clearance class). A through via spans
+        every layer, so we check the primary outer layer, the back layer, and
+        (when routing onto an inner layer) that inner layer's copper too."""
         if not self._spatial:
             return (x, y)
+        check_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
+        if extra_layer is not None and extra_layer not in check_layers:
+            check_layers.append(extra_layer)
         for ox, oy in ((0, 0), (0.3, 0.3), (-0.3, 0.3), (0.3, -0.3),
                        (-0.3, -0.3), (0.5, 0), (-0.5, 0), (0, 0.5), (0, -0.5)):
             vx, vy = x + ox, y + oy
-            if (self._spatial.check_clear(vx, vy, vx, vy, via_mm, net_name,
-                                          self.clearance_mm, pcbnew.F_Cu)
-                and self._spatial.check_clear(vx, vy, vx, vy, via_mm, net_name,
-                                              self.clearance_mm, pcbnew.B_Cu)):
+            if all(self._spatial.check_clear(vx, vy, vx, vy, via_mm, net_name,
+                                             self.clearance_mm, ly)
+                   for ly in check_layers):
                 return (vx, vy)
         return (x, y)
 
@@ -635,6 +639,8 @@ class Router:
         skip_nets: Optional[set[str]] = None,
         via_size_mm: float = 0.45,
         via_drill_mm: float = 0.2,
+        signal_layers: Optional[list[int]] = None,
+        via_penalty: float = 2,
     ) -> RouteResult:
         """Route on front first, overflow to back with via transitions.
 
@@ -650,6 +656,15 @@ class Router:
             power_nets = {"GND", "VCC", "3V3", "5V", "VBUS", "3.3V", "5.0V"}
         if net_widths is None:
             net_widths = {}
+        # Signals may route on any of these copper layers. The first is the
+        # "primary" layer where the SMD pads live (F_Cu) — routing there is
+        # via-free; every other layer is reached through two transition vias.
+        # Defaulting to [F_Cu, B_Cu] preserves the classic front/overflow-back
+        # behaviour; passing inner layers too turns this into a true N-layer
+        # autorouter that spreads congested buses across free inner copper.
+        if signal_layers is None:
+            signal_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
+        primary_layer = signal_layers[0]
 
         pairs = self.get_unrouted()
         if skip_nets:
@@ -689,71 +704,58 @@ class Router:
                 result.failed += 1
                 continue
 
-            # Try front layer first
+            # Candidate waypoint sets — geometry is layer-independent, so the
+            # same L/Z/approach paths are scored on every routable layer.
             dx = abs(pair.x_b - pair.x_a)
             dy = abs(pair.y_b - pair.y_a)
             horiz_first = dx >= dy
 
-            front_paths = [
+            cand_paths = [
                 self._gen_L_path(pair, horiz_first),
                 self._gen_L_path(pair, not horiz_first),
             ]
             for off in [1.0, -1.0, 2.0, -2.0]:
-                front_paths.append(self._gen_Z_path(pair, horiz_first, off))
-            front_paths.extend(self._gen_approach_paths(pair))
+                cand_paths.append(self._gen_Z_path(pair, horiz_first, off))
+            cand_paths.extend(self._gen_approach_paths(pair))
 
-            # Score every front candidate; a fully-clear (cost 0) path wins
-            # immediately, otherwise remember the least-colliding one.
-            best_front, best_front_cost = None, None
-            for path in front_paths:
-                c = self._path_cost(path, w, pair.net_name, pcbnew.F_Cu)
-                if c == 0:
-                    best_front, best_front_cost = path, 0
+            # Score every candidate on every signal layer and keep the global
+            # minimum of (collision_cost + via_cost). The primary layer is
+            # via-free; any other layer costs ``via_penalty`` (two transition
+            # vias, each a hole_clearance risk in dense copper). A congested
+            # primary layer therefore spills a bus onto a free inner/back layer
+            # only when doing so removes more collisions than the vias add —
+            # never forcing a path that ploughs through other nets when a
+            # cleaner layer exists.
+            best = None  # (total_cost, layer, path)
+            for ly in signal_layers:
+                via_cost = 0 if ly == primary_layer else via_penalty
+                for path in cand_paths:
+                    c = self._path_cost(path, w, pair.net_name, ly) + via_cost
+                    if best is None or c < best[0]:
+                        best = (c, ly, path)
+                    if via_cost == 0 and c == 0:
+                        break  # fully clear on a via-less layer — unbeatable
+                if best is not None and best[0] == 0:
                     break
-                if best_front_cost is None or c < best_front_cost:
-                    best_front, best_front_cost = path, c
 
-            # Do the same on B_Cu (reached via two layer-transition vias).
-            back_paths = [
-                self._gen_L_path(pair, horiz_first),
-                self._gen_L_path(pair, not horiz_first),
-            ]
-            for off in [1.0, -1.0, 2.0, -2.0]:
-                back_paths.append(self._gen_Z_path(pair, horiz_first, off))
-            best_back, best_back_cost = None, None
-            for bp in back_paths:
-                c = self._path_cost(bp, w, pair.net_name, pcbnew.B_Cu)
-                if c == 0:
-                    best_back, best_back_cost = bp, 0
-                    break
-                if best_back_cost is None or c < best_back_cost:
-                    best_back, best_back_cost = bp, c
+            _, chosen_layer, chosen_path = best
 
-            # Prefer the via-less front route. Switching to the back layer
-            # costs two layer-transition vias (each a hole_clearance risk in
-            # dense areas), so only do it when it removes clearly more
-            # collisions than that — never force a path that ploughs through
-            # other nets when a cleaner one exists.
-            via_penalty = 2
-            use_back = best_back_cost is not None and (
-                best_front_cost is None
-                or best_back_cost + via_penalty < best_front_cost)
-
-            if not use_back:
-                path = best_front
+            if chosen_layer == primary_layer:
+                path = chosen_path
                 for i in range(len(path) - 1):
                     self._add_track_seg(
                         path[i][0], path[i][1], path[i+1][0], path[i+1][1],
-                        w, pcbnew.F_Cu, net,
+                        w, primary_layer, net,
                     )
                 result.tracks_added += len(path) - 1
             else:
-                chosen_path = best_back
                 # Place layer-transition vias clear of foreign pads/holes.
                 va_x, va_y = self._clear_via_spot(
-                    pair.x_a, pair.y_a, pair.net_name, via_size_mm)
+                    pair.x_a, pair.y_a, pair.net_name, via_size_mm,
+                    extra_layer=chosen_layer)
                 vb_x, vb_y = self._clear_via_spot(
-                    pair.x_b, pair.y_b, pair.net_name, via_size_mm)
+                    pair.x_b, pair.y_b, pair.net_name, via_size_mm,
+                    extra_layer=chosen_layer)
                 for vx, vy in ((va_x, va_y), (vb_x, vb_y)):
                     via = pcbnew.PCB_VIA(self.board)
                     via.SetPosition(pcbnew.VECTOR2I(
@@ -762,22 +764,22 @@ class Router:
                     via.SetDrill(pcbnew.FromMM(via_drill_mm))
                     via.SetNet(net)
                     self.board.Add(via)
-                    if self._spatial:  # reserve the via on both outer layers
-                        for ly in (pcbnew.F_Cu, pcbnew.B_Cu):
+                    if self._spatial:  # reserve via on primary + chosen layer
+                        for ly in (primary_layer, chosen_layer):
                             self._spatial.mark(vx, vy, vx, vy, via_size_mm,
                                                pair.net_name, ly)
-                # B_Cu body runs between the two vias.
+                # Routed body runs on the chosen layer between the two vias.
                 body = [(va_x, va_y)] + list(chosen_path[1:-1]) + [(vb_x, vb_y)]
                 for i in range(len(body) - 1):
                     self._add_track_seg(
                         body[i][0], body[i][1], body[i+1][0], body[i+1][1],
-                        w, pcbnew.B_Cu, net,
+                        w, chosen_layer, net,
                     )
-                # F_Cu stubs from each pad to its via.
+                # Primary-layer stubs from each pad to its via.
                 self._add_track_seg(pair.x_a, pair.y_a, va_x, va_y,
-                                    w, pcbnew.F_Cu, net)
+                                    w, primary_layer, net)
                 self._add_track_seg(vb_x, vb_y, pair.x_b, pair.y_b,
-                                    w, pcbnew.F_Cu, net)
+                                    w, primary_layer, net)
                 result.tracks_added += len(body) - 1 + 2
                 result.vias_added += 2
 

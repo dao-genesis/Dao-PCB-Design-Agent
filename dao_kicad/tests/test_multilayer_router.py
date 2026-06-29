@@ -1,5 +1,7 @@
 """Tests for multilayer via-transition router."""
 
+import pcbnew
+
 from dao_kicad.core.manipulate import BoardBuilder
 from dao_kicad.core.router import Router, _SpatialIndex
 
@@ -65,6 +67,38 @@ class TestMultilayerRouter:
         assert result.routed == result.total
         # Dense board should produce some vias
         assert result.vias_added >= 0  # may or may not need vias
+
+    def test_routes_onto_inner_signal_layer(self):
+        """An arbitrary inner copper layer can be handed to the router as a
+        routable signal layer; when the primary layer is congested the net
+        spills onto that inner layer with two transition vias."""
+        b = _make_board(layers=4, w=40, h=20)
+        b.add_nets("S0", "BLOCK")
+        b.place("Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical",
+                "J1", 8, 10, value="A")
+        b.place("Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical",
+                "J2", 32, 10, value="B")
+        b.assign_net("J1", "1", "S0")
+        b.assign_net("J2", "1", "S0")
+
+        # Pre-occupy the whole F_Cu corridor with a dense foreign-net wall so
+        # every F_Cu candidate collides; the only clean route is the inner
+        # layer, which the router must discover via the signal_layers list.
+        # These are real board tracks, so route_multilayer seeds them into its
+        # freshly-built spatial index.
+        for x in range(9, 32):
+            b.add_track((x, 2), (x, 18), width_mm=0.3, layer=pcbnew.F_Cu,
+                        net_name="BLOCK")
+
+        r = Router(b.board, min_clearance_mm=0.15)
+        result = r.route_multilayer(
+            width_mm=0.15, power_nets=set(),
+            signal_layers=[pcbnew.F_Cu, pcbnew.In1_Cu], via_penalty=2)
+        assert result.routed == result.total
+        assert result.vias_added == 2
+        inner = [t for t in b.board.GetTracks()
+                 if t.GetClass() == "PCB_TRACK" and t.GetLayer() == pcbnew.In1_Cu]
+        assert inner, "expected at least one track routed on the inner layer"
 
 
 class TestCollisionAwareRouting:
