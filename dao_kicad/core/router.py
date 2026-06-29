@@ -80,7 +80,18 @@ class _SpatialIndex:
         self.cell = cell_mm
         self.cols = max(1, int(math.ceil(width_mm / cell_mm)) + 1)
         self.rows = max(1, int(math.ceil(height_mm / cell_mm)) + 1)
-        self.grid: dict[tuple[int, int], str] = {}
+        # Per-layer occupancy: layer id -> {cell: net_name}. A track only
+        # collides with copper on its own layer, so keeping grids per layer
+        # lets F_Cu and B_Cu route independently (an SMD pad on the front
+        # must not block a trace on the back).
+        self.grids: dict[int, dict[tuple[int, int], str]] = {}
+
+    def _grid(self, layer: int) -> dict[tuple[int, int], str]:
+        g = self.grids.get(layer)
+        if g is None:
+            g = {}
+            self.grids[layer] = g
+        return g
 
     def _cells_for_segment(self, x1: float, y1: float, x2: float, y2: float,
                            half_w: float) -> list[tuple[int, int]]:
@@ -102,19 +113,38 @@ class _SpatialIndex:
         return cells
 
     def mark(self, x1: float, y1: float, x2: float, y2: float,
-             width_mm: float, net_name: str):
-        """Mark cells as occupied by a track segment."""
+             width_mm: float, net_name: str, layer: int = pcbnew.F_Cu):
+        """Mark cells on ``layer`` as occupied by a track segment."""
         hw = width_mm / 2 + 0.1  # include clearance
+        grid = self._grid(layer)
         for cell in self._cells_for_segment(x1, y1, x2, y2, hw):
-            if cell not in self.grid:
-                self.grid[cell] = net_name
+            if cell not in grid:
+                grid[cell] = net_name
+
+    def mark_box(self, cx: float, cy: float, half_mm: float, net_name: str,
+                 layers):
+        """Mark a square region (a pad footprint) on each layer in ``layers``.
+
+        Routes of a DIFFERENT net that pass over these cells are then rejected
+        by check_clear — preventing tracks from crossing other components'
+        pads, the dominant source of ``shorting_items`` DRC errors. SMD pads
+        pass a single layer; through-hole pads pass every copper layer.
+        """
+        cells = self._cells_for_segment(cx, cy, cx, cy, half_mm)
+        for layer in layers:
+            grid = self._grid(layer)
+            for cell in cells:
+                grid.setdefault(cell, net_name)
 
     def check_clear(self, x1: float, y1: float, x2: float, y2: float,
-                    width_mm: float, net_name: str, clearance_mm: float = 0.15) -> bool:
-        """Check if a segment can be routed without violating clearance."""
+                    width_mm: float, net_name: str, clearance_mm: float = 0.15,
+                    layer: int = pcbnew.F_Cu) -> bool:
+        """Check if a segment can be routed on ``layer`` without violations."""
         hw = width_mm / 2 + clearance_mm
+        grid = self._grid(layer)
         for cell in self._cells_for_segment(x1, y1, x2, y2, hw):
-            if cell in self.grid and self.grid[cell] != net_name:
+            occ = grid.get(cell)
+            if occ is not None and occ != net_name:
                 return False
         return True
 
@@ -139,6 +169,42 @@ class Router:
         """Refresh the board's connectivity data."""
         self.board.BuildConnectivity()
         self.conn = self.board.GetConnectivity()
+
+    def _seed_pads(self, clearance_mm: Optional[float] = None):
+        """Mark every pad's footprint into the spatial index under its net.
+
+        WISDOM (shorting_items = #1 DRC error class): the router previously only
+        avoided existing tracks, so Manhattan/Z paths happily crossed straight
+        over other components' pads — each crossing a short. Seeding pads makes
+        ``check_clear`` reject any path that would cross a different net's pad.
+        Same-net pads (including the route's own endpoints) stay routable.
+        """
+        if not self._spatial:
+            return
+        cl = self.clearance_mm if clearance_mm is None else clearance_mm
+        nc_idx = 0
+        for fp in self.board.GetFootprints():
+            for pad in fp.Pads():
+                net = pad.GetNet()
+                nn = net.GetNetname() if (net and net.GetNetname()) else None
+                if nn is None:
+                    # Unconnected pad: unique sentinel so every net is blocked.
+                    nn = f"__NC_{nc_idx}"
+                    nc_idx += 1
+                pos = pad.GetPosition()
+                sz = pad.GetSize()
+                half = max(pcbnew.ToMM(sz.x), pcbnew.ToMM(sz.y)) / 2 + cl
+                # Through-hole pads short on every copper layer; an SMD pad
+                # only blocks the single layer it lives on.
+                attr = pad.GetAttribute()
+                if attr in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH):
+                    layers = (pcbnew.F_Cu, pcbnew.B_Cu)
+                elif pad.IsOnLayer(pcbnew.B_Cu) and not pad.IsOnLayer(pcbnew.F_Cu):
+                    layers = (pcbnew.B_Cu,)
+                else:
+                    layers = (pcbnew.F_Cu,)
+                self._spatial.mark_box(
+                    pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y), half, nn, layers)
 
     def get_unrouted(self) -> list[RoutePair]:
         """Find all pad pairs that share a net but have no copper path.
@@ -235,7 +301,7 @@ class Router:
         t.SetNet(net)
         self.board.Add(t)
         if self._spatial:
-            self._spatial.mark(x1, y1, x2, y2, width_mm, net.GetNetname())
+            self._spatial.mark(x1, y1, x2, y2, width_mm, net.GetNetname(), layer)
         return True
 
     def _gen_L_path(self, pair: RoutePair, horiz_first: bool):
@@ -255,14 +321,15 @@ class Router:
         return [(pair.x_a, pair.y_a), (pair.x_a, my), (pair.x_b, my), (pair.x_b, pair.y_b)]
 
     def _path_clear(self, path: list[tuple[float, float]],
-                    width_mm: float, net_name: str) -> bool:
-        """Check if entire path is clear of collisions."""
+                    width_mm: float, net_name: str,
+                    layer: int = pcbnew.F_Cu) -> bool:
+        """Check if entire path is clear of collisions on ``layer``."""
         if not self._spatial:
             return True
         for i in range(len(path) - 1):
             if not self._spatial.check_clear(
                 path[i][0], path[i][1], path[i+1][0], path[i+1][1],
-                width_mm, net_name, self.clearance_mm,
+                width_mm, net_name, self.clearance_mm, layer,
             ):
                 return False
         return True
@@ -295,7 +362,7 @@ class Router:
 
         chosen = candidates[0]  # default
         for path in candidates:
-            if self._path_clear(path, width_mm, pair.net_name):
+            if self._path_clear(path, width_mm, pair.net_name, layer):
                 chosen = path
                 break
 
@@ -397,8 +464,10 @@ class Router:
             self._spatial.mark(
                 pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
                 pcbnew.ToMM(e.x), pcbnew.ToMM(e.y),
-                pcbnew.ToMM(track.GetWidth()), nn,
+                pcbnew.ToMM(track.GetWidth()), nn, track.GetLayer(),
             )
+        # Pad-collision awareness: never route across another net's pad.
+        self._seed_pads()
 
         if strategy == "manhattan":
             route_fn = self.route_manhattan
@@ -470,8 +539,10 @@ class Router:
             self._spatial.mark(
                 pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
                 pcbnew.ToMM(e.x), pcbnew.ToMM(e.y),
-                pcbnew.ToMM(track.GetWidth()), nn,
+                pcbnew.ToMM(track.GetWidth()), nn, track.GetLayer(),
             )
+        # Pad-collision awareness: never route across another net's pad.
+        self._seed_pads()
 
         for pair in pairs:
             if pair.net_name in net_widths:
@@ -500,7 +571,7 @@ class Router:
 
             routed = False
             for path in front_paths:
-                if self._path_clear(path, w, pair.net_name):
+                if self._path_clear(path, w, pair.net_name, pcbnew.F_Cu):
                     for i in range(len(path) - 1):
                         self._add_track_seg(
                             path[i][0], path[i][1],
@@ -523,7 +594,7 @@ class Router:
                 # Use first clear B_Cu path, or fall back to first one
                 chosen_path = back_paths[0]
                 for bp in back_paths:
-                    if self._path_clear(bp, w, pair.net_name):
+                    if self._path_clear(bp, w, pair.net_name, pcbnew.B_Cu):
                         chosen_path = bp
                         break
 
