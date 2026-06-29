@@ -53,6 +53,21 @@ class TestExportEngine:
         for i in range(1, 5):
             assert ext[f"In{i}_Cu"] == f".g{i}"
 
+    def test_step_3d_export(self, sample_board, tmp_path):
+        """STEP export must actually produce a non-empty file via kicad-cli.
+
+        Regression guard: the old pcbnew SWIG path (UTILS_STEP_MODEL(board))
+        raised in KiCad 9 and was silently swallowed, so step_3d always
+        returned None and no 3D model was ever written."""
+        from daokicad import env
+        if env.detect().cli is None:
+            pytest.skip("kicad-cli not available")
+        engine = ExportEngine(sample_board)
+        out = engine.step_3d(tmp_path / "board.step")
+        assert out is not None
+        assert out.exists()
+        assert out.stat().st_size > 0
+
     def test_drill_export(self, sample_board, tmp_path):
         engine = ExportEngine(sample_board)
         files = engine.drill(tmp_path / "drill")

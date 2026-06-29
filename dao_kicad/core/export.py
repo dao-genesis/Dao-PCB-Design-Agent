@@ -8,7 +8,10 @@ No abstractions — direct control over every export parameter.
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
@@ -151,16 +154,45 @@ class ExportEngine:
         return output_path
 
     def step_3d(self, output_path: Path) -> Optional[Path]:
-        """Export 3D STEP model."""
+        """Export a 3D STEP model via ``kicad-cli pcb export step``.
+
+        The pcbnew SWIG ``UTILS_STEP_MODEL`` constructor takes no board in
+        KiCad 9, so the old in-process call raised and was silently swallowed —
+        STEP export never produced a file. kicad-cli is the supported path and
+        is fast (~0.1s even on the 256-net board). The in-memory board is saved
+        to a temporary .kicad_pcb first since the CLI works on a file.
+        """
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        cli = shutil.which("kicad-cli")
+        if not cli:
+            from daokicad import env
+            detected = env.detect().cli
+            cli = str(detected) if detected else None
+        if not cli:
+            return None
+
+        src = self.board.GetFileName()
+        tmp = None
+        if not src or not Path(src).is_file():
+            fd, tmp = tempfile.mkstemp(suffix=".kicad_pcb")
+            os.close(fd)
+            self.board.Save(tmp)
+            src = tmp
         try:
-            exporter = pcbnew.UTILS_STEP_MODEL(self.board)
-            exporter.SaveSTEP(str(output_path))
-            return output_path if output_path.exists() else None
+            proc = subprocess.run(
+                [cli, "pcb", "export", "step", "--output", str(output_path), src],
+                capture_output=True, text=True, timeout=300,
+            )
+            if proc.returncode == 0 and output_path.exists():
+                return output_path
+            return None
         except Exception:
             return None
+        finally:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
 
     def full_manufacturing(self, output_dir: Path) -> dict[str, list[Path]]:
         """Complete manufacturing package — everything a fab house needs."""
@@ -182,5 +214,10 @@ class ExportEngine:
 
         # Placement
         result["placement"] = [self.placement(output_dir / "placement.csv")]
+
+        # 3D STEP model (mechanical/enclosure fit). Omitted from the package
+        # only when kicad-cli is unavailable, so the rest still succeeds.
+        step = self.step_3d(output_dir / "board.step")
+        result["step"] = [step] if step else []
 
         return result
