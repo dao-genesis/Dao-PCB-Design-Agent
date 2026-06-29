@@ -69,8 +69,58 @@ class RouteResult:
                 f"{self.failed} failed")
 
 
+class _SpatialIndex:
+    """Grid-based spatial index for collision detection.
+
+    Tracks occupied cells in a 2D grid to detect clearance violations
+    BEFORE adding tracks. Resolution = cell_mm.
+    """
+
+    def __init__(self, width_mm: float, height_mm: float, cell_mm: float = 0.5):
+        self.cell = cell_mm
+        self.cols = max(1, int(math.ceil(width_mm / cell_mm)) + 1)
+        self.rows = max(1, int(math.ceil(height_mm / cell_mm)) + 1)
+        self.grid: dict[tuple[int, int], str] = {}
+
+    def _cells_for_segment(self, x1: float, y1: float, x2: float, y2: float,
+                           half_w: float) -> list[tuple[int, int]]:
+        """Return grid cells occupied by a track segment with width."""
+        cells = []
+        dist = math.hypot(x2 - x1, y2 - y1)
+        steps = max(1, int(dist / (self.cell * 0.5)))
+        for s in range(steps + 1):
+            t = s / steps
+            cx = x1 + (x2 - x1) * t
+            cy = y1 + (y2 - y1) * t
+            c0 = int((cx - half_w) / self.cell)
+            c1 = int((cx + half_w) / self.cell) + 1
+            r0 = int((cy - half_w) / self.cell)
+            r1 = int((cy + half_w) / self.cell) + 1
+            for r in range(max(0, r0), min(self.rows, r1 + 1)):
+                for c in range(max(0, c0), min(self.cols, c1 + 1)):
+                    cells.append((r, c))
+        return cells
+
+    def mark(self, x1: float, y1: float, x2: float, y2: float,
+             width_mm: float, net_name: str):
+        """Mark cells as occupied by a track segment."""
+        hw = width_mm / 2 + 0.1  # include clearance
+        for cell in self._cells_for_segment(x1, y1, x2, y2, hw):
+            if cell not in self.grid:
+                self.grid[cell] = net_name
+
+    def check_clear(self, x1: float, y1: float, x2: float, y2: float,
+                    width_mm: float, net_name: str, clearance_mm: float = 0.15) -> bool:
+        """Check if a segment can be routed without violating clearance."""
+        hw = width_mm / 2 + clearance_mm
+        for cell in self._cells_for_segment(x1, y1, x2, y2, hw):
+            if cell in self.grid and self.grid[cell] != net_name:
+                return False
+        return True
+
+
 class Router:
-    """Connectivity-aware PCB router.
+    """Connectivity-aware PCB router with collision detection.
 
     Usage:
         router = Router(board)
@@ -81,6 +131,8 @@ class Router:
     def __init__(self, board: pcbnew.BOARD, min_clearance_mm: float = 0.2):
         self.board = board
         self.clearance = pcbnew.FromMM(min_clearance_mm)
+        self.clearance_mm = min_clearance_mm
+        self._spatial: _SpatialIndex | None = None
         self._rebuild_connectivity()
 
     def _rebuild_connectivity(self):
@@ -170,12 +222,60 @@ class Router:
         self.board.Add(track)
         return True
 
+    def _add_track_seg(self, x1: float, y1: float, x2: float, y2: float,
+                       width_mm: float, layer: int, net) -> bool:
+        """Add a single track segment and mark it in spatial index."""
+        if abs(x1 - x2) < 0.01 and abs(y1 - y2) < 0.01:
+            return True  # zero-length, skip
+        t = pcbnew.PCB_TRACK(self.board)
+        t.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(x1), pcbnew.FromMM(y1)))
+        t.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(x2), pcbnew.FromMM(y2)))
+        t.SetWidth(pcbnew.FromMM(width_mm))
+        t.SetLayer(layer)
+        t.SetNet(net)
+        self.board.Add(t)
+        if self._spatial:
+            self._spatial.mark(x1, y1, x2, y2, width_mm, net.GetNetname())
+        return True
+
+    def _gen_L_path(self, pair: RoutePair, horiz_first: bool):
+        """Generate L-shaped waypoints."""
+        if horiz_first:
+            return [(pair.x_a, pair.y_a), (pair.x_b, pair.y_a), (pair.x_b, pair.y_b)]
+        return [(pair.x_a, pair.y_a), (pair.x_a, pair.y_b), (pair.x_b, pair.y_b)]
+
+    def _gen_Z_path(self, pair: RoutePair, horiz_first: bool, offset: float):
+        """Generate Z-shaped waypoints with midpoint offset."""
+        dx = pair.x_b - pair.x_a
+        dy = pair.y_b - pair.y_a
+        if horiz_first:
+            mx = pair.x_a + dx * 0.5 + offset
+            return [(pair.x_a, pair.y_a), (mx, pair.y_a), (mx, pair.y_b), (pair.x_b, pair.y_b)]
+        my = pair.y_a + dy * 0.5 + offset
+        return [(pair.x_a, pair.y_a), (pair.x_a, my), (pair.x_b, my), (pair.x_b, pair.y_b)]
+
+    def _path_clear(self, path: list[tuple[float, float]],
+                    width_mm: float, net_name: str) -> bool:
+        """Check if entire path is clear of collisions."""
+        if not self._spatial:
+            return True
+        for i in range(len(path) - 1):
+            if not self._spatial.check_clear(
+                path[i][0], path[i][1], path[i+1][0], path[i+1][1],
+                width_mm, net_name, self.clearance_mm,
+            ):
+                return False
+        return True
+
     def route_manhattan(self, pair: RoutePair, width_mm: float = 0.25,
                         layer: int = pcbnew.F_Cu) -> bool:
-        """Route with an L-shaped (Manhattan) path.
+        """Route with collision-aware L/Z paths.
 
-        Goes horizontal first, then vertical (or vice versa based on
-        which direction is longer — reduces stub length).
+        Tries multiple path candidates in order:
+        1. L-path (longer axis first)
+        2. L-path (shorter axis first)
+        3. Z-path with increasing offsets
+        Falls back to direct if all fail.
         """
         net = self.board.FindNet(pair.net_name)
         if not net:
@@ -183,36 +283,28 @@ class Router:
 
         dx = abs(pair.x_b - pair.x_a)
         dy = abs(pair.y_b - pair.y_a)
+        horiz_first = dx >= dy
 
-        # Choose bend direction: go longer axis first
-        if dx >= dy:
-            mid_x, mid_y = pair.x_b, pair.y_a
-        else:
-            mid_x, mid_y = pair.x_a, pair.y_b
+        candidates = [
+            self._gen_L_path(pair, horiz_first),
+            self._gen_L_path(pair, not horiz_first),
+        ]
+        for off in [1.0, -1.0, 2.0, -2.0, 3.0]:
+            candidates.append(self._gen_Z_path(pair, horiz_first, off))
+            candidates.append(self._gen_Z_path(pair, not horiz_first, off))
 
-        # Segment 1: start → bend
-        t1 = pcbnew.PCB_TRACK(self.board)
-        t1.SetStart(pcbnew.VECTOR2I(
-            pcbnew.FromMM(pair.x_a), pcbnew.FromMM(pair.y_a)))
-        t1.SetEnd(pcbnew.VECTOR2I(
-            pcbnew.FromMM(mid_x), pcbnew.FromMM(mid_y)))
-        t1.SetWidth(pcbnew.FromMM(width_mm))
-        t1.SetLayer(layer)
-        t1.SetNet(net)
-        self.board.Add(t1)
+        chosen = candidates[0]  # default
+        for path in candidates:
+            if self._path_clear(path, width_mm, pair.net_name):
+                chosen = path
+                break
 
-        # Segment 2: bend → end (skip if collinear)
-        if abs(mid_x - pair.x_b) > 0.01 or abs(mid_y - pair.y_b) > 0.01:
-            t2 = pcbnew.PCB_TRACK(self.board)
-            t2.SetStart(pcbnew.VECTOR2I(
-                pcbnew.FromMM(mid_x), pcbnew.FromMM(mid_y)))
-            t2.SetEnd(pcbnew.VECTOR2I(
-                pcbnew.FromMM(pair.x_b), pcbnew.FromMM(pair.y_b)))
-            t2.SetWidth(pcbnew.FromMM(width_mm))
-            t2.SetLayer(layer)
-            t2.SetNet(net)
-            self.board.Add(t2)
-
+        for i in range(len(chosen) - 1):
+            self._add_track_seg(
+                chosen[i][0], chosen[i][1],
+                chosen[i+1][0], chosen[i+1][1],
+                width_mm, layer, net,
+            )
         return True
 
     def route_offset_manhattan(self, pair: RoutePair, width_mm: float = 0.25,
@@ -289,6 +381,24 @@ class Router:
 
         pairs = self.get_unrouted()
         result = RouteResult(total=len(pairs))
+
+        # Initialize spatial index from board outline
+        bbox = self.board.GetBoardEdgesBoundingBox()
+        bw = pcbnew.ToMM(bbox.GetWidth()) + 10
+        bh = pcbnew.ToMM(bbox.GetHeight()) + 10
+        self._spatial = _SpatialIndex(bw, bh, cell_mm=0.3)
+
+        # Pre-populate with existing tracks
+        for track in self.board.GetTracks():
+            s = track.GetStart()
+            e = track.GetEnd()
+            n = track.GetNet()
+            nn = n.GetNetname() if n else ""
+            self._spatial.mark(
+                pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
+                pcbnew.ToMM(e.x), pcbnew.ToMM(e.y),
+                pcbnew.ToMM(track.GetWidth()), nn,
+            )
 
         if strategy == "manhattan":
             route_fn = self.route_manhattan
