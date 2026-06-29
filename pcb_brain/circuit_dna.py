@@ -23,6 +23,33 @@ class Comp:
     category:  str = ""
     note:      str = ""
 
+    # 兼容别名: 布局/制造各层 (pcb_wugan/kicad_arm/pcb_ibom/pcb_jlcpcb/optimize_layout)
+    # 历来用 comp.pos / comp.group, 而本 dataclass 字段名为 position / category。
+    # 不写死、不改散落各处的调用面, 以属性别名一处归一, 读写双向。
+    @property
+    def pos(self) -> Tuple[float, float]:
+        return self.position
+
+    @pos.setter
+    def pos(self, value: Tuple[float, float]) -> None:
+        self.position = value
+
+    @property
+    def group(self) -> str:
+        return self.category
+
+    @group.setter
+    def group(self, value: str) -> None:
+        self.category = value
+
+    @property
+    def description(self) -> str:
+        return self.note
+
+    @description.setter
+    def description(self, value: str) -> None:
+        self.note = value
+
 
 @dataclass
 class DNA:
