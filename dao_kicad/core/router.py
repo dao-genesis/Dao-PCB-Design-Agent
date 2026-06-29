@@ -430,6 +430,121 @@ class Router:
 
         return result
 
+    def route_multilayer(
+        self,
+        width_mm: float = 0.15,
+        power_width_mm: float = 0.4,
+        power_nets: Optional[set[str]] = None,
+        net_widths: Optional[dict[str, float]] = None,
+        via_size_mm: float = 0.3,
+        via_drill_mm: float = 0.15,
+    ) -> RouteResult:
+        """Route on front first, overflow to back with via transitions.
+
+        For each pair:
+        1. Try manhattan on F_Cu
+        2. If collision detected, add via → route on B_Cu → add via back
+        This distributes traces across layers to reduce DRC violations.
+        """
+        if power_nets is None:
+            power_nets = {"GND", "VCC", "3V3", "5V", "VBUS", "3.3V", "5.0V"}
+        if net_widths is None:
+            net_widths = {}
+
+        pairs = self.get_unrouted()
+        result = RouteResult(total=len(pairs))
+
+        bbox = self.board.GetBoardEdgesBoundingBox()
+        bw = pcbnew.ToMM(bbox.GetWidth()) + 10
+        bh = pcbnew.ToMM(bbox.GetHeight()) + 10
+        self._spatial = _SpatialIndex(bw, bh, cell_mm=0.3)
+
+        for track in self.board.GetTracks():
+            s = track.GetStart()
+            e = track.GetEnd()
+            n = track.GetNet()
+            nn = n.GetNetname() if n else ""
+            self._spatial.mark(
+                pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
+                pcbnew.ToMM(e.x), pcbnew.ToMM(e.y),
+                pcbnew.ToMM(track.GetWidth()), nn,
+            )
+
+        for pair in pairs:
+            if pair.net_name in net_widths:
+                w = net_widths[pair.net_name]
+            elif pair.net_name in power_nets:
+                w = power_width_mm
+            else:
+                w = width_mm
+
+            net = self.board.FindNet(pair.net_name)
+            if not net:
+                result.failed += 1
+                continue
+
+            # Try front layer first
+            dx = abs(pair.x_b - pair.x_a)
+            dy = abs(pair.y_b - pair.y_a)
+            horiz_first = dx >= dy
+
+            front_paths = [
+                self._gen_L_path(pair, horiz_first),
+                self._gen_L_path(pair, not horiz_first),
+            ]
+            for off in [1.0, -1.0, 2.0, -2.0]:
+                front_paths.append(self._gen_Z_path(pair, horiz_first, off))
+
+            routed = False
+            for path in front_paths:
+                if self._path_clear(path, w, pair.net_name):
+                    for i in range(len(path) - 1):
+                        self._add_track_seg(
+                            path[i][0], path[i][1],
+                            path[i+1][0], path[i+1][1],
+                            w, pcbnew.F_Cu, net,
+                        )
+                    routed = True
+                    result.tracks_added += len(path) - 1
+                    break
+
+            if not routed:
+                # Fall back to B_Cu with vias at start/end
+                via_s = pcbnew.PCB_VIA(self.board)
+                via_s.SetPosition(pcbnew.VECTOR2I(
+                    pcbnew.FromMM(pair.x_a), pcbnew.FromMM(pair.y_a)))
+                via_s.SetWidth(pcbnew.FromMM(via_size_mm))
+                via_s.SetDrill(pcbnew.FromMM(via_drill_mm))
+                via_s.SetNet(net)
+                self.board.Add(via_s)
+
+                path = self._gen_L_path(pair, horiz_first)
+                for i in range(len(path) - 1):
+                    self._add_track_seg(
+                        path[i][0], path[i][1],
+                        path[i+1][0], path[i+1][1],
+                        w, pcbnew.B_Cu, net,
+                    )
+
+                via_e = pcbnew.PCB_VIA(self.board)
+                via_e.SetPosition(pcbnew.VECTOR2I(
+                    pcbnew.FromMM(pair.x_b), pcbnew.FromMM(pair.y_b)))
+                via_e.SetWidth(pcbnew.FromMM(via_size_mm))
+                via_e.SetDrill(pcbnew.FromMM(via_drill_mm))
+                via_e.SetNet(net)
+                self.board.Add(via_e)
+
+                routed = True
+                result.tracks_added += len(path) - 1
+                result.vias_added += 2
+
+            if routed:
+                result.routed += 1
+            else:
+                result.failed += 1
+
+        return result
+
     def export_dsn(self, output_path: str | Path) -> bool:
         """Export board to Specctra DSN format for external routing.
 
