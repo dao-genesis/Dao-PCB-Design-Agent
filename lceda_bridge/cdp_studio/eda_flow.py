@@ -795,18 +795,54 @@ class Flow:
         return {"dialog_confirmed": clicked, "pcb_components": self.pcb_component_ids()}
 
     # --- DRC ---
-    def drc_check(self, timeout=60):
-        return self.eda.call("pcb_Drc.check", timeout=timeout)
+    def drc_check(self, strict=True, verbose=True, timeout=60):
+        """运行 DRC。逆出真实签名 `pcb_Drc.check(strict, userInterface, includeVerboseError)`:
+        - verbose=False → 裸 bool(true=通过/false=有违规);
+        - verbose=True  → **结构化违规树**(见 drc_violations 的字段说明)。
+        """
+        return self.eda.call("pcb_Drc.check", strict, False, bool(verbose), timeout=timeout)
 
-    # DRC 违规明细的**唯一真相源**是 GUI 面板,不是 API。第二十二章硬验证:`pcb_Drc` 命名空间
-    # 全表只有 check()/getRealTimeDrcStatus() 两个返回**裸 bool**(通过/不通过)的方法,**没有任何**
-    # 取逐条违规(类型/对象/网络/层/说明)的接口;EXTAPI 根下也只有 pcb_Drc / sch_Drc 两个命名空间,
-    # 没有 DrcError 之类可枚举图元。故第二十章「板框→J3 0.9mil 偶发摆放」纯属未读面板的臆测——
-    # 实测密板真实违规是「连接错误(XTAL1/DSIG_N 两网未布通)+ 差分对长度差 1256.7mil>10mil 容差」,
-    # 与板框几何毫无关系。教训:DRC 失败必须**读面板逐条**,严禁靠几何直觉猜。
-    # 本方法即「读面板」的程序化实现:派发内置「Check DRC」算完后,直接抓取 DRC 结果表 DOM,
-    # 把每行解析成 {no,type,object,rule,obj1,obj2,layer,explain}。这样布完即可拿到**真违规清单**
-    # 驱动后续修复(而不是只知道一个 false)。
+    @staticmethod
+    def _flatten_drc(tree):
+        """把 check(verbose) 的三层树 [{name,list:[{name,list:[err...]}]}] 拍平为违规清单。"""
+        out = []
+        for cat in (tree or []):
+            for sub in (cat.get("list") or []):
+                for err in (sub.get("list") or []):
+                    exp = err.get("explanation") or {}
+                    par = exp.get("param") or {}
+                    ed = err.get("errData") or {}
+                    out.append({
+                        "errorType": err.get("errorType"),
+                        "objType": err.get("errorObjType"),
+                        "rule": err.get("ruleName"),
+                        "obj1": (err.get("obj1") or {}).get("suffix"),
+                        "obj2": (err.get("obj2") or {}).get("suffix"),
+                        "layer": err.get("layer"),
+                        "minDistance": par.get("minDistance"),
+                        "shouldBe": par.get("shouldBe"),
+                        "position": ed.get("position"),
+                    })
+        return out
+
+    def drc_violations(self, strict=True, timeout=60):
+        """**直接经 API** 取逐条 DRC 违规(无需读 GUI 面板 DOM)。每条含
+        {errorType, objType, rule, obj1, obj2, layer, minDistance, shouldBe, position}。"""
+        return self._flatten_drc(self.drc_check(strict=strict, verbose=True, timeout=timeout))
+
+    def drc_summary(self, strict=True, timeout=60):
+        """DRC 概览:{total, by_type:{错误类型: 数量}}。total=0 即板子干净。"""
+        v = self.drc_violations(strict=strict, timeout=timeout)
+        by = {}
+        for e in v:
+            by[e["errorType"]] = by.get(e["errorType"], 0) + 1
+        return {"total": len(v), "by_type": by}
+
+    # 历史结论更正(本会话硬验证):此前认为 DRC 逐条违规「API 取不到、唯一真相源是 GUI 面板」。
+    # 实测 v3.2.148 `pcb_Drc.check(strict, userInterface, includeVerboseError=true)` **直接**返回
+    # 结构化违规树(类型/规则/obj1/obj2/层/坐标/最小间距/应满足值),与面板信息等价且更全
+    # (带精确 position 与 clearance)。故 drc_violations 现走 API(headless 可用、无 DOM 依赖);
+    # 下面 read_drc_violations(抓面板 DOM)保留为**老版本/兜底**通道。
     _DRC_SCRAPE = r"""(()=>{
       var KW=/Connection Error|Differential Pair|Clearance|Width|Spacing|Short|Annular|Hole|Silk|disconnected|tolerance|should be|Net Antenna|Unrouted/i;
       var out=[];
