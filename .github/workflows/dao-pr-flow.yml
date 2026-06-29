@@ -1,7 +1,8 @@
 name: DAO PR Flow
 
 # 道法自然 · 无为而无不为 —— 统一的自动化 PR 流程:
-# 每个 PR 自动做轻量自检、按规模/范围自动打标、并对带 `dao-auto` 标签且检查通过的 PR 自动合并。
+# 每个 PR 自动做轻量自检、按规模/范围自动打标。
+# 自动合并已分离到 `dao-auto-merge.yml`(监听 CI 绿灯后由仓库自身合并,无需人工点击)。
 
 on:
   pull_request:
@@ -64,16 +65,3 @@ jobs:
                 issue_number: pr.number, labels: [...labels],
               });
             } catch (e) { core.warning('label failed: ' + e.message); }
-
-  auto-merge:
-    name: 自动合并 (dao-auto)
-    needs: [sanity]
-    if: contains(github.event.pull_request.labels.*.name, 'dao-auto')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Enable auto-merge
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr merge --auto --merge "${{ github.event.pull_request.number }}" \
-            -R "${{ github.repository }}" || echo "auto-merge 未启用(可能需仓库开启 Allow auto-merge)"
