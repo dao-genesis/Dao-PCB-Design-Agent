@@ -23,6 +23,81 @@ import pcbnew
 EDGE_KEEPOUT_MM = 0.8
 
 
+def _courtyard_half_extents(fps) -> dict[str, tuple[float, float]]:
+    """Half width/height (mm) of each footprint's courtyard — the exact polygon
+    KiCad's ``courtyards_overlap`` DRC test uses. Footprints without a courtyard
+    (OutlineCount 0) fall back to their full bounding box so they still repel."""
+    out: dict[str, tuple[float, float]] = {}
+    for fp in fps:
+        hx = hy = 0.0
+        for ly in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+            try:
+                cy = fp.GetCourtyard(ly)
+            except Exception:
+                cy = None
+            if cy is not None and cy.OutlineCount() > 0:
+                bb = cy.BBox()
+                hx = max(hx, pcbnew.ToMM(bb.GetWidth()) / 2)
+                hy = max(hy, pcbnew.ToMM(bb.GetHeight()) / 2)
+        if hx <= 0 or hy <= 0:
+            gb = fp.GetBoundingBox()
+            hx = max(hx, pcbnew.ToMM(gb.GetWidth()) / 2)
+            hy = max(hy, pcbnew.ToMM(gb.GetHeight()) / 2)
+        out[fp.GetReference()] = (hx, hy)
+    return out
+
+
+def _legalize_courtyards(refs, positions, half, constraint_map, bounds,
+                         gap_mm: float = 0.05, passes: int = 200) -> None:
+    """Remove residual courtyard overlaps the soft force model leaves behind.
+
+    Force-directed placement with cooling only *discourages* overlap; pairs
+    pinned against a fixed part or the board edge can still settle overlapping.
+    This deterministic pass pushes each overlapping pair apart along the axis of
+    least penetration (so a small nudge clears it without scrambling the layout),
+    moving only the non-fixed member(s), then re-clamps to the board. Mutates
+    ``positions`` in place. O(n^2) per pass; converges in a few passes for the
+    handful of overlaps that survive the force loop."""
+    lo_x, lo_y, hi_x, hi_y = bounds
+    for _ in range(passes):
+        moved = False
+        for i, ra in enumerate(refs):
+            for rb in refs[i + 1:]:
+                xa, ya = positions[ra]
+                xb, yb = positions[rb]
+                hxa, hya = half[ra]
+                hxb, hyb = half[rb]
+                ox = (hxa + hxb + gap_mm) - abs(xa - xb)
+                oy = (hya + hyb + gap_mm) - abs(ya - yb)
+                if ox <= 0 or oy <= 0:
+                    continue  # no courtyard overlap
+                fa = ra in constraint_map and constraint_map[ra].fixed
+                fb = rb in constraint_map and constraint_map[rb].fixed
+                if fa and fb:
+                    continue
+                moved = True
+                if ox <= oy:  # separate along least-penetration axis (x)
+                    s = ox if (fa or fb) else ox / 2.0
+                    sign = 1.0 if xa >= xb else -1.0
+                    if not fa:
+                        positions[ra][0] += sign * s
+                    if not fb:
+                        positions[rb][0] -= sign * s
+                else:
+                    s = oy if (fa or fb) else oy / 2.0
+                    sign = 1.0 if ya >= yb else -1.0
+                    if not fa:
+                        positions[ra][1] += sign * s
+                    if not fb:
+                        positions[rb][1] -= sign * s
+                for r in (ra, rb):
+                    hx, hy = half[r]
+                    positions[r][0] = max(lo_x + hx, min(hi_x - hx, positions[r][0]))
+                    positions[r][1] = max(lo_y + hy, min(hi_y - hy, positions[r][1]))
+        if not moved:
+            break
+
+
 @dataclass
 class PlacementConstraint:
     """Constraint for component placement."""
@@ -171,6 +246,14 @@ def optimize_placement(
                     lo_y = hi_y = cy_offset + bh / 2
                 positions[r][0] = max(lo_x, min(hi_x, positions[r][0]))
                 positions[r][1] = max(lo_y, min(hi_y, positions[r][1]))
+
+    # Hard legalization: the force loop above only discourages overlap, so a
+    # few courtyards can remain overlapping (courtyards_overlap DRC errors).
+    # Resolve them deterministically against the exact courtyard polygons.
+    cy_half = _courtyard_half_extents(fps)
+    bounds = (cx_offset + EDGE_KEEPOUT_MM, cy_offset + EDGE_KEEPOUT_MM,
+              cx_offset + bw - EDGE_KEEPOUT_MM, cy_offset + bh - EDGE_KEEPOUT_MM)
+    _legalize_courtyards(refs, positions, cy_half, constraint_map, bounds)
 
     # Apply final positions
     result = {}

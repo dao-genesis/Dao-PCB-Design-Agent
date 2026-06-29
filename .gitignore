@@ -50,3 +50,7 @@ _agent_work/
 
 build/
 pcb_brain/output/_demos_practice/
+
+# vendored JDK + generated fab output (recreated by blueprint / runs)
+dao_kicad/tools/jdk/
+out/

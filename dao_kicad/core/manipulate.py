@@ -97,6 +97,25 @@ class BoardBuilder:
         """
         ds = self.board.GetDesignSettings()
         ds.m_MinClearance = pcbnew.FromMM(min_clearance_mm)
+        # Align the *default netclass* clearance with the declared board rule.
+        # KiCad's netclass clearance defaults to 0.2mm and DRC enforces the
+        # netclass value (not m_MinClearance), so without this every net is held
+        # to 0.2mm even when the board declares a finer rule (e.g. 0.10mm on a
+        # 6-layer advanced-fab design) — the routers build to min_clearance_mm
+        # while DRC silently checks 0.2mm, manufacturing phantom clearance
+        # errors. Setting it here makes DRC verify the rule the design targets.
+        try:
+            dn = ds.m_NetSettings.GetDefaultNetclass()
+            if dn.GetClearance() > pcbnew.FromMM(min_clearance_mm):
+                dn.SetClearance(pcbnew.FromMM(min_clearance_mm))
+        except Exception:
+            pass
+        # Same story for the hole-to-copper clearance: KiCad defaults it to
+        # 0.25mm independently of the copper clearance, so a finer board rule
+        # never reaches the hole_clearance test and DRC flags vias the router
+        # placed legally. Align it down to the declared clearance (never up).
+        if ds.m_HoleClearance > pcbnew.FromMM(min_clearance_mm):
+            ds.m_HoleClearance = pcbnew.FromMM(min_clearance_mm)
         ds.m_TrackMinWidth = pcbnew.FromMM(min_track_mm)
         ds.m_ViasMinSize = pcbnew.FromMM(via_size_mm)
         ds.m_ViasMinAnnularWidth = pcbnew.FromMM(0.05)  # 50um min annular ring

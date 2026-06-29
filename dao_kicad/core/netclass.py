@@ -65,6 +65,7 @@ STANDARD_CLASSES: dict[str, NetClassDef] = {
     "Diff_USB": NetClassDef("Diff_USB", 0.15, 0.15, 0.3, 0.15, 0.15, 0.15),
     "Diff_DDR": NetClassDef("Diff_DDR", 0.1, 0.1, 0.25, 0.12, 0.1, 0.1),
     "Diff_Ethernet": NetClassDef("Diff_Ethernet", 0.12, 0.12, 0.3, 0.15, 0.12, 0.12),
+    "Diff": NetClassDef("Diff", 0.15, 0.15, 0.3, 0.15, 0.15, 0.15),
     "Analog": NetClassDef("Analog", 0.2, 0.2, 0.3, 0.15),
     "RF": NetClassDef("RF", 0.2, 0.15, 0.3, 0.15),
 }
@@ -115,6 +116,22 @@ def classify_nets(net_names: list[str], category: BoardCategory = BoardCategory.
     diff_ddr_prefixes = ("DQS", "CK+", "CK-")
     diff_eth_prefixes = ("ETH", "TX+", "TX-", "RX+", "RX-")
 
+    # Generic differential conventions need *pair context*: a net is only a
+    # diff member if its mate is also present. We have the full net list here,
+    # so build the set once and require the mate to exist (so a lone ``RESET_N``
+    # is never mistaken for a pair). Longest suffix first to avoid ``_P``
+    # swallowing ``_DP``.
+    upper_names = {n.upper().replace(" ", "") for n in net_names}
+    _generic_diff = (("_DP", "_DN"), ("_DP", "_DM"), ("_DN", "_DP"),
+                     ("_DM", "_DP"), ("_P", "_N"), ("_N", "_P"))
+
+    def _generic_diff_mate(nu: str) -> bool:
+        for suf, mate_suf in _generic_diff:
+            if nu.endswith(suf) and len(nu) > len(suf):
+                if nu[: -len(suf)] + mate_suf in upper_names:
+                    return True
+        return False
+
     analog_patterns = {"VREF", "ISNS", "TEMP", "ADC", "DAC"}
     analog_prefixes = ("AIN", "AOUT", "VREF_", "ISNS_", "TEMP_")
 
@@ -157,6 +174,12 @@ def classify_nets(net_names: list[str], category: BoardCategory = BoardCategory.
             result.assignments[net] = "Diff_Ethernet"
             continue
 
+        # Generic differential (_P/_N, _DP/_DN, _DP/_DM) — only when the mate
+        # net is present, so single-ended actives (RESET_N, WE_N) are immune.
+        if _generic_diff_mate(nu):
+            result.assignments[net] = "Diff"
+            continue
+
         # Analog
         if nu in analog_patterns or any(nu.startswith(p) for p in analog_prefixes):
             result.assignments[net] = "Analog"
@@ -189,3 +212,24 @@ def get_router_params(assignment: NetClassAssignment) -> tuple[dict[str, float],
             power_nets.add(net)
 
     return net_widths, power_nets
+
+
+def get_diff_pair_params(
+    assignment: NetClassAssignment,
+) -> dict[str, tuple[float, float]]:
+    """Per-net differential-pair ``(width_mm, gap_mm)`` from its net class.
+
+    Returns an entry only for nets whose class carries a non-zero diff-pair
+    geometry (the ``Diff_*`` presets). Detection of *which* nets form a pair
+    stays with :meth:`Router.find_diff_pairs` (it alone has the pair context);
+    this just supplies the impedance-derived width/gap once a pair is known, so
+    USB/DDR/Ethernet pairs route at their class spacing instead of a generic
+    fallback. Previously ``diff_pair_width_mm``/``diff_pair_gap_mm`` were
+    defined on every class but read by nothing.
+    """
+    out: dict[str, tuple[float, float]] = {}
+    for net, cls_name in assignment.assignments.items():
+        cls = assignment.classes.get(cls_name)
+        if cls and cls.diff_pair_width_mm > 0 and cls.diff_pair_gap_mm > 0:
+            out[net] = (cls.diff_pair_width_mm, cls.diff_pair_gap_mm)
+    return out

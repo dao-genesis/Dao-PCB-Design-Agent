@@ -49,6 +49,36 @@ class RoutePair:
 
 
 @dataclass
+class DiffPair:
+    """Two nets that form a differential pair (e.g. ``USB_DP``/``USB_DN``)."""
+    base: str
+    p_net: str
+    n_net: str
+
+
+@dataclass
+class DiffPairReport:
+    """Measured quality of one routed differential pair.
+
+    ``length_skew_pct`` is the intra-pair length mismatch as a percentage of
+    the longer half — the constraint that matters for phase alignment. The
+    coupled router produces 0% by construction (mirror geometry), so a nonzero
+    value flags a layer transition or a fan-in that broke the mirror.
+    """
+    base: str
+    p_net: str
+    n_net: str
+    p_len_mm: float
+    n_len_mm: float
+    routed: bool
+
+    @property
+    def length_skew_pct(self) -> float:
+        hi = max(self.p_len_mm, self.n_len_mm)
+        return abs(self.p_len_mm - self.n_len_mm) / hi * 100 if hi else 0.0
+
+
+@dataclass
 class RouteResult:
     """Result of routing attempt."""
     routed: int = 0
@@ -433,19 +463,23 @@ class Router:
         return cost
 
     def _clear_via_spot(self, x: float, y: float, net_name: str,
-                        via_mm: float):
-        """Find a via location near (x, y) clear of foreign copper on both
-        outer layers, trying the centre then small offsets — so layer-transition
-        vias stop landing on a neighbour's pad/hole (the hole_clearance class)."""
+                        via_mm: float, extra_layer: Optional[int] = None):
+        """Find a via location near (x, y) clear of foreign copper, trying the
+        centre then small offsets — so layer-transition vias stop landing on a
+        neighbour's pad/hole (the hole_clearance class). A through via spans
+        every layer, so we check the primary outer layer, the back layer, and
+        (when routing onto an inner layer) that inner layer's copper too."""
         if not self._spatial:
             return (x, y)
+        check_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
+        if extra_layer is not None and extra_layer not in check_layers:
+            check_layers.append(extra_layer)
         for ox, oy in ((0, 0), (0.3, 0.3), (-0.3, 0.3), (0.3, -0.3),
                        (-0.3, -0.3), (0.5, 0), (-0.5, 0), (0, 0.5), (0, -0.5)):
             vx, vy = x + ox, y + oy
-            if (self._spatial.check_clear(vx, vy, vx, vy, via_mm, net_name,
-                                          self.clearance_mm, pcbnew.F_Cu)
-                and self._spatial.check_clear(vx, vy, vx, vy, via_mm, net_name,
-                                              self.clearance_mm, pcbnew.B_Cu)):
+            if all(self._spatial.check_clear(vx, vy, vx, vy, via_mm, net_name,
+                                             self.clearance_mm, ly)
+                   for ly in check_layers):
                 return (vx, vy)
         return (x, y)
 
@@ -635,6 +669,8 @@ class Router:
         skip_nets: Optional[set[str]] = None,
         via_size_mm: float = 0.45,
         via_drill_mm: float = 0.2,
+        signal_layers: Optional[list[int]] = None,
+        via_penalty: float = 2,
     ) -> RouteResult:
         """Route on front first, overflow to back with via transitions.
 
@@ -650,6 +686,15 @@ class Router:
             power_nets = {"GND", "VCC", "3V3", "5V", "VBUS", "3.3V", "5.0V"}
         if net_widths is None:
             net_widths = {}
+        # Signals may route on any of these copper layers. The first is the
+        # "primary" layer where the SMD pads live (F_Cu) — routing there is
+        # via-free; every other layer is reached through two transition vias.
+        # Defaulting to [F_Cu, B_Cu] preserves the classic front/overflow-back
+        # behaviour; passing inner layers too turns this into a true N-layer
+        # autorouter that spreads congested buses across free inner copper.
+        if signal_layers is None:
+            signal_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
+        primary_layer = signal_layers[0]
 
         pairs = self.get_unrouted()
         if skip_nets:
@@ -689,71 +734,58 @@ class Router:
                 result.failed += 1
                 continue
 
-            # Try front layer first
+            # Candidate waypoint sets — geometry is layer-independent, so the
+            # same L/Z/approach paths are scored on every routable layer.
             dx = abs(pair.x_b - pair.x_a)
             dy = abs(pair.y_b - pair.y_a)
             horiz_first = dx >= dy
 
-            front_paths = [
+            cand_paths = [
                 self._gen_L_path(pair, horiz_first),
                 self._gen_L_path(pair, not horiz_first),
             ]
             for off in [1.0, -1.0, 2.0, -2.0]:
-                front_paths.append(self._gen_Z_path(pair, horiz_first, off))
-            front_paths.extend(self._gen_approach_paths(pair))
+                cand_paths.append(self._gen_Z_path(pair, horiz_first, off))
+            cand_paths.extend(self._gen_approach_paths(pair))
 
-            # Score every front candidate; a fully-clear (cost 0) path wins
-            # immediately, otherwise remember the least-colliding one.
-            best_front, best_front_cost = None, None
-            for path in front_paths:
-                c = self._path_cost(path, w, pair.net_name, pcbnew.F_Cu)
-                if c == 0:
-                    best_front, best_front_cost = path, 0
+            # Score every candidate on every signal layer and keep the global
+            # minimum of (collision_cost + via_cost). The primary layer is
+            # via-free; any other layer costs ``via_penalty`` (two transition
+            # vias, each a hole_clearance risk in dense copper). A congested
+            # primary layer therefore spills a bus onto a free inner/back layer
+            # only when doing so removes more collisions than the vias add —
+            # never forcing a path that ploughs through other nets when a
+            # cleaner layer exists.
+            best = None  # (total_cost, layer, path)
+            for ly in signal_layers:
+                via_cost = 0 if ly == primary_layer else via_penalty
+                for path in cand_paths:
+                    c = self._path_cost(path, w, pair.net_name, ly) + via_cost
+                    if best is None or c < best[0]:
+                        best = (c, ly, path)
+                    if via_cost == 0 and c == 0:
+                        break  # fully clear on a via-less layer — unbeatable
+                if best is not None and best[0] == 0:
                     break
-                if best_front_cost is None or c < best_front_cost:
-                    best_front, best_front_cost = path, c
 
-            # Do the same on B_Cu (reached via two layer-transition vias).
-            back_paths = [
-                self._gen_L_path(pair, horiz_first),
-                self._gen_L_path(pair, not horiz_first),
-            ]
-            for off in [1.0, -1.0, 2.0, -2.0]:
-                back_paths.append(self._gen_Z_path(pair, horiz_first, off))
-            best_back, best_back_cost = None, None
-            for bp in back_paths:
-                c = self._path_cost(bp, w, pair.net_name, pcbnew.B_Cu)
-                if c == 0:
-                    best_back, best_back_cost = bp, 0
-                    break
-                if best_back_cost is None or c < best_back_cost:
-                    best_back, best_back_cost = bp, c
+            _, chosen_layer, chosen_path = best
 
-            # Prefer the via-less front route. Switching to the back layer
-            # costs two layer-transition vias (each a hole_clearance risk in
-            # dense areas), so only do it when it removes clearly more
-            # collisions than that — never force a path that ploughs through
-            # other nets when a cleaner one exists.
-            via_penalty = 2
-            use_back = best_back_cost is not None and (
-                best_front_cost is None
-                or best_back_cost + via_penalty < best_front_cost)
-
-            if not use_back:
-                path = best_front
+            if chosen_layer == primary_layer:
+                path = chosen_path
                 for i in range(len(path) - 1):
                     self._add_track_seg(
                         path[i][0], path[i][1], path[i+1][0], path[i+1][1],
-                        w, pcbnew.F_Cu, net,
+                        w, primary_layer, net,
                     )
                 result.tracks_added += len(path) - 1
             else:
-                chosen_path = best_back
                 # Place layer-transition vias clear of foreign pads/holes.
                 va_x, va_y = self._clear_via_spot(
-                    pair.x_a, pair.y_a, pair.net_name, via_size_mm)
+                    pair.x_a, pair.y_a, pair.net_name, via_size_mm,
+                    extra_layer=chosen_layer)
                 vb_x, vb_y = self._clear_via_spot(
-                    pair.x_b, pair.y_b, pair.net_name, via_size_mm)
+                    pair.x_b, pair.y_b, pair.net_name, via_size_mm,
+                    extra_layer=chosen_layer)
                 for vx, vy in ((va_x, va_y), (vb_x, vb_y)):
                     via = pcbnew.PCB_VIA(self.board)
                     via.SetPosition(pcbnew.VECTOR2I(
@@ -762,28 +794,366 @@ class Router:
                     via.SetDrill(pcbnew.FromMM(via_drill_mm))
                     via.SetNet(net)
                     self.board.Add(via)
-                    if self._spatial:  # reserve the via on both outer layers
-                        for ly in (pcbnew.F_Cu, pcbnew.B_Cu):
+                    if self._spatial:  # reserve via on primary + chosen layer
+                        for ly in (primary_layer, chosen_layer):
                             self._spatial.mark(vx, vy, vx, vy, via_size_mm,
                                                pair.net_name, ly)
-                # B_Cu body runs between the two vias.
+                # Routed body runs on the chosen layer between the two vias.
                 body = [(va_x, va_y)] + list(chosen_path[1:-1]) + [(vb_x, vb_y)]
                 for i in range(len(body) - 1):
                     self._add_track_seg(
                         body[i][0], body[i][1], body[i+1][0], body[i+1][1],
-                        w, pcbnew.B_Cu, net,
+                        w, chosen_layer, net,
                     )
-                # F_Cu stubs from each pad to its via.
+                # Primary-layer stubs from each pad to its via.
                 self._add_track_seg(pair.x_a, pair.y_a, va_x, va_y,
-                                    w, pcbnew.F_Cu, net)
+                                    w, primary_layer, net)
                 self._add_track_seg(vb_x, vb_y, pair.x_b, pair.y_b,
-                                    w, pcbnew.F_Cu, net)
+                                    w, primary_layer, net)
                 result.tracks_added += len(body) - 1 + 2
                 result.vias_added += 2
 
             result.routed += 1
 
         return result
+
+    # -- Differential-pair routing ---------------------------------------
+    # High-speed buses (USB, HDMI, MIPI, Ethernet, LVDS …) carry their signal
+    # as two nets driven in anti-phase. They must be routed as a *coupled*
+    # pair: the two traces run parallel at a constant edge-to-edge gap (which
+    # sets the differential impedance) and are length-matched so the two
+    # halves arrive in phase. The generic point-to-point router treats them as
+    # two unrelated nets and will happily route them far apart with different
+    # lengths — destroying the differential behaviour. This routes them
+    # together instead.
+
+    # Longest / most specific conventions first so ``USB_DP`` matches ``_DP``
+    # before the bare ``P`` rule could mis-fire.
+    _DIFF_SUFFIXES = (("_DP", "_DN"), ("_DP", "_DM"), ("_P", "_N"),
+                      ("_p", "_n"), ("+", "-"), ("P", "N"))
+
+    def find_diff_pairs(
+        self, only_nets: Optional[set[str]] = None
+    ) -> list["DiffPair"]:
+        """Detect differential pairs by net-name convention.
+
+        A pair is two routable nets whose names share a base and differ only
+        by a positive/negative suffix (``CLK_P``/``CLK_N``, ``D0+``/``D0-`` …).
+        """
+        names = set()
+        for fp in self.board.GetFootprints():
+            for pad in fp.Pads():
+                n = pad.GetNet()
+                if n and n.GetNetname():
+                    names.add(n.GetNetname())
+        if only_nets is not None:
+            names &= only_nets
+
+        seen: set[str] = set()
+        out: list[DiffPair] = []
+        for name in sorted(names):
+            if name in seen:
+                continue
+            for sp, sn in self._DIFF_SUFFIXES:
+                if sp == sn or not name.endswith(sp):
+                    continue
+                # Guard the bare ``P``/``N`` case so ``GND``-style names that
+                # merely end in ``N`` are not mistaken for a pair member.
+                if sp in ("P", "N") and len(name) <= len(sp):
+                    continue
+                base = name[: -len(sp)]
+                mate = base + sn
+                if mate in names and mate != name:
+                    out.append(DiffPair(base=base, p_net=name, n_net=mate))
+                    seen.add(name)
+                    seen.add(mate)
+                    break
+        return out
+
+    def route_diff_pairs(
+        self,
+        diff_pairs: Optional[list["DiffPair"]] = None,
+        width_mm: float = 0.2,
+        gap_mm: float = 0.2,
+        signal_layers: Optional[list[int]] = None,
+        via_penalty: float = 4,
+        via_size_mm: float = 0.45,
+        via_drill_mm: float = 0.2,
+    ) -> RouteResult:
+        """Route differential pairs as coupled, length-matched parallel traces.
+
+        For each pair the two driver pads define one end and the two receiver
+        pads the other. We run a shared centreline between the endpoint
+        midpoints and offset it by ``±(gap+width)/2`` perpendicular to give two
+        parallel polylines — P on one side, N on the other — then fan each
+        polyline end back into its own pad. By construction the two traces keep
+        a constant ``gap`` and have equal length (mirror images about the
+        centreline), which is exactly the differential constraint.
+
+        The coupled pair is layer-aware: the same offset geometry is scored on
+        every routable layer (``signal_layers``, default ``[F_Cu, B_Cu]``) and
+        the pair drops to a cleaner layer *as a unit* — both halves transition
+        together through symmetric vias so they stay coupled and length-matched
+        — only when that removes more collisions than the via pairs add
+        (``via_penalty`` per half). The primary layer is via-free.
+        """
+        if diff_pairs is None:
+            diff_pairs = self.find_diff_pairs()
+        result = RouteResult(total=len(diff_pairs))
+        if not diff_pairs:
+            return result
+        if signal_layers is None:
+            signal_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
+        primary_layer = signal_layers[0]
+
+        if self._spatial is None:
+            bbox = self.board.GetBoardEdgesBoundingBox()
+            bw = pcbnew.ToMM(bbox.GetWidth()) + 10
+            bh = pcbnew.ToMM(bbox.GetHeight()) + 10
+            self._spatial = _SpatialIndex(bw, bh, cell_mm=0.2,
+                                          mark_clearance_mm=self.clearance_mm)
+            for track in self.board.GetTracks():
+                s, e = track.GetStart(), track.GetEnd()
+                n = track.GetNet()
+                self._spatial.mark(
+                    pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
+                    pcbnew.ToMM(e.x), pcbnew.ToMM(e.y),
+                    pcbnew.ToMM(track.GetWidth()),
+                    n.GetNetname() if n else "", track.GetLayer())
+            self._seed_pads()
+
+        # Centre-to-centre offset: half the gap plus half a trace on each side.
+        off = (gap_mm + width_mm) / 2.0
+        for dp in diff_pairs:
+            unrouted = {p.net_name: p for p in self.get_unrouted()}
+            pp = unrouted.get(dp.p_net)
+            pn = unrouted.get(dp.n_net)
+            net_p = self.board.FindNet(dp.p_net)
+            net_n = self.board.FindNet(dp.n_net)
+            if not (pp and pn and net_p and net_n):
+                result.failed += 1
+                continue
+
+            # Endpoint midpoints define the shared centreline. Pad A of each
+            # net is the "near" end; pads were ordered by get_unrouted's MST.
+            ax = (pp.x_a + pn.x_a) / 2.0
+            ay = (pp.y_a + pn.y_a) / 2.0
+            bx = (pp.x_b + pn.x_b) / 2.0
+            by = (pp.y_b + pn.y_b) / 2.0
+            dx, dy = bx - ax, by - ay
+            length = math.hypot(dx, dy)
+            if length < 1e-6:
+                result.failed += 1
+                continue
+            # Unit perpendicular to the centreline.
+            ux, uy = -dy / length, dx / length
+
+            # P sits on the side its near pad already lies; keep N opposite so
+            # the traces never cross over the centreline.
+            side = 1.0
+            if ((pp.x_a - ax) * ux + (pp.y_a - ay) * uy) < 0:
+                side = -1.0
+
+            def _offsets(sgn):
+                return ((ax + ux * off * sgn, ay + uy * off * sgn),
+                        (bx + ux * off * sgn, by + uy * off * sgn))
+
+            # The coupled body is the perpendicular-offset segment between the
+            # two endpoint midpoints; score it on every layer for both halves.
+            a_p, b_p = _offsets(side)
+            a_n, b_n = _offsets(-side)
+            best = None  # (cost, layer)
+            for ly in signal_layers:
+                via_cost = 0 if ly == primary_layer else via_penalty
+                c = (self._path_cost([a_p, b_p], width_mm, dp.p_net, ly)
+                     + self._path_cost([a_n, b_n], width_mm, dp.n_net, ly)
+                     + via_cost)
+                if best is None or c < best[0]:
+                    best = (c, ly)
+                if c == 0:
+                    break
+            chosen_layer = best[1]
+
+            def _emit(pair, net, sgn):
+                a_off, b_off = _offsets(sgn)
+                if chosen_layer == primary_layer:
+                    poly = [(pair.x_a, pair.y_a), a_off, b_off,
+                            (pair.x_b, pair.y_b)]
+                    for i in range(len(poly) - 1):
+                        self._add_track_seg(poly[i][0], poly[i][1],
+                                            poly[i + 1][0], poly[i + 1][1],
+                                            width_mm, primary_layer, net)
+                    return len(poly) - 1, 0
+                # Drop to the chosen layer through a symmetric via at each end.
+                va = self._clear_via_spot(*a_off, net.GetNetname(), via_size_mm,
+                                          extra_layer=chosen_layer)
+                vb = self._clear_via_spot(*b_off, net.GetNetname(), via_size_mm,
+                                          extra_layer=chosen_layer)
+                for vx, vy in (va, vb):
+                    via = pcbnew.PCB_VIA(self.board)
+                    via.SetPosition(pcbnew.VECTOR2I(
+                        pcbnew.FromMM(vx), pcbnew.FromMM(vy)))
+                    via.SetWidth(pcbnew.FromMM(via_size_mm))
+                    via.SetDrill(pcbnew.FromMM(via_drill_mm))
+                    via.SetNet(net)
+                    self.board.Add(via)
+                    for mly in (primary_layer, chosen_layer):
+                        self._spatial.mark(vx, vy, vx, vy, via_size_mm,
+                                           net.GetNetname(), mly)
+                self._add_track_seg(pair.x_a, pair.y_a, va[0], va[1],
+                                    width_mm, primary_layer, net)
+                self._add_track_seg(va[0], va[1], vb[0], vb[1],
+                                    width_mm, chosen_layer, net)
+                self._add_track_seg(vb[0], vb[1], pair.x_b, pair.y_b,
+                                    width_mm, primary_layer, net)
+                return 3, 2
+
+            t_p, v_p = _emit(pp, net_p, side)
+            t_n, v_n = _emit(pn, net_n, -side)
+            result.tracks_added += t_p + t_n
+            result.vias_added += v_p + v_n
+            result.routed += 1
+
+        return result
+
+    def validate_diff_pairs(
+        self, diff_pairs: Optional[list["DiffPair"]] = None
+    ) -> list["DiffPairReport"]:
+        """Measure the routed quality of each differential pair (read-only).
+
+        Sums the routed track length of each half from the board and reports
+        the intra-pair length skew. Pure analysis — it never mutates the board,
+        so it cannot regress routing; it just surfaces whether the high-speed
+        constraint actually held after routing.
+        """
+        if diff_pairs is None:
+            diff_pairs = self.find_diff_pairs()
+
+        lengths: dict[str, float] = {}
+        for track in self.board.GetTracks():
+            if track.GetClass() != "PCB_TRACK":
+                continue
+            n = track.GetNet()
+            name = n.GetNetname() if n else ""
+            if not name:
+                continue
+            s, e = track.GetStart(), track.GetEnd()
+            lengths[name] = lengths.get(name, 0.0) + math.hypot(
+                pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+
+        out: list[DiffPairReport] = []
+        for dp in diff_pairs:
+            pl = lengths.get(dp.p_net, 0.0)
+            nl = lengths.get(dp.n_net, 0.0)
+            out.append(DiffPairReport(
+                base=dp.base, p_net=dp.p_net, n_net=dp.n_net,
+                p_len_mm=pl, n_len_mm=nl, routed=(pl > 0 and nl > 0)))
+        return out
+
+    def _net_lengths(self, nets: set[str]) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for track in self.board.GetTracks():
+            if track.GetClass() != "PCB_TRACK":
+                continue
+            n = track.GetNet()
+            name = n.GetNetname() if n else ""
+            if name not in nets:
+                continue
+            s, e = track.GetStart(), track.GetEnd()
+            out[name] = out.get(name, 0.0) + math.hypot(
+                pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+        return out
+
+    def tune_length_group(
+        self, nets: list[str], target_len_mm: Optional[float] = None,
+        amplitude_mm: float = 1.0, tolerance_mm: float = 0.1,
+    ) -> dict[str, float]:
+        """Equalize routed length across a group of nets (opt-in).
+
+        For each net shorter than the group's longest (or an explicit
+        ``target_len_mm``), the net's longest straight track is replaced with a
+        square-wave serpentine that adds exactly the length deficit: ``k``
+        perpendicular excursions of amplitude ``A`` add ``2*A*k`` (the along-
+        baseline travel is preserved), so the added length is exact by
+        construction. Returns ``{net: final_length_mm}``.
+
+        Read-only of any default path — :func:`auto_design` never calls this, so
+        it cannot move the DRC benchmarks. It is the natural follow-on to
+        :meth:`validate_diff_pairs`: that *measures* skew, this *removes* it for
+        a matched bus/group.
+        """
+        want = set(nets)
+        lengths = self._net_lengths(want)
+        target = target_len_mm if target_len_mm is not None else max(
+            lengths.values(), default=0.0)
+
+        for net in nets:
+            cur = lengths.get(net, 0.0)
+            delta = target - cur
+            if delta <= tolerance_mm or cur <= 0:
+                continue
+            longest = None
+            for track in self.board.GetTracks():
+                if track.GetClass() != "PCB_TRACK":
+                    continue
+                tn = track.GetNet()
+                if not tn or tn.GetNetname() != net:
+                    continue
+                s, e = track.GetStart(), track.GetEnd()
+                ln = math.hypot(pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+                if longest is None or ln > longest[0]:
+                    longest = (ln, track)
+            if longest is None:
+                continue
+            _, track = longest
+            s, e = track.GetStart(), track.GetEnd()
+            x0, y0 = pcbnew.ToMM(s.x), pcbnew.ToMM(s.y)
+            x1, y1 = pcbnew.ToMM(e.x), pcbnew.ToMM(e.y)
+            width_mm = pcbnew.ToMM(track.GetWidth())
+            layer = track.GetLayer()
+            net_obj = track.GetNet()
+            pts = self._square_meander(
+                x0, y0, x1, y1, delta, amplitude_mm, width_mm)
+            self.board.Remove(track)
+            for i in range(len(pts) - 1):
+                self._add_track_seg(pts[i][0], pts[i][1], pts[i + 1][0],
+                                    pts[i + 1][1], width_mm, layer, net_obj)
+
+        return self._net_lengths(want)
+
+    @staticmethod
+    def _square_meander(x0, y0, x1, y1, add_mm, amplitude_mm, width_mm):
+        """Square-wave detour from (x0,y0)->(x1,y1) that adds ``add_mm`` length.
+
+        ``k`` bumps each add ``2*A`` (two perpendicular legs); amplitude is
+        recomputed to ``add_mm/(2k)`` so the total is exact. Bumps alternate
+        sides and are spaced by their own width so they never overlap.
+        """
+        baseline = math.hypot(x1 - x0, y1 - y0)
+        if baseline <= 0 or add_mm <= 0:
+            return [(x0, y0), (x1, y1)]
+        ux, uy = (x1 - x0) / baseline, (y1 - y0) / baseline
+        nx, ny = -uy, ux  # perpendicular unit
+        k = max(1, round(add_mm / (2.0 * amplitude_mm)))
+        amp = add_mm / (2.0 * k)  # exact added length = 2*amp*k = add_mm
+        bump_w = max(2.0 * width_mm, baseline / (k + 1))
+        if k * bump_w > baseline:  # keep bumps inside the baseline
+            bump_w = baseline / k
+        span = k * bump_w
+        start = (baseline - span) / 2.0
+
+        def at(dist, off):
+            return (x0 + ux * dist + nx * off, y0 + uy * dist + ny * off)
+
+        pts = [(x0, y0), at(start, 0.0)]
+        for i in range(k):
+            side = amp if i % 2 == 0 else -amp
+            p = start + i * bump_w
+            pts.append(at(p, side))
+            pts.append(at(p + bump_w, side))
+            pts.append(at(p + bump_w, 0.0))
+        pts.append((x1, y1))
+        return pts
 
     def export_dsn(self, output_path: str | Path) -> bool:
         """Export board to Specctra DSN format for external routing.
