@@ -55,10 +55,15 @@ class ExportEngine:
             (pcbnew.B_Fab, "B_Fab", "Back Fabrication"),
         ]
 
-        # Inner copper layers
+        # Inner copper layers (KiCad 9: IDs are In1_Cu, In2_Cu, ... spaced by 2)
+        inner_layer_ids = [
+            pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.In4_Cu,
+            pcbnew.In5_Cu, pcbnew.In6_Cu, pcbnew.In7_Cu, pcbnew.In8_Cu,
+        ]
         for i in range(1, n_copper - 1):
-            layer_id = pcbnew.In1_Cu + (i - 1)
-            layer_plan.append((layer_id, f"In{i}_Cu", f"Inner Layer {i}"))
+            if i - 1 < len(inner_layer_ids):
+                layer_id = inner_layer_ids[i - 1]
+                layer_plan.append((layer_id, f"In{i}_Cu", f"Inner Layer {i}"))
 
         files = []
         for layer_id, suffix, _desc in layer_plan:

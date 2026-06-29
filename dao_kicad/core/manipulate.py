@@ -118,6 +118,13 @@ class BoardBuilder:
             self._nets[name] = net
         return net
 
+    def _find_footprint(self, ref: str):
+        """Find a footprint by reference designator."""
+        for fp in self.board.GetFootprints():
+            if fp.GetReference() == ref:
+                return fp
+        return None
+
     # ─── Component Placement ────────────────────────────────────────────────
 
     def place(self, library: str, footprint: str, reference: str,
