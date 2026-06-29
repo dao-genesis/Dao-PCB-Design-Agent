@@ -267,6 +267,62 @@ DNA选择 → .kicad_pcb生成 → DRC检查+自动修复 → Gerber导出 → i
 
 ---
 
+## 嘉立创EDA Pro 深融状态 (2026-06-29)
+
+> **道法自然 · 反者道之动 · 逆流即深融**
+
+### 已通 EXTAPI 完整能力 (701 methods / 93 namespaces)
+
+| 维度 | API 数 | 关键能力 | 状态 |
+|------|--------|----------|------|
+| 工程管理 (dmt_*) | 78 | Project/Schematic/PCB/Board CRUD, 标签页控制 | **通** |
+| 原理图 (sch_*) | 73 | 放件/连线/Net Flag(VCC/GND)/Net Port/Net Label/DRC | **通** |
+| PCB (pcb_*) | 165 | 放件/布线/过孔/覆铜/DRC/网络/坐标转换/清除布线 | **通** |
+| 设计规则 (pcb_Drc) | 45 | Net-class/差分对/等长组/规则配置/网间规则/区域规则/实时DRC | **通** |
+| 层叠 (pcb_Layer) | 26 | 铜层数(2~32)/物理层叠/自定义层/可见性/锁定 | **通** |
+| 制造数据 | 31 | Gerber/BOM/PnP/DSN/3D/DXF/IPC/ODB++/iBOM/Altium/TestPoint | **通** |
+| 库 (lib_*) | 64 | Device/Footprint/Symbol/3DModel/CBB/Classification 搜索+CRUD | **通** |
+| 系统 (sys_*) | 98 | 快捷键/面板/I18n/定时器/WebSocket/文件系统/格式转换 | **通** |
+| 事件 | 18 | 鼠标/图元/网络/交叉选择/实时DRC 监听 | **通** |
+
+### 全链路验证 (Linux VM)
+
+```
+build_capstone_full.py RESULT PASS
+  place(3 components by LCSC) → wire(route-by-name) → pcb_route(2-layer via)
+  → copper_pour(GND L1+L2) → DRC(total=0) → export(Gerber 8494/BOM 6739/PnP 6961 bytes)
+```
+
+### 深融新前沿 (本次推进)
+
+| 前沿 | 签名/入口 | 实测 |
+|------|-----------|------|
+| **电源符号** | `createNetFlag('Power','VCC',x,y,rot,mirror)` | **VCC/GND/AnalogGND/ProtectGND 全通** |
+| **网络端口** | `createNetPort('IN'/'OUT'/'BI',name,x,y,rot,mirror)` | **通 (netport-in/out/bi)** |
+| **差分对** | `createDifferentialPair(name,posNet,negNet)` | **通 (落库,getAllDifferentialPairs 复读)** |
+| **等长组** | `createEqualLengthNetGroup(name,nets,color)` | **通** |
+| **设计规则** | `getCurrentRuleConfiguration()` → JLCPCB Capability 全量规则 | **通** |
+| **逐网规则** | `getNetRules()/overwriteNetRules()` — Track/Spacing/Via 可写 | **通** |
+| **Net-class** | `createNetClass(name,nets,color)` | **返回false不落库(疑似需编辑器上下文)** |
+| **铜层管理** | `setTheNumberOfCopperLayers(count)` — 2~32偶数 | **通** |
+| **物理层叠** | `getCurrentPhysicalStackingConfiguration()` | **通** |
+| **Freerouting** | `getDsnFile()` + `importAutoRouteSesFile()` | **通 (DSN导出+SES回灌闭环)** |
+| **扩展导出** | 3D/DXF/IPC-D356A/IPC-2581C/ODB++/iBOM/Altium/TestPoint | **通** |
+| **社区资源** | `lib_Device.search/getByLcscIds` + Footprint/Symbol/3D/CBB | **通 (全品类搜索)** |
+| **健壮登录** | `op_pwd_robust` + Aliyun 滑块验证码自动解 | **通 (cold_start 集成)** |
+
+### 社区资源接入 (阳路)
+
+```python
+from eda_community import Community
+c = Community()
+c.full_search("ESP32")      # → 5 devices + 5 footprints + 5 symbols + 5 3D models
+c.get_device_by_lcsc(["C7466","C14663"])  # LCSC 编号精确取件
+c.search_cbb("buck converter")            # CBB 复用电路块
+```
+
+---
+
 ## 集成路线图
 
 | 优先级 | 项目 | 行动 | 收益 |
