@@ -855,14 +855,21 @@ class Flow:
 
     def auto_ground_pour(self, net="GND", layers=(1, 2), margin=20, line_width=10):
         """从焊盘 bbox 自动给指定层铺 GND(双面地平面),建完即 rebuild_pours 算出铜。"""
-        pads = self.eda.call("pcb_PrimitivePad.getAllPrimitiveId", timeout=15) or []
         xs, ys = [], []
+        pads = self.eda.call("pcb_PrimitivePad.getAllPrimitiveId", timeout=15) or []
         for p in pads:
             g = self.eda.call("pcb_PrimitivePad.get", p, timeout=8)
             if g and "x" in g and "y" in g:
                 xs.append(g["x"]); ys.append(g["y"])
         if not xs:
-            raise FlowError("auto_ground_pour: 焊盘无坐标(先 importChanges?)")
+            # 自由焊盘为空(实板焊盘绑在器件引脚上):从器件引脚取 bbox
+            for c in (self.pcb_component_ids() or []):
+                for q in (self.eda.call("pcb_PrimitiveComponent.getAllPinsByPrimitiveId",
+                                        c, timeout=10) or []):
+                    if "x" in q and "y" in q:
+                        xs.append(q["x"]); ys.append(q["y"])
+        if not xs:
+            raise FlowError("auto_ground_pour: 无焊盘/引脚坐标(先 importChanges?)")
         x = min(xs) - margin
         top_y = max(ys) + margin
         w = (max(xs) - min(xs)) + 2 * margin
