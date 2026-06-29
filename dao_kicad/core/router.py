@@ -215,6 +215,57 @@ class Router:
 
         return True
 
+    def route_offset_manhattan(self, pair: RoutePair, width_mm: float = 0.25,
+                               layer: int = pcbnew.F_Cu, offset_mm: float = 0.0) -> bool:
+        """Route manhattan with an offset bend to avoid congestion.
+
+        Instead of bending at (xB, yA) or (xA, yB), offset the bend point
+        to create a Z-shaped route that avoids existing tracks.
+        """
+        net = self.board.FindNet(pair.net_name)
+        if not net:
+            return False
+
+        dx = pair.x_b - pair.x_a
+        dy = pair.y_b - pair.y_a
+
+        if abs(dx) < 0.01 or abs(dy) < 0.01:
+            return self.route_direct(pair, width_mm, layer)
+
+        # Choose midpoint with offset: Z-shape instead of L-shape
+        mid_frac = 0.5  # bend at halfway point along longer axis
+        if abs(dx) >= abs(dy):
+            mid_x = pair.x_a + dx * mid_frac
+            # 3-segment Z-route: horizontal → vertical → horizontal
+            pts = [
+                (pair.x_a, pair.y_a),
+                (mid_x + offset_mm, pair.y_a),
+                (mid_x + offset_mm, pair.y_b),
+                (pair.x_b, pair.y_b),
+            ]
+        else:
+            mid_y = pair.y_a + dy * mid_frac
+            pts = [
+                (pair.x_a, pair.y_a),
+                (pair.x_a, mid_y + offset_mm),
+                (pair.x_b, mid_y + offset_mm),
+                (pair.x_b, pair.y_b),
+            ]
+
+        # Add track segments, skip zero-length
+        for i in range(len(pts) - 1):
+            if abs(pts[i][0] - pts[i+1][0]) < 0.01 and abs(pts[i][1] - pts[i+1][1]) < 0.01:
+                continue
+            t = pcbnew.PCB_TRACK(self.board)
+            t.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(pts[i][0]), pcbnew.FromMM(pts[i][1])))
+            t.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(pts[i+1][0]), pcbnew.FromMM(pts[i+1][1])))
+            t.SetWidth(pcbnew.FromMM(width_mm))
+            t.SetLayer(layer)
+            t.SetNet(net)
+            self.board.Add(t)
+
+        return True
+
     def route_all(self, strategy: str = "manhattan",
                   width_mm: float = 0.25,
                   power_width_mm: float = 0.5,
@@ -239,7 +290,12 @@ class Router:
         pairs = self.get_unrouted()
         result = RouteResult(total=len(pairs))
 
-        route_fn = self.route_manhattan if strategy == "manhattan" else self.route_direct
+        if strategy == "manhattan":
+            route_fn = self.route_manhattan
+        elif strategy == "z-route":
+            route_fn = self.route_offset_manhattan
+        else:
+            route_fn = self.route_direct
 
         for pair in pairs:
             # Per-net width override → power width → default
