@@ -57,6 +57,28 @@ class DiffPair:
 
 
 @dataclass
+class DiffPairReport:
+    """Measured quality of one routed differential pair.
+
+    ``length_skew_pct`` is the intra-pair length mismatch as a percentage of
+    the longer half — the constraint that matters for phase alignment. The
+    coupled router produces 0% by construction (mirror geometry), so a nonzero
+    value flags a layer transition or a fan-in that broke the mirror.
+    """
+    base: str
+    p_net: str
+    n_net: str
+    p_len_mm: float
+    n_len_mm: float
+    routed: bool
+
+    @property
+    def length_skew_pct(self) -> float:
+        hi = max(self.p_len_mm, self.n_len_mm)
+        return abs(self.p_len_mm - self.n_len_mm) / hi * 100 if hi else 0.0
+
+
+@dataclass
 class RouteResult:
     """Result of routing attempt."""
     routed: int = 0
@@ -993,6 +1015,40 @@ class Router:
             result.routed += 1
 
         return result
+
+    def validate_diff_pairs(
+        self, diff_pairs: Optional[list["DiffPair"]] = None
+    ) -> list["DiffPairReport"]:
+        """Measure the routed quality of each differential pair (read-only).
+
+        Sums the routed track length of each half from the board and reports
+        the intra-pair length skew. Pure analysis — it never mutates the board,
+        so it cannot regress routing; it just surfaces whether the high-speed
+        constraint actually held after routing.
+        """
+        if diff_pairs is None:
+            diff_pairs = self.find_diff_pairs()
+
+        lengths: dict[str, float] = {}
+        for track in self.board.GetTracks():
+            if track.GetClass() != "PCB_TRACK":
+                continue
+            n = track.GetNet()
+            name = n.GetNetname() if n else ""
+            if not name:
+                continue
+            s, e = track.GetStart(), track.GetEnd()
+            lengths[name] = lengths.get(name, 0.0) + math.hypot(
+                pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+
+        out: list[DiffPairReport] = []
+        for dp in diff_pairs:
+            pl = lengths.get(dp.p_net, 0.0)
+            nl = lengths.get(dp.n_net, 0.0)
+            out.append(DiffPairReport(
+                base=dp.base, p_net=dp.p_net, n_net=dp.n_net,
+                p_len_mm=pl, n_len_mm=nl, routed=(pl > 0 and nl > 0)))
+        return out
 
     def export_dsn(self, output_path: str | Path) -> bool:
         """Export board to Specctra DSN format for external routing.

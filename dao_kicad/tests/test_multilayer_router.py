@@ -220,3 +220,27 @@ class TestDiffPairNetClassParams:
         assert dpp["ETH_TX+"] == (0.12, 0.12)
         # Single-ended and power nets have no diff-pair geometry.
         assert "GND" not in dpp and "3V3" not in dpp and "S0" not in dpp
+
+
+class TestDiffPairValidation:
+    def test_validate_reports_zero_skew_when_coupled(self):
+        """A coupled front-layer pair must validate at ~0% length skew."""
+        b = _make_board(layers=4, w=50, h=30)
+        b.add_nets("D_P", "D_N", "GND")
+        b.place("Connector_PinHeader_2.54mm", "PinHeader_1x03_P2.54mm_Vertical",
+                "J1", 10, 15, value="A")
+        b.place("Connector_PinHeader_2.54mm", "PinHeader_1x03_P2.54mm_Vertical",
+                "J2", 40, 15, value="B")
+        for j in ("J1", "J2"):
+            b.assign_net(j, "1", "D_P")
+            b.assign_net(j, "2", "D_N")
+            b.assign_net(j, "3", "GND")
+
+        r = Router(b.board, min_clearance_mm=0.15)
+        pairs = r.find_diff_pairs()
+        r.route_diff_pairs(pairs, signal_layers=[pcbnew.F_Cu])
+        reports = {rep.base: rep for rep in r.validate_diff_pairs(pairs)}
+        assert "D" in reports
+        rep = reports["D"]
+        assert rep.routed
+        assert rep.length_skew_pct < 1.0
