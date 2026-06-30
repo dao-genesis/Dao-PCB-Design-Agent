@@ -139,6 +139,18 @@ Layers Board)"[Spacing/Physics/Plane/Expansion], drc:0}`。**能力面盘点 = 9
 > 心法：**软件本体的 `.d.ts` 是「人能操作的一切」最权威的册**；读它即把 GUI 里
 > 每个可点选项映射成确定可调的 RPC——这是「比人更稳更准」的本源，胜过反复试错。
 
+### 下一前沿：差异化网络规则（已探明·留作下轮）
+
+`getNetRules()` 返回规则树：每个 `netClass`/`net` 节点带 `Track`、`Safe Spacing`、
+`Via Size`、`Net Length Range/Tolerance`、`Differential Pair` 等属性，值多为
+`"default"`（即引用名为「default」的具名规则档）。已封只读 `net_rules()` 并入自审。
+
+要让网络类**真正差异化**（如高速类单独的线宽/间距/过孔），须经 `overwriteNetRules`
+把对应节点的 `"default"` 改成目标具名档——但该方法 `@remarks` 明示「覆写当前 PCB
+**所有**网络规则、有数据丢失风险」，且属性值是**具名档引用**而非裸数值（需先弄清有哪些
+合法档名、各档参数从何处建）。signature/取值未明，故**只读不写**（知止不殆），
+待下轮逐一实测具名档来源后再封安全的差异化写入。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`

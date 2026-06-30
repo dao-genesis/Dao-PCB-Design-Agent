@@ -419,6 +419,14 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             out["equal_length"][nm] = self.equal_length_group(nm, nets)
         return out
 
+    def net_rules(self):
+        """网络/网络类的规则树（只读）。每个 netClass/net 节点带 Track、Safe Spacing、
+        Via Size、Net Length Range/Tolerance、Differential Pair 等属性，值多为 "default"
+        （引用具名规则档）。差异化（如给高速类单独的线宽/间距）须经
+        `overwriteNetRules` 改这些值——属覆写全表的高风险操作，且值为具名档引用而非裸
+        数值，签名/取值待逐一实测，故暂只读不写（知止不殆）。"""
+        return self._call("pcb_Drc.getNetRules", timeout=20) or []
+
     def constraints_summary(self):
         """高速约束快照：{net_classes, diff_pairs, equal_length}（只读，喂自审）。"""
         return {
