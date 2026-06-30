@@ -167,9 +167,19 @@ Layers Board)"[Spacing/Physics/Plane/Expansion], drc:0}`。**能力面盘点 = 9
   新增一个具名子规则（如 `Track:"hs_wide"`）→ `overwriteCurrentRuleConfiguration`（仅
   自定义档可改），②`overwriteNetRules` 把高速类节点的 `Track` 指向 `"hs_wide"`。
 
-**仍只读不写的原因**：两步都是「覆写全表」级高风险写入（系统档还不可改，须先存一份
-自定义档）。路径虽已探明，但写入语义未在活板验证、易致规则丢失，故按知止不殆，留待
-下轮在自定义档上小步验证后再封 `set_net_class_rule(class, attr, profile)` 安全写入。
+**差异化写入已落地（小步验证后封装）**：实测 `overwriteNetRules` 的「覆写全表」风险
+可由「**读全量树 → 只改目标类一个属性 → 整树写回**」彻底规避（其余规则原样保留、
+无丢失）。据此封 `set_net_class_rule(class, attr, profile)`：先按 `rule_profiles()`
+校验 attr/profile 合法、改目标 netClass 节点、写回后**读回确认**。`apply_constraints`
+新增 `class_rules: {类: {属性: 具名子规则}}`，spec 即可声明差异化。
+
+- **实测**：medium 板把 `BUS6` 类的 `Track`+`Safe Spacing` 指向 `copperThickness2oz`
+  （更粗线/更大间距）→ 全链路 **DRC=0 CLEAN**（attempts `[112,0]`：首攻 112 违规、
+  二攻清零——更严的高速规则使首遍更难、freerouting 自愈后收敛）。
+- **本源心法**：高危覆写 API 的安全用法 = **读—改—写回**整体事务，把"覆写全表"变成
+  "差量更新"；危险不在 API 本身，在于丢了它要的全量上下文。读它要的全量再回写，即化危为安。
+- 注：要严格按高速工艺核 DRC，还可 `setAsDefaultRuleConfiguration('High Frequency
+  Board')` 切到高频档（与差异化 net-class 规则正交，二者可叠加）。
 
 ## 一句话沉淀
 
