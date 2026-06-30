@@ -53,6 +53,31 @@
   整板重建收敛（实测 5 次内必绿）——**重试预算应随板复杂度上调**（与 Web 版结论一致）。
 - 产物均为真实可投产文件：`Gerber`(zip) / `BOM.xlsx` / `PnP`，落 `~/dao_pcb_out/<板名>/`。
 
+## 自审 / 感知层（闭环「自我审视」· 只读）
+
+> 阴阳之阴：在「能改板」之外补「能看清板」。落地前先感知真实板态，是闭环自审的本源。
+
+`dao_rpc_driver` 新增 4 个只读快照方法（零 GUI、不改板，喂自我审视回环）：
+
+| 方法 | 读到什么 | 底层 EXTAPI |
+|---|---|---|
+| `layer_info()` | 铜层数 + 叠层名 | `pcb_Layer.getTheNumberOfCopperLayers` / `…StackingConfigurationName` |
+| `net_summary(with_length=)` | 网络数 / 名 / 线长 | `pcb_Net.getAllNetsName` / `getNetLength` |
+| `design_rules(raw=)` | 当前 DRC 规则配置名 + 类目 | `pcb_Drc.getCurrentRuleConfiguration{,Name}` |
+| `board_report()` | 上三者 + DRC 一次性自审 | 组合 |
+| `capabilities(detail=)` | `_EXTAPI_ROOT_` 全能力面盘点 | renderer introspection |
+
+CLI 速用（对当前打开的板）：
+
+```bash
+python dao_rpc_driver.py report   # 层/网络/规则/DRC 自审快照
+python dao_rpc_driver.py caps     # 能力面：实测 93 命名空间 / 702 方法
+```
+
+实测（STM32 最小系统板）：`{layers:2, nets:22, rules:"JLCPCB Capability(Two
+Layers Board)"[Spacing/Physics/Plane/Expansion], drc:0}`。**能力面盘点 = 93 ns /
+702 method**——「人能在软件里点的模块」尽数在册，后续可据此把更多模块逐一纳入稳定 RPC。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`

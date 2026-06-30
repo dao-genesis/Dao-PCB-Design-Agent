@@ -339,6 +339,76 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             by[e["type"]] = by.get(e["type"], 0) + 1
         return {"total": len(viol), "by_type": by, "violations": viol}
 
+    # ---------- 自审 / 感知（只读，喂闭环自我审视） ----------
+    def layer_info(self):
+        """板层快照：{copper_layers, stackup}。多层板实践的前置感知。"""
+        n = self._call("pcb_Layer.getTheNumberOfCopperLayers", timeout=15)
+        stack = self._call(
+            "pcb_Layer.getCurrentPhysicalStackingConfigurationName", timeout=15)
+        return {"copper_layers": n, "stackup": stack}
+
+    def net_summary(self, with_length=False):
+        """网络快照：{count, names, [lengths]}。length 单位同 EDA 内部（mil）。"""
+        names = self._call("pcb_Net.getAllNetsName", timeout=20) or []
+        out = {"count": len(names), "names": names}
+        if with_length:
+            lengths = {}
+            for nm in names:
+                try:
+                    lengths[nm] = self._call("pcb_Net.getNetLength", nm,
+                                             timeout=15)
+                except Exception:
+                    lengths[nm] = None
+            out["lengths"] = lengths
+        return out
+
+    def design_rules(self, raw=False):
+        """当前 DRC 规则配置：{name, categories[, config]}。
+
+        `getCurrentRuleConfiguration` 返回的 config 体量很大（整张间距矩阵），
+        默认只回名字与顶层类目（Spacing/Width/…）；raw=True 才带全量 config。
+        """
+        name = self._call("pcb_Drc.getCurrentRuleConfigurationName", timeout=15)
+        cfg = self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=20) or {}
+        inner = cfg.get("config", cfg) if isinstance(cfg, dict) else {}
+        cats = sorted(inner.keys()) if isinstance(inner, dict) else []
+        out = {"name": name, "categories": cats}
+        if raw:
+            out["config"] = cfg
+        return out
+
+    def board_report(self):
+        """一次性自审快照：层 + 网络 + 规则 + DRC，供闭环「自我审视」。"""
+        rep = {"layers": self.layer_info(), "nets": self.net_summary(),
+               "rules": self.design_rules()}
+        try:
+            rep["drc"] = self.drc()
+        except Exception as e:
+            rep["drc"] = {"error": str(e)}
+        return rep
+
+    def capabilities(self, detail=False):
+        """introspect `_EXTAPI_ROOT_`：{ns_count, method_count[, methods]}。
+
+        把「软件本体所有可操作模块」摊给后续会话——人能点的这里都在册。
+        detail=True 时附 {ns: [method,…]} 全表（体量较大）。
+        """
+        js = (r'''(function(){var R=%s;if(!R)return JSON.stringify({err:"no extapi"});
+var out={},nc=0,mc=0;Object.keys(R).forEach(function(ns){var o=R[ns];
+if(!o||typeof o!=="object"){return;}var names=[],seen={},p=o;
+while(p&&p!==Object.prototype){Object.getOwnPropertyNames(p).forEach(function(k){
+if(seen[k])return;seen[k]=1;try{if(typeof o[k]==="function"&&k!=="constructor")names.push(k);}catch(e){}});
+p=Object.getPrototypeOf(p);}if(names.length){out[ns]=names.sort();nc++;mc+=names.length;}});
+return JSON.stringify({ns_count:nc,method_count:mc,methods:out});})()''' % EXT)
+        o = self._eval(js, timeout=30) or {}
+        if o.get("err"):
+            raise DaoRpcError("capabilities: %s" % o["err"])
+        res = {"ns_count": o.get("ns_count"),
+               "method_count": o.get("method_count")}
+        if detail:
+            res["methods"] = o.get("methods")
+        return res
+
     # ---------- 导出 ----------
     _BLOB = (r'''(async function(){try{var f=await %s;if(!f)return JSON.stringify({err:"no file"});
 var ab=await f.arrayBuffer();var u=new Uint8Array(ab);var s="";for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);
@@ -539,3 +609,29 @@ return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return 
         with open(best["out_dir"] + "/audit.json", "w") as fh:
             json.dump(best, fh, ensure_ascii=False, indent=2)
         return best
+
+
+def _main(argv):
+    """轻量自审 CLI：对当前打开的板做只读快照（零 GUI、不改板）。
+
+    用法：
+        python dao_rpc_driver.py report [--port 29230]   # 层/网络/规则/DRC 自审
+        python dao_rpc_driver.py caps   [--port 29230]    # _EXTAPI_ROOT_ 能力面
+    """
+    cmd = argv[0] if argv else "report"
+    port = 29230
+    if "--port" in argv:
+        port = int(argv[argv.index("--port") + 1])
+    drv = DaoRpc(port=port)
+    if cmd == "caps":
+        out = drv.capabilities(detail="--detail" in argv)
+    elif cmd == "report":
+        out = drv.board_report()
+    else:
+        out = {"err": "unknown cmd %r; use report|caps" % cmd}
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    import sys
+    _main(sys.argv[1:])
