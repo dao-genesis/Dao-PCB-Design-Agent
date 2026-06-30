@@ -81,4 +81,23 @@
 5. **net 标志/电源符号**:`sch_PrimitiveComponent.createNetFlag` / `setNetFlagComponentUuid_Ground/Power` 做规范电源轨。
 6. **KiCad 道**(`kicad_origin/`):继续 IPC API 深融、3D/Gerber/STEP 导出对齐。
 
+## 6. 桌面端纯 RPC 轨 · 本会话新增能力与本源教训
+
+> 桌面端(`bootstrap_desktop.py` → CDP:29230)走 `dao_rpc_driver.py`(类 `DaoRpc`),
+> 全链路零 GUI:`place_and_net → apply_constraints → board_outline → autoroute(freerouting) → drc → length_audit → export`。
+> 板谱在 `examples/specs.py`(`BOARDS` 字典),`run.py <name|all> --tries N` 跑。
+
+### 已固化原语
+- **`auto_fanout(designator, pad_net, ...)`** — 几何驱动**通用扇出**:读目标器件**真实焊盘 (x,y)**(`pad_xy`)→算中心→每脚按 `|dx|`vs`|dy|` 主轴定逃逸边(右/左/上/下)、同侧沿边排序逐颗递增 `depth_step` 错位→串件落「脚垂直对齐线 × 外延深度」。**不对任何封装引脚布局做硬假设**。已在 QFP(四边)/ SOIC(双边)/ BGA(栅格外圈)三类几何验证 DRC=0 通用。谱里器件声明 `auto_fanout={脚:网}` 即接入。
+- **`place_and_net(components, chunk=10)`** — 按 `chunk` 件**分批多发 eval**:治大板(如 48 脚 QFP ~120 次绑网)单发破 90s `NO_RESULT`,对任意规模线性可扩。
+- **`length_audit(constraints)`** — 布线后以 `pcb_Net.getNetLength` 量实测铜长,报 diff_pair **skew**(`|lP-lN|`)/ equal_length **spread**(`max-min`),据实入 `audit.steps.length_audit`。把「约束兑现度」变成可量测数字。
+- **`_eval(..., retries=2)`** — 对**瞬时** `NO_RESULT`(CDP 偶发空结果)有限重试 + 重连编辑器会话;真错误/超时如实抛,不掩盖。
+
+### 本源教训(实证)
+- **几何优先**:高脚数器件能否一次布通,命门在**放置质量**而非布线器。qfp 实证——detached 栅格放 32 扇出残留 8 Connection Error;改「就近同侧逃逸」即一次过 DRC=0。`auto_fanout` 把这套手调几何**自动化**。
+- **诚实定界**:① headless 无实铜覆铜(`rebuildCopperRegion` 恒 undefined,见 FINDINGS);② freerouting **仅通孔、不做长度调谐(蛇形)**——故 BGA **内圈球** escape 与差分严格等长是当前布线级前沿;③ length_audit 的 skew/spread 取决于放置对称性,如实记录(hs 对称放置恰好 skew=0)。
+
+### 板谱(10,全 VM 活体一次过 DRC=0 CLEAN)
+`simple/medium/complex/mcu`(几何全链)· `hs`(约束级:网类+差分对+等长组+类线宽注入 DSN)· `via6`(6 层+自定义过孔+盲埋孔层对)· `qfp`(LQFP48 四边手调扇出)· `autofan`(同 QFP 但 auto_fanout 零手填坐标)· `soicfan`(SOIC16 双边 auto_fanout)· `bga`(BGA64 0.65mm 外圈通孔逃逸)。
+
 > 接手姿势:先 `python build_capstone_full.py` 确认底座活;再挑一条前沿,逆向 → 实现 → `build_*_det.py` 活体验证 → py_compile → 干净 PR → CI 绿 → 合并。一直推进,一直完善。
