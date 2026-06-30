@@ -241,6 +241,24 @@ ns.build("design.kicad_sch", "out/")         # 摆位+真网表 → native_build
 布局保设计者排布 (R 在左、D/C 在右; R1 在 R2 上), 等比缩进 60×40 板; 缺封装 0;
 该图未画连线, 故 `nets=0` 如实回报 (非 bug, 是真相); 全闭环建板+布线出真 board。
 
+### 〇.12 本源拼板 (`native_panel.py`)
+
+> 单板是"一"; 投厂按单位面积出片, 要把它阵列成 n×m 拼板加工艺边 (一生二二生三)。不靠手摆,
+> 而用 KiCad 本源 `BOARD_ITEM.Duplicate()` 把源板每一件 (封装/走线/过孔/覆铜/图元) 真复制
+> 平移到各格 (源板占首格), 末了在 `Edge.Cuts` 加整面外框 + `rail_mm` 工艺边。子进程
+> (`_panel_worker.py`) 在 pcbnew 内完成, 落盘后**重载实测**封装总数与外框尺寸 (反臆造)。
+
+```python
+from kicad_origin.origin.native_panel import NativePanel
+rep = NativePanel().panelize("board.kicad_pcb", "panel.kicad_pcb",
+                             cols=3, rows=2, gap_mm=2.0, rail_mm=5.0)
+rep.fp_after        # = fp_before * cols * rows
+rep.panel_bbox_mm   # 整面外框尺寸 (重载实测)
+```
+
+实测: 3 件单板 (39.8×11.2mm) → 3×2 拼板 = **18 件**, 整面 133.5×34.4mm (含 5mm 工艺边);
+2×1 条板 = 6 件; `1×1` (非拼板) 与 `cols=0` 均如实拒做。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
