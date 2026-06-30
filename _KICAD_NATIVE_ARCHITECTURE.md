@@ -440,6 +440,23 @@ rep.fiducials, rep.mask_margins_mm   # 重载实测: 余量 = (mask-copper)/2
 实测: 顶层 2 个 (铜1/窗2) → `fiducials=2`、阻焊余量均 0.5mm; 底层 (铜1.5/窗3) → 余量 0.75mm;
 `mask_mm<=copper_mm` / 空输入 / 缺板文件如实报错 `ok=False`。
 
+### 〇.23 锡膏钢网开孔调优 (`native_paste.py`)
+
+> 反者道之动: 钢网(stencil)开孔为防连锡/补锡量本是人在 GUI 里逐焊盘改 paste margin 的, 但落到本源它
+> 只是每个 SMD `PAD` 的 `LocalSolderPasteMargin`(绝对/每边) 与 `LocalSolderPasteMarginRatio`(按尺寸
+> 比例)。本层经子进程 (`_paste_worker.py`) 对全部(或按封装 ref 过滤的) SMD 焊盘批量下发余量/比例,
+> 落盘后**重载实测**被调焊盘数与实际回读值 (反臆造)。
+
+```python
+from kicad_origin.origin.native_paste import NativePaste
+rep = NativePaste().tune("in.kicad_pcb", "out.kicad_pcb",
+                         margin_mm=-0.05, ratio=-0.1, refs=["U1"])
+rep.tuned, rep.sample_margin_mm, rep.sample_ratio   # 重载回读
+```
+
+实测: 全板 6 个 SMD 焊盘下发 margin=-0.05/ratio=-0.1 → `tuned=6`、回读 -0.05/-0.1; `refs=["R1"]`
+过滤后 `tuned` 收窄且 < 全板; margin 与 ratio 全缺 / 缺板文件如实报错 `ok=False`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
