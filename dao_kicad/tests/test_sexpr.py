@@ -11,7 +11,8 @@ from pathlib import Path
 import pcbnew
 import pytest
 
-from dao_kicad.core.sexpr import Sym, dumps, loads
+from dao_kicad.core.sexpr import (
+    Sym, dumps, loads, head, children, find, find_all, value, set_value)
 from dao_kicad.core.netlist_driven import (
     ComponentSpec, DesignSpec, NetConnection, build_from_spec)
 
@@ -93,3 +94,55 @@ def test_symbol_library_reparse_stable():
         pytest.skip("no system symbol library")
     tree = loads(Path(libs[0]).read_text())
     assert loads(dumps(tree)) == tree
+
+
+def test_navigation_helpers():
+    tree = loads('(footprint "Lib:R" (at 1 2 90) (layer "F.Cu") '
+                 '(property "Reference" "R1") (pad 1) (pad 2))')
+    assert head(tree) == "footprint"
+    assert head(tree[2]) == "at"
+    assert head(tree[3]) == "layer"
+    assert value(tree, "layer") == "F.Cu"
+    assert value(tree, "at", 3) == 90  # rotation
+    assert value(tree, "missing", default="x") == "x"
+    assert find(tree, "at") == [Sym("at"), 1, 2, 90]
+    assert len(find_all(tree, "pad")) == 2
+    # children() returns only sub-lists, skipping the leading "Lib:R" atom
+    assert all(isinstance(c, list) for c in children(tree))
+    assert len(children(tree)) == 5
+
+
+def test_set_value_edits_and_inserts():
+    tree = loads('(footprint "Lib:R" (at 1 2 0))')
+    set_value(tree, "at", 5.0, 6.0, 90)        # edit existing
+    assert find(tree, "at") == [Sym("at"), 5.0, 6.0, 90]
+    set_value(tree, "locked", Sym("yes"))      # insert missing
+    assert value(tree, "locked") == "yes"
+    assert isinstance(value(tree, "locked"), Sym)
+    assert loads(dumps(tree)) == tree
+
+
+def test_pcbnew_free_edit_confirmed_by_pcbnew(tmp_path):
+    """Move a footprint by editing the parsed tree only (no pcbnew), write it
+    back, and confirm pcbnew loads the new coordinates. This is the payoff of
+    owning the file layer: deep edits become tree edits."""
+    src = _build_board(tmp_path)
+    tree = loads(src.read_text())
+
+    moved = False
+    for fp in find_all(tree, "footprint"):
+        ref = next((p[2] for p in find_all(fp, "property")
+                    if len(p) >= 3 and p[1] == "Reference"), None)
+        if ref == "R1":
+            set_value(fp, "at", 20.0, 20.0, 0)
+            moved = True
+    assert moved, "R1 footprint not found in tree"
+
+    out = tmp_path / "edited.kicad_pcb"
+    out.write_text(dumps(tree))
+
+    board = pcbnew.LoadBoard(str(out))
+    r1 = next(f for f in board.GetFootprints() if f.GetReference() == "R1")
+    pos = r1.GetPosition()
+    assert abs(pcbnew.ToMM(pos.x) - 20.0) < 1e-6
+    assert abs(pcbnew.ToMM(pos.y) - 20.0) < 1e-6

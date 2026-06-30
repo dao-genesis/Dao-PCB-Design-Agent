@@ -28,7 +28,10 @@ from __future__ import annotations
 
 from typing import Union
 
-__all__ = ["Sym", "loads", "dumps", "SExprError"]
+__all__ = [
+    "Sym", "loads", "dumps", "SExprError",
+    "head", "children", "find_all", "find", "value", "set_value",
+]
 
 
 class SExprError(ValueError):
@@ -213,16 +216,79 @@ def dumps(node: Node, pretty: bool = True, indent: str = "  ",
     # remaining child indented on its own line.
     pad = indent * (_level + 1)
     close_pad = indent * _level
-    head_atoms = []
-    rest_start = 1
     # keep the head symbol plus any immediately-following atoms inline
+    rest_start = 1
     for child in node[1:]:
         if isinstance(child, list):
             break
-        head_atoms.append(child)
         rest_start += 1
-    first_line = "(" + " ".join([parts[0]] + parts[1:rest_start])
+    first_line = "(" + " ".join(parts[:rest_start])
     lines = [first_line]
     for child_text in parts[rest_start:]:
         lines.append(pad + child_text)
     return "\n".join(lines) + "\n" + close_pad + ")"
+
+
+# ── navigation & editing ──────────────────────────────────────────────────────
+#
+# A KiCad node is conventionally ``(<head> <arg>... <child-list>...)``: the head
+# symbol names the node (``footprint``, ``at``, ``net``) and the tail holds its
+# arguments and/or sub-nodes. These helpers turn that convention into ergonomic,
+# pcbnew-free tree edits — the point of owning the file layer.
+
+def head(node: Node):
+    """The head symbol of a list node (``node[0]``), or ``None`` for an atom or
+    empty list."""
+    if isinstance(node, list) and node and isinstance(node[0], (Sym, str)):
+        return node[0]
+    return None
+
+
+def children(node: Node) -> list:
+    """The sub-*list* children of ``node`` (skips leading atom arguments)."""
+    if not isinstance(node, list):
+        return []
+    return [c for c in node[1:] if isinstance(c, list)]
+
+
+def find_all(node: Node, key: str) -> list:
+    """All direct child lists of ``node`` whose head equals ``key``."""
+    if not isinstance(node, list):
+        return []
+    return [c for c in node[1:] if isinstance(c, list) and head(c) == key]
+
+
+def find(node: Node, key: str):
+    """First direct child list whose head equals ``key``, else ``None``."""
+    for c in find_all(node, key):
+        return c
+    return None
+
+
+def value(node: Node, key: str, index: int = 1, default=None):
+    """The ``index``-th element of the first ``key`` child of ``node``.
+
+    For ``(footprint ... (layer "F.Cu"))``, ``value(fp, "layer")`` is ``"F.Cu"``.
+    Returns ``default`` if the key (or that index) is absent.
+    """
+    child = find(node, key)
+    if child is None or index >= len(child):
+        return default
+    return child[index]
+
+
+def set_value(node: list, key: str, *values: Atom) -> list:
+    """Set the argument tail of ``node``'s first ``key`` child to ``values``.
+
+    Creates the child ``(key value...)`` if absent (appended to ``node``).
+    Returns the (possibly new) child list. Mutates ``node`` in place.
+    """
+    if not isinstance(node, list):
+        raise SExprError("set_value target must be a list node")
+    child = find(node, key)
+    if child is None:
+        child = [Sym(key), *values]
+        node.append(child)
+    else:
+        child[1:] = list(values)
+    return child
