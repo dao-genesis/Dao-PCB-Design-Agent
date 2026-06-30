@@ -156,10 +156,14 @@ class ExportEngine:
                 continue
             pos = fp.GetPosition()
             side = "top" if fp.GetLayer() == pcbnew.F_Cu else "bottom"
+            # pcbnew's Y grows downward, but pick-and-place / CPL files (and
+            # KiCad's own `kicad-cli pcb export pos`) use the fab convention of
+            # Y growing upward. Emitting the raw pcbnew Y mirrors every part
+            # vertically — a silently mis-assembled board. Negate Y to match.
             lines.append(
                 f"{fp.GetReference()},{fp.GetValue()},"
                 f"{fp.GetFPID().GetUniStringLibItemName()},"
-                f"{pcbnew.ToMM(pos.x):.4f},{pcbnew.ToMM(pos.y):.4f},"
+                f"{pcbnew.ToMM(pos.x):.4f},{-pcbnew.ToMM(pos.y):.4f},"
                 f"{fp.GetOrientationDegrees():.1f},{side}"
             )
 

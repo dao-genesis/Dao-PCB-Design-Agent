@@ -116,6 +116,42 @@ class TestExportEngine:
         assert "Ref" in content
         assert "U1" in content
 
+    def test_placement_matches_kicad_cli_pos(self, sample_board, tmp_path):
+        """Our CPL coordinates must match KiCad's authoritative pos export.
+
+        pcbnew's Y grows downward; pick-and-place files use the fab Y-up
+        convention (KiCad's own `kicad-cli pcb export pos` negates Y). Emitting
+        the raw pcbnew Y mirrors every part vertically — a mis-assembled board
+        that presence-only tests never caught. Cross-check each part's X/Y
+        against kicad-cli."""
+        import csv
+        import shutil
+        import subprocess
+
+        if shutil.which("kicad-cli") is None:
+            pytest.skip("kicad-cli not available")
+
+        pcb = tmp_path / "b.kicad_pcb"
+        import pcbnew
+        pcbnew.SaveBoard(str(pcb), sample_board)
+
+        ours_path = ExportEngine(sample_board).placement(tmp_path / "ours.csv")
+        ours = {}
+        for row in csv.DictReader(ours_path.read_text().splitlines()):
+            ours[row["Ref"]] = (float(row["PosX"]), float(row["PosY"]))
+
+        ref_csv = tmp_path / "kicad.csv"
+        subprocess.run(
+            ["kicad-cli", "pcb", "export", "pos", "--format", "csv",
+             "--units", "mm", "--side", "both", "-o", str(ref_csv), str(pcb)],
+            capture_output=True, check=True)
+        for row in csv.DictReader(ref_csv.read_text().splitlines()):
+            ref = row["Ref"]
+            assert ref in ours, f"{ref} missing from our CPL"
+            ox, oy = ours[ref]
+            assert abs(ox - float(row["PosX"])) < 1e-3
+            assert abs(oy - float(row["PosY"])) < 1e-3
+
     def test_full_manufacturing(self, sample_board, tmp_path):
         engine = ExportEngine(sample_board)
         result = engine.full_manufacturing(tmp_path / "mfg")
