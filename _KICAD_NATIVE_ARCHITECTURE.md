@@ -457,6 +457,24 @@ rep.tuned, rep.sample_margin_mm, rep.sample_ratio   # 重载回读
 实测: 全板 6 个 SMD 焊盘下发 margin=-0.05/ratio=-0.1 → `tuned=6`、回读 -0.05/-0.1; `refs=["R1"]`
 过滤后 `tuned` 收窄且 < 全板; margin 与 ratio 全缺 / 缺板文件如实报错 `ok=False`。
 
+### 〇.24 网类驱动 (`native_netclass.py`)
+
+> 反者道之动: 网类(线宽/间距/过孔尺寸)与"哪些网归哪类"本是人在板设置对话框里点出来的, 但落到本源它
+> 只是 `NET_SETTINGS` 里的一组 `NETCLASS` 与一串模式→类的绑定。本层经子进程 (`_netclass_worker.py`)
+> 声明式建/改网类、按网名(或模式)绑网, `SynchronizeNetsAndNetClasses` 后落盘, **重载后对每条真实网
+> 逐一解析其生效网类与实际线宽/间距/过孔** (反臆造) —— 这是 DRC 与自动布线的根。
+
+```python
+from kicad_origin.origin.native_netclass import NativeNetclass
+rep = NativeNetclass().apply("in.kicad_pcb", "out.kicad_pcb",
+    classes=[{"name": "PWR", "track_mm": 0.5, "via_dia_mm": 0.9}],
+    assignments=[{"pattern": "VCC", "class": "PWR"}])
+rep.class_of("VCC"), rep.nets   # 重载实测每条网生效网类与参数
+```
+
+实测: 建 PWR(track 0.5/clr 0.25/via 0.9) 并绑 VCC → 重载 `reload_classes` 含 PWR、VCC 生效类=PWR 且
+线宽 0.5/过孔 0.9; 未绑的 GND 仍为 Default(0.2); classes 与 assignments 全空 / 缺板文件如实报错。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
