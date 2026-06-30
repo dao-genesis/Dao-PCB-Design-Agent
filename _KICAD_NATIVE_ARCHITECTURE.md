@@ -756,6 +756,29 @@ r.netclass("Power", ["VCC","GND"], track_width_mm=0.6, clearance_mm=0.25)
 full_flow(r.spec("board.kicad_pcb", size_mm=[34,24]), "out/")  # 组合 → 可投产
 ```
 
+### 〇.38 接地平面闭环: 双面 GND 铺铜 + 避异网缝合过孔 (`native_flow` ground 阶 · `_stitch_worker` 防短路)
+
+> 反者道之动: 〇.37 把链跑通, 但一上真实接地平面就**暴露真问题**——单面 B.Cu GND 铺铜因 SMD 焊盘
+> 全在 F.Cu、无缝合过孔, DRC 报 `isolated_copper`(整片地铜悬空)。真练方知缺口, 这正是道法自然。
+
+**接地平面闭环 (融进 `native_flow.run_flow` 的可选 ground 阶)。** spec 增可选 `ground` 段, 仅当
+存在时触发, 落于 heal/route 之后、fab 之前: 由 `size_mm` 内缩 `inset_mm` 得轮廓 (避板框
+`copper_edge_clearance`), **双面 (F.Cu+B.Cu) 浇 GND 铜** → **缝合过孔**把两面地平面 + 各 GND 焊盘
+缝成一体, 化解 isolated_copper。无 `size_mm` 则如实跳过 (不臆造板框)。
+
+```python
+spec["ground"] = {"net": "GND", "layers": ["F.Cu", "B.Cu"],
+                  "inset_mm": 0.5, "stitch": {"pitch_mm": 5}}
+run_flow(spec, "out/", heal=True, route=True, fab=True)  # 自动多一道 ground 阶
+```
+
+**避异网缝合 (`_stitch_worker` 深修, 主线一)。** 初版缝合过孔只避**异网焊盘**, 不避**异网走线/过孔**
+—— freerouting 布线非确定, 某次 FB 走线恰穿过网格过孔点 → DRC 报 `shorting_items`(GND 与 FB 短路)。
+补齐: 收集所有异网走线段 (点到线段距离平方, 整数 nm 无溢出) + 异网过孔, 候选过孔点距任一异网铜
+< `clearance + via_r + 半宽` 即跳过。实测稳压小板: 双面铺铜 (F.Cu 540 / B.Cu 609 mm²) + **16 颗
+GND 缝合过孔** → 投厂真 DRC **0 违规 / 0 未连**。golden 测试重载实测每颗 GND 过孔到异网走线的距离
+≥ clearance (反臆造, 不靠 DRC 兜底而直接量距)。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
