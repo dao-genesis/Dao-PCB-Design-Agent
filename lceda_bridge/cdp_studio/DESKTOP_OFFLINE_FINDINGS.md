@@ -147,9 +147,29 @@ Layers Board)"[Spacing/Physics/Plane/Expansion], drc:0}`。**能力面盘点 = 9
 
 要让网络类**真正差异化**（如高速类单独的线宽/间距/过孔），须经 `overwriteNetRules`
 把对应节点的 `"default"` 改成目标具名档——但该方法 `@remarks` 明示「覆写当前 PCB
-**所有**网络规则、有数据丢失风险」，且属性值是**具名档引用**而非裸数值（需先弄清有哪些
-合法档名、各档参数从何处建）。signature/取值未明，故**只读不写**（知止不殆），
-待下轮逐一实测具名档来源后再封安全的差异化写入。
+**所有**网络规则、有数据丢失风险」，且属性值是**具名档引用**而非裸数值。本轮已把
+「具名档从何处来」实测清楚（只读），差异化路径就此完整可循：
+
+**规则档全景（`getAllRuleConfigurations(true)` / `getCurrentRuleConfiguration`）**
+
+- 6 个内置规则配置（系统档不可改）：`JLCPCB Capability(Two Layers / Single Layer /
+  Multiple Layers / High Frequency / Aluminum Substrate / Copper Substrate Board)`。
+  **高速板应切到 `High Frequency Board` 档**（`setAsDefaultRuleConfiguration` / 切档）。
+- 当前配置 `config` 分 4 大类，每类下「属性 → 具名子规则集」：
+  | 类目 | 属性 → 具名子规则 |
+  | --- | --- |
+  | Spacing | Safe Spacing→`copperThickness1oz/2oz`、Other Spacing→`otherClearance`、Creepage Distance→`creepage` |
+  | Physics | **Track→`copperThickness1oz/2oz`**、Net Length Range→`netLength`、Net Length Tolerance→`netLengthTolerance`、**Differential Pair→`differentialPair`** |
+  | Plane | Plane Zone→`innerPlane`、Copper Zone→`copperRegion` |
+  | Expansion | Solder Mask→`solderMaskExpansion`、Paste Mask→`pasteMaskExpansion` |
+- `getNetRules()` 里 netClass/net 节点的 `Track`/`Safe Spacing`/`Differential Pair`
+  等键，值即上表某个具名子规则名（默认 `"default"`）。差异化 = ①在 `config` 里
+  新增一个具名子规则（如 `Track:"hs_wide"`）→ `overwriteCurrentRuleConfiguration`（仅
+  自定义档可改），②`overwriteNetRules` 把高速类节点的 `Track` 指向 `"hs_wide"`。
+
+**仍只读不写的原因**：两步都是「覆写全表」级高风险写入（系统档还不可改，须先存一份
+自定义档）。路径虽已探明，但写入语义未在活板验证、易致规则丢失，故按知止不殆，留待
+下轮在自定义档上小步验证后再封 `set_net_class_rule(class, attr, profile)` 安全写入。
 
 ## 一句话沉淀
 

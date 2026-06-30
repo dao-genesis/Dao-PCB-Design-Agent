@@ -419,6 +419,25 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             out["equal_length"][nm] = self.equal_length_group(nm, nets)
         return out
 
+    def rule_profiles(self):
+        """规则档全景（只读，喂差异化规则的下一步）。返回 {configs, current,
+        categories}：configs=可选规则配置名（含 6 个 JLCPCB 内置档，高速板宜用
+        `High Frequency Board`）；categories={类目: {属性: [具名子规则…]}}——
+        `getNetRules()` 节点上 `Track`/`Safe Spacing`/`Differential Pair` 等键的值
+        即引用这里的具名子规则名。"""
+        configs = [c.get("name") for c in
+                   (self._call("pcb_Drc.getAllRuleConfigurations", True,
+                               timeout=25) or []) if isinstance(c, dict)]
+        cur = self._call("pcb_Drc.getCurrentRuleConfigurationName", timeout=15)
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        cats = {}
+        for cat, attrs in cfg.items():
+            if isinstance(attrs, dict):
+                cats[cat] = {k: (list(v.keys()) if isinstance(v, dict) else None)
+                             for k, v in attrs.items()}
+        return {"configs": configs, "current": cur, "categories": cats}
+
     def net_rules(self):
         """网络/网络类的规则树（只读）。每个 netClass/net 节点带 Track、Safe Spacing、
         Via Size、Net Length Range/Tolerance、Differential Pair 等属性，值多为 "default"
