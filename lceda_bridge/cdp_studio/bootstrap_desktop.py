@@ -266,6 +266,8 @@ def main(argv=None) -> int:
                     help="顺带安装 freerouting + JDK25(DSN→SES 自动布线)")
     ap.add_argument("--verify", action="store_true",
                     help="启动后探 _EXTAPI_ROOT_ 命名空间数确认编辑器活")
+    ap.add_argument("--prepare-only", action="store_true",
+                    help="仅预置(下载/解压/装 freerouting),不启动——供 blueprint 预烘快照")
     a = ap.parse_args(argv)
 
     lic = a.license or os.environ.get("LCEDA_ACTIVATION")
@@ -292,6 +294,12 @@ def main(argv=None) -> int:
         if fr.exists():
             _log("安装 freerouting + JDK25 ...")
             subprocess.run([sys.executable, str(fr)], check=False)
+
+    if a.prepare_only:
+        # blueprint 预烘:只把客户端+freerouting 落进快照,启动留到会话内
+        # (运行态进程不入快照、且 initialize 期通常无 DISPLAY)。
+        _log("预置完成(--prepare-only)。会话内再 --launch-only --verify 拉起。")
+        return 0
 
     launch(binary, a.port, display=a.display)
     if a.verify:
