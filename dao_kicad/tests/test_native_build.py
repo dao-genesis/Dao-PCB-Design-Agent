@@ -83,3 +83,37 @@ class TestFullFlow:
         fab = rep["stages"]["fab"]
         assert fab["ok"] is True
         assert fab["zip_path"] and Path(fab["zip_path"]).exists()
+
+
+class TestNetclass:
+    """差异化布线规则 (主线一深度): 净类落 .kicad_pro, 重载实测 effective 轨宽。"""
+
+    @pcbnew_only
+    def test_netclass_widths_persist_and_reload(self, tmp_path):
+        out = tmp_path / "nc.kicad_pcb"
+        spec = _spec(str(out))
+        spec["netclasses"] = [
+            {"name": "Power", "track_width_mm": 0.8, "clearance_mm": 0.25,
+             "nets": ["VOUT", "GND"]},
+        ]
+        r = nb.NativeBuilder().build(spec)
+        assert r["ok"] is True
+        assert r["netclasses"] == [{"name": "Power",
+                                    "nets": ["VOUT", "GND"]}]
+        # 反臆造: 重载读回每网 effective 净类轨宽 (KiCad 9 净类存 .kicad_pro)。
+        import pcbnew
+        b = pcbnew.LoadBoard(str(out))
+        ns = b.GetDesignSettings().m_NetSettings
+        assert pcbnew.ToMM(ns.GetEffectiveNetClass("VOUT").GetTrackWidth()) == 0.8
+        assert pcbnew.ToMM(ns.GetEffectiveNetClass("GND").GetTrackWidth()) == 0.8
+        # 未指派的网仍走 Default (窄)。
+        assert ns.GetEffectiveNetClass("VOUT").GetName() == "Power"
+
+    @pcbnew_only
+    def test_netclass_unknown_net_errors_not_silent(self, tmp_path):
+        spec = _spec(str(tmp_path / "x.kicad_pcb"))
+        spec["netclasses"] = [{"name": "Power", "track_width_mm": 0.8,
+                               "nets": ["NOPE_no_such_net"]}]
+        r = nb.NativeBuilder().build(spec)
+        assert r["ok"] is False
+        assert "unknown net" in r["error"]

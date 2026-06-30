@@ -719,6 +719,43 @@ freerouting 真布线 **未布线 5→0、落 14 条铜走线**、pass1 **DRC 0 
 `violations=[] unconnected=[]`。`test_native_endtoend` 把这条链固化: 布线器缺位优雅跳过, 在位即真跑真
 断言 (反臆造取自重载与真 DRC); 另含不联网的 `ensure_freerouting` 兜底逻辑断言 (已在位即返回, 绝不触网)。
 
+### 〇.37 三主线同进: 净类深控 + 规模化实跑 + 组合方法论 (`_build_worker` netclass · `native_recipe`)
+
+> 道并行不相背驰。承 〇.36 的全链闭合, 三主线同步再进一步, 皆 VM 真跑、反臆造实测:
+
+**主线一 (深度接入 KiCad 底层) — netclass 差异化布线。** 此前 `_build_worker` 只会建"等宽"
+板, 对布线器毫无规则深控。补齐: spec 增 `netclasses` 段, 经 `NET_SETTINGS.SetNetclasses`
++ `SetNetclassPatternAssignment` 把每网指派到带 `track_width/clearance/diff_pair_*` 的净类。
+关键本源认知: **KiCad 9 把净类存进 `.kicad_pro` 项目文件而非 `.kicad_pcb`** —— `SaveBoard`
+连带写出 `.kicad_pro`, `LoadBoard` 又随邻接项目文件读回 effective 净类, 故 DSN 导出/freerouting
+全程 honor。实测稳压小板设 Power 类 0.8mm: 重载 `GetEffectiveNetClass('VOUT').GetTrackWidth()`
+**=0.8mm**, 布线后电源网 VIN/VOUT/GND 落 **0.8mm 粗铜**、信号 FB 仍 **0.2mm 细铜** —— 对布线器
+的深控由 spec 一路贯到铜箔。指派到不存在的网**如实报错**, 不静默 (反臆造)。
+
+**主线二 (纯代码全栈) — 规模化实跑。** 把 〇.36 的 4 件小板扩到 **12 件真实 MCU 板** (SOIC-8
+MCU + 3 去耦 + 4 电阻 + 2 LED + SOT-23 三极管 + 排针, 12 网): 纯代码 spec → 建板 **22 未布线**
+→ freerouting **22→0 全布通** → DRC **0 违规/0 未连** → 重载实测 **58 条 track / 12 封装** → 投厂
+真出 **27 件 Gerber + 钻孔 + STEP + PDF + 贴装 csv**。证全链非玩具, 可扩到工程规模板。
+
+**主线三 (工具协同方法论) — `native_recipe` 组合层。** spec 仍是手抄扁平字典, 同类子电路
+(去耦/分压/LED 指示/排针引出) 反复手抄易错。沉淀: 纯 Python 的 `Recipe` 累加器 + 参数化积木
+`decoupling/voltage_divider/led_indicator/pin_header`, 叠加时自动合并同名网、ref 冲突即报错,
+`.spec()` 吐出 `native_build` 直接可吃的字典 (净类指派到未声明网亦报错)。于是"画一块板"从手抄
+升维为"组合积木"。**零 KiCad 依赖 → CI 全测**; 末附 router_only 集成把组合出的板真送 `full_flow`
+端到端落地。
+
+```python
+from kicad_origin.origin import native_recipe as rcp
+from kicad_origin.origin.native_build import full_flow
+r = rcp.Recipe()
+rcp.pin_header(r, "J1", {"1":"VCC","2":"IO1","3":"FB","4":"GND"}, at=(3,6))
+rcp.decoupling(r, "C1", "VCC", "GND", at=(12,5))
+rcp.voltage_divider(r, "R1","R2", high="VCC", mid="FB", low="GND", at=(20,6))
+rcp.led_indicator(r, "R3","D1", drive="IO1", gnd="GND", at=(12,14))
+r.netclass("Power", ["VCC","GND"], track_width_mm=0.6, clearance_mm=0.25)
+full_flow(r.spec("board.kicad_pcb", size_mm=[34,24]), "out/")  # 组合 → 可投产
+```
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
