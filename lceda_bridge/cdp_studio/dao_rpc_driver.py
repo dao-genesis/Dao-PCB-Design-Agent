@@ -409,14 +409,21 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         """按 spec 批量落高速约束。constraints = {
             "net_classes": {名: [网络…]},
             "diff_pairs":  {名: [正网, 负网]},
-            "equal_length":{名: [网络…]}}。返回落库回执。"""
-        out = {"net_classes": {}, "diff_pairs": {}, "equal_length": {}}
+            "equal_length":{名: [网络…]},
+            "class_rules": {类名: {属性: 具名子规则}}}。返回落库回执。"""
+        out = {"net_classes": {}, "diff_pairs": {}, "equal_length": {},
+               "class_rules": {}}
         for nm, nets in (constraints.get("net_classes") or {}).items():
             out["net_classes"][nm] = self.net_class(nm, nets)
         for nm, pair in (constraints.get("diff_pairs") or {}).items():
             out["diff_pairs"][nm] = self.differential_pair(nm, pair[0], pair[1])
         for nm, nets in (constraints.get("equal_length") or {}).items():
             out["equal_length"][nm] = self.equal_length_group(nm, nets)
+        # 差异化规则须在网络类已建之后落（指向具名子规则）
+        for cls, rules in (constraints.get("class_rules") or {}).items():
+            out["class_rules"][cls] = {
+                attr: self.set_net_class_rule(cls, attr, prof)
+                for attr, prof in rules.items()}
         return out
 
     def rule_profiles(self):
@@ -445,6 +452,37 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         `overwriteNetRules` 改这些值——属覆写全表的高风险操作，且值为具名档引用而非裸
         数值，签名/取值待逐一实测，故暂只读不写（知止不殆）。"""
         return self._call("pcb_Drc.getNetRules", timeout=20) or []
+
+    def set_net_class_rule(self, class_name, attr, profile):
+        """给网络类挂差异化规则：把其规则节点的某属性（如 `Track`/`Safe Spacing`/
+        `Differential Pair`）指向某个具名子规则（见 `rule_profiles()`）。
+
+        本源做法（规避 `overwriteNetRules` 的「覆写全表」风险）：先 `getNetRules`
+        取**全量**规则树，只改目标类的那一个属性，再整树写回——其余规则原样保留，
+        无数据丢失。attr/profile 先按 `rule_profiles()` 的合法集校验，写后读回确认。"""
+        prof = self.rule_profiles()
+        valid = None
+        for cat, attrs in prof["categories"].items():
+            if attr in attrs:
+                valid = attrs[attr]; break
+        if valid is None:
+            raise DaoRpcError("未知规则属性 %r（合法属性见 rule_profiles）" % attr)
+        if profile not in valid:
+            raise DaoRpcError("属性 %s 的具名子规则只可取 %s，收到 %r"
+                              % (attr, valid, profile))
+        rules = self._call("pcb_Drc.getNetRules", timeout=20) or []
+        target = next((x for x in rules if x.get("type") == "netClass"
+                       and x.get("name") == class_name), None)
+        if target is None:
+            raise DaoRpcError("网络类 %r 不存在（先 net_class 建之）" % class_name)
+        target[attr] = profile
+        self._call("pcb_Drc.overwriteNetRules", rules, timeout=25)
+        back = self._call("pcb_Drc.getNetRules", timeout=20) or []
+        bnode = next((x for x in back if x.get("name") == class_name), None)
+        if not bnode or bnode.get(attr) != profile:
+            raise DaoRpcError("set_net_class_rule 未生效（读回 %s）"
+                              % (bnode and bnode.get(attr)))
+        return {"class": class_name, "attr": attr, "profile": profile}
 
     def constraints_summary(self):
         """高速约束快照：{net_classes, diff_pairs, equal_length}（只读，喂自审）。"""
