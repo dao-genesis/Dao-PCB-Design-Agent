@@ -5,6 +5,8 @@
 
 ## 0. 一分钟上手
 
+- **桌面端零摩擦部署(干净机器一条命令)**：`python bootstrap_desktop.py --license <激活文件> --with-freerouting --verify`(幂等：下载客户端→解压→安放离线激活→拉起 CDP:29230 并等 `_EXTAPI_ROOT_` ns>0)。已部署过仅重起：`--launch-only --verify`。随后 `cd examples && PYTHONPATH=.. python3 run.py all --tries 5` 跑全链路板谱。详见 `DESKTOP_OFFLINE_FINDINGS.md` 末「一键复现部署」与「冷启动竞争」。
+
 - 引擎:`lceda_bridge/cdp_studio/eda_flow.py`(类 `Flow`,封装全部能力,逆向自嘉立创 EDA Pro v3.2.148 的 `window._EXTAPI_ROOT_` 私有 RPC 总线)。
 - 驱动:`dao_eda_cdp_driver.py` / `eda_api.py`(CDP 接到运行中的 Chrome,端口 `:29229`;编辑器在 `https://pro.lceda.cn/editor`)。
 - 账号:`15606700905`(用户 `aiotvr`)。冷启动登录见 `cold_start.py`(已固化确定性登录,根治"GUI 合成键入吞密码前缀"——改用 CDP 向 React 受控组件注入)。
