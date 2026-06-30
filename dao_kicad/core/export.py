@@ -207,6 +207,117 @@ class ExportEngine:
             if tmp and os.path.exists(tmp):
                 os.unlink(tmp)
 
+    def _cli(self) -> Optional[str]:
+        """Locate kicad-cli, falling back to the env-detected binary."""
+        cli = shutil.which("kicad-cli")
+        if cli:
+            return cli
+        from daokicad import env
+        detected = env.detect().cli
+        return str(detected) if detected else None
+
+    def _run_cli(self, args: list[str]) -> bool:
+        """Run a kicad-cli command against this board, saving to a temp
+        .kicad_pcb when the in-memory board has no backing file. ``args`` is
+        the part after ``kicad-cli`` and must end with the placeholder
+        ``"__SRC__"`` where the input file goes."""
+        cli = self._cli()
+        if not cli:
+            return False
+        src = self.board.GetFileName()
+        tmp = None
+        if not src or not Path(src).is_file():
+            fd, tmp = tempfile.mkstemp(suffix=".kicad_pcb")
+            os.close(fd)
+            self.board.Save(tmp)
+            src = tmp
+        try:
+            cmd = [cli] + [src if a == "__SRC__" else a for a in args]
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=300)
+            return proc.returncode == 0
+        except Exception:
+            return False
+        finally:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
+
+    # KiCad CLI layer names are dotted (F.Cu), but pcbnew's GetLayerName and
+    # most of this codebase use underscores (F_Cu); accept either.
+    _DEFAULT_PLOT_LAYERS = ("F.Cu", "B.Cu", "Edge.Cuts")
+
+    @staticmethod
+    def _norm_layers(layers) -> str:
+        names = [str(l).replace("_", ".") for l in layers]
+        return ",".join(names)
+
+    def render_3d(self, output_path: Path, side: str = "top",
+                  width: int = 1600, height: int = 900,
+                  quality: str = "high", background: str = "",
+                  rotate: str = "", perspective: bool = False) -> Optional[Path]:
+        """Render a photographic 3D view (PNG/JPEG) via ``kicad-cli pcb render``.
+
+        This is the headless equivalent of KiCad's 3D viewer image export — a
+        user-visible surface previously unreachable from the engine. ``side``
+        is top/bottom/left/right/front/back; ``rotate`` like ``-45,0,45`` gives
+        an isometric view. Returns the path on success, ``None`` otherwise.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        args = ["pcb", "render", "--output", str(output_path),
+                "--side", side, "--width", str(width), "--height", str(height),
+                "--quality", quality]
+        if background:
+            args += ["--background", background]
+        if rotate:
+            args += ["--rotate", rotate]
+        if perspective:
+            args += ["--perspective"]
+        args.append("__SRC__")
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def plot_svg(self, output_path: Path, layers=None,
+                 fit_to_board: bool = True,
+                 black_and_white: bool = False) -> Optional[Path]:
+        """Plot layers to a single SVG via ``kicad-cli pcb export svg``.
+
+        Headless equivalent of File → Plot (SVG). ``layers`` defaults to
+        F.Cu/B.Cu/Edge.Cuts and accepts dotted or underscored names.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        layer_str = self._norm_layers(layers or self._DEFAULT_PLOT_LAYERS)
+        args = ["pcb", "export", "svg", "--output", str(output_path),
+                "--layers", layer_str, "--mode-single"]
+        if fit_to_board:
+            args.append("--fit-page-to-board")
+        if black_and_white:
+            args.append("--black-and-white")
+        args.append("__SRC__")
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def plot_pdf(self, output_path: Path, layers=None,
+                 black_and_white: bool = False) -> Optional[Path]:
+        """Plot layers to PDF via ``kicad-cli pcb export pdf``.
+
+        Headless equivalent of File → Plot (PDF), e.g. for fab review docs.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        layer_str = self._norm_layers(layers or self._DEFAULT_PLOT_LAYERS)
+        args = ["pcb", "export", "pdf", "--output", str(output_path),
+                "--layers", layer_str]
+        if black_and_white:
+            args.append("--black-and-white")
+        args.append("__SRC__")
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
     def full_manufacturing(self, output_dir: Path) -> dict[str, list[Path]]:
         """Complete manufacturing package — everything a fab house needs."""
         output_dir = Path(output_dir)

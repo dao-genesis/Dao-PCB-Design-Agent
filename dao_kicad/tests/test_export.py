@@ -125,3 +125,40 @@ class TestExportEngine:
         assert "placement" in result
         assert len(result["gerbers"]) > 0
         assert len(result["drill"]) > 0
+
+    def _require_cli(self):
+        from daokicad import env
+        if env.detect().cli is None:
+            pytest.skip("kicad-cli not available")
+
+    def test_plot_svg(self, sample_board, tmp_path):
+        """SVG plot must produce a non-empty file (headless File→Plot SVG)."""
+        self._require_cli()
+        engine = ExportEngine(sample_board)
+        out = engine.plot_svg(tmp_path / "board.svg")
+        assert out is not None and out.exists()
+        assert out.stat().st_size > 0
+        assert out.read_text(errors="ignore").lstrip().startswith("<")
+
+    def test_plot_svg_accepts_underscore_layer_names(self, sample_board, tmp_path):
+        """Layer names may be underscored (F_Cu) as used across the codebase."""
+        self._require_cli()
+        engine = ExportEngine(sample_board)
+        out = engine.plot_svg(tmp_path / "b.svg", layers=["F_Cu", "Edge_Cuts"])
+        assert out is not None and out.exists()
+
+    def test_plot_pdf(self, sample_board, tmp_path):
+        """PDF plot must produce a real PDF (header %PDF)."""
+        self._require_cli()
+        engine = ExportEngine(sample_board)
+        out = engine.plot_pdf(tmp_path / "board.pdf")
+        assert out is not None and out.exists()
+        assert out.read_bytes()[:4] == b"%PDF"
+
+    def test_render_3d_png(self, sample_board, tmp_path):
+        """3D render must produce a PNG (headless 3D-viewer image export)."""
+        self._require_cli()
+        engine = ExportEngine(sample_board)
+        out = engine.render_3d(tmp_path / "board.png", width=400, height=300)
+        assert out is not None and out.exists()
+        assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
