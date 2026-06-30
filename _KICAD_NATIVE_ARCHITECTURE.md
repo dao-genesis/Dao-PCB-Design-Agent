@@ -317,6 +317,24 @@ rep.holes     # NPTH 安装孔数 (重载实测)
 实测: 50×30 矩形 + 四角 Ø3.2 → `edge_items=1, holes=4, size≈[50,30]`;
 40×40 圆角 r=5 居中 + 中心 Ø4 孔 → `edge_items=8, holes=1`; 尺寸非正/缺板文件如实报错。
 
+### 〇.16 连接感知自动布局 (`native_place.py`)
+
+> 反者道之动: 摆放元件本是人盯着飞线一个个拖的活, 但它本质是个**可度量的优化**——让相连焊盘
+> 靠拢、总连线最短。本层以布局界标准指标 HPWL (各网焊盘包围盒半周长之和) 为度量, 经子进程
+> (`_place_worker.py`) 在 pcbnew 内做 barycentric 收敛 (每件拉向相连焊盘质心) + 防重叠分离,
+> `fixed` 位号 (连接器/定位件) 锚定不动; 落盘后**重载实测** HPWL 前后值与剩余重叠 (反臆造)。
+
+```python
+from kicad_origin.origin.native_place import NativePlace
+rep = NativePlace().place("in.kicad_pcb", "out.kicad_pcb", fixed=["J1"])
+rep.hpwl_before_mm, rep.hpwl_after_mm   # 重载实测总连线长
+rep.reduction_mm, rep.improved          # 严格变短即 improved
+rep.overlaps                            # 收尾分离后剩余重叠对数 (期望 0)
+```
+
+实测: 4 连杆链路打散在四角 (HPWL≈385mm) → 布局后 ≈44mm (降 ~89%), `improved=True`、
+`overlaps=0`; `fixed=["R1"]` 时 R1 坐标重载后逐位不变; 缺板文件如实报错。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
