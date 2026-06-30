@@ -193,6 +193,68 @@ def build_via6():
     }
 
 
+LQFP48 = "LQFP48"   # 48 脚周边封装(命中 LQFP48_M;焊盘号 1..48,无散热焊盘)
+
+
+def build_qfp():
+    """板⑦·高脚数周边扇出:单颗 LQFP48 + 多电源脚 + 32 路信号扇出。3xx 件 / 4 层。
+
+    方向③的**可达**前沿:真实高脚数**周边**器件(QFP)的引脚→网映射与高密扇出布通。
+    (栅格 BGA 内球扇出需盲埋孔**布线级**能力,受限于 freerouting 仅通孔——见
+    DESKTOP_OFFLINE_FINDINGS「覆铜实铜不可得」同源的深层前沿,故此处取 QFP 周边扇出。)
+
+    布局:U1(LQFP48)居中;8 电源脚(4×VCC/4×GND,周边均布)配 4 颗去耦电容;
+    16 信号脚(四边均布)各串一阻扇出,余脚 NC。串阻**就近贴在所属焊盘那一侧**
+    (按 pad 落在 上/右/下/左 边分别朝外排成四列/行)——逃逸方向与焊盘同侧、互不抢道,
+    这是高脚数器件「扇出即布线」的本源:几何先对,布线器才好收敛。4 层给内层让道。
+    压测点:单器件 48 焊盘 pin→net 映射、四边逃逸下 freerouting 收敛 DRC=0。"""
+    VCC_PADS = {6, 18, 30, 42}
+    GND_PADS = {12, 24, 36, 48}
+    # 四边各取 4 个信号脚(避开电源脚),按 LQFP 习惯 1-12 左 / 13-24 下 / 25-36 右 / 37-48 上
+    SIG_PADS = [2, 4, 8, 10, 14, 16, 20, 22, 26, 28, 32, 34, 38, 40, 44, 46]
+    pins = {}
+    comps = []
+    # 四边外延的就近落点:left 朝 -x、bottom 朝 -y、right 朝 +x、top 朝 +y
+    side_pos = {"L": [], "B": [], "R": [], "T": []}
+    for pad in SIG_PADS:
+        side = ("L" if pad <= 12 else "B" if pad <= 24
+                else "R" if pad <= 36 else "T")
+        side_pos[side].append(pad)
+    for pad in VCC_PADS:
+        pins[str(pad)] = "VCC"
+    for pad in GND_PADS:
+        pins[str(pad)] = "GND"
+    sig_i = 0
+    LANE, BASE = 320, 700   # 同侧逃逸列间距 / 离 QFP 中心的起始外延
+    for side, pads in side_pos.items():
+        for j, pad in enumerate(pads):
+            net = "S%d" % sig_i
+            pins[str(pad)] = net
+            off = (j - (len(pads) - 1) / 2.0) * LANE
+            depth = BASE + j * 180
+            if side == "L":
+                x, y, rot = -depth, off, 0
+            elif side == "R":
+                x, y, rot = depth, off, 0
+            elif side == "B":
+                x, y, rot = off, -depth, 90
+            else:
+                x, y, rot = off, depth, 90
+            comps.append({"ref": "R%d" % sig_i, "query": R, "rotation": rot,
+                          "x": int(x), "y": int(y),
+                          "pins": {"1": net, "2": "ST%d" % sig_i}})
+            sig_i += 1
+    for i, (cx, cy) in enumerate([(-450, 450), (450, 450),
+                                  (-450, -450), (450, -450)], 1):
+        comps.append({"ref": "C%d" % i, "query": C, "rotation": 90,
+                      "x": cx, "y": cy, "pins": {"1": "VCC", "2": "GND"}})
+    comps.append({"ref": "U1", "query": LQFP48, "rotation": 0,
+                  "x": 0, "y": 0, "pins": pins})
+    return {"name": "DAO_Q1_LQFP48_Fanout", "gnd_net": "GND",
+            "track_width": 8, "margin": 200, "copper_layers": 4,
+            "components": comps}
+
+
 BOARDS = {
     "simple": build_simple,
     "medium": build_medium,
@@ -200,4 +262,5 @@ BOARDS = {
     "mcu": build_mcu,
     "hs": build_hs,
     "via6": build_via6,
+    "qfp": build_qfp,
 }
