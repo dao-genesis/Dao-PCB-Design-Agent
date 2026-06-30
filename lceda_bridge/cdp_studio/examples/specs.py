@@ -279,6 +279,23 @@ def build_autofan():
             "components": comps}
 
 
+def build_soicfan():
+    """板⑨·跨几何泛化:在**双边** SOIC-16(74HC595)上跑同一 auto_fanout 原语。
+    QFP 是四边、SOIC 是左右两排——若原语真无硬假设,应自动判出 L/R 两边逃逸并布通。
+    8 个 Q 输出(15,1..7)各串一阻扇出;VCC/GND 绑电源脚配去耦电容;控制脚留单脚网。
+    验证:auto_fanout 对器件几何不可知,双边器件同样 DRC=0。"""
+    pins = {"16": "VCC", "8": "GND"}
+    af = {pad: "Q%d" % k for k, pad in enumerate([15, 1, 2, 3, 4, 5, 6, 7])}
+    comps = [{"ref": "U1", "query": IC595, "rotation": 0, "x": 0, "y": 0,
+              "pins": pins, "auto_fanout": af, "fanout_query": R,
+              "fanout_offset": 380, "fanout_depth_step": 200},
+             {"ref": "C1", "query": C, "rotation": 90, "x": 0, "y": 500,
+              "pins": {"1": "VCC", "2": "GND"}}]
+    return {"name": "DAO_SF1_SOIC16_Fanout", "gnd_net": "GND",
+            "track_width": 10, "margin": 180, "copper_layers": 2,
+            "components": comps}
+
+
 BOARDS = {
     "simple": build_simple,
     "medium": build_medium,
@@ -288,4 +305,5 @@ BOARDS = {
     "via6": build_via6,
     "qfp": build_qfp,
     "autofan": build_autofan,
+    "soicfan": build_soicfan,
 }
