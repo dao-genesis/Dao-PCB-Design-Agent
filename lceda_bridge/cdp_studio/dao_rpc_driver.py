@@ -415,11 +415,12 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             "spacing_rules":{名: {"clearance_mm":}},
             "length_rules":{名: {"min_mm":, "max_mm":}},
             "length_tolerance_rules":{名: {"tolerance_mm":}},
+            "diff_pair_rules":{名: {"width_mm":, "gap_mm":}},
             "class_rules": {类名: {属性: 具名子规则}}}。返回落库回执。"""
         out = {"net_classes": {}, "diff_pairs": {}, "equal_length": {},
                "track_rules": {}, "via_rules": {}, "spacing_rules": {},
                "length_rules": {}, "length_tolerance_rules": {},
-               "class_rules": {}}
+               "diff_pair_rules": {}, "class_rules": {}}
         for nm, nets in (constraints.get("net_classes") or {}).items():
             out["net_classes"][nm] = self.net_class(nm, nets)
         for nm, pair in (constraints.get("diff_pairs") or {}).items():
@@ -442,6 +443,9 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         for nm, p in (constraints.get("length_tolerance_rules") or {}).items():
             out["length_tolerance_rules"][nm] = self.add_length_tolerance_rule(
                 nm, p["tolerance_mm"])
+        for nm, p in (constraints.get("diff_pair_rules") or {}).items():
+            out["diff_pair_rules"][nm] = self.add_diff_pair_rule(
+                nm, p["width_mm"], p["gap_mm"])
         # 差异化规则须在网络类已建之后落（指向具名子规则）
         for cls, rules in (constraints.get("class_rules") or {}).items():
             out["class_rules"][cls] = {
@@ -600,6 +604,44 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
                                 {"netLengthTolerance": tolerance_mm})
         return {"name": name, "tolerance": tolerance_mm, "form": f}
 
+    def add_diff_pair_rule(self, name, width_mm, gap_mm):
+        """新增**自定义差分对子规则**（Physics/Differential Pair，form 态双表）并应用到
+        当前 PCB。供 USB/HDMI/以太网等差分阻抗匹配（线宽 + 对内间距）。
+
+        本源（读 `ui.js` 实证）：`form.strokeWidthTables.data[*]`=差分线宽
+        （`ez` 校验 min≤default≤max），`form.diffPairSpacingTables.data[*]`=对内间距
+        （`ez` 只校验 min≤default，max 可为 0 表无上限）。克隆模板改两表各层默认值即可，
+        经 `overwriteCurrentRuleConfiguration` 整体写回、读回确认。单位 mm。
+
+        注意（实测本源）：`Differential Pair` **不在 netClass 节点上**（其键里没有此属性），
+        故**不可经 `set_net_class_rule` 在网络类层绑定**——它属差分对对象层，须经差分对节点
+        绑定（留作下一前沿）。本函数只负责把具名 DP 子规则落到当前板（读回确认）。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        bucket = cfg.get("Physics", {}).get("Differential Pair", {})
+        if not bucket:
+            raise DaoRpcError("当前配置无 Physics/Differential Pair")
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(bucket.values())))
+        tmpl["editName"] = name
+        for layer in tmpl.get("form", {}).get("strokeWidthTables", {}).get(
+                "data", {}).values():
+            layer["minValue"] = round(width_mm * 0.5, 4)
+            layer["defaultValue"] = width_mm
+            layer["maxValue"] = round(width_mm * 10, 4)
+        for layer in tmpl.get("form", {}).get("diffPairSpacingTables", {}).get(
+                "data", {}).values():
+            layer["minValue"] = round(gap_mm * 0.5, 4)
+            layer["defaultValue"] = gap_mm
+        bucket[name] = tmpl
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Physics", {})
+                .get("Differential Pair", {}))
+        if name not in back:
+            raise DaoRpcError("add_diff_pair_rule(%s) 未落库" % name)
+        return {"name": name, "width": width_mm, "gap": gap_mm}
+
     def net_rules(self):
         """网络/网络类的规则树（只读）。每个 netClass/net 节点带 Track、Safe Spacing、
         Via Size、Net Length Range/Tolerance、Differential Pair 等属性，值多为 "default"
@@ -630,6 +672,13 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
                        and x.get("name") == class_name), None)
         if target is None:
             raise DaoRpcError("网络类 %r 不存在（先 net_class 建之）" % class_name)
+        # 本源校验：并非所有规则属性都在网络类层可绑（如 `Differential Pair` 不在
+        # netClass 节点上——它属差分对对象层）。只认该节点真实存在的键，免静默 no-op。
+        if attr not in target:
+            bindable = sorted(k for k in target
+                              if k not in ("type", "name", "sub", "targetNet"))
+            raise DaoRpcError("属性 %r 不可在网络类层绑定；该类可绑属性为 %s"
+                              % (attr, bindable))
         target[attr] = profile
         self._call("pcb_Drc.overwriteNetRules", rules, timeout=25)
         back = self._call("pcb_Drc.getNetRules", timeout=20) or []
