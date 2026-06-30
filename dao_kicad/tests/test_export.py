@@ -162,3 +162,27 @@ class TestExportEngine:
         out = engine.render_3d(tmp_path / "board.png", width=400, height=300)
         assert out is not None and out.exists()
         assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_odb_export(self, sample_board, tmp_path):
+        """ODB++ export must produce a zip archive (PK magic)."""
+        self._require_cli()
+        engine = ExportEngine(sample_board)
+        out = engine.odb(tmp_path / "odb.zip")
+        assert out is not None and out.exists()
+        assert out.read_bytes()[:2] == b"PK"
+
+    def test_ipc2581_export(self, sample_board, tmp_path):
+        """IPC-2581 export must produce a non-empty XML document."""
+        self._require_cli()
+        engine = ExportEngine(sample_board)
+        out = engine.ipc2581(tmp_path / "board.xml")
+        assert out is not None and out.exists()
+        assert out.read_text(errors="ignore").lstrip().startswith("<?xml")
+
+    def test_ipc_d356_export(self, sample_board, tmp_path):
+        """IPC-D-356 bare-board test netlist must be produced and non-empty."""
+        self._require_cli()
+        engine = ExportEngine(sample_board)
+        out = engine.ipc_d356(tmp_path / "netlist.d356")
+        assert out is not None and out.exists()
+        assert out.stat().st_size > 0

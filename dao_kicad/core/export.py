@@ -318,6 +318,48 @@ class ExportEngine:
             return output_path
         return None
 
+    def odb(self, output_path: Path) -> Optional[Path]:
+        """Export an ODB++ package via ``kicad-cli pcb export odb``.
+
+        ODB++ is a single-archive fab handoff (copper, drills, netlist, stackup
+        in one file) that modern fabs accept in place of a Gerber+drill bundle.
+        Output is a ``.zip`` by default. Returns the path or ``None``.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        args = ["pcb", "export", "odb", "--output", str(output_path), "__SRC__"]
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def ipc2581(self, output_path: Path) -> Optional[Path]:
+        """Export IPC-2581 (XML) via ``kicad-cli pcb export ipc2581``.
+
+        IPC-2581 is the open single-file fab/assembly interchange standard
+        (geometry + BOM + netlist). Returns the path or ``None``.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        args = ["pcb", "export", "ipc2581",
+                "--output", str(output_path), "__SRC__"]
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def ipc_d356(self, output_path: Path) -> Optional[Path]:
+        """Export an IPC-D-356 netlist via ``kicad-cli pcb export ipcd356``.
+
+        This is the bare-board electrical-test netlist a fab loads into a
+        flying-probe / bed-of-nails tester. Returns the path or ``None``.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        args = ["pcb", "export", "ipcd356",
+                "--output", str(output_path), "__SRC__"]
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
     def full_manufacturing(self, output_dir: Path) -> dict[str, list[Path]]:
         """Complete manufacturing package — everything a fab house needs."""
         output_dir = Path(output_dir)
