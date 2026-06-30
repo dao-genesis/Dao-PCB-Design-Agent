@@ -407,6 +407,22 @@ rep.clean   # 无重叠且检测成功
 实测: 间隔摆放 2 件 → `overlap_count=0`、`clean=True`; 近乎叠放 (dx=0.3mm) → 报 1 处重叠并给真实
 相交面积 (≈5.76 mm²); 缺板文件如实报错 `ok=False`。
 
+### 〇.21 制造图尺寸标注 (`native_dimension.py`)
+
+> 反者道之动: 制造图上的板宽/孔距/间距标注本是人在 GUI 里一根根拉出来的, 但落到本源它们只是
+> Dwgs.User 上的 `PCB_DIM_ALIGNED`。本层经子进程 (`_dimension_worker.py`) 用本源 PCB_DIM_ALIGNED
+> 下发对齐标注 (毫米/精度可控), `auto_board=True` 时按板框包围盒自动加"板宽/板高"两道, 落盘后
+> **重载实测** Dwgs.User 标注计数与各自量得值 (反臆造: 数值取自 KiCad 量算 `GetMeasuredValue` 而非手填)。
+
+```python
+from kicad_origin.origin.native_dimension import NativeDimension
+rep = NativeDimension().annotate("in.kicad_pcb", "out.kicad_pcb", auto_board=True)
+rep.added, rep.dims_on_layer, rep.values   # values 为重载后 KiCad 量得的真实 mm
+```
+
+实测: 显式 40mm 跨距 → 量得 ≈40.0; `auto_board` 在 50×30 板上自动加两道 → 量得 ≈30 与 ≈50;
+dims 空且未启用 auto_board / 缺板文件如实报错 `ok=False`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
