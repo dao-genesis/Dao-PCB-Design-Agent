@@ -390,6 +390,23 @@ rep.added, rep.vias_on_net, rep.vias_total   # 重载实测: 落点全在 GND
 实测: 40×40 区域 pitch 5 → 全部落点重载后均在 GND (`vias_on_net==added`); pitch 越细过孔越多;
 目标网不存在 / 缺板文件如实报错 `ok=False`。
 
+### 〇.20 元件际间距/重叠检测 (`native_courtyard.py`)
+
+> 反者道之动: 装配阶段元件会不会"打架"本是人在 GUI 里放大了肉眼比对 courtyard 框, 但落到本源每件
+> courtyard 只是 F.CrtYd/B.CrtYd 上一圈 `SHAPE_POLY_SET`。本层经子进程 (`_courtyard_worker.py`) 取每件
+> 本源 courtyard 多边形两两做 `BooleanIntersection` 求**真实相交面积** (非包围盒近似), 面积 > eps 即判
+> 重叠报出 (反臆造: 缺 courtyard 的件如实列入 missing, 不臆造为 0 重叠)。与铜层 DRC 互补的装配几何检查。
+
+```python
+from kicad_origin.origin.native_courtyard import NativeCourtyard
+rep = NativeCourtyard().check("board.kicad_pcb")
+rep.overlap_count, rep.overlaps, rep.missing   # overlaps:[{a,b,area_mm2}]
+rep.clean   # 无重叠且检测成功
+```
+
+实测: 间隔摆放 2 件 → `overlap_count=0`、`clean=True`; 近乎叠放 (dx=0.3mm) → 报 1 处重叠并给真实
+相交面积 (≈5.76 mm²); 缺板文件如实报错 `ok=False`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
