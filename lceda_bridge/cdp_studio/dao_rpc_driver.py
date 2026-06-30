@@ -27,6 +27,7 @@
     res = drv.build_board(SPEC)        # 见 examples/ 下的板谱
 """
 import base64
+import difflib
 import glob
 import json
 import os
@@ -37,6 +38,57 @@ import dao_eda_cdp_driver as _d
 import eda_api
 
 EXT = "window._EXTAPI_ROOT_"
+
+# 全量逆流目录（extract_extapi_dts.py 产出）：95 命名空间 / 749 方法 + 词汇。
+# 仅用于「NO_API 错误路径」上给出最接近的真实方法名建议（成功路径零负担）。
+_FULL_CATALOG = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "extapi_full_catalog.json")
+_CAT_INDEX = None  # {namespace: [method_names]} 惰性加载
+
+
+def _catalog_index():
+    global _CAT_INDEX
+    if _CAT_INDEX is None:
+        idx = {}
+        try:
+            with open(_FULL_CATALOG, encoding="utf-8") as f:
+                cat = json.load(f)
+            for ns, v in cat.get("namespaces", {}).items():
+                idx[ns] = [m["name"] for m in v.get("methods", [])]
+        except Exception:
+            pass
+        _CAT_INDEX = idx
+    return _CAT_INDEX
+
+
+def _suggest_api(ns_api):
+    """对 `namespace.method` 给出基于全量目录的最接近建议（教训固化：名必取自目录）。"""
+    idx = _catalog_index()
+    if not idx or "." not in ns_api:
+        return ""
+    ns, _, meth = ns_api.partition(".")
+    if ns not in idx:
+        near_ns = _dedup(difflib.get_close_matches(ns, list(idx), n=4, cutoff=0.6))
+        return ("未知命名空间 %r；相近：%s" % (ns, ", ".join(near_ns))) if near_ns \
+            else ("未知命名空间 %r（全量目录共 %d 个命名空间）" % (ns, len(idx)))
+    if meth in idx[ns]:
+        return ("`%s.%s` 已在声明中但运行期不可达（declared-not-live）——"
+                "可能需特定文档/上下文已打开，或本版本未暴露。" % (ns, meth))
+    near = _dedup(difflib.get_close_matches(meth, idx[ns], n=6, cutoff=0.5))
+    if near:
+        return "`%s` 无此方法；是否想用：%s" % (ns, ", ".join(near))
+    return "`%s` 无 %r；该命名空间共 %d 个方法（见 EXTAPI_REFERENCE.md）" % (
+        ns, meth, len(idx[ns]))
+
+
+def _dedup(seq):
+    seen, out = set(), []
+    for x in seq:
+        if x not in seen:
+            seen.add(x); out.append(x)
+    return out
+
+
 TOP, BOTTOM, MULTI, OUTLINE = 1, 2, 11, 11
 
 _FREEROUTING_JAR = os.path.expanduser(
@@ -113,7 +165,16 @@ class DaoRpc:
 
     def _call(self, ns_api, *args, **kw):
         self.metrics["rpc_calls"] += 1
-        return self.eda.call(ns_api, *args, **kw)
+        try:
+            return self.eda.call(ns_api, *args, **kw)
+        except Exception as e:
+            # 仅错误路径：NO_API（名不存在）时附上全量目录的最接近建议，
+            # 把「臆造名一律 NO_API」的教训变成可操作的纠错提示。
+            if "NO_API" in str(e):
+                hint = _suggest_api(ns_api)
+                if hint:
+                    raise DaoRpcError("%s | %s" % (e, hint))
+            raise
 
     # ---------- 钥匙 1：工程 ----------
     def create_project(self, name):
