@@ -107,7 +107,8 @@ def build_from_spec(spec: DesignSpec, output_dir: Path) -> DesignResult:
     for comp in spec.components:
         try:
             builder.place(comp.library, comp.footprint, comp.ref,
-                          comp.x_mm, comp.y_mm, value=comp.value)
+                          comp.x_mm, comp.y_mm, rotation=comp.rotation,
+                          value=comp.value)
             result.components_placed += 1
         except Exception as exc:
             result.errors.append(f"Place {comp.ref}: {exc}")
