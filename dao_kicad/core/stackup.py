@@ -73,11 +73,25 @@ class Stackup:
         return None
 
     def dielectric_height(self, signal_layer: str, ref_layer: str) -> float:
-        """Get dielectric height between two copper layers."""
-        positions = {name: z for name, z in self.copper_layers}
-        if signal_layer in positions and ref_layer in positions:
-            return abs(positions[signal_layer] - positions[ref_layer])
-        return 0.2  # default
+        """Dielectric thickness between two copper layers — the gap that sets
+        impedance.
+
+        Sum the dielectric entries strictly between the two coppers, not the
+        z-position difference of the layers. The z span runs copper-top to
+        copper-top, so it includes the upper layer's copper thickness,
+        overstating the gap by ~one copper thickness (~0.035mm, i.e. ~16% on a
+        0.22mm prepreg) and skewing every impedance / solved-trace-width
+        result that depends on it.
+        """
+        idx = {e.layer.name: i for i, e in enumerate(self.entries)
+               if isinstance(e.layer, CopperLayer)}
+        if signal_layer not in idx or ref_layer not in idx:
+            return 0.2  # default
+        a, b = sorted((idx[signal_layer], idx[ref_layer]))
+        gap = sum(self.entries[k].layer.thickness_mm
+                  for k in range(a + 1, b)
+                  if isinstance(self.entries[k].layer, DielectricLayer))
+        return gap if gap > 0 else 0.2
 
     def summary(self) -> str:
         lines = [f"Stackup: {self.total_thickness_mm:.3f}mm total, "
