@@ -158,6 +158,27 @@ rep = run_flow("design.net", "out/")     # netlist → 建板 → 自愈闸 → 
 实测 (divider.net, 3 件/4 网): build (2 飞线) → heal (DRC 0 违规 / 飞线 2→0) → fab zip,
 `_origin` 如实溯源 (3 件全可放, 0 缺封装), **全流程 ok**。
 
+### 〇.8 本源物料与装配 (`native_bom.py` / `native_assembly.py`)
+
+> 制板出 gerber 只是裸板; **采购**要 BOM、**贴片**要坐标、**评审**要 3D 实体。
+> - `native_bom`: 两条本源路径取 BOM —— ① `from_board` 经子进程 (`_bom_worker`) 用 pcbnew
+>   读每枚封装真 ref/value/footprint, 按 (value, footprint) 归并 (KiCad "Grouped By Value"
+>   同义, 引脚号自然序 R2<R10); ② `from_schematic` 经 `kicad-cli sch export bom` 直出真
+>   原理图 BOM。读不到即报错, 不编行。
+> - `native_assembly`: 把贴片坐标 (`export_pos`) + 3D STEP/GLB (`pcb export step|glb`,
+>   catalog-backed) + BOM 一并打成**装配包 zip**。
+
+```python
+from kicad_origin.origin.native_bom import NativeBom
+from kicad_origin.origin.native_assembly import NativeAssembly
+NativeBom().from_board("board.kicad_pcb")            # 真板 → 归并 BOM
+NativeAssembly().assemble("board.kicad_pcb", "out/") # pos+step+glb+bom → zip
+```
+
+实测: 真板 4 件 → BOM 归并 (R1+R2 同值合 qty2 / R10 异值另起, 3 物料/4 总数); 真原理图
+simple_fan_controller → `sch export bom` 出 5 行 (330R ×2 归并); 装配包 zip 含
+positions.csv+board.step+board.glb+bom.csv, **全产出 ok**。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
