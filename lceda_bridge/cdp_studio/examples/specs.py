@@ -162,10 +162,42 @@ def build_hs():
     }
 
 
+def build_via6():
+    """板⑥·受控叠层:6 层 + 自定义过孔尺寸子规则 + 盲埋孔层对规则。
+
+    专测**叠层/过孔约束深链路**(方向②)。在 complex 式双电源域 RC 网上叠加:
+      · copper_layers=6:6 层叠层(顶/底 + 4 内层 Inner1..4,内层物理号起于 15);
+      · via_rules `V_small`(外 0.45/内 0.2mm):自定义过孔尺寸子规则,经
+        `overwriteCurrentRuleConfiguration` 读写回当前板;
+      · blind_via_rules: 顶层(1)↔Inner1(15) 盲孔层对规则,绑 `V_small` 尺寸。
+    验证点:6 层栈进 DSN + 过孔/盲孔规则全读回落库 + freerouting(通孔)收敛 DRC=0。
+    诚实边界(已入档):freerouting 仅打通孔,盲埋孔**布线级**几何留作更深前沿——
+    本板验证的是规则落库 + 多层布通,非盲孔实体成形。"""
+    comps = []
+    for i in range(1, 9):
+        dom = "A" if i <= 4 else "B"
+        vcc, gnd, node = "VCC_%s" % dom, "GND_%s" % dom, "N%d" % i
+        comps.append({"ref": "R%d" % i, "query": R, "rotation": 0,
+                      "pins": {"1": vcc, "2": node}})
+        comps.append({"ref": "C%d" % i, "query": C, "rotation": 90,
+                      "pins": {"1": node, "2": gnd}})
+    _grid(comps, cols=4, dx=600, dy=600)
+    return {
+        "name": "DAO_V6_Stackup6L", "gnd_net": "GND_A",
+        "track_width": 10, "margin": 200, "copper_layers": 6, "components": comps,
+        "constraints": {
+            "via_rules": {"V_small": {"outer_mm": 0.45, "inner_mm": 0.2}},
+            "blind_via_rules": [{"start_layer": 1, "end_layer": 15,
+                                 "via_size_rule": "V_small"}],
+        },
+    }
+
+
 BOARDS = {
     "simple": build_simple,
     "medium": build_medium,
     "complex": build_complex,
     "mcu": build_mcu,
     "hs": build_hs,
+    "via6": build_via6,
 }
