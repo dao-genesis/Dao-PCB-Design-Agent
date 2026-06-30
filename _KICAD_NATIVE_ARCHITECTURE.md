@@ -475,6 +475,23 @@ rep.class_of("VCC"), rep.nets   # 重载实测每条网生效网类与参数
 实测: 建 PWR(track 0.5/clr 0.25/via 0.9) 并绑 VCC → 重载 `reload_classes` 含 PWR、VCC 生效类=PWR 且
 线宽 0.5/过孔 0.9; 未绑的 GND 仍为 Default(0.2); classes 与 assignments 全空 / 缺板文件如实报错。
 
+### 〇.25 阻焊控制 (`native_mask.py`)
+
+> 反者道之动: 过孔是否被阻焊盖住(tenting)、焊盘开窗放多大本是人在 GUI 里逐个勾/改的, 但落到本源
+> 过孔蒙盖只是 `PCB_VIA` 的前/后 `TentingMode`, 焊盘开窗只是 `PAD` 的 `LocalSolderMaskMargin`。本层经
+> 子进程 (`_mask_worker.py`) 对全部过孔批量设蒙盖模式(`tented`/`not_tented`/`from_rules`)、对(可按封装
+> ref 过滤的)焊盘批量设开窗余量, 落盘后**重载实测**过孔蒙盖态与焊盘开窗余量 (反臆造)。
+
+```python
+from kicad_origin.origin.native_mask import NativeMask
+rep = NativeMask().apply("in.kicad_pcb", "out.kicad_pcb",
+                         via_tenting="tented", pad_mask_mm=0.05)
+rep.vias_tented, rep.sample_pad_mask_mm   # 重载实测
+```
+
+实测: 缝合 25 过孔后全设 `tented` → 重载 `vias_tented=25`(=全部); `not_tented`+`pad_mask_mm=0.05`
+→ 6 焊盘开窗余量回读 0.05; 非法模式 / 无参 / 缺板文件如实报错 `ok=False`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
