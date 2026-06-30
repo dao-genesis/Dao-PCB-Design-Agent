@@ -306,6 +306,39 @@ def build_bga():
             "components": comps}
 
 
+def build_cap():
+    """板⑫·合龙:原语**可组合**一板同跑——auto_fanout(QFP 几何扇出)+ 约束级(网类/
+    等长组)+ 4 层 + 布线后 length_audit,验证诸原语并非各自孤立。
+
+    U1(LQFP48)居中,8 信号脚 auto_fanout 四向均布串阻扇出(S0..S7);S2/S3 声明等长组,
+    布线后 length_audit 量其 spread;电源脚配去耦电容。
+
+    诚实定界(本板实证):**差分对约束不放在此**。auto_fanout 每网仅「焊盘→1 串阻」一段
+    **退化短桩**,freerouting 的差分布线规则需配对两网有**可并走的真实跨段**(见 hs 板:
+    每差分网挂 2 串阻、分栅格成span),退化短桩上声明 diff_pair 会触发 Differential Pair
+    Error(实测 DRC=1)。故差分对归 hs 板正例,本板只组合「几何扇出+网类+等长+多层+审计」。"""
+    # 四边各取 2 信号脚(避电源脚),让 auto_fanout 均布四向、互不抢道:
+    # 左 2,4 · 下 14,16 · 右 26,28 · 上 38,40
+    SIG = [2, 4, 14, 16, 26, 28, 38, 40]
+    pins = {p: "VCC" for p in ("6", "18", "30", "42")}
+    pins.update({p: "GND" for p in ("12", "24", "36", "48")})
+    af = {pad: "S%d" % k for k, pad in enumerate(SIG)}
+    comps = [{"ref": "U1", "query": LQFP48, "rotation": 0, "x": 0, "y": 0,
+              "pins": pins, "auto_fanout": af, "fanout_query": R,
+              "fanout_offset": 600, "fanout_depth_step": 180}]
+    for i, (cx, cy) in enumerate([(-650, 650), (650, 650),
+                                  (-650, -650), (650, -650)], 1):
+        comps.append({"ref": "C%d" % i, "query": C, "rotation": 90,
+                      "x": cx, "y": cy, "pins": {"1": "VCC", "2": "GND"}})
+    return {"name": "DAO_CAP1_AllPrimitives", "gnd_net": "GND",
+            "track_width": 8, "margin": 220, "copper_layers": 4,
+            "components": comps,
+            "constraints": {
+                "net_classes": {"SIG": ["S%d" % k for k in range(8)],
+                                "PWR": ["VCC", "GND"]},
+                "equal_length": {"EQ23": ["S2", "S3"]}}}
+
+
 def build_skewlen():
     """板⑪·诚实校验 length_audit:把一个等长组**故意做成不对称**——网 A 两脚近(短跨)、
     网 B 两脚远(长跨),freerouting 走最短路必致两网实测铜长悬殊。length_audit 应报
@@ -356,4 +389,5 @@ BOARDS = {
     "soicfan": build_soicfan,
     "bga": build_bga,
     "skewlen": build_skewlen,
+    "cap": build_cap,
 }
