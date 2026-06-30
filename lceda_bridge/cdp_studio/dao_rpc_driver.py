@@ -153,15 +153,28 @@ class DaoRpc:
         self.metrics = {"rpc_calls": 0, "evals": 0}
 
     # ---------- 底层封装 ----------
-    def _eval(self, js, timeout=45):
-        self.metrics["evals"] += 1
-        v, e = _d.evaluate(self.ws, js, await_promise=True, timeout=timeout)
-        if e:
-            raise DaoRpcError("eval: %s" % e)
-        try:
-            return json.loads(v) if v else None
-        except Exception:
-            return v
+    def _eval(self, js, timeout=45, retries=2):
+        """求值。对**瞬时** NO_RESULT(CDP 偶发返回空结果——本会话实证:同一 eval
+        立即重发即成)做有限重试并自愈重连;真正的脚本错误/超时如实抛出,不掩盖。"""
+        last = None
+        for attempt in range(retries + 1):
+            self.metrics["evals"] += 1
+            v, e = _d.evaluate(self.ws, js, await_promise=True, timeout=timeout)
+            if not e:
+                try:
+                    return json.loads(v) if v else None
+                except Exception:
+                    return v
+            last = e
+            if "NO_RESULT" in str(e) and attempt < retries:
+                time.sleep(0.8 * (attempt + 1))
+                try:                       # 重连编辑器会话再发(防 ws 半死)
+                    self.ws = _d.connect_editor(self.port)
+                except Exception:
+                    pass
+                continue
+            break
+        raise DaoRpcError("eval: %s" % last)
 
     def _call(self, ns_api, *args, **kw):
         self.metrics["rpc_calls"] += 1
