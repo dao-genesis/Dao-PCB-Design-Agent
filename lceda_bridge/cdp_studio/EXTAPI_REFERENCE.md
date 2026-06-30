@@ -4,6 +4,7 @@
 >
 > - API 版本：`0.2.53.aee2f57a`　生成：`2026-06-30`
 > - 命名空间 **95** 个，可直接 RPC 调用方法 **749** 个；返回/数据类型 **31** 个（链式方法 766 个）。
+> - 词汇：枚举 **69** 个、接口 **128** 个、类型别名 **30** 个（见文末「词汇表」，含层 id/图元类型/库类型等取值）。
 > - 根映射：`EDA` 根类把每个命名空间以「类名首段小写」暴露（`PCB_Drc`→`pcb_Drc`），经源码核实。
 > - 调用：`driver._call('<namespace>.<method>', *args)`（见 `dao_rpc_driver.py`）。
 
@@ -1253,4 +1254,2362 @@
 ### `eDA` · EDA （运行期未抽样）
 
 _（无公开方法）_
+
+## 词汇表 · 枚举（enum）
+
+> 调用各方法时传参/解读返回值所需的合法取值集合（层 id、图元类型、库类型、单位…）。
+
+### `CellContentType` — 单元格内容类型枚举 */
+
+| 成员 | 值 |
+|---|---|
+| `TEXT` | `"TEXT"` |
+| `INPUT` | `"INPUT"` |
+| `TEXTAREA` | `"TEXTAREA"` |
+| `SELECT` | `"SELECT"` |
+| `CHECKBOX` | `"CHECKBOX"` |
+| `CUSTOM` | `"CUSTOM"` |
+| `UNDEFINED` | `"UNDEFINED"` |
+
+### `CellType` — 单元格类型枚举 */
+
+| 成员 | 值 |
+|---|---|
+| `TH` | `"th"` |
+| `TD` | `"td"` |
+
+### `EDMT_EditorDocumentType` — 编辑器文档类型
+
+| 成员 | 值 |
+|---|---|
+| `HOME` | `-1` |
+| `BLANK` | `0` |
+| `PROJECT` | `5` |
+| `SCHEMATIC_PAGE` | `1` |
+| `PCB` | `3` |
+| `PCB_2D_PREVIEW` | `12` |
+| `PCB_3D_PREVIEW` | `15` |
+| `PANEL` | `26` |
+| `PANEL_3D_PREVIEW` | `27` |
+| `SYMBOL_COMPONENT` | `2` |
+| `SYMBOL_NET_FLAG` | `18` |
+| `SYMBOL_NET_PORT` | `19` |
+| `SYMBOL_DRAWING` | `20` |
+| `SYMBOL_NON_ELECTRICAL` | `21` |
+| `SYMBOL_SHORT_CIRCUIT_FLAG` | `22` |
+| `SYMBOL_OFF_PAGE_CONNECTOR_FLAG` | `25` |
+| `SYMBOL_CBB` | `17` |
+| `FOOTPRINT` | `4` |
+| `PANEL_LIBRARY` | `29` |
+| `SIMULATION_SCHEMATIC_PAGE_NGSPICE` | `8` |
+| `SIMULATION_SCHEMATIC_PAGE_SIMULIDE` | `9` |
+| `SIMULATION_SYMBOL_COMPONENT_NGSPICE` | `7` |
+| `SIMULATION_SYMBOL_COMPONENT_SIMULIDE` | `32` |
+
+### `EDMT_EditorSplitScreenDirection` — 编辑器分屏方向
+
+| 成员 | 值 |
+|---|---|
+| `HORIZONTAL` | `"horizontal"` |
+| `VERTICAL` | `"vertical"` |
+
+### `EDMT_EditorTabEventType` — 编辑器标签页事件类型
+
+| 成员 | 值 |
+|---|---|
+| `TOGGLE` | `"toggle"` |
+| `CLOSE` | `"close"` |
+| `OPEN` | `"open"` |
+
+### `EDMT_IndicatorMarkerType` — 指示标记类型
+
+| 成员 | 值 |
+|---|---|
+| `POINT` | `"point"` |
+| `CIRCLE` | `"circle"` |
+| `LINE` | `"line"` |
+| `ARC` | `"arc"` |
+| `RECTANGLE` | `"rectangle"` |
+
+### `EDMT_ItemType` — 文档树项目类型
+
+| 成员 | 值 |
+|---|---|
+| `WORKSPACE` | `"Workspace"` |
+| `TEAM` | `"Team"` |
+| `FOLDER` | `"Folder"` |
+| `PROJECT` | `"Project"` |
+| `CBB_PROJECT` | `"CBB Project"` |
+| `BOARD` | `"Board"` |
+| `SCHEMATIC` | `"Schematic"` |
+| `CBB_SCHEMATIC` | `"CBB Schematic"` |
+| `SCHEMATIC_PAGE` | `"Schematic Page"` |
+| `PCB` | `"PCB"` |
+| `CBB_PCB` | `"CBB PCB"` |
+| `PANEL` | `"Panel"` |
+
+### `EDMT_ProjectCollaborationMode` — 工程协作模式
+
+| 成员 | 值 |
+|---|---|
+| `STRICT` | `3` |
+| `FREE` | `1` |
+
+### `ELIB_DeviceJlcLibraryCategory` — 嘉立创贴片库类别
+
+| 成员 | 值 |
+|---|---|
+| `STANDARD` | `"standard"` |
+| `EXTEND` | `"extend"` |
+
+### `ELIB_LibraryType` — 综合库库类型
+
+| 成员 | 值 |
+|---|---|
+| `DEVICE` | `"3"` |
+| `SYMBOL` | `"2"` |
+| `FOOTPRINT` | `"4"` |
+| `CBB` | `"1"` |
+| `MODEL` | `"5"` |
+| `PANEL_LIBRARY` | `"29"` |
+
+### `ELIB_PreviewType` — 预览视图类型
+
+| 成员 | 值 |
+|---|---|
+| `SYMBOL` | `"S"` |
+| `FOOTPRINT` | `"F"` |
+| `PRODUCT` | `"P"` |
+| `MODEL_3D` | `"3D"` |
+
+### `ELIB_SymbolType` — 符号类型
+
+| 成员 | 值 |
+|---|---|
+| `COMPONENT` | `2` |
+| `NET_FLAG` | `18` |
+| `NET_PORT` | `19` |
+| `DRAWING` | `20` |
+| `NON_ELECTRICAL` | `21` |
+| `SHORT_CIRCUIT_FLAG` | `22` |
+| `OFF_PAGE_CONNECTOR` | `25` |
+| `DIFFERENTIAL_PAIRS_FLAG` | `31` |
+| `CBB_SYMBOL` | `17` |
+
+### `EPCB_DocumentRatlineCalculatingActiveStatus` — 文档飞线计算功能状态
+
+| 成员 | 值 |
+|---|---|
+| `ACTIVE` | `"active"` |
+| `INACTIVE` | `"inactive"` |
+
+### `EPCB_InactiveLayerDisplayMode` — 非激活层展示模式
+
+| 成员 | 值 |
+|---|---|
+| `NORMAL_BRIGHTNESS` | `0` |
+| `TURN_GRAY` | `1` |
+| `HIDE` | `2` |
+
+### `EPCB_LayerColorConfiguration` — 图层颜色配置
+
+| 成员 | 值 |
+|---|---|
+| `JLCEDA` | `1` |
+| `EASYEDA` | `1` |
+| `ALTIUM_DESIGNER` | `2` |
+| `PADS` | `3` |
+| `KICAD` | `4` |
+
+### `EPCB_LayerId` — 图层 ID
+
+| 成员 | 值 |
+|---|---|
+| `TOP` | `1` |
+| `TOP_SILKSCREEN` | `3` |
+| `TOP_SOLDER_MASK` | `5` |
+| `TOP_PASTE_MASK` | `7` |
+| `TOP_ASSEMBLY` | `9` |
+| `TOP_STIFFENER` | `58` |
+| `BOTTOM` | `2` |
+| `BOTTOM_SILKSCREEN` | `4` |
+| `BOTTOM_SOLDER_MASK` | `6` |
+| `BOTTOM_PASTE_MASK` | `8` |
+| `BOTTOM_ASSEMBLY` | `10` |
+| `BOTTOM_STIFFENER` | `59` |
+| `BOARD_OUTLINE` | `11` |
+| `MULTI` | `12` |
+| `DOCUMENT` | `13` |
+| `MECHANICAL` | `14` |
+| `RATLINE` | `57` |
+| `INNER_1` | `15` |
+| `INNER_2` | `16` |
+| `INNER_3` | `17` |
+| `INNER_4` | `18` |
+| `INNER_5` | `19` |
+| `INNER_6` | `20` |
+| `INNER_7` | `21` |
+| `INNER_8` | `22` |
+| `INNER_9` | `23` |
+| `INNER_10` | `24` |
+| `INNER_11` | `25` |
+| `INNER_12` | `26` |
+| `INNER_13` | `27` |
+| `INNER_14` | `28` |
+| `INNER_15` | `29` |
+| `INNER_16` | `30` |
+| `INNER_17` | `31` |
+| `INNER_18` | `32` |
+| `INNER_19` | `33` |
+| `INNER_20` | `34` |
+| `INNER_21` | `35` |
+| `INNER_22` | `36` |
+| `INNER_23` | `37` |
+| `INNER_24` | `38` |
+| `INNER_25` | `39` |
+| `INNER_26` | `40` |
+| `INNER_27` | `41` |
+| `INNER_28` | `42` |
+| `INNER_29` | `43` |
+| `INNER_30` | `44` |
+| `CUSTOM_1` | `71` |
+| `CUSTOM_2` | `72` |
+| `CUSTOM_3` | `73` |
+| `CUSTOM_4` | `74` |
+| `CUSTOM_5` | `75` |
+| `CUSTOM_6` | `76` |
+| `CUSTOM_7` | `77` |
+| `CUSTOM_8` | `78` |
+| `CUSTOM_9` | `79` |
+| `CUSTOM_10` | `80` |
+| `CUSTOM_11` | `81` |
+| `CUSTOM_12` | `82` |
+| `CUSTOM_13` | `83` |
+| `CUSTOM_14` | `84` |
+| `CUSTOM_15` | `85` |
+| `CUSTOM_16` | `86` |
+| `CUSTOM_17` | `87` |
+| `CUSTOM_18` | `88` |
+| `CUSTOM_19` | `89` |
+| `CUSTOM_20` | `90` |
+| `CUSTOM_21` | `91` |
+| `CUSTOM_22` | `92` |
+| `CUSTOM_23` | `93` |
+| `CUSTOM_24` | `94` |
+| `CUSTOM_25` | `95` |
+| `CUSTOM_26` | `96` |
+| `CUSTOM_27` | `97` |
+| `CUSTOM_28` | `98` |
+| `CUSTOM_29` | `99` |
+| `CUSTOM_30` | `100` |
+| `SUBSTRATE_1` | `101` |
+| `HOLE` | `47` |
+| `COMPONENT_SHAPE` | `48` |
+| `COMPONENT_MARKING` | `49` |
+| `PIN_SOLDERING` | `50` |
+| `PIN_FLOATING` | `51` |
+| `COMPONENT_MODEL` | `52` |
+| `SHELL_3D_OUTLINE` | `53` |
+| `SHELL_3D_TOP` | `54` |
+| `SHELL_3D_BOTTOM` | `55` |
+| `DRILL_DRAWING` | `56` |
+
+### `EPCB_LayerStatus` — 层状态
+
+| 成员 | 值 |
+|---|---|
+| `NOT_USED` | `0` |
+| `SHOW` | `1` |
+| `HIDDEN` | `2` |
+
+### `EPCB_LayerType` — 图层类型
+
+| 成员 | 值 |
+|---|---|
+| `SIGNAL` | `"SIGNAL"` |
+| `INTERNAL_ELECTRICAL` | `"PLANE"` |
+| `SILKSCREEN` | `"SILKSCREEN"` |
+| `SOLDER_MASK` | `"SOLDER_MASK"` |
+| `PASTE_MASK` | `"PASTE_MASK"` |
+| `ASSEMBLY` | `"ASSEMBLY"` |
+| `OTHER` | `"OTHER"` |
+| `CUSTOM` | `"CUSTOM"` |
+
+### `EPCB_MouseEventType` — 鼠标事件类型
+
+| 成员 | 值 |
+|---|---|
+| `SELECTED` | `"selected"` |
+| `CLEAR_SELECTED` | `"clearSelected"` |
+| `MOVE` | `"move"` |
+
+### `EPCB_NetEventType` — 网络事件类型
+
+| 成员 | 值 |
+|---|---|
+| `ADD` | `"add"` |
+| `REMOVE` | `"remove"` |
+| `SELECTED` | `"selected"` |
+
+### `EPCB_PcbPlateType` — PCB 板材类型
+
+| 成员 | 值 |
+|---|---|
+| `NORMAL` | `1` |
+| `FPC` | `2` |
+
+### `EPCB_PdfOutputMethod` — PDF 输出方式
+
+| 成员 | 值 |
+|---|---|
+| `MULTI_PAGE_PDF` | `"A Multi Page PDF"` |
+| `MULTIPLE_SINGLE_PAGE_PDF` | `"Multiple Single Page PDF"` |
+| `SINGLE_PAGE_PDF` | `"A Single Page PDF"` |
+
+### `EPCB_PrimitiveArcInteractiveMode` — 圆弧交互模式
+
+| 成员 | 值 |
+|---|---|
+| `TWO_POINT_ARC` | `1` |
+| `CENTER_ARC` | `2` |
+
+### `EPCB_PrimitiveDimensionType` — 尺寸标注类型
+
+| 成员 | 值 |
+|---|---|
+| `RADIUS` | `"Radius Dimension"` |
+| `LENGTH` | `"Length Dimension"` |
+| `ANGLE` | `"Protractor Dimension"` |
+
+### `EPCB_PrimitiveEventType` — 图元事件类型
+
+| 成员 | 值 |
+|---|---|
+| `DELETE` | `"delete"` |
+| `CREATE` | `"add"` |
+| `MODIFY` | `"modify"` |
+
+### `EPCB_PrimitiveFillMode` — 填充图元填充模式
+
+| 成员 | 值 |
+|---|---|
+| `SOLID` | `0` |
+| `MESH` | `1` |
+| `INNER_ELECTRICAL_LAYER` | `2` |
+
+### `EPCB_PrimitivePadHeatWeldingConnectionMethod` — 焊盘热焊连接方式
+
+| 成员 | 值 |
+|---|---|
+| `DIVERGENT` | `"Divergent"` |
+| `DIRECT_CONNECTED` | `"Direct-connected"` |
+| `NON_CONNECTED` | `"Non-connected"` |
+
+### `EPCB_PrimitivePadHoleType` — 焊盘钻孔类型
+
+| 成员 | 值 |
+|---|---|
+| `ROUND` | `"ROUND"` |
+| `RECTANGLE` | `"RECT"` |
+| `SLOT` | `"SLOT"` |
+
+### `EPCB_PrimitivePadShapeType` — 焊盘外形种类
+
+| 成员 | 值 |
+|---|---|
+| `ELLIPSE` | `"ELLIPSE"` |
+| `OBLONG` | `"OVAL"` |
+| `RECTANGLE` | `"RECT"` |
+| `REGULAR_POLYGON` | `"NGON"` |
+| `POLYLINE_COMPLEX_POLYGON` | `"POLYGON"` |
+
+### `EPCB_PrimitivePadType` — 焊盘类型
+
+| 成员 | 值 |
+|---|---|
+| `NORMAL` | `0` |
+| `TEST` | `1` |
+| `MARK_POINT` | `2` |
+
+### `EPCB_PrimitivePourFillMethod` — 覆铜填充方法
+
+| 成员 | 值 |
+|---|---|
+| `GRID45` | `"45grid"` |
+| `GRID` | `"90grid"` |
+| `SOLID` | `"solid"` |
+
+### `EPCB_PrimitiveRegionRuleType` — 区域图元区域规则类型
+
+| 成员 | 值 |
+|---|---|
+| `NO_COMPONENTS` | `2` |
+| `NO_VIAS` | `3` |
+| `NO_WIRES` | `5` |
+| `NO_FILLS` | `6` |
+| `NO_POURS` | `7` |
+| `NO_INNER_ELECTRICAL_LAYERS` | `8` |
+| `FOLLOW_REGION_RULE` | `9` |
+
+### `EPCB_PrimitiveStringAlignMode` — 文本对齐模式
+
+| 成员 | 值 |
+|---|---|
+| `LEFT_TOP` | `1` |
+| `LEFT_MIDDLE` | `2` |
+| `LEFT_BOTTOM` | `3` |
+| `CENTER_TOP` | `4` |
+| `CENTER` | `5` |
+| `CENTER_BOTTOM` | `6` |
+| `RIGHT_TOP` | `7` |
+| `RIGHT_MIDDLE` | `8` |
+| `RIGHT_BOTTOM` | `9` |
+
+### `EPCB_PrimitiveType` — 图元类型
+
+| 成员 | 值 |
+|---|---|
+| `ARC` | `"Arc"` |
+| `COMPONENT` | `"Component"` |
+| `PAD` | `"Pad"` |
+| `COMPONENT_PAD` | `"ComponentPad"` |
+| `POLYLINE` | `"Polyline"` |
+| `POUR` | `"Pour"` |
+| `FILL` | `"Fill"` |
+| `REGION` | `"Region"` |
+| `LINE` | `"Line"` |
+| `VIA` | `"Via"` |
+| `DIMENSION` | `"Dimension"` |
+| `IMAGE` | `"Image"` |
+| `OBJECT` | `"Object"` |
+| `POURED` | `"Poured"` |
+| `STRING` | `"String"` |
+| `ATTRIBUTE` | `"Attribute"` |
+
+### `EPCB_PrimitiveViaType` — 过孔类型
+
+| 成员 | 值 |
+|---|---|
+| `VIA` | `0` |
+| `BLIND` | `1` |
+| `SUTURE` | `2` |
+
+### `ESCH_DynamicSimulationEnginePullEventType` — 动态仿真引擎拉取事件类型
+
+| 成员 | 值 |
+|---|---|
+| `SESSION_START` | `"SESSION_START"` |
+| `SESSION_PAUSE` | `"SESSION_PAUSE"` |
+| `SESSION_RESUME` | `"SESSION_RESUME"` |
+| `SESSION_STOP` | `"SESSION_STOP"` |
+| `SESSION_STATE_QUERY` | `"SESSION_STATE_QUERY"` |
+| `SPEED_SET` | `"SPEED_SET"` |
+| `COMPONENT_UPDATE` | `"COMPONENT_UPDATE"` |
+
+### `ESCH_DynamicSimulationEnginePushEventType` — 动态仿真引擎推送事件类型
+
+| 成员 | 值 |
+|---|---|
+| `SESSION_STATE` | `"SESSION_STATE"` |
+| `STREAM_DATA` | `"STREAM_DATA"` |
+| `STREAM_SNAPSHOT` | `"STREAM_SNAPSHOT"` |
+| `ENGINE_LOG` | `"ENGINE_LOG"` |
+| `ENGINE_ERROR` | `"ENGINE_ERROR"` |
+
+### `ESCH_ExportDocumentFileType` — 导出文档文件类型
+
+| 成员 | 值 |
+|---|---|
+| `PDF` | `"PDF"` |
+| `PNG` | `"PNG"` |
+| `SVG` | `"SVG"` |
+
+### `ESCH_MouseEventType` — 鼠标事件类型
+
+| 成员 | 值 |
+|---|---|
+| `SELECTED` | `"selected"` |
+| `CLEAR_SELECTED` | `"clearSelected"` |
+
+### `ESCH_PrimitiveComponentType` — 器件类型
+
+| 成员 | 值 |
+|---|---|
+| `COMPONENT` | `"part"` |
+| `DRAWING` | `"sheet"` |
+| `NET_FLAG` | `"netflag"` |
+| `NET_PORT` | `"netport"` |
+| `NON_ELECTRICAL_FLAG` | `"nonElectrical_symbol"` |
+| `SHORT_CIRCUIT_FLAG` | `"short_symbol"` |
+| `NET_LABEL` | `"netlabel"` |
+| `OFF_PAGE_CONNECTOR` | `"offPageConnector"` |
+| `DIFFERENTIAL_PAIRS_FLAG` | `"diffPairsFlag"` |
+| `CBB_SYMBOL` | `"block_symbol"` |
+
+### `ESCH_PrimitiveEventType` — 图元事件类型
+
+| 成员 | 值 |
+|---|---|
+| `DELETE` | `"delete"` |
+| `CREATE` | `"create"` |
+| `MOVE` | `"move"` |
+| `CHANGE` | `"change"` |
+
+### `ESCH_PrimitiveFillStyle` — 填充样式
+
+| 成员 | 值 |
+|---|---|
+| `NONE` | `"None"` |
+| `SOLID` | `"Solid"` |
+| `GRID` | `"Grid"` |
+| `HORIZONTAL_LINE` | `"Horizontal Line"` |
+| `VERTICAL_LINE` | `"Vertical Line"` |
+| `RHOMBIC_GRID` | `"Rhombic Grid"` |
+| `LEFT_SLASH_LINE` | `"Left Slash Line"` |
+| `RIGHT_SLASH_LINE` | `"Right Slash Line"` |
+
+### `ESCH_PrimitiveLineType` — 线型
+
+| 成员 | 值 |
+|---|---|
+| `SOLID` | `0` |
+| `DASHED` | `1` |
+| `DOTTED` | `2` |
+| `DOT_DASHED` | `3` |
+
+### `ESCH_PrimitivePinShape` — 引脚形状
+
+| 成员 | 值 |
+|---|---|
+| `NONE` | `"None"` |
+| `INVERTED` | `"Inverted"` |
+| `CLOCK` | `"Clock"` |
+| `INVERTED_CLOCK` | `"Inverted Clock"` |
+
+### `ESCH_PrimitivePinType` — 引脚类型
+
+| 成员 | 值 |
+|---|---|
+| `IN` | `"IN"` |
+| `OUT` | `"OUT"` |
+| `BI` | `"BI"` |
+| `PASSIVE` | `"Passive"` |
+| `OPEN_COLLECTOR` | `"Open Collector"` |
+| `OPEN_EMITTER` | `"Open Emitter"` |
+| `POWER` | `"Power"` |
+| `GROUND` | `"Ground"` |
+| `HIZ` | `"HIZ"` |
+| `TERMINATOR` | `"Terminator"` |
+| `UNDEFINED` | `"Undefined"` |
+
+### `ESCH_PrimitiveTextAlignMode` — 文本对齐模式
+
+| 成员 | 值 |
+|---|---|
+| `LEFT_TOP` | `1` |
+| `LEFT_MIDDLE` | `2` |
+| `LEFT_BOTTOM` | `3` |
+| `CENTER_TOP` | `4` |
+| `CENTER` | `5` |
+| `CENTER_BOTTOM` | `6` |
+| `RIGHT_TOP` | `7` |
+| `RIGHT_MIDDLE` | `8` |
+| `RIGHT_BOTTOM` | `9` |
+
+### `ESCH_PrimitiveType` — 图元类型
+
+| 成员 | 值 |
+|---|---|
+| `ARC` | `"Arc"` |
+| `BUS` | `"Bus"` |
+| `CIRCLE` | `"Circle"` |
+| `COMPONENT` | `"Component"` |
+| `COMPONENT_PIN` | `"ComponentPin"` |
+| `PIN` | `"Pin"` |
+| `POLYGON` | `"Polygon"` |
+| `RECTANGLE` | `"Rectangle"` |
+| `TEXT` | `"Text"` |
+| `WIRE` | `"Wire"` |
+| `OBJECT` | `"Object"` |
+| `BEZIER` | `"Bezier"` |
+| `ELLIPSE` | `"Ellipse"` |
+| `ATTRIBUTE` | `"Attribute"` |
+
+### `ESCH_ShapeType` — 图元类型
+
+| 成员 | 值 |
+|---|---|
+| `OBJ` | `"obj"` |
+| `POLYLINE` | `"polyline"` |
+| `CIRCLE` | `"circle"` |
+| `ELLIPSE` | `"ellipse"` |
+| `RECT` | `"rect"` |
+| `ARC` | `"arc"` |
+| `TEXT` | `"text",//` |
+| `TABLE` | `"table"` |
+| `PIN` | `"pin"` |
+| `BUSENTRY` | `"busEntry"` |
+| `NOCONNECT` | `"noconnect"` |
+| `BUS` | `"bus"` |
+| `WIRE` | `"wire"` |
+| `BEZIER` | `"bezier"` |
+| `ANNOTATION` | `"annotation"` |
+| `MASKREGION` | `"maskregion"` |
+
+### `ESCH_SimulationNetlistType` — 仿真网表类型
+
+| 成员 | 值 |
+|---|---|
+| `NGSPICE` | `"NGspice"` |
+
+### `ESCH_SpiceSimulationEnginePullEventType` — Spice 仿真引擎拉取事件类型
+
+| 成员 | 值 |
+|---|---|
+| `SIMULATE_NETLIST` | `"SIMULATE_NETLIST"` |
+| `VALIDATE_NETLIST` | `"VALIDATE_NETLIST"` |
+
+### `ESCH_SpiceSimulationEnginePushEventType` — Spice 仿真引擎推送事件类型
+
+| 成员 | 值 |
+|---|---|
+| `SIMULATION_RESULT` | `"SIMULATION_RESULT"` |
+| `VALIDATION_RESULT` | `"VALIDATION_RESULT"` |
+| `LOG_RESULT` | `"LOG_RESULT"` |
+| `ERROR_RESULT` | `"ERROR_RESULT"` |
+
+### `ESYS_BottomPanelTab` — 底部面板标签页
+
+| 成员 | 值 |
+|---|---|
+| `LIBRARY` | `"library"` |
+| `LOG` | `"log"` |
+| `PCB_DRC` | `"drcResult"` |
+| `SCHEMATIC_DRC` | `"schDrcResult"` |
+| `FIND` | `"findResult"` |
+
+### `ESYS_HeaderMenuEnvironment` — 顶部菜单环境
+
+| 成员 | 值 |
+|---|---|
+| `HOME` | `"home"` |
+| `BLANK` | `"blank"` |
+| `SCHEMATIC` | `"sch"` |
+| `SYMBOL` | `"symbol"` |
+| `PCB` | `"pcb"` |
+| `FOOTPRINT` | `"footprint"` |
+| `PCB_VIEW` | `"pcbView"` |
+| `PANEL` | `"panel"` |
+| `PANEL_LIBRARY` | `"panelLibrary"` |
+| `PANEL_VIEW` | `"panelView"` |
+| `SIMULATION_SCHEMATIC_NGSPICE` | `"simulationSchematicNGspice"` |
+| `SIMULATION_SCHEMATIC_SIMULIDE` | `"simulationSchematicSimulIDE"` |
+
+### `ESYS_ImportProjectBoardOutlineSource` — 导入工程板边框来源
+
+| 成员 | 值 |
+|---|---|
+| `FROM_KEEPOUT_LAYER` | `"keepout"` |
+| `FROM_MECHANICAL_LAYER_1` | `"mechanical"` |
+
+### `ESYS_ImportProjectImportOption` — 导入工程导入选项
+
+| 成员 | 值 |
+|---|---|
+| `IMPORT_DOCUMENT` | `"ImportDocument"` |
+| `EXTRACT_LIBRARIES` | `"ExtractLibraries"` |
+| `IMPORT_DOCUMENT_EXTRACT_LIBRARIES` | `"ImportDocumentExtractLibraries"` |
+
+### `ESYS_ImportProjectSchematicObjectStyle` — 导入工程原理图图元样式
+
+| 成员 | 值 |
+|---|---|
+| `USE_SYSTEM_THEME` | `"system"` |
+| `USE_SOURCE_FILE_STYLE` | `"custom"` |
+
+### `ESYS_ImportProjectViaSolderMaskExpansion` — 导入工程过孔阻焊扩展
+
+| 成员 | 值 |
+|---|---|
+| `ALL_COVER_OIL` | `"cover"` |
+| `FOLLOW_ORIGINAL_SETTING` | `"custom"` |
+
+### `ESYS_LeftPanelTab` — 左侧面板标签页
+
+| 成员 | 值 |
+|---|---|
+| `PROJECT_LIST` | `"project_list"` |
+| `PROJECT_DESIGN` | `"projectDesign"` |
+| `LIB_DESIGN` | `"libDesign"` |
+| `BASIC_LIBRARY` | `"basicLibrary"` |
+| `DEVICE_STANDARDIZATION` | `"device-standardization"` |
+
+### `ESYS_LogType` — 日志类型
+
+| 成员 | 值 |
+|---|---|
+| `INFO` | `"info"` |
+| `WARNING` | `"warn"` |
+| `ERROR` | `"error"` |
+| `FATAL_ERROR` | `"fatalError"` |
+| `FIND` | `"find"` |
+| `REPLACE` | `"replace"` |
+| `OPEN_PROJECT` | `"openProject"` |
+
+### `ESYS_NetlistType` — 网表类型
+
+| 成员 | 值 |
+|---|---|
+| `ALLEGRO` | `"Allegro"` |
+| `PADS` | `"PADS"` |
+| `PROTEL2` | `"Protel2"` |
+| `JLCEDA_PRO` | `"JLCEDA"` |
+| `EASYEDA_PRO` | `"EasyEDA"` |
+| `ALTIUM_DESIGNER` | `"Protel2"` |
+| `DISA` | `"DISA"` |
+| `DISA_SIMULATION` | `"DSNET"` |
+
+### `ESYS_RightPanelTab` — 右侧面板标签页
+
+| 成员 | 值 |
+|---|---|
+| `SCH_ATTR` | `"sch-attr"` |
+| `SCH_FILTER` | `"sch-filter"` |
+| `PROJECT_ATTR` | `"project-attr"` |
+| `PANEL_LAYER` | `"panel-layer"` |
+| `PANEL_ATTR` | `"panel-attr"` |
+| `PANEL_FILTER` | `"panel-filter"` |
+| `PCB_LAYER` | `"pcb-layer"` |
+| `PCB_ATTR` | `"pcb-attr"` |
+| `PCB_SKETCHER_ATTR` | `"pcb-sketcher-attr"` |
+| `PCB_FILTER` | `"pcb-filter"` |
+| `PCB_2D_PREVIEW_ATTR` | `"pcb2d-attr"` |
+| `PCB_3D_PREVIEW_LAYER` | `"pcb3d-layer"` |
+| `PCB_3D_PREVIEW_ATTR` | `"pcb3d-attr"` |
+| `PANEL_3D_PREVIEW_LAYER` | `"panel3d-layer"` |
+| `PANEL_3D_PREVIEW_ATTR` | `"panel3d-attr"` |
+| `ANNOTATION` | `"annotation"` |
+
+### `ESYS_ShortcutKeyEffectiveEditorDocumentType` — 快捷键生效页面范围
+
+| 成员 | 值 |
+|---|---|
+| `BLANK` | `0` |
+| `HOME` | `1` |
+| `SCHEMATIC_PAGE` | `2` |
+| `SYMBOL` | `3` |
+| `PCB` | `4` |
+| `FOOTPRINT` | `5` |
+| `PANEL` | `6` |
+| `PCB_3D_PREVIEW` | `7` |
+| `PCB_2D_PREVIEW` | `8` |
+| `PANEL_3D_PREVIEW` | `9` |
+| `PANEL_LIBRARY` | `10` |
+
+### `ESYS_ShortcutKeyEffectiveEditorScene` — 快捷键生效场景范围
+
+| 成员 | 值 |
+|---|---|
+| `EDITOR` | `1` |
+| `SELECT_CANVAS` | `2` |
+| `NOT_SELECT_CANVAS` | `3` |
+| `DRAW` | `4` |
+| `PLACE` | `5` |
+| `LOCAL` | `6` |
+
+### `ESYS_Theme` — 主题
+
+| 成员 | 值 |
+|---|---|
+| `LIGHT` | `"light"` |
+| `DARK` | `"dark"` |
+
+### `ESYS_ToastMessageType` — 吐司消息类型
+
+| 成员 | 值 |
+|---|---|
+| `ERROR` | `"error"` |
+| `WARNING` | `"warn"` |
+| `INFO` | `"info"` |
+| `SUCCESS` | `"success"` |
+| `ASK` | `"question"` |
+
+### `ESYS_Unit` — 单位
+
+| 成员 | 值 |
+|---|---|
+| `MILLIMETER` | `"mm"` |
+| `CENTIMETER` | `"cm"` |
+| `DECIMETER` | `"dm"` |
+| `METER` | `"m"` |
+| `INCH` | `"inch"` |
+| `IN` | `"in"` |
+| `MIL` | `"mil"` |
+
+### `ESYS_WindowEventType` — 窗口事件类型
+
+| 成员 | 值 |
+|---|---|
+| `BLUR` | `"blur"` |
+| `FOCUS` | `"focus"` |
+
+### `ESYS_WindowOpenTarget` — 打开窗口上下文目标
+
+| 成员 | 值 |
+|---|---|
+| `BLANK` | `"_blank"` |
+| `SELF` | `"_self"` |
+
+### `ETableDataChangeType` — 表格数据变更类型 */
+
+| 成员 | 值 |
+|---|---|
+| `NORMAL` | `"NORMAL"` |
+| `CHECKED` | `"checked"` |
+| `ASC_SORT` | `"ASC_SORT"` |
+| `DESC_SORT` | `"DESC_SORT"` |
+
+## 词汇表 · 接口（interface，返回/参数结构）
+
+### `AddRowData`
+
+_（无字段或仅继承）_
+
+### `BoardProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `padding` | `number[]` | ? |  |
+| `bgColor` | `string` | ? |  |
+| `width` | `number` | ? |  |
+| `height` | `number` | ? |  |
+| `title` | `string` |  |  |
+| `children` | `React__default__default.ReactNode` | ? |  |
+| `onClick` | `() => void` | ? |  |
+
+### `ButtonProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `text` | `string` | ? |  |
+| `disabled` | `boolean` | ? |  |
+| `type` | `'default' \| 'primary' \| 'danger' \| 'forbidden' \| 'text'` | ? |  |
+| `width` | `number \| 'responsive'` | ? |  |
+| `icon` | `IconProps` | ? |  |
+| `onClick` | `() => void` | ? |  |
+
+### `CellAttributes`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `colSpan` | `number` | ? |  |
+| `rowSpan` | `number` | ? |  |
+| `style` | `CSSProperties` | ? |  |
+| `className` | `string` | ? |  |
+
+### `CellContentReflect`
+
+_（无字段或仅继承）_
+
+### `CheckBoxContentCellParams` extends `HasDisabledCellParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `checked` | `boolean` | ? |  |
+| `onChange` | `(checked: boolean) => void` |  |  |
+
+### `CheckBoxProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `checked` | `boolean` | ? |  |
+| `disabled` | `boolean` | ? |  |
+| `text` | `string` | ? |  |
+| `name` | `string` | ? |  |
+| `onlyChangeByBox` | `boolean` | ? |  |
+| `onChange` | `(checked: boolean) => void` | ? |  |
+
+### `CheckedOptionalParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `isTriggerByRowsUpdate` | `boolean` |  |  |
+| `isTriggerByCheckListUpdate` | `boolean` | ? |  |
+| `row` | `TableRow` | ? |  |
+
+### `ContainerStyleProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `backgroundColor` | `string` | ? |  |
+| `borderWidth` | `number` | ? |  |
+| `borderColor` | `string` | ? |  |
+| `hide` | `boolean` | ? |  |
+| `color` | `string` | ? |  |
+| `padding` | `number[]` | ? |  |
+| `margin` | `number[]` | ? |  |
+| `width` | `number \| '100%'` | ? |  |
+| `height` | `number \| '100%'` | ? |  |
+| `rotate` | `number` | ? |  |
+| `cursor` | `'pointer' \| 'default' \| 'none' \| 'move' \| 'text'` | ? |  |
+| `invisible` | `boolean` | ? |  |
+| `display` | `string` | ? |  |
+
+### `CustomContentCellParams` extends `HasSubTypeCellParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `element` | `ReactElement \| {` |  |  |
+| `Element` | `(props: K) => ReactElement` |  |  |
+| `elementProps` | `K` |  |  |
+| `maskStyle` | `CSSProperties` | ? |  |
+| `canEdit` | `(instance: any) => boolean` | ? |  |
+| `canPaste` | `(instance: any) => boolean` | ? |  |
+| `isDisabled` | `(instance: any) => boolean` | ? |  |
+| `getValue` | `(instance: any) => T` | ? |  |
+| `getText` | `(instance: any) => string` | ? |  |
+| `setValue` | `(instance: any, value: T) => void` | ? |  |
+| `onEdit` | `(instance: any, value?: T) => void` | ? |  |
+| `onConfirm` | `(cell: any) => void` | ? |  |
+| `data` | `{` | ? |  |
+
+### `DelRowInfo`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `indexValue` | `string` |  |  |
+| `refreshCount` | `number` |  |  |
+
+### `DialogProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `title` | `string` |  |  |
+| `width` | `number` | ? |  |
+| `height` | `number` | ? |  |
+| `left` | `number` | ? |  |
+| `top` | `number` | ? |  |
+| `hide` | `boolean` | ? |  |
+| `overlay` | `boolean` | ? |  |
+| `maxDragY` | `number` | ? |  |
+| `modal` | `boolean` | ? |  |
+| `resizeX` | `boolean` | ? |  |
+| `resizeY` | `boolean` | ? |  |
+| `buttons` | `ButtonProps[]` | ? |  |
+| `onClose` | `() => void` | ? |  |
+| `children` | `React__default__default.ReactNode` | ? |  |
+| `footer` | `React__default__default.ReactNode` | ? |  |
+
+### `DragConfigParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `upperLimitIndex` | `number` |  |  |
+| `lowerLimitIndex` | `number` |  |  |
+
+### `FlexItemProps` extends `ContainerStyleProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `flexRatio` | `number` | ? |  |
+| `children` | `React__default__default.ReactNode` | ? |  |
+| `onClick` | `() => void` | ? |  |
+
+### `FlexProps` extends `ContainerStyleProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `direction` | `'column' \| 'column-reverse' \| 'row' \| 'row-reverse'` | ? |  |
+| `alignX` | `'start' \| 'center' \| 'end'` | ? |  |
+| `alignY` | `'start' \| 'center' \| 'end' \| 'stretch'` | ? |  |
+| `gap` | `number` | ? |  |
+| `classes` | `string[]` | ? |  |
+| `children` | `React__default__default.ReactNode` | ? |  |
+| `onClick` | `() => void` | ? |  |
+
+### `GridItemProps` extends `ContainerStyleProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `colSpan` | `number` | ? |  |
+| `rowSpan` | `number` | ? |  |
+| `align` | `'start' \| 'center' \| 'end' \| 'stretch'` | ? |  |
+| `children` | `React__default__default.ReactNode` | ? |  |
+
+### `GridProps` extends `ContainerStyleProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `columns` | `number` |  |  |
+| `rowGap` | `number` | ? |  |
+| `colGap` | `number` | ? |  |
+| `children` | `React__default__default.ReactNode` | ? |  |
+
+### `HasDisabledCellParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `disabled` | `boolean` | ? |  |
+
+### `HasSubTypeCellParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `type` | `string` | ? |  |
+
+### `IDMT_BoardItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.BOARD` |  |  |
+| `name` | `string` |  |  |
+| `schematic` | `IDMT_SchematicItem` |  |  |
+| `pcb` | `IDMT_PcbItem` |  |  |
+| `parentProjectUuid` | `string` |  |  |
+
+### `IDMT_BriefProjectItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.PROJECT \| EDMT_ItemType.CBB_PROJECT` |  |  |
+| `uuid` | `string` |  |  |
+| `friendlyName` | `string` |  |  |
+| `teamUuid` | `string` |  |  |
+| `folderUuid` | `string` | ? |  |
+
+### `IDMT_EditorDocumentItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `documentType` | `EDMT_EditorDocumentType` |  |  |
+| `uuid` | `string` |  |  |
+| `tabId` | `string` |  |  |
+| `parentProjectUuid` | `string` | ? |  |
+| `parentLibraryUuid` | `string` | ? |  |
+
+### `IDMT_EditorSplitScreenItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `id` | `string` |  |  |
+| `fatherId` | `string` | ? |  |
+| `tabs` | `Array<IDMT_EditorTabItem>` | ? |  |
+| `direction` | `EDMT_EditorSplitScreenDirection` | ? |  |
+| `children` | `Array<IDMT_EditorSplitScreenItem>` | ? |  |
+
+### `IDMT_EditorTabItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `title` | `string` |  |  |
+| `tabId` | `string` |  |  |
+| `documentType` | `EDMT_EditorDocumentType` |  |  |
+| `draggable` | `boolean` |  |  |
+| `isAbleDelete` | `boolean` |  |  |
+| `notUseI18n` | `boolean` | ? | 标签页是否不使用 I18n 功能（内部功能） |
+
+### `IDMT_FolderItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.FOLDER` |  |  |
+| `uuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `teamUuid` | `string` |  |  |
+| `description` | `string` | ? |  |
+| `parentFolderUuid` | `string` |  |  |
+| `childrenFoldersUuid` | `Array<string>` | ? |  |
+
+### `IDMT_IndicatorMarkerShape`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `type` | `EDMT_IndicatorMarkerType` |  |  |
+| `x` | `number` | ? | 点：坐标 X |
+| `y` | `number` | ? | 点：坐标 Y |
+| `r` | `number` | ? | 圆形：半径 |
+| `startX` | `number` | ? | 线段 \| 圆弧：起始点 X |
+| `startY` | `number` | ? | 线段 \| 圆弧：起始点 Y |
+| `endX` | `number` | ? | 线段 \| 圆弧：终止点 X |
+| `endY` | `number` | ? | 线段 \| 圆弧：终止点 Y |
+| `top` | `number` | ? | 矩形：上 Y |
+| `bottom` | `number` | ? | 矩形：下 Y |
+| `left` | `number` | ? | 矩形：左 X |
+| `right` | `number` | ? | 矩形：右 X |
+| `angle` | `number` | ? | 圆弧：角度 |
+
+### `IDMT_PanelItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.PANEL` |  |  |
+| `uuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `parentProjectUuid` | `string` |  |  |
+
+### `IDMT_PcbItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.PCB \| EDMT_ItemType.CBB_PCB` |  |  |
+| `uuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `parentProjectUuid` | `string` |  |  |
+| `parentBoardName` | `string` | ? |  |
+
+### `IDMT_ProjectItem` extends `IDMT_BriefProjectItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` |  |  |
+| `description` | `string` | ? |  |
+| `data` | `Array<IDMT_BoardItem \| IDMT_SchematicItem \| IDMT_PcbItem \| IDMT_PanelItem>` |  |  |
+| `collaborationMode` | `EDMT_ProjectCollaborationMode` | ? |  |
+
+### `IDMT_SchematicItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.SCHEMATIC \| EDMT_ItemType.CBB_SCHEMATIC` |  |  |
+| `uuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `page` | `Array<IDMT_SchematicPageItem>` |  |  |
+| `parentProjectUuid` | `string` |  |  |
+| `parentBoardName` | `string` | ? |  |
+| `cbbSymbol` | `ILIB_SymbolItem` | ? |  |
+
+### `IDMT_SchematicPageItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.SCHEMATIC_PAGE` |  |  |
+| `uuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `parentSchematicUuid` | `string` |  |  |
+| `showTitleBlock` | `boolean` |  |  |
+| `titleBlockData` | `{` |  |  |
+| `showTitle` | `boolean` |  |  |
+| `showValue` | `boolean` |  |  |
+| `value` | `any` |  |  |
+
+### `IDMT_TeamItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.TEAM` |  |  |
+| `name` | `string` |  |  |
+| `uuid` | `string` |  |  |
+| `identity` | `number` |  |  |
+
+### `IDMT_WorkspaceItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `itemType` | `EDMT_ItemType.WORKSPACE` |  |  |
+| `name` | `string` |  |  |
+| `uuid` | `string` |  |  |
+
+### `ILIB_3DModelItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `libraryType` | `ELIB_LibraryType.MODEL` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `description` | `string` | ? |  |
+
+### `ILIB_3DModelSearchItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `ordinal` | `number` |  |  |
+| `name` | `string` |  |  |
+| `description` | `string` | ? |  |
+| `updateTimestamp` | `number` |  |  |
+| `ascription` | `string` |  |  |
+| `lastModifiedBy` | `string` |  |  |
+
+### `ILIB_CbbItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `libraryType` | `ELIB_LibraryType.CBB` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `description` | `string` | ? |  |
+| `boards` | `Array<IDMT_BoardItem>` |  |  |
+
+### `ILIB_CbbSearchItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `ordinal` | `number` |  |  |
+| `name` | `string` |  |  |
+| `description` | `string` | ? |  |
+| `updateTimestamp` | `number` |  |  |
+| `ascription` | `string` |  |  |
+| `lastModifiedBy` | `string` |  |  |
+
+### `ILIB_ClassificationIndex`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `libraryUuid` | `string` |  |  |
+| `libraryType` | `ELIB_LibraryType` |  |  |
+| `primaryClassificationUuid` | `string` |  |  |
+| `secondaryClassificationUuid` | `string` | ? |  |
+
+### `ILIB_DeviceAssociationItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `symbolType` | `ELIB_SymbolType` |  | 符号类型 |
+| `symbolUuid` | `string` |  | 符号 UUID |
+| `symbol` | `{` |  |  |
+| `type` | `ELIB_SymbolType` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `footprintUuid` | `string` |  | 封装 UUID |
+| `footprint` | `{` | ? |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `images` | `Array<string>` | ? |  |
+
+### `ILIB_DeviceExtendPropertyItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` | ? |  |
+| `designator` | `string` | ? |  |
+| `addIntoBom` | `boolean` | ? |  |
+| `addIntoPcb` | `boolean` | ? |  |
+| `net` | `string` | ? |  |
+| `manufacturer` | `string` | ? |  |
+| `manufacturerId` | `string` | ? |  |
+| `supplier` | `string` | ? |  |
+| `supplierId` | `string` | ? |  |
+| `otherProperty` | `{` | ? |  |
+
+### `ILIB_DeviceItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `libraryType` | `ELIB_LibraryType.DEVICE` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `association` | `ILIB_DeviceAssociationItem` |  |  |
+| `description` | `string` | ? |  |
+| `property` | `ILIB_DeviceExtendPropertyItem` |  |  |
+| `subPartNames` | `[]` |  |  |
+
+### `ILIB_DevicePropertiesForSearch`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` | ? |  |
+| `value` | `string` | ? |  |
+| `symbolName` | `string` | ? |  |
+| `footprintName` | `string` | ? |  |
+| `supplierFootprint` | `string` | ? |  |
+| `supplierId` | `string` | ? |  |
+| `partNumber` | `string` | ? |  |
+| `partCode` | `string` | ? |  |
+
+### `ILIB_DeviceSearchItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `ordinal` | `number` |  |  |
+| `name` | `string` |  |  |
+| `symbolName` | `string` |  | 关联符号名称 |
+| `symbolUuid` | `string` |  | 关联符号 UUID |
+| `symbol` | `{` |  |  |
+| `name` | `string` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `footprintName` | `string` | ? | 关联封装名称 |
+| `footprintUuid` | `string` |  | 关联封装 UUID |
+| `footprint` | `{` | ? |  |
+| `name` | `string` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `model3DName` | `string` | ? | 关联 3D 模型名称 |
+| `model3DUuid` | `string` |  | 关联 3D 模型 UUID |
+| `model3D` | `{` | ? |  |
+| `name` | `string` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `imageUuid` | `string` | ? |  |
+| `description` | `string` | ? |  |
+| `manufacturer` | `string` | ? | 制造商 |
+| `manufacturerId` | `string` | ? | 制造商编号 |
+| `supplier` | `string` | ? | 供应商 |
+| `supplierId` | `string` | ? | 供应商编号 |
+| `lcscInventory` | `number` | ? | 立创商城库存 |
+| `lcscPrice` | `number` | ? | 立创商城价格 |
+| `jlcInventory` | `number` | ? | 嘉立创库存 |
+| `jlcPrice` | `number` | ? | 嘉立创价格 |
+| `jlcLibraryCategory` | `ELIB_DeviceJlcLibraryCategory` | ? | 嘉立创库类别 |
+| `otherProperty` | `{` | ? |  |
+
+### `ILIB_ExtendLibrary3DModelFunctions` extends `ILIB_ExtendLibraryFunctions`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `getList` | `(props: ILIB_ExtendLibrarySearchProperty<{}>) => Promise<ILIB_ExtendLibrarySearchResult<ILIB_ExtendLibraryItemIndex & ILIB_ExtendLibrarySearchResultDataLine & {` |  |  |
+| `modelType` | `'step'` |  |  |
+
+### `ILIB_ExtendLibraryCbbFunctions` extends `ILIB_ExtendLibraryFunctions`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `getList` | `(props: any) => Promise<ILIB_ExtendLibrarySearchResult<ILIB_ExtendLibraryItem & ILIB_ExtendLibrarySearchResultDataLine & {` |  |  |
+| `schematics` | `Array<{` | ? |  |
+| `uuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `updateTime` | `string` |  |  |
+| `description` | `string` | ? |  |
+| `pcbs` | `Array<{` | ? |  |
+| `uuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `updateTime` | `number` |  |  |
+| `thumb` | `string` | ? |  |
+| `createTime` | `number` | ? |  |
+| `creator` | `ILIB_ExtendLibraryUserIndex` | ? |  |
+| `modifier` | `ILIB_ExtendLibraryUserIndex` | ? |  |
+| `description` | `string` | ? |  |
+| `boards` | `Array<{` | ? |  |
+| `pcbUuid` | `string` |  |  |
+| `schUuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `sheets` | `Array<{` | ? |  |
+| `uuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `belongSchematicUuid` | `string` |  |  |
+| `updateTime` | `number` |  |  |
+| `thumb` | `string` | ? |  |
+| `createTime` | `number` | ? |  |
+| `creator` | `ILIB_ExtendLibraryUserIndex` | ? |  |
+| `modifier` | `ILIB_ExtendLibraryUserIndex` | ? |  |
+| `description` | `string` | ? |  |
+
+### `ILIB_ExtendLibraryClassificationIndex`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `primaryClassificationName` | `string` | ? |  |
+| `primaryClassificationUuid` | `string` | ? |  |
+| `secondaryClassificationName` | `string` | ? |  |
+| `secondaryClassificationUuid` | `string` | ? |  |
+
+### `ILIB_ExtendLibraryDeviceFunctions` extends `ILIB_ExtendLibraryFunctions`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `getList` | `(props: ILIB_ExtendLibrarySearchProperty<{` |  |  |
+| `attributes` | `{` | ? |  |
+| `symbolType` | `ELIB_SymbolType` | ? |  |
+| `classification` | `ILIB_ExtendLibraryClassificationIndex \| Array<string>` | ? |  |
+| `symbol` | `ILIB_ExtendLibraryItem & {` | ? |  |
+| `symbolType` | `ELIB_SymbolType` |  |  |
+| `footprint` | `ILIB_ExtendLibraryItem` | ? |  |
+| `model3d` | `ILIB_ExtendLibraryItemIndex & {` | ? |  |
+| `adjustment` | `{` | ? |  |
+| `size` | `{` | ? |  |
+| `x` | `number` |  |  |
+| `y` | `number` |  |  |
+| `z` | `number` |  |  |
+| `rotation` | `{` | ? |  |
+| `x` | `number` |  |  |
+| `y` | `number` |  |  |
+| `z` | `number` |  |  |
+| `offset` | `{` | ? |  |
+| `x` | `number` |  |  |
+| `y` | `number` |  |  |
+| `z` | `number` |  |  |
+| `value` | `string` | ? |  |
+| `supplierPart` | `string` | ? |  |
+| `manufacturer` | `string` | ? |  |
+| `description` | `string` | ? |  |
+| `updateTime` | `number` | ? |  |
+| `createTime` | `number` | ? |  |
+| `attributes` | `{` | ? |  |
+| `getSupportedSymbolTypes` | `() => Promise<Array<ELIB_SymbolType>>` |  | 获取支持的符号类型 |
+| `getSupportedPreviewTypes` | `() => Promise<Array<ELIB_PreviewType>>` |  | 获取支持的预览类型 |
+
+### `ILIB_ExtendLibraryFootprintFunctions` extends `ILIB_ExtendLibraryFunctions`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `getList` | `(props: ILIB_ExtendLibrarySearchProperty<{}>) => Promise<ILIB_ExtendLibrarySearchResult<ILIB_ExtendLibraryItem & ILIB_ExtendLibrarySearchResultDataLine>>` |  |  |
+
+### `ILIB_ExtendLibraryFunctions`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `getDetail` | `(uuid: string) => Promise<any>` |  | 获取详细信息 |
+| `getClassificationTree` | `() => Promise<Array<{` |  | 获取分类树 |
+| `name` | `string` |  |  |
+| `uuid` | `string` | ? |  |
+| `children` | `Array<{` | ? |  |
+| `name` | `string` |  |  |
+| `uuid` | `string` | ? |  |
+| `getList` | `(props: ILIB_ExtendLibrarySearchProperty<any>) => Promise<ILIB_ExtendLibrarySearchResult<any>>` |  | 获取列表 |
+
+### `ILIB_ExtendLibraryItem` extends `ILIB_ExtendLibraryItemIndex`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `url` | `string` | ? |  |
+| `data` | `string \| Blob` | ? |  |
+
+### `ILIB_ExtendLibraryItemIndex`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `uuid` | `string` | ? |  |
+| `name` | `string` |  |  |
+
+### `ILIB_ExtendLibrarySearchProperty`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `page` | `number` | ? |  |
+| `pageSize` | `number` | ? |  |
+| `query` | `T & {` |  |  |
+| `wd` | `string` | ? |  |
+| `listByTitles` | `Array<string>` | ? |  |
+| `classification` | `ILIB_ExtendLibraryClassificationIndex \| Array<string>` | ? |  |
+
+### `ILIB_ExtendLibrarySearchResult`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `count` | `number` |  |  |
+| `lists` | `Array<T>` |  |  |
+| `page` | `number` |  |  |
+| `pageSize` | `number` |  |  |
+| `totalPage` | `number` |  |  |
+
+### `ILIB_ExtendLibrarySearchResultDataLine`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `classification` | `ILIB_ExtendLibraryClassificationIndex \| Array<string>` | ? |  |
+| `description` | `string` | ? |  |
+| `version` | `string` | ? |  |
+| `updateTime` | `number` | ? |  |
+| `createTime` | `number` | ? |  |
+| `creator` | `ILIB_ExtendLibraryUserIndex` | ? |  |
+| `modifier` | `ILIB_ExtendLibraryUserIndex` | ? |  |
+| `owner` | `ILIB_ExtendLibraryUserIndex` | ? |  |
+
+### `ILIB_ExtendLibrarySymbolFunctions` extends `ILIB_ExtendLibraryFunctions`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `getList` | `(props: ILIB_ExtendLibrarySearchProperty<{` |  |  |
+| `symbolType` | `ELIB_SymbolType` | ? |  |
+| `symbolType` | `ELIB_SymbolType` |  |  |
+| `getSupportedSymbolTypes` | `() => Promise<Array<ELIB_SymbolType>>` |  | 获取支持的符号类型 |
+
+### `ILIB_ExtendLibraryUserIndex`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` | ? |  |
+| `uuid` | `string` | ? |  |
+
+### `ILIB_FootprintItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `libraryType` | `ELIB_LibraryType.FOOTPRINT` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `description` | `string` | ? |  |
+
+### `ILIB_FootprintPropertiesForSearch`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` | ? |  |
+
+### `ILIB_FootprintSearchItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `ordinal` | `number` |  |  |
+| `name` | `string` |  |  |
+| `description` | `string` | ? |  |
+| `updateTimestamp` | `number` |  |  |
+| `ascription` | `string` |  |  |
+| `lastModifiedBy` | `string` |  |  |
+
+### `ILIB_LibraryInfo`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` |  |  |
+| `uuid` | `string` |  |  |
+
+### `ILIB_LibraryItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `uuid` | `string` |  |  |
+| `libraryType` | `ELIB_LibraryType` |  |  |
+| `libraryUuid` | `string` | ? |  |
+
+### `ILIB_PanelLibraryItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `libraryType` | `ELIB_LibraryType.PANEL_LIBRARY` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `name` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `description` | `string` | ? |  |
+
+### `ILIB_PanelLibrarySearchItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `ordinal` | `number` |  |  |
+| `name` | `string` |  |  |
+| `description` | `string` | ? |  |
+| `updateTimestamp` | `number` |  |  |
+| `ascription` | `string` |  |  |
+| `lastModifiedBy` | `string` |  |  |
+
+### `ILIB_SymbolItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `libraryType` | `ELIB_LibraryType.SYMBOL` |  |  |
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `cbbUuid` | `string` | ? |  |
+| `name` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `type` | `ELIB_SymbolType` |  |  |
+| `description` | `string` | ? |  |
+| `subPartNames` | `[]` |  |  |
+
+### `ILIB_SymbolPropertiesForSearch`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` | ? |  |
+
+### `ILIB_SymbolSearchItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `uuid` | `string` |  |  |
+| `libraryUuid` | `string` |  |  |
+| `classification` | `ILIB_ClassificationIndex \| Array<string>` | ? |  |
+| `ordinal` | `number` |  |  |
+| `name` | `string` |  |  |
+| `type` | `ELIB_SymbolType` |  |  |
+| `description` | `string` | ? |  |
+| `updateTimestamp` | `number` |  |  |
+| `ascription` | `string` |  |  |
+| `lastModifiedBy` | `string` |  |  |
+
+### `IPCB_BomPropertiesTableColumns`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `property` | `string` |  |  |
+| `title` | `string` | ? |  |
+| `sort` | `null \| 'asc' \| 'desc'` | ? |  |
+| `group` | `null \| 'Yes' \| 'No'` | ? |  |
+| `orderWeight` | `number` | ? |  |
+
+### `IPCB_DifferentialPairItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` |  |  |
+| `positiveNet` | `string` |  |  |
+| `negativeNet` | `string` |  |  |
+
+### `IPCB_DiscretizeOptions`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `step` | `number` | ? | 离散步长，即相邻离散点之间的最大距离 |
+
+### `IPCB_DiscretizedPoint`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `x` | `number` |  |  |
+| `y` | `number` |  |  |
+
+### `IPCB_EqualLengthNetGroupItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` |  |  |
+| `nets` | `Array<string>` |  |  |
+| `color` | `{` |  |  |
+| `r` | `number` |  |  |
+| `g` | `number` |  |  |
+| `b` | `number` |  |  |
+| `alpha` | `number` |  |  |
+
+### `IPCB_LayerItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `id` | `EPCB_LayerId` |  |  |
+| `name` | `string` |  |  |
+| `type` | `EPCB_LayerType` |  |  |
+| `color` | `string` |  |  |
+| `transparency` | `number` |  |  |
+| `inactiveColor` | `string` |  |  |
+| `inactiveTransparency` | `number` |  |  |
+| `layerStatus` | `EPCB_LayerStatus` |  |  |
+| `locked` | `boolean` |  |  |
+
+### `IPCB_NetClassItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` |  |  |
+| `nets` | `Array<string>` |  |  |
+| `color` | `{` |  |  |
+| `r` | `number` |  |  |
+| `g` | `number` |  |  |
+| `b` | `number` |  |  |
+| `alpha` | `number` |  |  |
+
+### `IPCB_NetInfo`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `net` | `string` |  |  |
+| `color` | `{` |  |  |
+| `r` | `number` |  |  |
+| `g` | `number` |  |  |
+| `b` | `number` |  |  |
+| `alpha` | `number` |  |  |
+| `length` | `number` |  |  |
+
+### `IPCB_PadPairGroupItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` |  |  |
+| `padPairs` | `Array<[string, string]>` |  |  |
+
+### `IPCB_PadPairMinWireLengthItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `padPair` | `[string, string]` |  |  |
+| `minWireLength` | `number` |  |  |
+
+### `IPCB_Primitive`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `getState_PrimitiveType` | `() => EPCB_PrimitiveType` |  |  |
+| `getState_PrimitiveId` | `() => string` |  |  |
+| `create` | `() => IPCB_Primitive \| Promise<IPCB_Primitive>` |  |  |
+| `toAsync` | `() => IPCB_Primitive` |  |  |
+| `toSync` | `() => IPCB_Primitive` |  |  |
+| `isAsync` | `() => boolean` |  |  |
+| `reset` | `() => IPCB_Primitive \| Promise<IPCB_Primitive>` |  |  |
+| `done` | `() => IPCB_Primitive \| Promise<IPCB_Primitive>` |  |  |
+
+### `IPCB_PrimitiveAPI`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `create` | `(...args: any[]) => IPCB_Primitive \| undefined \| Promise<IPCB_Primitive> \| Promise<IPCB_Primitive \| undefined>` |  |  |
+| `delete` | `(primitiveIds: string \| any \| Array<string> \| Array<any>) => boolean \| Promise<boolean>` |  |  |
+| `modify` | `(primitiveId: string \| any, ...args: any[]) => IPCB_Primitive \| undefined \| Promise<IPCB_Primitive> \| Promise<IPCB_Primitive \| undefined>` |  |  |
+| `get` | `{` |  |  |
+| `getAllPrimitiveId` | `(...args: any[]) => Array<string> \| Promise<Array<string>>` |  |  |
+| `getAll` | `(...args: any[]) => Array<IPCB_Primitive> \| Promise<Array<IPCB_Primitive>>` |  |  |
+
+### `IPCB_PrimitivePadHeatWelding`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `connectionMethod` | `EPCB_PrimitivePadHeatWeldingConnectionMethod` |  |  |
+| `divergenceSpacing` | `number` | ? |  |
+| `divergenceLineWidth` | `number` | ? |  |
+| `divergenceAngle` | `number` | ? |  |
+
+### `IPCB_PrimitivePouredPourFill`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `path` | `IPCB_ComplexPolygon` |  |  |
+| `lineWidth` | `number` |  |  |
+| `fill` | `boolean` |  |  |
+| `id` | `string` |  |  |
+
+### `IPCB_PrimitiveSolderMaskAndPasteMaskExpansion`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `topSolderMask` | `number` | ? |  |
+| `bottomSolderMask` | `number` | ? |  |
+| `topPasteMask` | `number` | ? |  |
+| `bottomPasteMask` | `number` | ? |  |
+
+### `ISCH_NetInfo`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `net` | `string` |  |  |
+| `wires` | `Array<ISCH_WireInfo>` |  |  |
+
+### `ISCH_Primitive`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `getState_PrimitiveType` | `() => ESCH_PrimitiveType` |  |  |
+| `getState_PrimitiveId` | `() => string` |  |  |
+| `create` | `() => ISCH_Primitive \| Promise<ISCH_Primitive>` |  |  |
+| `toAsync` | `() => ISCH_Primitive` |  |  |
+| `toSync` | `() => ISCH_Primitive` |  |  |
+| `isAsync` | `() => boolean` |  |  |
+| `reset` | `() => ISCH_Primitive \| Promise<ISCH_Primitive>` |  |  |
+| `done` | `() => ISCH_Primitive \| Promise<ISCH_Primitive>` |  |  |
+
+### `ISCH_PrimitiveAPI`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `create` | `(...args: any[]) => ISCH_Primitive \| undefined \| Promise<ISCH_Primitive> \| Promise<ISCH_Primitive \| undefined>` |  |  |
+| `delete` | `(primitiveIds: string \| any \| Array<string> \| Array<any>) => boolean \| Promise<boolean>` |  |  |
+| `modify` | `(primitiveId: string \| any, ...args: any[]) => ISCH_Primitive \| undefined \| Promise<ISCH_Primitive> \| Promise<ISCH_Primitive \| undefined>` |  |  |
+| `get` | `{` |  |  |
+| `getAllPrimitiveId` | `(...args: any[]) => Array<string> \| Promise<Array<string>>` |  |  |
+| `getAll` | `(...args: any[]) => Array<ISCH_Primitive> \| Promise<Array<ISCH_Primitive>>` |  |  |
+
+### `ISCH_ProjectNetInfo`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `schematicName` | `string` |  |  |
+| `schematicUuid` | `string` |  |  |
+| `boardName` | `string` |  |  |
+| `nets` | `Array<ISCH_NetInfo>` |  |  |
+
+### `ISCH_WireInfo`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `name` | `string` |  |  |
+| `id` | `string` |  |  |
+| `globalNetName` | `string` |  |  |
+| `pageName` | `string` |  |  |
+| `pageUuid` | `string` |  |  |
+
+### `ISYS_FileSystemFileList`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `fileName` | `string` |  |  |
+| `isDirectory` | `boolean` |  |  |
+| `subFiles` | `Array<ISYS_FileSystemFileList>` | ? |  |
+| `relativePath` | `string` | ? |  |
+| `fullPath` | `string` |  |  |
+
+### `ISYS_HeaderMenuSub1MenuItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `id` | `string` |  |  |
+| `title` | `string` |  |  |
+| `icon` | `string` | ? |  |
+| `registerFn` | `string` | ? |  |
+| `menuItems` | `Array<ISYS_HeaderMenuSub2MenuItem \| null>` | ? |  |
+
+### `ISYS_HeaderMenuSub2MenuItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `id` | `string` |  |  |
+| `title` | `string` |  |  |
+| `icon` | `string` | ? |  |
+| `registerFn` | `string` | ? |  |
+
+### `ISYS_HeaderMenuTopMenuItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `id` | `string` |  |  |
+| `title` | `string` |  |  |
+| `registerFn` | `string` | ? |  |
+| `menuItems` | `Array<ISYS_HeaderMenuSub1MenuItem \| null>` | ? |  |
+
+### `ISYS_HeaderMenus`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `home` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `blank` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `schematic` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `sch` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? | 原理图 |
+| `symbol` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `pcb` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `footprint` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `pcbView` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `panel` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `panelLibrary` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `panelView` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `simulationSchematicNGspice` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+| `simulationSchematicSimulIDE` | `Array<ISYS_HeaderMenuTopMenuItem>` | ? |  |
+
+### `ISYS_LanguageKeyValuePairs`
+
+_（无字段或仅继承）_
+
+### `ISYS_LogLine`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `timestamp` | `number` |  |  |
+| `type` | `ESYS_LogType` |  |  |
+| `message` | `string` |  |  |
+
+### `ISYS_MessageBusTask`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `cancel` | `() => void` |  |  |
+| `running` | `() => boolean` |  | 检查运行状态 |
+| `execute` | `(message: any) => Promise<void>` |  | 任务处理 |
+
+### `ISYS_MultilingualLanguagesData`
+
+_（无字段或仅继承）_
+
+### `ISYS_ReactComponentizationDialogInterface`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `Components` | `LC_DESIGN_COMPONENTS` |  | 预制组件 |
+| `LC_DESIGN_COMPONENTS_NAMES` | `typeof LC_DESIGN_COMPONENTS_NAMES` |  | 组件名称常量 |
+| `WorkerPortal` | `new () => ISYS_ReactComponentizationDialogWorkerPortal` |  | WorkerPortal 类 |
+| `VirtualRender` | `new () => ISYS_ReactComponentizationDialogVirtualRender` |  | VirtualRender 类 |
+
+### `ISYS_ReactComponentizationDialogReactInstance`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `createContext` | `<T>(defaultValue: T) => React.Context<T>` |  | 创建 React Context |
+| `useContext` | `<T>(context: React.Context<T>) => T` |  | 读取和订阅 Context 的值 |
+| `useRef` | `<T>(initialValue: T) => React.MutableRefObject<T>` |  | 创建一个可变的 ref 对象 |
+| `useEffect` | `(effect: () => undefined \| (() => undefined), deps?: React.DependencyList) => void` |  | 执行副作用操作 |
+| `createElement` | `<P extends Record<string, unknown>>(type: React.ElementType<P>, props?: P \| null, ...children: React.ReactNode[]) => React.ReactElement<P>` |  | 创建并返回指定类型的新 React 元素 |
+
+### `ISYS_ReactComponentizationDialogReconcilerInstance`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `default` | `any` |  | Reconciler 构造函数 |
+| `constants` | `{` |  | Reconciler 常量 |
+| `ContinuousEventPriority` | `number` |  | 连续事件优先级 |
+| `DiscreteEventPriority` | `number` |  | 离散事件优先级 |
+| `DefaultEventPriority` | `number` |  | 默认事件优先级 |
+| `ConcurrentRoot` | `number` |  | 并发根节点标签 |
+
+### `ISYS_ReactComponentizationDialogVirtualRender`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `render` | `(element: React.ReactNode) => void` |  | 渲染 React 元素 |
+
+### `ISYS_ReactComponentizationDialogWorkerPortal`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `Provider` | `React.ComponentType<React.PropsWithChildren<unknown>>` |  | Provider 组件 |
+| `createComponent` | `(handle: string, type: string, props: Record<string, unknown>, parent: string) => void` |  | 创建组件 |
+| `updateComponent` | `(handle: string, props: Record<string, unknown>) => void` |  | 更新组件 |
+| `detachComponent` | `(handle: string) => void` |  | 销毁组件 |
+| `bindEvent` | `(handle: string, callback: (event: unknown) => void) => void` |  | 绑定事件处理器 |
+| `dispatchEvent` | `(handle: string, event: unknown) => void` |  | 触发事件 |
+
+### `ISYS_RightClickMenuItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `id` | `string` |  |  |
+| `title` | `string` | ? |  |
+| `icon` | `string` | ? |  |
+| `registerFn` | `string` | ? |  |
+| `menuItems` | `Array<ISYS_RightClickMenuItem \| null>` | ? |  |
+
+### `ISYS_WindowEventListenerRemovableObject`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `type` | `ESYS_WindowEventType` |  |  |
+| `listener` | `(ev: any) => any` |  |  |
+| `options` | `{` | ? |  |
+| `capture` | `boolean` | ? |  |
+
+### `ImageProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `src` | `string` |  |  |
+| `width` | `number` | ? |  |
+| `height` | `number` | ? |  |
+| `title` | `string` | ? |  |
+| `onClick` | `() => void` | ? |  |
+
+### `InputContentCellParams` extends `HasDisabledCellParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `value` | `string` | ? |  |
+| `onChange` | `(value: string) => void` |  |  |
+| `onConfirm` | `(cell: any) => void` |  |  |
+| `children` | `ReactElement` | ? |  |
+
+### `InputProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `width` | `number` | ? |  |
+| `disabled` | `boolean` | ? |  |
+| `readonly` | `boolean` | ? |  |
+| `clearBtn` | `boolean` | ? |  |
+| `clickBtn` | `boolean` | ? |  |
+| `dropDownList` | `ListChildren$1[]` | ? |  |
+| `searchBtn` | `boolean` | ? |  |
+| `value` | `string` | ? |  |
+| `placeholder` | `string` | ? |  |
+| `preText` | `string` | ? |  |
+| `type` | `'text' \| 'telephone' \| 'number' \| 'password' \| 'color' \| 'email'` |  |  |
+| `otherAttr` | `{` | ? |  |
+| `testVal` | `string` | ? |  |
+| `onClick` | `() => void` | ? |  |
+| `onSearchClick` | `(data: string) => void` | ? |  |
+| `onFilterClick` | `(data: string) => void` | ? |  |
+| `onChange` | `(data: string) => void` | ? |  |
+| `onAddClick` | `(data: string) => void` | ? |  |
+| `onBlur` | `(data: string) => void` | ? |  |
+
+### `ListChildren`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `title` | `string` |  |  |
+| `id` | `string` | ? |  |
+| `value` | `string` | ? |  |
+| `clearBtn` | `boolean` | ? |  |
+| `children` | `ListChildren[]` | ? |  |
+| `childrenCollapse` | `boolean` | ? |  |
+| `selected` | `boolean` | ? |  |
+| `icons` | `IconProps[]` | ? |  |
+
+### `ListProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `width` | `number` | ? |  |
+| `height` | `number` | ? |  |
+| `list` | `ListChildren[]` |  |  |
+| `itemHeight` | `number` | ? |  |
+| `border` | `boolean` | ? |  |
+| `expandEnable` | `boolean` | ? |  |
+| `onItemClick` | `(id: string, item: ListChildren) => void` | ? |  |
+| `onItemDblclick` | `(id: string) => void` | ? |  |
+| `onItemContextmenu` | `(id: string) => void` | ? |  |
+
+### `ModalProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `top` | `number` |  |  |
+| `left` | `number` |  |  |
+| `width` | `number` |  |  |
+| `height` | `number` |  |  |
+| `overlay` | `boolean` | ? |  |
+| `maxDragX` | `number` | ? |  |
+| `maxDragY` | `number` | ? |  |
+| `hide` | `boolean` | ? |  |
+| `resizeX` | `boolean` | ? |  |
+| `resizeY` | `boolean` | ? |  |
+| `children` | `React__default__default.ReactNode` | ? |  |
+| `onMoved` | `(top: number, left: number) => void` | ? |  |
+
+### `MoveRowIndex`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `curIndex` | `number` |  |  |
+| `newIndex` | `number` |  |  |
+
+### `RadioGroupProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `group` | `RadioProps[]` |  |  |
+| `selectedValue` | `string` | ? |  |
+| `onlyChangeByBox` | `boolean` | ? |  |
+| `lineBreak` | `boolean` | ? |  |
+| `gap` | `number` | ? |  |
+| `onChange` | `(value: string) => void` | ? |  |
+
+### `RadioProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `disabled` | `boolean` | ? |  |
+| `text` | `string` |  |  |
+| `value` | `string` |  |  |
+| `width` | `number` | ? |  |
+
+### `RenderParam`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `clickObj` | `TableClickObj` |  |  |
+| `rowNumber` | `number` |  |  |
+| `colKey` | `string` |  |  |
+| `row` | `TableRow` |  |  |
+| `cellData` | `any` |  |  |
+| `tableData` | `TableRow[]` |  |  |
+| `editingRowNumbers` | `number[]` |  |  |
+| `selectedRowNumbers` | `number[]` |  |  |
+| `setCellStyle` | `(style: CSSProperties) => void` |  |  |
+| `setRowStyle` | `(style: CSSProperties) => void` |  |  |
+| `setAllCellStyle` | `(style: CSSProperties) => void` |  |  |
+| `setRowData` | `(data: {` |  |  |
+| `rowIndex` | `number` |  |  |
+| `colKey` | `string` |  |  |
+| `value` | `string \| number` |  |  |
+| `setTableData` | `(data: TableRow[]) => void` |  |  |
+| `onToggleExpand` | `(action: 'Expand' \| 'Collapse', rows: Array<TableRow>, opIndex: number) => void` | ? |  |
+| `heightLightStr` | `string` | ? |  |
+
+### `SelectContentCellParams` extends `HasDisabledCellParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `value` | `string \| number` | ? |  |
+| `onChange` | `(value: string \| number \| Array<string \| number>) => void` |  |  |
+| `options` | `SelectOption[]` | ? |  |
+| `children` | `ReactElement` | ? |  |
+
+### `SelectListItem`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `title` | `string` |  |  |
+| `value` | `string` | ? |  |
+| `selected` | `boolean` | ? |  |
+| `children` | `SelectListItem[]` | ? |  |
+
+### `SelectOption`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `text` | `string` |  |  |
+| `value` | `string \| number` |  |  |
+| `disabled` | `boolean` | ? |  |
+
+### `SelectProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `width` | `number` | ? |  |
+| `disabled` | `boolean` | ? |  |
+| `readonly` | `boolean` | ? |  |
+| `dropDownList` | `SelectListItem[]` | ? |  |
+| `value` | `string` | ? |  |
+| `onChange` | `(value: string) => void` | ? |  |
+
+### `SortInfo`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `colKey` | `string` |  |  |
+| `key` | `string \| string[]` |  |  |
+| `status` | `SortStatus` |  |  |
+
+### `TableCellConfig`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `cellType` | `CellType` | ? |  |
+| `cellAttributes` | `CellAttributes` | ? |  |
+| `contentType` | `T` | ? |  |
+| `content` | `CellContentParams<T>` | ? |  |
+| `sortable` | `boolean` | ? |  |
+| `sortKey` | `string` | ? |  |
+
+### `TableClickObj`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `rowNumber` | `number` |  |  |
+| `colKey` | `string` | ? |  |
+| `clickCount` | `number` |  |  |
+| `isCtrl` | `boolean` | ? |  |
+| `isShift` | `boolean` | ? |  |
+| `checked` | `boolean` | ? |  |
+| `e` | `React.MouseEvent<HTMLTableDataCellElement> \| null` |  |  |
+
+### `TableColumn`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `key` | `string` |  |  |
+| `name` | `string` |  |  |
+| `width` | `number` | ? |  |
+| `sortable` | `boolean` | ? |  |
+| `sortKey` | `string \| string[]` | ? |  |
+| `editable` | `boolean \| 1 \| 2` | ? |  |
+| `filter` | `boolean` | ? |  |
+| `align` | `TableCellAlign` | ? |  |
+| `selectList` | `SelectOption[]` | ? |  |
+| `ellipsis` | `boolean` | ? |  |
+| `fixed` | `TableColFixed` | ? |  |
+| `fixedWidth` | `boolean` | ? |  |
+| `showBodyTitle` | `boolean` | ? |  |
+| `style` | `CSSProperties` | ? |  |
+| `onClick` | `(colKey: string, ev: React.MouseEvent<HTMLTableHeaderCellElement>) => void` | ? |  |
+| `onCell` | `(row: TableRow, index: number, colKey: string) => CellAttributes \| void` | ? |  |
+| `onHeadCell` | `(col: TableColumn) => CellAttributes \| void` | ? |  |
+| `render` | `(params: RenderParam) => ReactNode` | ? |  |
+| `nameRender` | `() => ReactNode` | ? |  |
+
+### `TableInstance`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `checkAll` | `() => void` |  |  |
+| `checkedRow` | `({ row, checked }: {` |  |  |
+| `row` | `TableRow` |  |  |
+| `checked` | `boolean` |  |  |
+| `toSelectRow` | `(row: TableRow, option?: {` |  |  |
+| `isCtrl` | `boolean` | ? |  |
+| `isShift` | `boolean` | ? |  |
+| `downMove` | `(rowNumber?: number) => void` |  |  |
+| `upMove` | `(rowNumber?: number) => void` |  |  |
+| `scrollSelectedRowIntoView` | `() => void` |  |  |
+| `scrollRowIntoView` | `(rowIndex: string) => void` |  |  |
+| `handleTableScrollByScrollTop` | `(scrollTop: number) => void` |  |  |
+| `refresh` | `() => void` |  |  |
+| `cancelSortStatus` | `() => void` |  |  |
+| `tableBodyDiv` | `HTMLDivElement \| null` |  |  |
+| `revertSelect` | `() => void` |  |  |
+| `virtualScrollRowIndexIntoView` | `(rowIdx: number) => void` |  |  |
+
+### `TableOnClickParam`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `clickObj` | `TableClickObj` | ? |  |
+| `row` | `TableRow` |  |  |
+| `tableData` | `TableRow[]` | ? |  |
+| `editingRowNumbers` | `number[]` | ? |  |
+| `selectedRowNumbers` | `number[]` | ? |  |
+| `allSelectedRowIndexValues` | `Set<string \| number>` | ? |  |
+| `isCtrl` | `boolean` | ? |  |
+| `isShift` | `boolean` | ? |  |
+| `from` | `string` | ? |  |
+| `setCellStyle` | `(style: CSSProperties) => void` | ? |  |
+
+### `TableProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `id` | `string` | ? |  |
+| `index` | `string` |  |  |
+| `name` | `string` | ? |  |
+| `width` | `number` | ? |  |
+| `height` | `number` | ? |  |
+| `columns` | `TableColumn[]` |  |  |
+| `rows` | `TableRow[]` |  |  |
+| `head` | `Array<Array<TableCellProps>>` | ? |  |
+| `body` | `Array<Array<TableCellProps>>` | ? |  |
+| `foot` | `Array<Array<TableCellProps>>` | ? |  |
+| `number` | `boolean` | ? |  |
+| `border` | `boolean` | ? |  |
+| `headerBorder` | `boolean` | ? |  |
+| `stockade` | `boolean` | ? |  |
+| `checkbox` | `boolean` | ? |  |
+| `checkedList` | `TableRow[]` | ? |  |
+| `fixedHeader` | `boolean` | ? |  |
+| `showHeader` | `boolean` | ? |  |
+| `moveRowIndex` | `MoveRowIndex` | ? |  |
+| `delRowInfo` | `DelRowInfo` | ? |  |
+| `addRowData` | `AddRowData` | ? |  |
+| `openVirtualScroll` | `boolean` | ? |  |
+| `searchValue` | `string` | ? |  |
+| `selectedRowNumbers` | `number[]` | ? |  |
+| `editingRowNumbers` | `number[]` | ? |  |
+| `openRowSelectedBgColor` | `boolean` | ? |  |
+| `showCustomHeadSettingOnHeadContextmenu` | `boolean` | ? |  |
+| `isChangeSortStatus` | `boolean` | ? |  |
+| `showStatus` | `boolean` | ? |  |
+| `statusNode` | `ReactNode` | ? |  |
+| `multiSelect` | `boolean` | ? |  |
+| `moveAble` | `boolean` | ? |  |
+| `isOnlyHighlightText` | `boolean` | ? |  |
+| `rowHeight` | `number` | ? |  |
+| `headHeight` | `number` | ? |  |
+| `headLineHeight` | `number` | ? |  |
+| `enableSelectRowByHover` | `boolean` | ? |  |
+| `resetTableDataCount` | `number` | ? |  |
+| `resetScrollOnDataChange` | `boolean` | ? |  |
+| `enableDragSort` | `boolean` | ? |  |
+| `showDragIcon` | `boolean` | ? |  |
+| `dragConfig` | `DragConfigParams` | ? |  |
+| `openMultiDrag` | `boolean` | ? |  |
+| `followHeightLight` | `boolean` | ? |  |
+| `resize` | `boolean` | ? |  |
+| `isCtrlSelect` | `boolean` | ? |  |
+| `isShiftSelect` | `boolean` | ? |  |
+| `virtualScrollAutoFirst` | `boolean` | ? |  |
+| `scrollXBaseBottom` | `number` | ? |  |
+| `extraHeight` | `number` | ? |  |
+| `headerStyle` | `CSSProperties` | ? |  |
+| `enableScrollX` | `boolean` | ? |  |
+| `doubleClick` | `boolean` | ? |  |
+| `usePointerDrag` | `boolean` | ? |  |
+| `highLightRegexpFn` | `(v: any) => RegExp` | ? |  |
+| `enableVerticalHeader` | `boolean` | ? |  |
+| `verticalHeaderIgnoreKeys` | `string[]` | ? |  |
+| `onCheckRow` | `(rows: TableRow[], rowNumbers: number[], optional: CheckedOptionalParams) => void` | ? |  |
+| `onAllChecked` | `(data: TableRow[], checked: boolean) => void` | ? |  |
+| `onClick` | `(props: TableOnClickParam) => void` | ? |  |
+| `onChange` | `(data: TableRow[], row?: TableRow, type?: ETableDataChangeType, optional?: PlainObject) => void` | ? |  |
+| `onContextMenu` | `(rows: TableRow, ev: React.MouseEvent<HTMLTableCellElement>) => void` | ? |  |
+| `onRowMouseLeave` | `(row: TableRow, rowIndex: number) => void` | ? |  |
+| `onRowMouseEnter` | `(row: TableRow, rowIndex: number) => void` | ? |  |
+| `onRowMouseMove` | `(row: TableRow, rowIndex: number) => void` | ? |  |
+| `onDragMoveEnd` | `(handlerInitialIndex: number \| number[], insertedRealtimeIndex: number, handlerRealtimeIndex: number \| number[]) => void` | ? |  |
+| `onTableScroll` | `(tableScrollHeight: number, currentTableHeight: number, scrollTop: number) => void` | ? |  |
+| `searchValueCB` | `(a: any) => void` | ? |  |
+| `onColSizeChange` | `(col: TableColumn, cols: TableColumn[]) => void` | ? |  |
+| `onSort` | `(info: SortInfo) => void` | ? |  |
+| `style` | `CSSProperties` | ? |  |
+| `tableBodyStyle` | `CSSProperties` | ? |  |
+
+### `TableRow`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `bgColor` | `string` | ? |  |
+| `isError` | `boolean` | ? |  |
+| `noCheckbox` | `boolean` | ? |  |
+| `fixed` | `boolean` | ? |  |
+| `disabledRow` | `boolean` | ? |  |
+| `disabledCheckbox` | `boolean` | ? |  |
+| `propagationClickHandle` | `boolean` | ? |  |
+
+### `TextAreaProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `disabled` | `boolean` | ? |  |
+| `value` | `string` | ? |  |
+| `width` | `number` | ? |  |
+| `height` | `number` | ? |  |
+| `resizable` | `{` | ? |  |
+| `x` | `boolean` | ? |  |
+| `y` | `boolean` | ? |  |
+| `placeholder` | `string` | ? |  |
+| `name` | `string` | ? |  |
+| `onChange` | `(value: string) => void` | ? |  |
+
+### `TextContentCellParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `value` | `string` | ? |  |
+| `content` | `string` | ? |  |
+
+### `TextProps`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `value` | `string` |  |  |
+| `fontFamily` | `string` | ? |  |
+| `textAlign` | `'left' \| 'center' \| 'right'` | ? |  |
+| `fontSize` | `number` | ? |  |
+| `color` | `string` | ? |  |
+
+### `TextareaContentCellParams` extends `HasDisabledCellParams`
+
+| 字段 | 类型 | 可选 | 说明 |
+|---|---|:--:|---|
+| `value` | `string` | ? |  |
+| `onChange` | `(value: string) => void` |  |  |
+| `children` | `ReactElement` | ? |  |
+
+## 词汇表 · 类型别名（type）
+
+| 别名 | 定义 | 说明 |
+|---|---|---|
+| `ComponentProps` | `TComponentsIndex[T] extends React.ComponentType<infer P> ? P : never` |  |
+| `IconProps` | `{ /** 模板名称 */ iconClass: string` |  |
+| `KComponentsIndex` | `keyof TComponentsIndex` |  |
+| `LC_DESIGN_COMPONENTS` | `{ [K in KComponentsIndex]: (props: ReactComponentProps<K>) => React.ReactElement` |  |
+| `PlainObject` | `{ [key: string]: any` | 普通对象类型 */ |
+| `ReactComponentProps` | `ComponentProps<T>` |  |
+| `SortStatus` | `'asc' \| 'desc' \| 'unset'` | 排序状态 */ |
+| `TComponentsIndex` | `typeof ComponentsIndex` |  |
+| `TPCB_LayerTypesOfInnerLayer` | `EPCB_LayerType.SIGNAL \| EPCB_LayerType.INTERNAL_ELECTRICAL` | 内层允许设置的图层类型 |
+| `TPCB_LayersInTheSelectable` | `TPCB_LayersOfInner \| TPCB_LayersOfCustom \| EPCB_LayerId.TOP \| EPCB_LayerId.TOP_SILKSCREEN \| EPCB_LayerId.TOP_SOLDER_MASK \| EPCB_LayerId.TOP_PASTE_MASK \| EPCB_LayerId.TOP_ASSEMBLY \| EPCB_LayerId.TOP_STIFFENER \| EPCB_LayerId.BOTTOM \| EPCB_LayerId.BOTTOM_SILKSCREEN \| EPCB_LayerId.BOTTOM_SO…` | 可选中图层 |
+| `TPCB_LayersOfComponent` | `EPCB_LayerId.TOP \| EPCB_LayerId.BOTTOM` | 器件所属层 |
+| `TPCB_LayersOfCopper` | `TPCB_LayersOfInner \| EPCB_LayerId.TOP \| EPCB_LayerId.BOTTOM` | 铜箔所属层 |
+| `TPCB_LayersOfCustom` | `EPCB_LayerId.CUSTOM_1 \| EPCB_LayerId.CUSTOM_2 \| EPCB_LayerId.CUSTOM_3 \| EPCB_LayerId.CUSTOM_4 \| EPCB_LayerId.CUSTOM_5 \| EPCB_LayerId.CUSTOM_6 \| EPCB_LayerId.CUSTOM_7 \| EPCB_LayerId.CUSTOM_8 \| EPCB_LayerId.CUSTOM_9 \| EPCB_LayerId.CUSTOM_10 \| EPCB_LayerId.CUSTOM_11 \| EPCB_LayerId.CUSTOM_…` | 自定义层 |
+| `TPCB_LayersOfDimension` | `TPCB_LayersOfCustom \| EPCB_LayerId.TOP_SILKSCREEN \| EPCB_LayerId.BOTTOM_SILKSCREEN \| EPCB_LayerId.DOCUMENT \| EPCB_LayerId.MECHANICAL` | 尺寸标注所属层 |
+| `TPCB_LayersOfFill` | `TPCB_LayersOfCopper \| TPCB_LayersOfCustom \| EPCB_LayerId.TOP_SILKSCREEN \| EPCB_LayerId.TOP_SOLDER_MASK \| EPCB_LayerId.TOP_PASTE_MASK \| EPCB_LayerId.TOP_ASSEMBLY \| EPCB_LayerId.BOTTOM_SILKSCREEN \| EPCB_LayerId.BOTTOM_SOLDER_MASK \| EPCB_LayerId.BOTTOM_PASTE_MASK \| EPCB_LayerId.BOTTOM_ASSEM…` | 填充所属层 |
+| `TPCB_LayersOfImage` | `TPCB_LayersOfCopper \| TPCB_LayersOfCustom \| EPCB_LayerId.TOP_SILKSCREEN \| EPCB_LayerId.TOP_SOLDER_MASK \| EPCB_LayerId.TOP_ASSEMBLY \| EPCB_LayerId.BOTTOM_SILKSCREEN \| EPCB_LayerId.BOTTOM_SOLDER_MASK \| EPCB_LayerId.BOTTOM_ASSEMBLY \| EPCB_LayerId.DOCUMENT \| EPCB_LayerId.MECHANICAL \| EPCB_L…` | 复杂多边形图（SVG 图像、文本）所属层 |
+| `TPCB_LayersOfInner` | `EPCB_LayerId.INNER_1 \| EPCB_LayerId.INNER_2 \| EPCB_LayerId.INNER_3 \| EPCB_LayerId.INNER_4 \| EPCB_LayerId.INNER_5 \| EPCB_LayerId.INNER_6 \| EPCB_LayerId.INNER_7 \| EPCB_LayerId.INNER_8 \| EPCB_LayerId.INNER_9 \| EPCB_LayerId.INNER_10 \| EPCB_LayerId.INNER_11 \| EPCB_LayerId.INNER_12 \| EPCB_L…` | 内层 |
+| `TPCB_LayersOfLine` | `TPCB_LayersOfCopper \| TPCB_LayersOfCustom \| EPCB_LayerId.TOP_SILKSCREEN \| EPCB_LayerId.TOP_SOLDER_MASK \| EPCB_LayerId.TOP_PASTE_MASK \| EPCB_LayerId.TOP_ASSEMBLY \| EPCB_LayerId.BOTTOM_SILKSCREEN \| EPCB_LayerId.BOTTOM_SOLDER_MASK \| EPCB_LayerId.BOTTOM_PASTE_MASK \| EPCB_LayerId.BOTTOM_ASSEM…` | 线所属层 |
+| `TPCB_LayersOfObject` | `EPCB_LayerId.TOP_SILKSCREEN \| EPCB_LayerId.BOTTOM_SILKSCREEN \| EPCB_LayerId.DOCUMENT` | 二进制内嵌对象所属层 |
+| `TPCB_LayersOfPad` | `EPCB_LayerId.TOP \| EPCB_LayerId.BOTTOM \| EPCB_LayerId.MULTI` | 焊盘所属层 |
+| `TPCB_LayersOfRegion` | `TPCB_LayersOfCopper \| EPCB_LayerId.MULTI` | 区域所属层 |
+| `TPCB_PolygonSourceArray` | `Array<'L' \| 'ARC' \| 'CARC' \| 'C' \| 'R' \| 'CIRCLE' \| number>` | 单多边形源数组 |
+| `TPCB_PrimitiveDimensionCoordinateSet` | `[number, number, number, number, number, number] \| [number, number, number, number, number, number, number, number]` | 尺寸标注坐标集 |
+| `TPCB_PrimitivePadHole` | `[EPCB_PrimitivePadHoleType.ROUND, number] \| [EPCB_PrimitivePadHoleType.SLOT, number, number]` | 焊盘钻孔 |
+| `TPCB_PrimitivePadShape` | `[EPCB_PrimitivePadShapeType.ELLIPSE \| EPCB_PrimitivePadShapeType.OBLONG \| EPCB_PrimitivePadShapeType.REGULAR_POLYGON, number, number] \| [EPCB_PrimitivePadShapeType.RECTANGLE, number, number, number] \| [EPCB_PrimitivePadShapeType.POLYLINE_COMPLEX_POLYGON, TPCB_PolygonSourceArray \| Array<TPCB_…` | 焊盘外形 |
+| `TPCB_PrimitiveSpecialPadShape` | `Array<[number, number, TPCB_PrimitivePadShape]>` | 特殊焊盘外形 |
+| `TSYS_ShortcutKeys` | `Array<'SHIFT' \| 'LEFT_SHIFT' \| 'RIGHT_SHIFT' \| 'FN' \| 'ALT' \| 'LEFT_ALT' \| 'RIGHT_ALT' \| 'CONTROL' \| 'LEFT_CONTROL' \| 'RIGHT_CONTROL' \| 'COMMAND' \| 'WIN' \| 'OPTION' \| 'SUPER' \| 'TAB' \| 'SPACE' \| 'UP' \| 'DOWN' \| 'LEFT' \| 'RIGHT' \| 'F1' \| 'F2' \| 'F3' \| 'F4' \| 'F5' \| 'F6' \|…` | 快捷键按键 |
+| `TableCellAlign` | `'left' \| 'center' \| 'right'` | 表格对齐方式 */ |
+| `TableCellProps` | `string \| TableCellConfig` | 单元格属性 */ |
+| `TableColFixed` | `'left' \| 'right'` | 列固定位置 */ |
 

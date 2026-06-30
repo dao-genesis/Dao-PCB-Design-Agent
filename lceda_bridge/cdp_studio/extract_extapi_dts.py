@@ -122,6 +122,103 @@ def parse_methods(body):
     return methods
 
 
+def _block(lines, start):
+    """从 lines[start]（含 '{'）按花括号配平取块体，返回 (body_lines, end_idx)。"""
+    depth = lines[start].count("{") - lines[start].count("}")
+    j = start + 1
+    n = len(lines)
+    while j < n and depth > 0:
+        depth += lines[j].count("{") - lines[j].count("}")
+        j += 1
+    return lines[start + 1:j - 1], j
+
+
+def _doc_before(lines, idx):
+    """取声明前紧邻 /** … */ 的首条描述。"""
+    k = idx - 1
+    while k >= 0 and lines[k].strip() == "":
+        k -= 1
+    if k < 0 or "*/" not in lines[k]:
+        return ""
+    end = k
+    while k >= 0 and "/**" not in lines[k]:
+        k -= 1
+    for dl in lines[k:end + 1]:
+        t = dl.strip().lstrip("/*").strip()
+        if t and not t.startswith("@") and t != "*":
+            t = t.lstrip("*").strip()
+            if t:
+                return t
+    return ""
+
+
+def parse_enums(lines):
+    out = {}
+    re_e = re.compile(r"^(?:export\s+|declare\s+)*(?:const\s+)?enum (\w+)\s*\{")
+    for i, ln in enumerate(lines):
+        m = re_e.match(ln)
+        if not m:
+            continue
+        body, _ = _block(lines, i)
+        members = []
+        for b in body:
+            mm = re.match(r"(\w+)\s*(?:=\s*(.+?))?,?\s*$", b.strip())
+            if mm and mm.group(1):
+                members.append({"name": mm.group(1),
+                                 "value": (mm.group(2) or "").strip().rstrip(",")})
+        out[m.group(1)] = {"doc": _doc_before(lines, i), "members": members}
+    return out
+
+
+def parse_interfaces(lines):
+    out = {}
+    re_i = re.compile(r"^(?:export\s+|declare\s+)?interface (\w+)(?:<[^>{]*>)?(?:\s+extends\s+([\w, <>.]+))?\s*\{")
+    for i, ln in enumerate(lines):
+        m = re_i.match(ln)
+        if not m:
+            continue
+        body, _ = _block(lines, i)
+        fields, k, nb = [], 0, len(body)
+        last = ""
+        while k < nb:
+            s = body[k].strip()
+            if s.startswith("/**"):
+                doc = ""
+                while k < nb and "*/" not in body[k]:
+                    t = body[k].strip().lstrip("/*").strip()
+                    if t and not t.startswith("@") and t != "*":
+                        doc = doc or t.lstrip("*").strip()
+                    k += 1
+                last = doc
+                k += 1
+                continue
+            mm = re.match(r"(readonly\s+)?(\w+)(\?)?\s*:\s*(.+?);?\s*$", s)
+            if mm:
+                fields.append({"name": mm.group(2), "optional": bool(mm.group(3)),
+                               "type": mm.group(4).rstrip(";").strip(), "doc": last})
+                last = ""
+            k += 1
+        out[m.group(1)] = {"extends": (m.group(2) or "").strip(), "fields": fields}
+    return out
+
+
+def parse_type_aliases(lines):
+    out = {}
+    n = len(lines)
+    for i, ln in enumerate(lines):
+        m = re.match(r"^(?:export\s+|declare\s+)?type (\w+)(?:<[^=]*>)?\s*=\s*(.*)$", ln)
+        if not m:
+            continue
+        defn = m.group(2)
+        j = i
+        while ";" not in defn and j < n - 1:
+            j += 1
+            defn += " " + lines[j].strip()
+        out[m.group(1)] = {"doc": _doc_before(lines, i),
+                           "definition": re.sub(r"\s+", " ", defn).rstrip(";").strip()}
+    return out
+
+
 def main():
     src = sys.argv[1] if len(sys.argv) > 1 else find_dts()
     if not src or not os.path.exists(src):
@@ -133,6 +230,11 @@ def main():
             runtime = json.load(open(RUNTIME_MAP, encoding="utf-8"))
         except Exception:
             runtime = {}
+
+    all_lines = open(src, encoding="utf-8").read().split("\n")
+    enums = parse_enums(all_lines)
+    interfaces = parse_interfaces(all_lines)
+    type_aliases = parse_type_aliases(all_lines)
 
     classes = parse(src)
     namespaces, data_types = {}, {}
@@ -162,9 +264,15 @@ def main():
         "namespace_method_count": nm,
         "data_type_count": len(data_types),
         "data_type_method_count": dm,
+        "enum_count": len(enums),
+        "interface_count": len(interfaces),
+        "type_alias_count": len(type_aliases),
         "root_mapping": "EDA root class exposes each namespace as lowercase-first-segment of class name (verified vs source)",
         "namespaces": namespaces,
         "data_types": data_types,
+        "enums": enums,
+        "interfaces": interfaces,
+        "type_aliases": type_aliases,
     }
     json.dump(catalog, open(OUT_JSON, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
@@ -178,6 +286,8 @@ def main():
     md.append(f"> - API 版本：`{api_ver}`　生成：`{catalog['generated']}`")
     md.append(f"> - 命名空间 **{len(namespaces)}** 个，可直接 RPC 调用方法 **{nm}** 个；"
               f"返回/数据类型 **{len(data_types)}** 个（链式方法 {dm} 个）。")
+    md.append(f"> - 词汇：枚举 **{len(enums)}** 个、接口 **{len(interfaces)}** 个、"
+              f"类型别名 **{len(type_aliases)}** 个（见文末「词汇表」，含层 id/图元类型/库类型等取值）。")
     md.append(f"> - 根映射：`EDA` 根类把每个命名空间以「类名首段小写」暴露"
               "（`PCB_Drc`→`pcb_Drc`），经源码核实。")
     md.append(f"> - 调用：`driver._call('<namespace>.<method>', *args)`（见 `dao_rpc_driver.py`）。")
@@ -215,11 +325,58 @@ def main():
                 md.append(f"| `{mth['name']}` | `{sig}` | {doc} | {lv} |")
             md.append("")
 
+    # ---- 词汇表：枚举 / 接口 / 类型别名 ----
+    md.append("## 词汇表 · 枚举（enum）")
+    md.append("")
+    md.append("> 调用各方法时传参/解读返回值所需的合法取值集合（层 id、图元类型、库类型、单位…）。")
+    md.append("")
+    for name in sorted(enums):
+        e = enums[name]
+        doc = f" — {e['doc']}" if e["doc"] else ""
+        md.append(f"### `{name}`{doc}")
+        md.append("")
+        md.append("| 成员 | 值 |")
+        md.append("|---|---|")
+        for mb in e["members"]:
+            md.append(f"| `{mb['name']}` | `{mb['value']}` |")
+        md.append("")
+
+    md.append("## 词汇表 · 接口（interface，返回/参数结构）")
+    md.append("")
+    for name in sorted(interfaces):
+        it = interfaces[name]
+        ext = f" extends `{it['extends']}`" if it["extends"] else ""
+        md.append(f"### `{name}`{ext}")
+        md.append("")
+        if not it["fields"]:
+            md.append("_（无字段或仅继承）_"); md.append(""); continue
+        md.append("| 字段 | 类型 | 可选 | 说明 |")
+        md.append("|---|---|:--:|---|")
+        for f in it["fields"]:
+            typ = f["type"].replace("|", "\\|")
+            doc = (f["doc"] or "").replace("|", "\\|")
+            md.append(f"| `{f['name']}` | `{typ}` | {'?' if f['optional'] else ''} | {doc} |")
+        md.append("")
+
+    md.append("## 词汇表 · 类型别名（type）")
+    md.append("")
+    md.append("| 别名 | 定义 | 说明 |")
+    md.append("|---|---|---|")
+    for name in sorted(type_aliases):
+        t = type_aliases[name]
+        defn = t["definition"].replace("|", "\\|")
+        if len(defn) > 300:
+            defn = defn[:297] + "…"
+        doc = (t["doc"] or "").replace("|", "\\|")
+        md.append(f"| `{name}` | `{defn}` | {doc} |")
+    md.append("")
+
     open(OUT_MD, "w", encoding="utf-8").write("\n".join(md) + "\n")
 
     print("api_version:", api_ver)
     print("namespaces:", len(namespaces), "methods:", nm)
     print("data_types:", len(data_types), "methods:", dm)
+    print("enums:", len(enums), "interfaces:", len(interfaces), "type_aliases:", len(type_aliases))
     live_total = sum(1 for v in namespaces.values() for x in v["methods"] if x.get("live"))
     known_ns = sum(1 for v in namespaces.values() if v["runtime_known"])
     print("runtime-known namespaces:", known_ns, "| live-confirmed methods:", live_total)

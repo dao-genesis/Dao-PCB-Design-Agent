@@ -6,6 +6,9 @@
  "namespace_method_count": 749,
  "data_type_count": 31,
  "data_type_method_count": 766,
+ "enum_count": 69,
+ "interface_count": 128,
+ "type_alias_count": 30,
  "root_mapping": "EDA root class exposes each namespace as lowercase-first-segment of class name (verified vs source)",
  "namespaces": {
   "dmt_SelectControl": {
@@ -9247,6 +9250,8199 @@
      "doc": "将对图元的更改应用到画布"
     }
    ]
+  }
+ },
+ "enums": {
+  "EDMT_ItemType": {
+   "doc": "文档树项目类型",
+   "members": [
+    {
+     "name": "WORKSPACE",
+     "value": "\"Workspace\""
+    },
+    {
+     "name": "TEAM",
+     "value": "\"Team\""
+    },
+    {
+     "name": "FOLDER",
+     "value": "\"Folder\""
+    },
+    {
+     "name": "PROJECT",
+     "value": "\"Project\""
+    },
+    {
+     "name": "CBB_PROJECT",
+     "value": "\"CBB Project\""
+    },
+    {
+     "name": "BOARD",
+     "value": "\"Board\""
+    },
+    {
+     "name": "SCHEMATIC",
+     "value": "\"Schematic\""
+    },
+    {
+     "name": "CBB_SCHEMATIC",
+     "value": "\"CBB Schematic\""
+    },
+    {
+     "name": "SCHEMATIC_PAGE",
+     "value": "\"Schematic Page\""
+    },
+    {
+     "name": "PCB",
+     "value": "\"PCB\""
+    },
+    {
+     "name": "CBB_PCB",
+     "value": "\"CBB PCB\""
+    },
+    {
+     "name": "PANEL",
+     "value": "\"Panel\""
+    }
+   ]
+  },
+  "EDMT_EditorDocumentType": {
+   "doc": "编辑器文档类型",
+   "members": [
+    {
+     "name": "HOME",
+     "value": "-1"
+    },
+    {
+     "name": "BLANK",
+     "value": "0"
+    },
+    {
+     "name": "PROJECT",
+     "value": "5"
+    },
+    {
+     "name": "SCHEMATIC_PAGE",
+     "value": "1"
+    },
+    {
+     "name": "PCB",
+     "value": "3"
+    },
+    {
+     "name": "PCB_2D_PREVIEW",
+     "value": "12"
+    },
+    {
+     "name": "PCB_3D_PREVIEW",
+     "value": "15"
+    },
+    {
+     "name": "PANEL",
+     "value": "26"
+    },
+    {
+     "name": "PANEL_3D_PREVIEW",
+     "value": "27"
+    },
+    {
+     "name": "SYMBOL_COMPONENT",
+     "value": "2"
+    },
+    {
+     "name": "SYMBOL_NET_FLAG",
+     "value": "18"
+    },
+    {
+     "name": "SYMBOL_NET_PORT",
+     "value": "19"
+    },
+    {
+     "name": "SYMBOL_DRAWING",
+     "value": "20"
+    },
+    {
+     "name": "SYMBOL_NON_ELECTRICAL",
+     "value": "21"
+    },
+    {
+     "name": "SYMBOL_SHORT_CIRCUIT_FLAG",
+     "value": "22"
+    },
+    {
+     "name": "SYMBOL_OFF_PAGE_CONNECTOR_FLAG",
+     "value": "25"
+    },
+    {
+     "name": "SYMBOL_CBB",
+     "value": "17"
+    },
+    {
+     "name": "FOOTPRINT",
+     "value": "4"
+    },
+    {
+     "name": "PANEL_LIBRARY",
+     "value": "29"
+    },
+    {
+     "name": "SIMULATION_SCHEMATIC_PAGE_NGSPICE",
+     "value": "8"
+    },
+    {
+     "name": "SIMULATION_SCHEMATIC_PAGE_SIMULIDE",
+     "value": "9"
+    },
+    {
+     "name": "SIMULATION_SYMBOL_COMPONENT_NGSPICE",
+     "value": "7"
+    },
+    {
+     "name": "SIMULATION_SYMBOL_COMPONENT_SIMULIDE",
+     "value": "32"
+    }
+   ]
+  },
+  "ELIB_LibraryType": {
+   "doc": "综合库库类型",
+   "members": [
+    {
+     "name": "DEVICE",
+     "value": "\"3\""
+    },
+    {
+     "name": "SYMBOL",
+     "value": "\"2\""
+    },
+    {
+     "name": "FOOTPRINT",
+     "value": "\"4\""
+    },
+    {
+     "name": "CBB",
+     "value": "\"1\""
+    },
+    {
+     "name": "MODEL",
+     "value": "\"5\""
+    },
+    {
+     "name": "PANEL_LIBRARY",
+     "value": "\"29\""
+    }
+   ]
+  },
+  "ELIB_SymbolType": {
+   "doc": "符号类型",
+   "members": [
+    {
+     "name": "COMPONENT",
+     "value": "2"
+    },
+    {
+     "name": "NET_FLAG",
+     "value": "18"
+    },
+    {
+     "name": "NET_PORT",
+     "value": "19"
+    },
+    {
+     "name": "DRAWING",
+     "value": "20"
+    },
+    {
+     "name": "NON_ELECTRICAL",
+     "value": "21"
+    },
+    {
+     "name": "SHORT_CIRCUIT_FLAG",
+     "value": "22"
+    },
+    {
+     "name": "OFF_PAGE_CONNECTOR",
+     "value": "25"
+    },
+    {
+     "name": "DIFFERENTIAL_PAIRS_FLAG",
+     "value": "31"
+    },
+    {
+     "name": "CBB_SYMBOL",
+     "value": "17"
+    }
+   ]
+  },
+  "EDMT_EditorSplitScreenDirection": {
+   "doc": "编辑器分屏方向",
+   "members": [
+    {
+     "name": "HORIZONTAL",
+     "value": "\"horizontal\""
+    },
+    {
+     "name": "VERTICAL",
+     "value": "\"vertical\""
+    }
+   ]
+  },
+  "EDMT_IndicatorMarkerType": {
+   "doc": "指示标记类型",
+   "members": [
+    {
+     "name": "POINT",
+     "value": "\"point\""
+    },
+    {
+     "name": "CIRCLE",
+     "value": "\"circle\""
+    },
+    {
+     "name": "LINE",
+     "value": "\"line\""
+    },
+    {
+     "name": "ARC",
+     "value": "\"arc\""
+    },
+    {
+     "name": "RECTANGLE",
+     "value": "\"rectangle\""
+    }
+   ]
+  },
+  "EDMT_EditorTabEventType": {
+   "doc": "编辑器标签页事件类型",
+   "members": [
+    {
+     "name": "TOGGLE",
+     "value": "\"toggle\""
+    },
+    {
+     "name": "CLOSE",
+     "value": "\"close\""
+    },
+    {
+     "name": "OPEN",
+     "value": "\"open\""
+    }
+   ]
+  },
+  "EDMT_ProjectCollaborationMode": {
+   "doc": "工程协作模式",
+   "members": [
+    {
+     "name": "STRICT",
+     "value": "3"
+    },
+    {
+     "name": "FREE",
+     "value": "1"
+    }
+   ]
+  },
+  "ESYS_Unit": {
+   "doc": "单位",
+   "members": [
+    {
+     "name": "MILLIMETER",
+     "value": "\"mm\""
+    },
+    {
+     "name": "CENTIMETER",
+     "value": "\"cm\""
+    },
+    {
+     "name": "DECIMETER",
+     "value": "\"dm\""
+    },
+    {
+     "name": "METER",
+     "value": "\"m\""
+    },
+    {
+     "name": "INCH",
+     "value": "\"inch\""
+    },
+    {
+     "name": "IN",
+     "value": "\"in\""
+    },
+    {
+     "name": "MIL",
+     "value": "\"mil\""
+    }
+   ]
+  },
+  "ELIB_DeviceJlcLibraryCategory": {
+   "doc": "嘉立创贴片库类别",
+   "members": [
+    {
+     "name": "STANDARD",
+     "value": "\"standard\""
+    },
+    {
+     "name": "EXTEND",
+     "value": "\"extend\""
+    }
+   ]
+  },
+  "ELIB_PreviewType": {
+   "doc": "预览视图类型",
+   "members": [
+    {
+     "name": "SYMBOL",
+     "value": "\"S\""
+    },
+    {
+     "name": "FOOTPRINT",
+     "value": "\"F\""
+    },
+    {
+     "name": "PRODUCT",
+     "value": "\"P\""
+    },
+    {
+     "name": "MODEL_3D",
+     "value": "\"3D\""
+    }
+   ]
+  },
+  "EPCB_LayerId": {
+   "doc": "图层 ID",
+   "members": [
+    {
+     "name": "TOP",
+     "value": "1"
+    },
+    {
+     "name": "TOP_SILKSCREEN",
+     "value": "3"
+    },
+    {
+     "name": "TOP_SOLDER_MASK",
+     "value": "5"
+    },
+    {
+     "name": "TOP_PASTE_MASK",
+     "value": "7"
+    },
+    {
+     "name": "TOP_ASSEMBLY",
+     "value": "9"
+    },
+    {
+     "name": "TOP_STIFFENER",
+     "value": "58"
+    },
+    {
+     "name": "BOTTOM",
+     "value": "2"
+    },
+    {
+     "name": "BOTTOM_SILKSCREEN",
+     "value": "4"
+    },
+    {
+     "name": "BOTTOM_SOLDER_MASK",
+     "value": "6"
+    },
+    {
+     "name": "BOTTOM_PASTE_MASK",
+     "value": "8"
+    },
+    {
+     "name": "BOTTOM_ASSEMBLY",
+     "value": "10"
+    },
+    {
+     "name": "BOTTOM_STIFFENER",
+     "value": "59"
+    },
+    {
+     "name": "BOARD_OUTLINE",
+     "value": "11"
+    },
+    {
+     "name": "MULTI",
+     "value": "12"
+    },
+    {
+     "name": "DOCUMENT",
+     "value": "13"
+    },
+    {
+     "name": "MECHANICAL",
+     "value": "14"
+    },
+    {
+     "name": "RATLINE",
+     "value": "57"
+    },
+    {
+     "name": "INNER_1",
+     "value": "15"
+    },
+    {
+     "name": "INNER_2",
+     "value": "16"
+    },
+    {
+     "name": "INNER_3",
+     "value": "17"
+    },
+    {
+     "name": "INNER_4",
+     "value": "18"
+    },
+    {
+     "name": "INNER_5",
+     "value": "19"
+    },
+    {
+     "name": "INNER_6",
+     "value": "20"
+    },
+    {
+     "name": "INNER_7",
+     "value": "21"
+    },
+    {
+     "name": "INNER_8",
+     "value": "22"
+    },
+    {
+     "name": "INNER_9",
+     "value": "23"
+    },
+    {
+     "name": "INNER_10",
+     "value": "24"
+    },
+    {
+     "name": "INNER_11",
+     "value": "25"
+    },
+    {
+     "name": "INNER_12",
+     "value": "26"
+    },
+    {
+     "name": "INNER_13",
+     "value": "27"
+    },
+    {
+     "name": "INNER_14",
+     "value": "28"
+    },
+    {
+     "name": "INNER_15",
+     "value": "29"
+    },
+    {
+     "name": "INNER_16",
+     "value": "30"
+    },
+    {
+     "name": "INNER_17",
+     "value": "31"
+    },
+    {
+     "name": "INNER_18",
+     "value": "32"
+    },
+    {
+     "name": "INNER_19",
+     "value": "33"
+    },
+    {
+     "name": "INNER_20",
+     "value": "34"
+    },
+    {
+     "name": "INNER_21",
+     "value": "35"
+    },
+    {
+     "name": "INNER_22",
+     "value": "36"
+    },
+    {
+     "name": "INNER_23",
+     "value": "37"
+    },
+    {
+     "name": "INNER_24",
+     "value": "38"
+    },
+    {
+     "name": "INNER_25",
+     "value": "39"
+    },
+    {
+     "name": "INNER_26",
+     "value": "40"
+    },
+    {
+     "name": "INNER_27",
+     "value": "41"
+    },
+    {
+     "name": "INNER_28",
+     "value": "42"
+    },
+    {
+     "name": "INNER_29",
+     "value": "43"
+    },
+    {
+     "name": "INNER_30",
+     "value": "44"
+    },
+    {
+     "name": "CUSTOM_1",
+     "value": "71"
+    },
+    {
+     "name": "CUSTOM_2",
+     "value": "72"
+    },
+    {
+     "name": "CUSTOM_3",
+     "value": "73"
+    },
+    {
+     "name": "CUSTOM_4",
+     "value": "74"
+    },
+    {
+     "name": "CUSTOM_5",
+     "value": "75"
+    },
+    {
+     "name": "CUSTOM_6",
+     "value": "76"
+    },
+    {
+     "name": "CUSTOM_7",
+     "value": "77"
+    },
+    {
+     "name": "CUSTOM_8",
+     "value": "78"
+    },
+    {
+     "name": "CUSTOM_9",
+     "value": "79"
+    },
+    {
+     "name": "CUSTOM_10",
+     "value": "80"
+    },
+    {
+     "name": "CUSTOM_11",
+     "value": "81"
+    },
+    {
+     "name": "CUSTOM_12",
+     "value": "82"
+    },
+    {
+     "name": "CUSTOM_13",
+     "value": "83"
+    },
+    {
+     "name": "CUSTOM_14",
+     "value": "84"
+    },
+    {
+     "name": "CUSTOM_15",
+     "value": "85"
+    },
+    {
+     "name": "CUSTOM_16",
+     "value": "86"
+    },
+    {
+     "name": "CUSTOM_17",
+     "value": "87"
+    },
+    {
+     "name": "CUSTOM_18",
+     "value": "88"
+    },
+    {
+     "name": "CUSTOM_19",
+     "value": "89"
+    },
+    {
+     "name": "CUSTOM_20",
+     "value": "90"
+    },
+    {
+     "name": "CUSTOM_21",
+     "value": "91"
+    },
+    {
+     "name": "CUSTOM_22",
+     "value": "92"
+    },
+    {
+     "name": "CUSTOM_23",
+     "value": "93"
+    },
+    {
+     "name": "CUSTOM_24",
+     "value": "94"
+    },
+    {
+     "name": "CUSTOM_25",
+     "value": "95"
+    },
+    {
+     "name": "CUSTOM_26",
+     "value": "96"
+    },
+    {
+     "name": "CUSTOM_27",
+     "value": "97"
+    },
+    {
+     "name": "CUSTOM_28",
+     "value": "98"
+    },
+    {
+     "name": "CUSTOM_29",
+     "value": "99"
+    },
+    {
+     "name": "CUSTOM_30",
+     "value": "100"
+    },
+    {
+     "name": "SUBSTRATE_1",
+     "value": "101"
+    },
+    {
+     "name": "HOLE",
+     "value": "47"
+    },
+    {
+     "name": "COMPONENT_SHAPE",
+     "value": "48"
+    },
+    {
+     "name": "COMPONENT_MARKING",
+     "value": "49"
+    },
+    {
+     "name": "PIN_SOLDERING",
+     "value": "50"
+    },
+    {
+     "name": "PIN_FLOATING",
+     "value": "51"
+    },
+    {
+     "name": "COMPONENT_MODEL",
+     "value": "52"
+    },
+    {
+     "name": "SHELL_3D_OUTLINE",
+     "value": "53"
+    },
+    {
+     "name": "SHELL_3D_TOP",
+     "value": "54"
+    },
+    {
+     "name": "SHELL_3D_BOTTOM",
+     "value": "55"
+    },
+    {
+     "name": "DRILL_DRAWING",
+     "value": "56"
+    }
+   ]
+  },
+  "EPCB_LayerStatus": {
+   "doc": "层状态",
+   "members": [
+    {
+     "name": "NOT_USED",
+     "value": "0"
+    },
+    {
+     "name": "SHOW",
+     "value": "1"
+    },
+    {
+     "name": "HIDDEN",
+     "value": "2"
+    }
+   ]
+  },
+  "EPCB_LayerColorConfiguration": {
+   "doc": "图层颜色配置",
+   "members": [
+    {
+     "name": "JLCEDA",
+     "value": "1"
+    },
+    {
+     "name": "EASYEDA",
+     "value": "1"
+    },
+    {
+     "name": "ALTIUM_DESIGNER",
+     "value": "2"
+    },
+    {
+     "name": "PADS",
+     "value": "3"
+    },
+    {
+     "name": "KICAD",
+     "value": "4"
+    }
+   ]
+  },
+  "EPCB_PcbPlateType": {
+   "doc": "PCB 板材类型",
+   "members": [
+    {
+     "name": "NORMAL",
+     "value": "1"
+    },
+    {
+     "name": "FPC",
+     "value": "2"
+    }
+   ]
+  },
+  "EPCB_LayerType": {
+   "doc": "图层类型",
+   "members": [
+    {
+     "name": "SIGNAL",
+     "value": "\"SIGNAL\""
+    },
+    {
+     "name": "INTERNAL_ELECTRICAL",
+     "value": "\"PLANE\""
+    },
+    {
+     "name": "SILKSCREEN",
+     "value": "\"SILKSCREEN\""
+    },
+    {
+     "name": "SOLDER_MASK",
+     "value": "\"SOLDER_MASK\""
+    },
+    {
+     "name": "PASTE_MASK",
+     "value": "\"PASTE_MASK\""
+    },
+    {
+     "name": "ASSEMBLY",
+     "value": "\"ASSEMBLY\""
+    },
+    {
+     "name": "OTHER",
+     "value": "\"OTHER\""
+    },
+    {
+     "name": "CUSTOM",
+     "value": "\"CUSTOM\""
+    }
+   ]
+  },
+  "EPCB_InactiveLayerDisplayMode": {
+   "doc": "非激活层展示模式",
+   "members": [
+    {
+     "name": "NORMAL_BRIGHTNESS",
+     "value": "0"
+    },
+    {
+     "name": "TURN_GRAY",
+     "value": "1"
+    },
+    {
+     "name": "HIDE",
+     "value": "2"
+    }
+   ]
+  },
+  "EPCB_PrimitiveType": {
+   "doc": "图元类型",
+   "members": [
+    {
+     "name": "ARC",
+     "value": "\"Arc\""
+    },
+    {
+     "name": "COMPONENT",
+     "value": "\"Component\""
+    },
+    {
+     "name": "PAD",
+     "value": "\"Pad\""
+    },
+    {
+     "name": "COMPONENT_PAD",
+     "value": "\"ComponentPad\""
+    },
+    {
+     "name": "POLYLINE",
+     "value": "\"Polyline\""
+    },
+    {
+     "name": "POUR",
+     "value": "\"Pour\""
+    },
+    {
+     "name": "FILL",
+     "value": "\"Fill\""
+    },
+    {
+     "name": "REGION",
+     "value": "\"Region\""
+    },
+    {
+     "name": "LINE",
+     "value": "\"Line\""
+    },
+    {
+     "name": "VIA",
+     "value": "\"Via\""
+    },
+    {
+     "name": "DIMENSION",
+     "value": "\"Dimension\""
+    },
+    {
+     "name": "IMAGE",
+     "value": "\"Image\""
+    },
+    {
+     "name": "OBJECT",
+     "value": "\"Object\""
+    },
+    {
+     "name": "POURED",
+     "value": "\"Poured\""
+    },
+    {
+     "name": "STRING",
+     "value": "\"String\""
+    },
+    {
+     "name": "ATTRIBUTE",
+     "value": "\"Attribute\""
+    }
+   ]
+  },
+  "EPCB_DocumentRatlineCalculatingActiveStatus": {
+   "doc": "文档飞线计算功能状态",
+   "members": [
+    {
+     "name": "ACTIVE",
+     "value": "\"active\""
+    },
+    {
+     "name": "INACTIVE",
+     "value": "\"inactive\""
+    }
+   ]
+  },
+  "EPCB_MouseEventType": {
+   "doc": "鼠标事件类型",
+   "members": [
+    {
+     "name": "SELECTED",
+     "value": "\"selected\""
+    },
+    {
+     "name": "CLEAR_SELECTED",
+     "value": "\"clearSelected\""
+    },
+    {
+     "name": "MOVE",
+     "value": "\"move\""
+    }
+   ]
+  },
+  "EPCB_PrimitiveEventType": {
+   "doc": "图元事件类型",
+   "members": [
+    {
+     "name": "DELETE",
+     "value": "\"delete\""
+    },
+    {
+     "name": "CREATE",
+     "value": "\"add\""
+    },
+    {
+     "name": "MODIFY",
+     "value": "\"modify\""
+    }
+   ]
+  },
+  "EPCB_NetEventType": {
+   "doc": "网络事件类型",
+   "members": [
+    {
+     "name": "ADD",
+     "value": "\"add\""
+    },
+    {
+     "name": "REMOVE",
+     "value": "\"remove\""
+    },
+    {
+     "name": "SELECTED",
+     "value": "\"selected\""
+    }
+   ]
+  },
+  "ESYS_NetlistType": {
+   "doc": "网表类型",
+   "members": [
+    {
+     "name": "ALLEGRO",
+     "value": "\"Allegro\""
+    },
+    {
+     "name": "PADS",
+     "value": "\"PADS\""
+    },
+    {
+     "name": "PROTEL2",
+     "value": "\"Protel2\""
+    },
+    {
+     "name": "JLCEDA_PRO",
+     "value": "\"JLCEDA\""
+    },
+    {
+     "name": "EASYEDA_PRO",
+     "value": "\"EasyEDA\""
+    },
+    {
+     "name": "ALTIUM_DESIGNER",
+     "value": "\"Protel2\""
+    },
+    {
+     "name": "DISA",
+     "value": "\"DISA\""
+    },
+    {
+     "name": "DISA_SIMULATION",
+     "value": "\"DSNET\""
+    }
+   ]
+  },
+  "ESYS_ImportProjectImportOption": {
+   "doc": "导入工程导入选项",
+   "members": [
+    {
+     "name": "IMPORT_DOCUMENT",
+     "value": "\"ImportDocument\""
+    },
+    {
+     "name": "EXTRACT_LIBRARIES",
+     "value": "\"ExtractLibraries\""
+    },
+    {
+     "name": "IMPORT_DOCUMENT_EXTRACT_LIBRARIES",
+     "value": "\"ImportDocumentExtractLibraries\""
+    }
+   ]
+  },
+  "ESYS_ImportProjectSchematicObjectStyle": {
+   "doc": "导入工程原理图图元样式",
+   "members": [
+    {
+     "name": "USE_SYSTEM_THEME",
+     "value": "\"system\""
+    },
+    {
+     "name": "USE_SOURCE_FILE_STYLE",
+     "value": "\"custom\""
+    }
+   ]
+  },
+  "ESYS_ImportProjectViaSolderMaskExpansion": {
+   "doc": "导入工程过孔阻焊扩展",
+   "members": [
+    {
+     "name": "ALL_COVER_OIL",
+     "value": "\"cover\""
+    },
+    {
+     "name": "FOLLOW_ORIGINAL_SETTING",
+     "value": "\"custom\""
+    }
+   ]
+  },
+  "ESYS_ImportProjectBoardOutlineSource": {
+   "doc": "导入工程板边框来源",
+   "members": [
+    {
+     "name": "FROM_KEEPOUT_LAYER",
+     "value": "\"keepout\""
+    },
+    {
+     "name": "FROM_MECHANICAL_LAYER_1",
+     "value": "\"mechanical\""
+    }
+   ]
+  },
+  "EPCB_PdfOutputMethod": {
+   "doc": "PDF 输出方式",
+   "members": [
+    {
+     "name": "MULTI_PAGE_PDF",
+     "value": "\"A Multi Page PDF\""
+    },
+    {
+     "name": "MULTIPLE_SINGLE_PAGE_PDF",
+     "value": "\"Multiple Single Page PDF\""
+    },
+    {
+     "name": "SINGLE_PAGE_PDF",
+     "value": "\"A Single Page PDF\""
+    }
+   ]
+  },
+  "EPCB_PrimitiveViaType": {
+   "doc": "过孔类型",
+   "members": [
+    {
+     "name": "VIA",
+     "value": "0"
+    },
+    {
+     "name": "BLIND",
+     "value": "1"
+    },
+    {
+     "name": "SUTURE",
+     "value": "2"
+    }
+   ]
+  },
+  "EPCB_PrimitiveArcInteractiveMode": {
+   "doc": "圆弧交互模式",
+   "members": [
+    {
+     "name": "TWO_POINT_ARC",
+     "value": "1"
+    },
+    {
+     "name": "CENTER_ARC",
+     "value": "2"
+    }
+   ]
+  },
+  "EPCB_PrimitiveStringAlignMode": {
+   "doc": "文本对齐模式",
+   "members": [
+    {
+     "name": "LEFT_TOP",
+     "value": "1"
+    },
+    {
+     "name": "LEFT_MIDDLE",
+     "value": "2"
+    },
+    {
+     "name": "LEFT_BOTTOM",
+     "value": "3"
+    },
+    {
+     "name": "CENTER_TOP",
+     "value": "4"
+    },
+    {
+     "name": "CENTER",
+     "value": "5"
+    },
+    {
+     "name": "CENTER_BOTTOM",
+     "value": "6"
+    },
+    {
+     "name": "RIGHT_TOP",
+     "value": "7"
+    },
+    {
+     "name": "RIGHT_MIDDLE",
+     "value": "8"
+    },
+    {
+     "name": "RIGHT_BOTTOM",
+     "value": "9"
+    }
+   ]
+  },
+  "EPCB_PrimitiveRegionRuleType": {
+   "doc": "区域图元区域规则类型",
+   "members": [
+    {
+     "name": "NO_COMPONENTS",
+     "value": "2"
+    },
+    {
+     "name": "NO_VIAS",
+     "value": "3"
+    },
+    {
+     "name": "NO_WIRES",
+     "value": "5"
+    },
+    {
+     "name": "NO_FILLS",
+     "value": "6"
+    },
+    {
+     "name": "NO_POURS",
+     "value": "7"
+    },
+    {
+     "name": "NO_INNER_ELECTRICAL_LAYERS",
+     "value": "8"
+    },
+    {
+     "name": "FOLLOW_REGION_RULE",
+     "value": "9"
+    }
+   ]
+  },
+  "EPCB_PrimitivePourFillMethod": {
+   "doc": "覆铜填充方法",
+   "members": [
+    {
+     "name": "GRID45",
+     "value": "\"45grid\""
+    },
+    {
+     "name": "GRID",
+     "value": "\"90grid\""
+    },
+    {
+     "name": "SOLID",
+     "value": "\"solid\""
+    }
+   ]
+  },
+  "EPCB_PrimitiveFillMode": {
+   "doc": "填充图元填充模式",
+   "members": [
+    {
+     "name": "SOLID",
+     "value": "0"
+    },
+    {
+     "name": "MESH",
+     "value": "1"
+    },
+    {
+     "name": "INNER_ELECTRICAL_LAYER",
+     "value": "2"
+    }
+   ]
+  },
+  "EPCB_PrimitivePadShapeType": {
+   "doc": "焊盘外形种类",
+   "members": [
+    {
+     "name": "ELLIPSE",
+     "value": "\"ELLIPSE\""
+    },
+    {
+     "name": "OBLONG",
+     "value": "\"OVAL\""
+    },
+    {
+     "name": "RECTANGLE",
+     "value": "\"RECT\""
+    },
+    {
+     "name": "REGULAR_POLYGON",
+     "value": "\"NGON\""
+    },
+    {
+     "name": "POLYLINE_COMPLEX_POLYGON",
+     "value": "\"POLYGON\""
+    }
+   ]
+  },
+  "EPCB_PrimitivePadHoleType": {
+   "doc": "焊盘钻孔类型",
+   "members": [
+    {
+     "name": "ROUND",
+     "value": "\"ROUND\""
+    },
+    {
+     "name": "RECTANGLE",
+     "value": "\"RECT\""
+    },
+    {
+     "name": "SLOT",
+     "value": "\"SLOT\""
+    }
+   ]
+  },
+  "EPCB_PrimitivePadHeatWeldingConnectionMethod": {
+   "doc": "焊盘热焊连接方式",
+   "members": [
+    {
+     "name": "DIVERGENT",
+     "value": "\"Divergent\""
+    },
+    {
+     "name": "DIRECT_CONNECTED",
+     "value": "\"Direct-connected\""
+    },
+    {
+     "name": "NON_CONNECTED",
+     "value": "\"Non-connected\""
+    }
+   ]
+  },
+  "EPCB_PrimitivePadType": {
+   "doc": "焊盘类型",
+   "members": [
+    {
+     "name": "NORMAL",
+     "value": "0"
+    },
+    {
+     "name": "TEST",
+     "value": "1"
+    },
+    {
+     "name": "MARK_POINT",
+     "value": "2"
+    }
+   ]
+  },
+  "EPCB_PrimitiveDimensionType": {
+   "doc": "尺寸标注类型",
+   "members": [
+    {
+     "name": "RADIUS",
+     "value": "\"Radius Dimension\""
+    },
+    {
+     "name": "LENGTH",
+     "value": "\"Length Dimension\""
+    },
+    {
+     "name": "ANGLE",
+     "value": "\"Protractor Dimension\""
+    }
+   ]
+  },
+  "ESCH_PrimitiveType": {
+   "doc": "图元类型",
+   "members": [
+    {
+     "name": "ARC",
+     "value": "\"Arc\""
+    },
+    {
+     "name": "BUS",
+     "value": "\"Bus\""
+    },
+    {
+     "name": "CIRCLE",
+     "value": "\"Circle\""
+    },
+    {
+     "name": "COMPONENT",
+     "value": "\"Component\""
+    },
+    {
+     "name": "COMPONENT_PIN",
+     "value": "\"ComponentPin\""
+    },
+    {
+     "name": "PIN",
+     "value": "\"Pin\""
+    },
+    {
+     "name": "POLYGON",
+     "value": "\"Polygon\""
+    },
+    {
+     "name": "RECTANGLE",
+     "value": "\"Rectangle\""
+    },
+    {
+     "name": "TEXT",
+     "value": "\"Text\""
+    },
+    {
+     "name": "WIRE",
+     "value": "\"Wire\""
+    },
+    {
+     "name": "OBJECT",
+     "value": "\"Object\""
+    },
+    {
+     "name": "BEZIER",
+     "value": "\"Bezier\""
+    },
+    {
+     "name": "ELLIPSE",
+     "value": "\"Ellipse\""
+    },
+    {
+     "name": "ATTRIBUTE",
+     "value": "\"Attribute\""
+    }
+   ]
+  },
+  "ESCH_PrimitiveLineType": {
+   "doc": "线型",
+   "members": [
+    {
+     "name": "SOLID",
+     "value": "0"
+    },
+    {
+     "name": "DASHED",
+     "value": "1"
+    },
+    {
+     "name": "DOTTED",
+     "value": "2"
+    },
+    {
+     "name": "DOT_DASHED",
+     "value": "3"
+    }
+   ]
+  },
+  "ESCH_PrimitiveFillStyle": {
+   "doc": "填充样式",
+   "members": [
+    {
+     "name": "NONE",
+     "value": "\"None\""
+    },
+    {
+     "name": "SOLID",
+     "value": "\"Solid\""
+    },
+    {
+     "name": "GRID",
+     "value": "\"Grid\""
+    },
+    {
+     "name": "HORIZONTAL_LINE",
+     "value": "\"Horizontal Line\""
+    },
+    {
+     "name": "VERTICAL_LINE",
+     "value": "\"Vertical Line\""
+    },
+    {
+     "name": "RHOMBIC_GRID",
+     "value": "\"Rhombic Grid\""
+    },
+    {
+     "name": "LEFT_SLASH_LINE",
+     "value": "\"Left Slash Line\""
+    },
+    {
+     "name": "RIGHT_SLASH_LINE",
+     "value": "\"Right Slash Line\""
+    }
+   ]
+  },
+  "ESCH_MouseEventType": {
+   "doc": "鼠标事件类型",
+   "members": [
+    {
+     "name": "SELECTED",
+     "value": "\"selected\""
+    },
+    {
+     "name": "CLEAR_SELECTED",
+     "value": "\"clearSelected\""
+    }
+   ]
+  },
+  "ESCH_PrimitiveEventType": {
+   "doc": "图元事件类型",
+   "members": [
+    {
+     "name": "DELETE",
+     "value": "\"delete\""
+    },
+    {
+     "name": "CREATE",
+     "value": "\"create\""
+    },
+    {
+     "name": "MOVE",
+     "value": "\"move\""
+    },
+    {
+     "name": "CHANGE",
+     "value": "\"change\""
+    }
+   ]
+  },
+  "ESCH_DynamicSimulationEnginePullEventType": {
+   "doc": "动态仿真引擎拉取事件类型",
+   "members": [
+    {
+     "name": "SESSION_START",
+     "value": "\"SESSION_START\""
+    },
+    {
+     "name": "SESSION_PAUSE",
+     "value": "\"SESSION_PAUSE\""
+    },
+    {
+     "name": "SESSION_RESUME",
+     "value": "\"SESSION_RESUME\""
+    },
+    {
+     "name": "SESSION_STOP",
+     "value": "\"SESSION_STOP\""
+    },
+    {
+     "name": "SESSION_STATE_QUERY",
+     "value": "\"SESSION_STATE_QUERY\""
+    },
+    {
+     "name": "SPEED_SET",
+     "value": "\"SPEED_SET\""
+    },
+    {
+     "name": "COMPONENT_UPDATE",
+     "value": "\"COMPONENT_UPDATE\""
+    }
+   ]
+  },
+  "ESCH_SpiceSimulationEnginePullEventType": {
+   "doc": "Spice 仿真引擎拉取事件类型",
+   "members": [
+    {
+     "name": "SIMULATE_NETLIST",
+     "value": "\"SIMULATE_NETLIST\""
+    },
+    {
+     "name": "VALIDATE_NETLIST",
+     "value": "\"VALIDATE_NETLIST\""
+    }
+   ]
+  },
+  "ESCH_ExportDocumentFileType": {
+   "doc": "导出文档文件类型",
+   "members": [
+    {
+     "name": "PDF",
+     "value": "\"PDF\""
+    },
+    {
+     "name": "PNG",
+     "value": "\"PNG\""
+    },
+    {
+     "name": "SVG",
+     "value": "\"SVG\""
+    }
+   ]
+  },
+  "ESCH_SimulationNetlistType": {
+   "doc": "仿真网表类型",
+   "members": [
+    {
+     "name": "NGSPICE",
+     "value": "\"NGspice\""
+    }
+   ]
+  },
+  "ESCH_PrimitiveTextAlignMode": {
+   "doc": "文本对齐模式",
+   "members": [
+    {
+     "name": "LEFT_TOP",
+     "value": "1"
+    },
+    {
+     "name": "LEFT_MIDDLE",
+     "value": "2"
+    },
+    {
+     "name": "LEFT_BOTTOM",
+     "value": "3"
+    },
+    {
+     "name": "CENTER_TOP",
+     "value": "4"
+    },
+    {
+     "name": "CENTER",
+     "value": "5"
+    },
+    {
+     "name": "CENTER_BOTTOM",
+     "value": "6"
+    },
+    {
+     "name": "RIGHT_TOP",
+     "value": "7"
+    },
+    {
+     "name": "RIGHT_MIDDLE",
+     "value": "8"
+    },
+    {
+     "name": "RIGHT_BOTTOM",
+     "value": "9"
+    }
+   ]
+  },
+  "ESCH_PrimitivePinShape": {
+   "doc": "引脚形状",
+   "members": [
+    {
+     "name": "NONE",
+     "value": "\"None\""
+    },
+    {
+     "name": "INVERTED",
+     "value": "\"Inverted\""
+    },
+    {
+     "name": "CLOCK",
+     "value": "\"Clock\""
+    },
+    {
+     "name": "INVERTED_CLOCK",
+     "value": "\"Inverted Clock\""
+    }
+   ]
+  },
+  "ESCH_PrimitivePinType": {
+   "doc": "引脚类型",
+   "members": [
+    {
+     "name": "IN",
+     "value": "\"IN\""
+    },
+    {
+     "name": "OUT",
+     "value": "\"OUT\""
+    },
+    {
+     "name": "BI",
+     "value": "\"BI\""
+    },
+    {
+     "name": "PASSIVE",
+     "value": "\"Passive\""
+    },
+    {
+     "name": "OPEN_COLLECTOR",
+     "value": "\"Open Collector\""
+    },
+    {
+     "name": "OPEN_EMITTER",
+     "value": "\"Open Emitter\""
+    },
+    {
+     "name": "POWER",
+     "value": "\"Power\""
+    },
+    {
+     "name": "GROUND",
+     "value": "\"Ground\""
+    },
+    {
+     "name": "HIZ",
+     "value": "\"HIZ\""
+    },
+    {
+     "name": "TERMINATOR",
+     "value": "\"Terminator\""
+    },
+    {
+     "name": "UNDEFINED",
+     "value": "\"Undefined\""
+    }
+   ]
+  },
+  "ESCH_ShapeType": {
+   "doc": "图元类型",
+   "members": [
+    {
+     "name": "OBJ",
+     "value": "\"obj\""
+    },
+    {
+     "name": "POLYLINE",
+     "value": "\"polyline\""
+    },
+    {
+     "name": "CIRCLE",
+     "value": "\"circle\""
+    },
+    {
+     "name": "ELLIPSE",
+     "value": "\"ellipse\""
+    },
+    {
+     "name": "RECT",
+     "value": "\"rect\""
+    },
+    {
+     "name": "ARC",
+     "value": "\"arc\""
+    },
+    {
+     "name": "TEXT",
+     "value": "\"text\",//"
+    },
+    {
+     "name": "TABLE",
+     "value": "\"table\""
+    },
+    {
+     "name": "PIN",
+     "value": "\"pin\""
+    },
+    {
+     "name": "BUSENTRY",
+     "value": "\"busEntry\""
+    },
+    {
+     "name": "NOCONNECT",
+     "value": "\"noconnect\""
+    },
+    {
+     "name": "BUS",
+     "value": "\"bus\""
+    },
+    {
+     "name": "WIRE",
+     "value": "\"wire\""
+    },
+    {
+     "name": "BEZIER",
+     "value": "\"bezier\""
+    },
+    {
+     "name": "ANNOTATION",
+     "value": "\"annotation\""
+    },
+    {
+     "name": "MASKREGION",
+     "value": "\"maskregion\""
+    }
+   ]
+  },
+  "ESCH_PrimitiveComponentType": {
+   "doc": "器件类型",
+   "members": [
+    {
+     "name": "COMPONENT",
+     "value": "\"part\""
+    },
+    {
+     "name": "DRAWING",
+     "value": "\"sheet\""
+    },
+    {
+     "name": "NET_FLAG",
+     "value": "\"netflag\""
+    },
+    {
+     "name": "NET_PORT",
+     "value": "\"netport\""
+    },
+    {
+     "name": "NON_ELECTRICAL_FLAG",
+     "value": "\"nonElectrical_symbol\""
+    },
+    {
+     "name": "SHORT_CIRCUIT_FLAG",
+     "value": "\"short_symbol\""
+    },
+    {
+     "name": "NET_LABEL",
+     "value": "\"netlabel\""
+    },
+    {
+     "name": "OFF_PAGE_CONNECTOR",
+     "value": "\"offPageConnector\""
+    },
+    {
+     "name": "DIFFERENTIAL_PAIRS_FLAG",
+     "value": "\"diffPairsFlag\""
+    },
+    {
+     "name": "CBB_SYMBOL",
+     "value": "\"block_symbol\""
+    }
+   ]
+  },
+  "ESCH_DynamicSimulationEnginePushEventType": {
+   "doc": "动态仿真引擎推送事件类型",
+   "members": [
+    {
+     "name": "SESSION_STATE",
+     "value": "\"SESSION_STATE\""
+    },
+    {
+     "name": "STREAM_DATA",
+     "value": "\"STREAM_DATA\""
+    },
+    {
+     "name": "STREAM_SNAPSHOT",
+     "value": "\"STREAM_SNAPSHOT\""
+    },
+    {
+     "name": "ENGINE_LOG",
+     "value": "\"ENGINE_LOG\""
+    },
+    {
+     "name": "ENGINE_ERROR",
+     "value": "\"ENGINE_ERROR\""
+    }
+   ]
+  },
+  "ESCH_SpiceSimulationEnginePushEventType": {
+   "doc": "Spice 仿真引擎推送事件类型",
+   "members": [
+    {
+     "name": "SIMULATION_RESULT",
+     "value": "\"SIMULATION_RESULT\""
+    },
+    {
+     "name": "VALIDATION_RESULT",
+     "value": "\"VALIDATION_RESULT\""
+    },
+    {
+     "name": "LOG_RESULT",
+     "value": "\"LOG_RESULT\""
+    },
+    {
+     "name": "ERROR_RESULT",
+     "value": "\"ERROR_RESULT\""
+    }
+   ]
+  },
+  "ETableDataChangeType": {
+   "doc": "表格数据变更类型 */",
+   "members": [
+    {
+     "name": "NORMAL",
+     "value": "\"NORMAL\""
+    },
+    {
+     "name": "CHECKED",
+     "value": "\"checked\""
+    },
+    {
+     "name": "ASC_SORT",
+     "value": "\"ASC_SORT\""
+    },
+    {
+     "name": "DESC_SORT",
+     "value": "\"DESC_SORT\""
+    }
+   ]
+  },
+  "CellType": {
+   "doc": "单元格类型枚举 */",
+   "members": [
+    {
+     "name": "TH",
+     "value": "\"th\""
+    },
+    {
+     "name": "TD",
+     "value": "\"td\""
+    }
+   ]
+  },
+  "CellContentType": {
+   "doc": "单元格内容类型枚举 */",
+   "members": [
+    {
+     "name": "TEXT",
+     "value": "\"TEXT\""
+    },
+    {
+     "name": "INPUT",
+     "value": "\"INPUT\""
+    },
+    {
+     "name": "TEXTAREA",
+     "value": "\"TEXTAREA\""
+    },
+    {
+     "name": "SELECT",
+     "value": "\"SELECT\""
+    },
+    {
+     "name": "CHECKBOX",
+     "value": "\"CHECKBOX\""
+    },
+    {
+     "name": "CUSTOM",
+     "value": "\"CUSTOM\""
+    },
+    {
+     "name": "UNDEFINED",
+     "value": "\"UNDEFINED\""
+    }
+   ]
+  },
+  "ESYS_HeaderMenuEnvironment": {
+   "doc": "顶部菜单环境",
+   "members": [
+    {
+     "name": "HOME",
+     "value": "\"home\""
+    },
+    {
+     "name": "BLANK",
+     "value": "\"blank\""
+    },
+    {
+     "name": "SCHEMATIC",
+     "value": "\"sch\""
+    },
+    {
+     "name": "SYMBOL",
+     "value": "\"symbol\""
+    },
+    {
+     "name": "PCB",
+     "value": "\"pcb\""
+    },
+    {
+     "name": "FOOTPRINT",
+     "value": "\"footprint\""
+    },
+    {
+     "name": "PCB_VIEW",
+     "value": "\"pcbView\""
+    },
+    {
+     "name": "PANEL",
+     "value": "\"panel\""
+    },
+    {
+     "name": "PANEL_LIBRARY",
+     "value": "\"panelLibrary\""
+    },
+    {
+     "name": "PANEL_VIEW",
+     "value": "\"panelView\""
+    },
+    {
+     "name": "SIMULATION_SCHEMATIC_NGSPICE",
+     "value": "\"simulationSchematicNGspice\""
+    },
+    {
+     "name": "SIMULATION_SCHEMATIC_SIMULIDE",
+     "value": "\"simulationSchematicSimulIDE\""
+    }
+   ]
+  },
+  "ESYS_LogType": {
+   "doc": "日志类型",
+   "members": [
+    {
+     "name": "INFO",
+     "value": "\"info\""
+    },
+    {
+     "name": "WARNING",
+     "value": "\"warn\""
+    },
+    {
+     "name": "ERROR",
+     "value": "\"error\""
+    },
+    {
+     "name": "FATAL_ERROR",
+     "value": "\"fatalError\""
+    },
+    {
+     "name": "FIND",
+     "value": "\"find\""
+    },
+    {
+     "name": "REPLACE",
+     "value": "\"replace\""
+    },
+    {
+     "name": "OPEN_PROJECT",
+     "value": "\"openProject\""
+    }
+   ]
+  },
+  "ESYS_LeftPanelTab": {
+   "doc": "左侧面板标签页",
+   "members": [
+    {
+     "name": "PROJECT_LIST",
+     "value": "\"project_list\""
+    },
+    {
+     "name": "PROJECT_DESIGN",
+     "value": "\"projectDesign\""
+    },
+    {
+     "name": "LIB_DESIGN",
+     "value": "\"libDesign\""
+    },
+    {
+     "name": "BASIC_LIBRARY",
+     "value": "\"basicLibrary\""
+    },
+    {
+     "name": "DEVICE_STANDARDIZATION",
+     "value": "\"device-standardization\""
+    }
+   ]
+  },
+  "ESYS_RightPanelTab": {
+   "doc": "右侧面板标签页",
+   "members": [
+    {
+     "name": "SCH_ATTR",
+     "value": "\"sch-attr\""
+    },
+    {
+     "name": "SCH_FILTER",
+     "value": "\"sch-filter\""
+    },
+    {
+     "name": "PROJECT_ATTR",
+     "value": "\"project-attr\""
+    },
+    {
+     "name": "PANEL_LAYER",
+     "value": "\"panel-layer\""
+    },
+    {
+     "name": "PANEL_ATTR",
+     "value": "\"panel-attr\""
+    },
+    {
+     "name": "PANEL_FILTER",
+     "value": "\"panel-filter\""
+    },
+    {
+     "name": "PCB_LAYER",
+     "value": "\"pcb-layer\""
+    },
+    {
+     "name": "PCB_ATTR",
+     "value": "\"pcb-attr\""
+    },
+    {
+     "name": "PCB_SKETCHER_ATTR",
+     "value": "\"pcb-sketcher-attr\""
+    },
+    {
+     "name": "PCB_FILTER",
+     "value": "\"pcb-filter\""
+    },
+    {
+     "name": "PCB_2D_PREVIEW_ATTR",
+     "value": "\"pcb2d-attr\""
+    },
+    {
+     "name": "PCB_3D_PREVIEW_LAYER",
+     "value": "\"pcb3d-layer\""
+    },
+    {
+     "name": "PCB_3D_PREVIEW_ATTR",
+     "value": "\"pcb3d-attr\""
+    },
+    {
+     "name": "PANEL_3D_PREVIEW_LAYER",
+     "value": "\"panel3d-layer\""
+    },
+    {
+     "name": "PANEL_3D_PREVIEW_ATTR",
+     "value": "\"panel3d-attr\""
+    },
+    {
+     "name": "ANNOTATION",
+     "value": "\"annotation\""
+    }
+   ]
+  },
+  "ESYS_BottomPanelTab": {
+   "doc": "底部面板标签页",
+   "members": [
+    {
+     "name": "LIBRARY",
+     "value": "\"library\""
+    },
+    {
+     "name": "LOG",
+     "value": "\"log\""
+    },
+    {
+     "name": "PCB_DRC",
+     "value": "\"drcResult\""
+    },
+    {
+     "name": "SCHEMATIC_DRC",
+     "value": "\"schDrcResult\""
+    },
+    {
+     "name": "FIND",
+     "value": "\"findResult\""
+    }
+   ]
+  },
+  "ESYS_ToastMessageType": {
+   "doc": "吐司消息类型",
+   "members": [
+    {
+     "name": "ERROR",
+     "value": "\"error\""
+    },
+    {
+     "name": "WARNING",
+     "value": "\"warn\""
+    },
+    {
+     "name": "INFO",
+     "value": "\"info\""
+    },
+    {
+     "name": "SUCCESS",
+     "value": "\"success\""
+    },
+    {
+     "name": "ASK",
+     "value": "\"question\""
+    }
+   ]
+  },
+  "ESYS_ShortcutKeyEffectiveEditorDocumentType": {
+   "doc": "快捷键生效页面范围",
+   "members": [
+    {
+     "name": "BLANK",
+     "value": "0"
+    },
+    {
+     "name": "HOME",
+     "value": "1"
+    },
+    {
+     "name": "SCHEMATIC_PAGE",
+     "value": "2"
+    },
+    {
+     "name": "SYMBOL",
+     "value": "3"
+    },
+    {
+     "name": "PCB",
+     "value": "4"
+    },
+    {
+     "name": "FOOTPRINT",
+     "value": "5"
+    },
+    {
+     "name": "PANEL",
+     "value": "6"
+    },
+    {
+     "name": "PCB_3D_PREVIEW",
+     "value": "7"
+    },
+    {
+     "name": "PCB_2D_PREVIEW",
+     "value": "8"
+    },
+    {
+     "name": "PANEL_3D_PREVIEW",
+     "value": "9"
+    },
+    {
+     "name": "PANEL_LIBRARY",
+     "value": "10"
+    }
+   ]
+  },
+  "ESYS_ShortcutKeyEffectiveEditorScene": {
+   "doc": "快捷键生效场景范围",
+   "members": [
+    {
+     "name": "EDITOR",
+     "value": "1"
+    },
+    {
+     "name": "SELECT_CANVAS",
+     "value": "2"
+    },
+    {
+     "name": "NOT_SELECT_CANVAS",
+     "value": "3"
+    },
+    {
+     "name": "DRAW",
+     "value": "4"
+    },
+    {
+     "name": "PLACE",
+     "value": "5"
+    },
+    {
+     "name": "LOCAL",
+     "value": "6"
+    }
+   ]
+  },
+  "ESYS_WindowOpenTarget": {
+   "doc": "打开窗口上下文目标",
+   "members": [
+    {
+     "name": "BLANK",
+     "value": "\"_blank\""
+    },
+    {
+     "name": "SELF",
+     "value": "\"_self\""
+    }
+   ]
+  },
+  "ESYS_WindowEventType": {
+   "doc": "窗口事件类型",
+   "members": [
+    {
+     "name": "BLUR",
+     "value": "\"blur\""
+    },
+    {
+     "name": "FOCUS",
+     "value": "\"focus\""
+    }
+   ]
+  },
+  "ESYS_Theme": {
+   "doc": "主题",
+   "members": [
+    {
+     "name": "LIGHT",
+     "value": "\"light\""
+    },
+    {
+     "name": "DARK",
+     "value": "\"dark\""
+    }
+   ]
+  }
+ },
+ "interfaces": {
+  "IDMT_EditorDocumentItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "documentType",
+     "optional": false,
+     "type": "EDMT_EditorDocumentType",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "tabId",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "parentProjectUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "parentLibraryUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_PcbItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.PCB | EDMT_ItemType.CBB_PCB",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "parentProjectUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "parentBoardName",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ClassificationIndex": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryType",
+     "optional": false,
+     "type": "ELIB_LibraryType",
+     "doc": ""
+    },
+    {
+     "name": "primaryClassificationUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "secondaryClassificationUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_SymbolItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "libraryType",
+     "optional": false,
+     "type": "ELIB_LibraryType.SYMBOL",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "cbbUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "type",
+     "optional": false,
+     "type": "ELIB_SymbolType",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "subPartNames",
+     "optional": false,
+     "type": "[]",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_SymbolSearchItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "ordinal",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "type",
+     "optional": false,
+     "type": "ELIB_SymbolType",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTimestamp",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "ascription",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "lastModifiedBy",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_SymbolPropertiesForSearch": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_SchematicItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.SCHEMATIC | EDMT_ItemType.CBB_SCHEMATIC",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "page",
+     "optional": false,
+     "type": "Array<IDMT_SchematicPageItem>",
+     "doc": ""
+    },
+    {
+     "name": "parentProjectUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "parentBoardName",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "cbbSymbol",
+     "optional": true,
+     "type": "ILIB_SymbolItem",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_SchematicPageItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.SCHEMATIC_PAGE",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "parentSchematicUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "showTitleBlock",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "titleBlockData",
+     "optional": false,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "showTitle",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "showValue",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": false,
+     "type": "any",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_BoardItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.BOARD",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "schematic",
+     "optional": false,
+     "type": "IDMT_SchematicItem",
+     "doc": ""
+    },
+    {
+     "name": "pcb",
+     "optional": false,
+     "type": "IDMT_PcbItem",
+     "doc": ""
+    },
+    {
+     "name": "parentProjectUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_IndicatorMarkerShape": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "type",
+     "optional": false,
+     "type": "EDMT_IndicatorMarkerType",
+     "doc": ""
+    },
+    {
+     "name": "x",
+     "optional": true,
+     "type": "number",
+     "doc": "点：坐标 X"
+    },
+    {
+     "name": "y",
+     "optional": true,
+     "type": "number",
+     "doc": "点：坐标 Y"
+    },
+    {
+     "name": "r",
+     "optional": true,
+     "type": "number",
+     "doc": "圆形：半径"
+    },
+    {
+     "name": "startX",
+     "optional": true,
+     "type": "number",
+     "doc": "线段 | 圆弧：起始点 X"
+    },
+    {
+     "name": "startY",
+     "optional": true,
+     "type": "number",
+     "doc": "线段 | 圆弧：起始点 Y"
+    },
+    {
+     "name": "endX",
+     "optional": true,
+     "type": "number",
+     "doc": "线段 | 圆弧：终止点 X"
+    },
+    {
+     "name": "endY",
+     "optional": true,
+     "type": "number",
+     "doc": "线段 | 圆弧：终止点 Y"
+    },
+    {
+     "name": "top",
+     "optional": true,
+     "type": "number",
+     "doc": "矩形：上 Y"
+    },
+    {
+     "name": "bottom",
+     "optional": true,
+     "type": "number",
+     "doc": "矩形：下 Y"
+    },
+    {
+     "name": "left",
+     "optional": true,
+     "type": "number",
+     "doc": "矩形：左 X"
+    },
+    {
+     "name": "right",
+     "optional": true,
+     "type": "number",
+     "doc": "矩形：右 X"
+    },
+    {
+     "name": "angle",
+     "optional": true,
+     "type": "number",
+     "doc": "圆弧：角度"
+    }
+   ]
+  },
+  "IDMT_EditorSplitScreenItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "id",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "fatherId",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "tabs",
+     "optional": true,
+     "type": "Array<IDMT_EditorTabItem>",
+     "doc": ""
+    },
+    {
+     "name": "direction",
+     "optional": true,
+     "type": "EDMT_EditorSplitScreenDirection",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "Array<IDMT_EditorSplitScreenItem>",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_EditorTabItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "title",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "tabId",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "documentType",
+     "optional": false,
+     "type": "EDMT_EditorDocumentType",
+     "doc": ""
+    },
+    {
+     "name": "draggable",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isAbleDelete",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "notUseI18n",
+     "optional": true,
+     "type": "boolean",
+     "doc": "标签页是否不使用 I18n 功能（内部功能）"
+    }
+   ]
+  },
+  "IDMT_FolderItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.FOLDER",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "teamUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "parentFolderUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "childrenFoldersUuid",
+     "optional": true,
+     "type": "Array<string>",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_PanelItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.PANEL",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "parentProjectUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_BriefProjectItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.PROJECT | EDMT_ItemType.CBB_PROJECT",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "friendlyName",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "teamUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "folderUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_ProjectItem": {
+   "extends": "IDMT_BriefProjectItem",
+   "fields": [
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "data",
+     "optional": false,
+     "type": "Array<IDMT_BoardItem | IDMT_SchematicItem | IDMT_PcbItem | IDMT_PanelItem>",
+     "doc": ""
+    },
+    {
+     "name": "collaborationMode",
+     "optional": true,
+     "type": "EDMT_ProjectCollaborationMode",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_TeamItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.TEAM",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "identity",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "IDMT_WorkspaceItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "itemType",
+     "optional": false,
+     "type": "EDMT_ItemType.WORKSPACE",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_3DModelItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "libraryType",
+     "optional": false,
+     "type": "ELIB_LibraryType.MODEL",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_3DModelSearchItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "ordinal",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTimestamp",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "ascription",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "lastModifiedBy",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_CbbItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "libraryType",
+     "optional": false,
+     "type": "ELIB_LibraryType.CBB",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "boards",
+     "optional": false,
+     "type": "Array<IDMT_BoardItem>",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_CbbSearchItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "ordinal",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTimestamp",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "ascription",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "lastModifiedBy",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_DeviceAssociationItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "symbolType",
+     "optional": false,
+     "type": "ELIB_SymbolType",
+     "doc": "符号类型"
+    },
+    {
+     "name": "symbolUuid",
+     "optional": false,
+     "type": "string",
+     "doc": "符号 UUID"
+    },
+    {
+     "name": "symbol",
+     "optional": false,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "type",
+     "optional": false,
+     "type": "ELIB_SymbolType",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "footprintUuid",
+     "optional": false,
+     "type": "string",
+     "doc": "封装 UUID"
+    },
+    {
+     "name": "footprint",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "images",
+     "optional": true,
+     "type": "Array<string>",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_DeviceExtendPropertyItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "designator",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "addIntoBom",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "addIntoPcb",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "net",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "manufacturer",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "manufacturerId",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "supplier",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "supplierId",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "otherProperty",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_DeviceItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "libraryType",
+     "optional": false,
+     "type": "ELIB_LibraryType.DEVICE",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "association",
+     "optional": false,
+     "type": "ILIB_DeviceAssociationItem",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "property",
+     "optional": false,
+     "type": "ILIB_DeviceExtendPropertyItem",
+     "doc": ""
+    },
+    {
+     "name": "subPartNames",
+     "optional": false,
+     "type": "[]",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_DeviceSearchItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "ordinal",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "symbolName",
+     "optional": false,
+     "type": "string",
+     "doc": "关联符号名称"
+    },
+    {
+     "name": "symbolUuid",
+     "optional": false,
+     "type": "string",
+     "doc": "关联符号 UUID"
+    },
+    {
+     "name": "symbol",
+     "optional": false,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "footprintName",
+     "optional": true,
+     "type": "string",
+     "doc": "关联封装名称"
+    },
+    {
+     "name": "footprintUuid",
+     "optional": false,
+     "type": "string",
+     "doc": "关联封装 UUID"
+    },
+    {
+     "name": "footprint",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "model3DName",
+     "optional": true,
+     "type": "string",
+     "doc": "关联 3D 模型名称"
+    },
+    {
+     "name": "model3DUuid",
+     "optional": false,
+     "type": "string",
+     "doc": "关联 3D 模型 UUID"
+    },
+    {
+     "name": "model3D",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "imageUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "manufacturer",
+     "optional": true,
+     "type": "string",
+     "doc": "制造商"
+    },
+    {
+     "name": "manufacturerId",
+     "optional": true,
+     "type": "string",
+     "doc": "制造商编号"
+    },
+    {
+     "name": "supplier",
+     "optional": true,
+     "type": "string",
+     "doc": "供应商"
+    },
+    {
+     "name": "supplierId",
+     "optional": true,
+     "type": "string",
+     "doc": "供应商编号"
+    },
+    {
+     "name": "lcscInventory",
+     "optional": true,
+     "type": "number",
+     "doc": "立创商城库存"
+    },
+    {
+     "name": "lcscPrice",
+     "optional": true,
+     "type": "number",
+     "doc": "立创商城价格"
+    },
+    {
+     "name": "jlcInventory",
+     "optional": true,
+     "type": "number",
+     "doc": "嘉立创库存"
+    },
+    {
+     "name": "jlcPrice",
+     "optional": true,
+     "type": "number",
+     "doc": "嘉立创价格"
+    },
+    {
+     "name": "jlcLibraryCategory",
+     "optional": true,
+     "type": "ELIB_DeviceJlcLibraryCategory",
+     "doc": "嘉立创库类别"
+    },
+    {
+     "name": "otherProperty",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_DevicePropertiesForSearch": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "symbolName",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "footprintName",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "supplierFootprint",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "supplierId",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "partNumber",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "partCode",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_FootprintItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "libraryType",
+     "optional": false,
+     "type": "ELIB_LibraryType.FOOTPRINT",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_FootprintSearchItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "ordinal",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTimestamp",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "ascription",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "lastModifiedBy",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_FootprintPropertiesForSearch": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_LibraryInfo": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibraryItemIndex": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "uuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibraryItem": {
+   "extends": "ILIB_ExtendLibraryItemIndex",
+   "fields": [
+    {
+     "name": "url",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "data",
+     "optional": true,
+     "type": "string | Blob",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibrarySearchProperty": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "page",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "pageSize",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "query",
+     "optional": false,
+     "type": "T & {",
+     "doc": ""
+    },
+    {
+     "name": "wd",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "listByTitles",
+     "optional": true,
+     "type": "Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryClassificationIndex | Array<string>",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibrarySearchResult": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "count",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "lists",
+     "optional": false,
+     "type": "Array<T>",
+     "doc": ""
+    },
+    {
+     "name": "page",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "pageSize",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "totalPage",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibrarySearchResultDataLine": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "version",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTime",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "createTime",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "creator",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryUserIndex",
+     "doc": ""
+    },
+    {
+     "name": "modifier",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryUserIndex",
+     "doc": ""
+    },
+    {
+     "name": "owner",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryUserIndex",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibraryUserIndex": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibraryClassificationIndex": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "primaryClassificationName",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "primaryClassificationUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "secondaryClassificationName",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "secondaryClassificationUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibraryFunctions": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "getDetail",
+     "optional": false,
+     "type": "(uuid: string) => Promise<any>",
+     "doc": "获取详细信息"
+    },
+    {
+     "name": "getClassificationTree",
+     "optional": false,
+     "type": "() => Promise<Array<{",
+     "doc": "获取分类树"
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "Array<{",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "getList",
+     "optional": false,
+     "type": "(props: ILIB_ExtendLibrarySearchProperty<any>) => Promise<ILIB_ExtendLibrarySearchResult<any>>",
+     "doc": "获取列表"
+    }
+   ]
+  },
+  "ILIB_ExtendLibraryDeviceFunctions": {
+   "extends": "ILIB_ExtendLibraryFunctions",
+   "fields": [
+    {
+     "name": "getList",
+     "optional": false,
+     "type": "(props: ILIB_ExtendLibrarySearchProperty<{",
+     "doc": ""
+    },
+    {
+     "name": "attributes",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "symbolType",
+     "optional": true,
+     "type": "ELIB_SymbolType",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "symbol",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryItem & {",
+     "doc": ""
+    },
+    {
+     "name": "symbolType",
+     "optional": false,
+     "type": "ELIB_SymbolType",
+     "doc": ""
+    },
+    {
+     "name": "footprint",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryItem",
+     "doc": ""
+    },
+    {
+     "name": "model3d",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryItemIndex & {",
+     "doc": ""
+    },
+    {
+     "name": "adjustment",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "size",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "x",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "y",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "z",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "rotation",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "x",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "y",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "z",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "offset",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "x",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "y",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "z",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "supplierPart",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "manufacturer",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTime",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "createTime",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "attributes",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "getSupportedSymbolTypes",
+     "optional": false,
+     "type": "() => Promise<Array<ELIB_SymbolType>>",
+     "doc": "获取支持的符号类型"
+    },
+    {
+     "name": "getSupportedPreviewTypes",
+     "optional": false,
+     "type": "() => Promise<Array<ELIB_PreviewType>>",
+     "doc": "获取支持的预览类型"
+    }
+   ]
+  },
+  "ILIB_ExtendLibrarySymbolFunctions": {
+   "extends": "ILIB_ExtendLibraryFunctions",
+   "fields": [
+    {
+     "name": "getList",
+     "optional": false,
+     "type": "(props: ILIB_ExtendLibrarySearchProperty<{",
+     "doc": ""
+    },
+    {
+     "name": "symbolType",
+     "optional": true,
+     "type": "ELIB_SymbolType",
+     "doc": ""
+    },
+    {
+     "name": "symbolType",
+     "optional": false,
+     "type": "ELIB_SymbolType",
+     "doc": ""
+    },
+    {
+     "name": "getSupportedSymbolTypes",
+     "optional": false,
+     "type": "() => Promise<Array<ELIB_SymbolType>>",
+     "doc": "获取支持的符号类型"
+    }
+   ]
+  },
+  "ILIB_ExtendLibraryFootprintFunctions": {
+   "extends": "ILIB_ExtendLibraryFunctions",
+   "fields": [
+    {
+     "name": "getList",
+     "optional": false,
+     "type": "(props: ILIB_ExtendLibrarySearchProperty<{}>) => Promise<ILIB_ExtendLibrarySearchResult<ILIB_ExtendLibraryItem & ILIB_ExtendLibrarySearchResultDataLine>>",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibraryCbbFunctions": {
+   "extends": "ILIB_ExtendLibraryFunctions",
+   "fields": [
+    {
+     "name": "getList",
+     "optional": false,
+     "type": "(props: any) => Promise<ILIB_ExtendLibrarySearchResult<ILIB_ExtendLibraryItem & ILIB_ExtendLibrarySearchResultDataLine & {",
+     "doc": ""
+    },
+    {
+     "name": "schematics",
+     "optional": true,
+     "type": "Array<{",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTime",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "pcbs",
+     "optional": true,
+     "type": "Array<{",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTime",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "thumb",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "createTime",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "creator",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryUserIndex",
+     "doc": ""
+    },
+    {
+     "name": "modifier",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryUserIndex",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "boards",
+     "optional": true,
+     "type": "Array<{",
+     "doc": ""
+    },
+    {
+     "name": "pcbUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "schUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "sheets",
+     "optional": true,
+     "type": "Array<{",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "belongSchematicUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTime",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "thumb",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "createTime",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "creator",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryUserIndex",
+     "doc": ""
+    },
+    {
+     "name": "modifier",
+     "optional": true,
+     "type": "ILIB_ExtendLibraryUserIndex",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_ExtendLibrary3DModelFunctions": {
+   "extends": "ILIB_ExtendLibraryFunctions",
+   "fields": [
+    {
+     "name": "getList",
+     "optional": false,
+     "type": "(props: ILIB_ExtendLibrarySearchProperty<{}>) => Promise<ILIB_ExtendLibrarySearchResult<ILIB_ExtendLibraryItemIndex & ILIB_ExtendLibrarySearchResultDataLine & {",
+     "doc": ""
+    },
+    {
+     "name": "modelType",
+     "optional": false,
+     "type": "'step'",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_PanelLibraryItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "libraryType",
+     "optional": false,
+     "type": "ELIB_LibraryType.PANEL_LIBRARY",
+     "doc": ""
+    },
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_PanelLibrarySearchItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "classification",
+     "optional": true,
+     "type": "ILIB_ClassificationIndex | Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "ordinal",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "description",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "updateTimestamp",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "ascription",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "lastModifiedBy",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ILIB_LibraryItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "uuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "libraryType",
+     "optional": false,
+     "type": "ELIB_LibraryType",
+     "doc": ""
+    },
+    {
+     "name": "libraryUuid",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_LayerItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "id",
+     "optional": false,
+     "type": "EPCB_LayerId",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "type",
+     "optional": false,
+     "type": "EPCB_LayerType",
+     "doc": ""
+    },
+    {
+     "name": "color",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "transparency",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "inactiveColor",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "inactiveTransparency",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "layerStatus",
+     "optional": false,
+     "type": "EPCB_LayerStatus",
+     "doc": ""
+    },
+    {
+     "name": "locked",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_DiscretizedPoint": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "x",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "y",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_DiscretizeOptions": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "step",
+     "optional": true,
+     "type": "number",
+     "doc": "离散步长，即相邻离散点之间的最大距离"
+    }
+   ]
+  },
+  "IPCB_PrimitiveSolderMaskAndPasteMaskExpansion": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "topSolderMask",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "bottomSolderMask",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "topPasteMask",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "bottomPasteMask",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_PrimitiveAPI": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "create",
+     "optional": false,
+     "type": "(...args: any[]) => IPCB_Primitive | undefined | Promise<IPCB_Primitive> | Promise<IPCB_Primitive | undefined>",
+     "doc": ""
+    },
+    {
+     "name": "delete",
+     "optional": false,
+     "type": "(primitiveIds: string | any | Array<string> | Array<any>) => boolean | Promise<boolean>",
+     "doc": ""
+    },
+    {
+     "name": "modify",
+     "optional": false,
+     "type": "(primitiveId: string | any, ...args: any[]) => IPCB_Primitive | undefined | Promise<IPCB_Primitive> | Promise<IPCB_Primitive | undefined>",
+     "doc": ""
+    },
+    {
+     "name": "get",
+     "optional": false,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "getAllPrimitiveId",
+     "optional": false,
+     "type": "(...args: any[]) => Array<string> | Promise<Array<string>>",
+     "doc": ""
+    },
+    {
+     "name": "getAll",
+     "optional": false,
+     "type": "(...args: any[]) => Array<IPCB_Primitive> | Promise<Array<IPCB_Primitive>>",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_Primitive": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "getState_PrimitiveType",
+     "optional": false,
+     "type": "() => EPCB_PrimitiveType",
+     "doc": ""
+    },
+    {
+     "name": "getState_PrimitiveId",
+     "optional": false,
+     "type": "() => string",
+     "doc": ""
+    },
+    {
+     "name": "create",
+     "optional": false,
+     "type": "() => IPCB_Primitive | Promise<IPCB_Primitive>",
+     "doc": ""
+    },
+    {
+     "name": "toAsync",
+     "optional": false,
+     "type": "() => IPCB_Primitive",
+     "doc": ""
+    },
+    {
+     "name": "toSync",
+     "optional": false,
+     "type": "() => IPCB_Primitive",
+     "doc": ""
+    },
+    {
+     "name": "isAsync",
+     "optional": false,
+     "type": "() => boolean",
+     "doc": ""
+    },
+    {
+     "name": "reset",
+     "optional": false,
+     "type": "() => IPCB_Primitive | Promise<IPCB_Primitive>",
+     "doc": ""
+    },
+    {
+     "name": "done",
+     "optional": false,
+     "type": "() => IPCB_Primitive | Promise<IPCB_Primitive>",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_NetClassItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "nets",
+     "optional": false,
+     "type": "Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "color",
+     "optional": false,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "r",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "g",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "b",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "alpha",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_DifferentialPairItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "positiveNet",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "negativeNet",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_EqualLengthNetGroupItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "nets",
+     "optional": false,
+     "type": "Array<string>",
+     "doc": ""
+    },
+    {
+     "name": "color",
+     "optional": false,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "r",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "g",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "b",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "alpha",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_PadPairGroupItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "padPairs",
+     "optional": false,
+     "type": "Array<[string, string]>",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_PadPairMinWireLengthItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "padPair",
+     "optional": false,
+     "type": "[string, string]",
+     "doc": ""
+    },
+    {
+     "name": "minWireLength",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_BomPropertiesTableColumns": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "property",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "title",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "sort",
+     "optional": true,
+     "type": "null | 'asc' | 'desc'",
+     "doc": ""
+    },
+    {
+     "name": "group",
+     "optional": true,
+     "type": "null | 'Yes' | 'No'",
+     "doc": ""
+    },
+    {
+     "name": "orderWeight",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_NetInfo": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "net",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "color",
+     "optional": false,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "r",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "g",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "b",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "alpha",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "length",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_PrimitivePouredPourFill": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "path",
+     "optional": false,
+     "type": "IPCB_ComplexPolygon",
+     "doc": ""
+    },
+    {
+     "name": "lineWidth",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "fill",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "id",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "IPCB_PrimitivePadHeatWelding": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "connectionMethod",
+     "optional": false,
+     "type": "EPCB_PrimitivePadHeatWeldingConnectionMethod",
+     "doc": ""
+    },
+    {
+     "name": "divergenceSpacing",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "divergenceLineWidth",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "divergenceAngle",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "ISCH_PrimitiveAPI": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "create",
+     "optional": false,
+     "type": "(...args: any[]) => ISCH_Primitive | undefined | Promise<ISCH_Primitive> | Promise<ISCH_Primitive | undefined>",
+     "doc": ""
+    },
+    {
+     "name": "delete",
+     "optional": false,
+     "type": "(primitiveIds: string | any | Array<string> | Array<any>) => boolean | Promise<boolean>",
+     "doc": ""
+    },
+    {
+     "name": "modify",
+     "optional": false,
+     "type": "(primitiveId: string | any, ...args: any[]) => ISCH_Primitive | undefined | Promise<ISCH_Primitive> | Promise<ISCH_Primitive | undefined>",
+     "doc": ""
+    },
+    {
+     "name": "get",
+     "optional": false,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "getAllPrimitiveId",
+     "optional": false,
+     "type": "(...args: any[]) => Array<string> | Promise<Array<string>>",
+     "doc": ""
+    },
+    {
+     "name": "getAll",
+     "optional": false,
+     "type": "(...args: any[]) => Array<ISCH_Primitive> | Promise<Array<ISCH_Primitive>>",
+     "doc": ""
+    }
+   ]
+  },
+  "ISCH_Primitive": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "getState_PrimitiveType",
+     "optional": false,
+     "type": "() => ESCH_PrimitiveType",
+     "doc": ""
+    },
+    {
+     "name": "getState_PrimitiveId",
+     "optional": false,
+     "type": "() => string",
+     "doc": ""
+    },
+    {
+     "name": "create",
+     "optional": false,
+     "type": "() => ISCH_Primitive | Promise<ISCH_Primitive>",
+     "doc": ""
+    },
+    {
+     "name": "toAsync",
+     "optional": false,
+     "type": "() => ISCH_Primitive",
+     "doc": ""
+    },
+    {
+     "name": "toSync",
+     "optional": false,
+     "type": "() => ISCH_Primitive",
+     "doc": ""
+    },
+    {
+     "name": "isAsync",
+     "optional": false,
+     "type": "() => boolean",
+     "doc": ""
+    },
+    {
+     "name": "reset",
+     "optional": false,
+     "type": "() => ISCH_Primitive | Promise<ISCH_Primitive>",
+     "doc": ""
+    },
+    {
+     "name": "done",
+     "optional": false,
+     "type": "() => ISCH_Primitive | Promise<ISCH_Primitive>",
+     "doc": ""
+    }
+   ]
+  },
+  "ISCH_ProjectNetInfo": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "schematicName",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "schematicUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "boardName",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "nets",
+     "optional": false,
+     "type": "Array<ISCH_NetInfo>",
+     "doc": ""
+    }
+   ]
+  },
+  "ISCH_NetInfo": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "net",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "wires",
+     "optional": false,
+     "type": "Array<ISCH_WireInfo>",
+     "doc": ""
+    }
+   ]
+  },
+  "ISCH_WireInfo": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "id",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "globalNetName",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "pageName",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "pageUuid",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "CellAttributes": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "colSpan",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "rowSpan",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "style",
+     "optional": true,
+     "type": "CSSProperties",
+     "doc": ""
+    },
+    {
+     "name": "className",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "HasDisabledCellParams": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "disabled",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    }
+   ]
+  },
+  "HasSubTypeCellParams": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "type",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "TextContentCellParams": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "content",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "InputContentCellParams": {
+   "extends": "HasDisabledCellParams",
+   "fields": [
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": false,
+     "type": "(value: string) => void",
+     "doc": ""
+    },
+    {
+     "name": "onConfirm",
+     "optional": false,
+     "type": "(cell: any) => void",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "ReactElement",
+     "doc": ""
+    }
+   ]
+  },
+  "SelectOption": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "text",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": false,
+     "type": "string | number",
+     "doc": ""
+    },
+    {
+     "name": "disabled",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    }
+   ]
+  },
+  "SelectContentCellParams": {
+   "extends": "HasDisabledCellParams",
+   "fields": [
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string | number",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": false,
+     "type": "(value: string | number | Array<string | number>) => void",
+     "doc": ""
+    },
+    {
+     "name": "options",
+     "optional": true,
+     "type": "SelectOption[]",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "ReactElement",
+     "doc": ""
+    }
+   ]
+  },
+  "CheckBoxContentCellParams": {
+   "extends": "HasDisabledCellParams",
+   "fields": [
+    {
+     "name": "checked",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": false,
+     "type": "(checked: boolean) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "TextareaContentCellParams": {
+   "extends": "HasDisabledCellParams",
+   "fields": [
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": false,
+     "type": "(value: string) => void",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "ReactElement",
+     "doc": ""
+    }
+   ]
+  },
+  "CustomContentCellParams": {
+   "extends": "HasSubTypeCellParams",
+   "fields": [
+    {
+     "name": "element",
+     "optional": false,
+     "type": "ReactElement | {",
+     "doc": ""
+    },
+    {
+     "name": "Element",
+     "optional": false,
+     "type": "(props: K) => ReactElement",
+     "doc": ""
+    },
+    {
+     "name": "elementProps",
+     "optional": false,
+     "type": "K",
+     "doc": ""
+    },
+    {
+     "name": "maskStyle",
+     "optional": true,
+     "type": "CSSProperties",
+     "doc": ""
+    },
+    {
+     "name": "canEdit",
+     "optional": true,
+     "type": "(instance: any) => boolean",
+     "doc": ""
+    },
+    {
+     "name": "canPaste",
+     "optional": true,
+     "type": "(instance: any) => boolean",
+     "doc": ""
+    },
+    {
+     "name": "isDisabled",
+     "optional": true,
+     "type": "(instance: any) => boolean",
+     "doc": ""
+    },
+    {
+     "name": "getValue",
+     "optional": true,
+     "type": "(instance: any) => T",
+     "doc": ""
+    },
+    {
+     "name": "getText",
+     "optional": true,
+     "type": "(instance: any) => string",
+     "doc": ""
+    },
+    {
+     "name": "setValue",
+     "optional": true,
+     "type": "(instance: any, value: T) => void",
+     "doc": ""
+    },
+    {
+     "name": "onEdit",
+     "optional": true,
+     "type": "(instance: any, value?: T) => void",
+     "doc": ""
+    },
+    {
+     "name": "onConfirm",
+     "optional": true,
+     "type": "(cell: any) => void",
+     "doc": ""
+    },
+    {
+     "name": "data",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    }
+   ]
+  },
+  "CellContentReflect": {
+   "extends": "",
+   "fields": []
+  },
+  "TableCellConfig": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "cellType",
+     "optional": true,
+     "type": "CellType",
+     "doc": ""
+    },
+    {
+     "name": "cellAttributes",
+     "optional": true,
+     "type": "CellAttributes",
+     "doc": ""
+    },
+    {
+     "name": "contentType",
+     "optional": true,
+     "type": "T",
+     "doc": ""
+    },
+    {
+     "name": "content",
+     "optional": true,
+     "type": "CellContentParams<T>",
+     "doc": ""
+    },
+    {
+     "name": "sortable",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "sortKey",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "TableRow": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "bgColor",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "isError",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "noCheckbox",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "fixed",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "disabledRow",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "disabledCheckbox",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "propagationClickHandle",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    }
+   ]
+  },
+  "TableColumn": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "key",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "sortable",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "sortKey",
+     "optional": true,
+     "type": "string | string[]",
+     "doc": ""
+    },
+    {
+     "name": "editable",
+     "optional": true,
+     "type": "boolean | 1 | 2",
+     "doc": ""
+    },
+    {
+     "name": "filter",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "align",
+     "optional": true,
+     "type": "TableCellAlign",
+     "doc": ""
+    },
+    {
+     "name": "selectList",
+     "optional": true,
+     "type": "SelectOption[]",
+     "doc": ""
+    },
+    {
+     "name": "ellipsis",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "fixed",
+     "optional": true,
+     "type": "TableColFixed",
+     "doc": ""
+    },
+    {
+     "name": "fixedWidth",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "showBodyTitle",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "style",
+     "optional": true,
+     "type": "CSSProperties",
+     "doc": ""
+    },
+    {
+     "name": "onClick",
+     "optional": true,
+     "type": "(colKey: string, ev: React.MouseEvent<HTMLTableHeaderCellElement>) => void",
+     "doc": ""
+    },
+    {
+     "name": "onCell",
+     "optional": true,
+     "type": "(row: TableRow, index: number, colKey: string) => CellAttributes | void",
+     "doc": ""
+    },
+    {
+     "name": "onHeadCell",
+     "optional": true,
+     "type": "(col: TableColumn) => CellAttributes | void",
+     "doc": ""
+    },
+    {
+     "name": "render",
+     "optional": true,
+     "type": "(params: RenderParam) => ReactNode",
+     "doc": ""
+    },
+    {
+     "name": "nameRender",
+     "optional": true,
+     "type": "() => ReactNode",
+     "doc": ""
+    }
+   ]
+  },
+  "RenderParam": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "clickObj",
+     "optional": false,
+     "type": "TableClickObj",
+     "doc": ""
+    },
+    {
+     "name": "rowNumber",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "colKey",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "row",
+     "optional": false,
+     "type": "TableRow",
+     "doc": ""
+    },
+    {
+     "name": "cellData",
+     "optional": false,
+     "type": "any",
+     "doc": ""
+    },
+    {
+     "name": "tableData",
+     "optional": false,
+     "type": "TableRow[]",
+     "doc": ""
+    },
+    {
+     "name": "editingRowNumbers",
+     "optional": false,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "selectedRowNumbers",
+     "optional": false,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "setCellStyle",
+     "optional": false,
+     "type": "(style: CSSProperties) => void",
+     "doc": ""
+    },
+    {
+     "name": "setRowStyle",
+     "optional": false,
+     "type": "(style: CSSProperties) => void",
+     "doc": ""
+    },
+    {
+     "name": "setAllCellStyle",
+     "optional": false,
+     "type": "(style: CSSProperties) => void",
+     "doc": ""
+    },
+    {
+     "name": "setRowData",
+     "optional": false,
+     "type": "(data: {",
+     "doc": ""
+    },
+    {
+     "name": "rowIndex",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "colKey",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": false,
+     "type": "string | number",
+     "doc": ""
+    },
+    {
+     "name": "setTableData",
+     "optional": false,
+     "type": "(data: TableRow[]) => void",
+     "doc": ""
+    },
+    {
+     "name": "onToggleExpand",
+     "optional": true,
+     "type": "(action: 'Expand' | 'Collapse', rows: Array<TableRow>, opIndex: number) => void",
+     "doc": ""
+    },
+    {
+     "name": "heightLightStr",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "TableClickObj": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "rowNumber",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "colKey",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "clickCount",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "isCtrl",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isShift",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "checked",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "e",
+     "optional": false,
+     "type": "React.MouseEvent<HTMLTableDataCellElement> | null",
+     "doc": ""
+    }
+   ]
+  },
+  "TableOnClickParam": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "clickObj",
+     "optional": true,
+     "type": "TableClickObj",
+     "doc": ""
+    },
+    {
+     "name": "row",
+     "optional": false,
+     "type": "TableRow",
+     "doc": ""
+    },
+    {
+     "name": "tableData",
+     "optional": true,
+     "type": "TableRow[]",
+     "doc": ""
+    },
+    {
+     "name": "editingRowNumbers",
+     "optional": true,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "selectedRowNumbers",
+     "optional": true,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "allSelectedRowIndexValues",
+     "optional": true,
+     "type": "Set<string | number>",
+     "doc": ""
+    },
+    {
+     "name": "isCtrl",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isShift",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "from",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "setCellStyle",
+     "optional": true,
+     "type": "(style: CSSProperties) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "CheckedOptionalParams": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "isTriggerByRowsUpdate",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isTriggerByCheckListUpdate",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "row",
+     "optional": true,
+     "type": "TableRow",
+     "doc": ""
+    }
+   ]
+  },
+  "SortInfo": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "colKey",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "key",
+     "optional": false,
+     "type": "string | string[]",
+     "doc": ""
+    },
+    {
+     "name": "status",
+     "optional": false,
+     "type": "SortStatus",
+     "doc": ""
+    }
+   ]
+  },
+  "MoveRowIndex": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "curIndex",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "newIndex",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "DelRowInfo": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "indexValue",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "refreshCount",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "AddRowData": {
+   "extends": "",
+   "fields": []
+  },
+  "DragConfigParams": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "upperLimitIndex",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "lowerLimitIndex",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "TableProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "id",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "index",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "height",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "columns",
+     "optional": false,
+     "type": "TableColumn[]",
+     "doc": ""
+    },
+    {
+     "name": "rows",
+     "optional": false,
+     "type": "TableRow[]",
+     "doc": ""
+    },
+    {
+     "name": "head",
+     "optional": true,
+     "type": "Array<Array<TableCellProps>>",
+     "doc": ""
+    },
+    {
+     "name": "body",
+     "optional": true,
+     "type": "Array<Array<TableCellProps>>",
+     "doc": ""
+    },
+    {
+     "name": "foot",
+     "optional": true,
+     "type": "Array<Array<TableCellProps>>",
+     "doc": ""
+    },
+    {
+     "name": "number",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "border",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "headerBorder",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "stockade",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "checkbox",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "checkedList",
+     "optional": true,
+     "type": "TableRow[]",
+     "doc": ""
+    },
+    {
+     "name": "fixedHeader",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "showHeader",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "moveRowIndex",
+     "optional": true,
+     "type": "MoveRowIndex",
+     "doc": ""
+    },
+    {
+     "name": "delRowInfo",
+     "optional": true,
+     "type": "DelRowInfo",
+     "doc": ""
+    },
+    {
+     "name": "addRowData",
+     "optional": true,
+     "type": "AddRowData",
+     "doc": ""
+    },
+    {
+     "name": "openVirtualScroll",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "searchValue",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "selectedRowNumbers",
+     "optional": true,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "editingRowNumbers",
+     "optional": true,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "openRowSelectedBgColor",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "showCustomHeadSettingOnHeadContextmenu",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isChangeSortStatus",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "showStatus",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "statusNode",
+     "optional": true,
+     "type": "ReactNode",
+     "doc": ""
+    },
+    {
+     "name": "multiSelect",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "moveAble",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isOnlyHighlightText",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "rowHeight",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "headHeight",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "headLineHeight",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "enableSelectRowByHover",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "resetTableDataCount",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "resetScrollOnDataChange",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "enableDragSort",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "showDragIcon",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "dragConfig",
+     "optional": true,
+     "type": "DragConfigParams",
+     "doc": ""
+    },
+    {
+     "name": "openMultiDrag",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "followHeightLight",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "resize",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isCtrlSelect",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isShiftSelect",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "virtualScrollAutoFirst",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "scrollXBaseBottom",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "extraHeight",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "headerStyle",
+     "optional": true,
+     "type": "CSSProperties",
+     "doc": ""
+    },
+    {
+     "name": "enableScrollX",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "doubleClick",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "usePointerDrag",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "highLightRegexpFn",
+     "optional": true,
+     "type": "(v: any) => RegExp",
+     "doc": ""
+    },
+    {
+     "name": "enableVerticalHeader",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "verticalHeaderIgnoreKeys",
+     "optional": true,
+     "type": "string[]",
+     "doc": ""
+    },
+    {
+     "name": "onCheckRow",
+     "optional": true,
+     "type": "(rows: TableRow[], rowNumbers: number[], optional: CheckedOptionalParams) => void",
+     "doc": ""
+    },
+    {
+     "name": "onAllChecked",
+     "optional": true,
+     "type": "(data: TableRow[], checked: boolean) => void",
+     "doc": ""
+    },
+    {
+     "name": "onClick",
+     "optional": true,
+     "type": "(props: TableOnClickParam) => void",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": true,
+     "type": "(data: TableRow[], row?: TableRow, type?: ETableDataChangeType, optional?: PlainObject) => void",
+     "doc": ""
+    },
+    {
+     "name": "onContextMenu",
+     "optional": true,
+     "type": "(rows: TableRow, ev: React.MouseEvent<HTMLTableCellElement>) => void",
+     "doc": ""
+    },
+    {
+     "name": "onRowMouseLeave",
+     "optional": true,
+     "type": "(row: TableRow, rowIndex: number) => void",
+     "doc": ""
+    },
+    {
+     "name": "onRowMouseEnter",
+     "optional": true,
+     "type": "(row: TableRow, rowIndex: number) => void",
+     "doc": ""
+    },
+    {
+     "name": "onRowMouseMove",
+     "optional": true,
+     "type": "(row: TableRow, rowIndex: number) => void",
+     "doc": ""
+    },
+    {
+     "name": "onDragMoveEnd",
+     "optional": true,
+     "type": "(handlerInitialIndex: number | number[], insertedRealtimeIndex: number, handlerRealtimeIndex: number | number[]) => void",
+     "doc": ""
+    },
+    {
+     "name": "onTableScroll",
+     "optional": true,
+     "type": "(tableScrollHeight: number, currentTableHeight: number, scrollTop: number) => void",
+     "doc": ""
+    },
+    {
+     "name": "searchValueCB",
+     "optional": true,
+     "type": "(a: any) => void",
+     "doc": ""
+    },
+    {
+     "name": "onColSizeChange",
+     "optional": true,
+     "type": "(col: TableColumn, cols: TableColumn[]) => void",
+     "doc": ""
+    },
+    {
+     "name": "onSort",
+     "optional": true,
+     "type": "(info: SortInfo) => void",
+     "doc": ""
+    },
+    {
+     "name": "style",
+     "optional": true,
+     "type": "CSSProperties",
+     "doc": ""
+    },
+    {
+     "name": "tableBodyStyle",
+     "optional": true,
+     "type": "CSSProperties",
+     "doc": ""
+    }
+   ]
+  },
+  "TableInstance": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "checkAll",
+     "optional": false,
+     "type": "() => void",
+     "doc": ""
+    },
+    {
+     "name": "checkedRow",
+     "optional": false,
+     "type": "({ row, checked }: {",
+     "doc": ""
+    },
+    {
+     "name": "row",
+     "optional": false,
+     "type": "TableRow",
+     "doc": ""
+    },
+    {
+     "name": "checked",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "toSelectRow",
+     "optional": false,
+     "type": "(row: TableRow, option?: {",
+     "doc": ""
+    },
+    {
+     "name": "isCtrl",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "isShift",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "downMove",
+     "optional": false,
+     "type": "(rowNumber?: number) => void",
+     "doc": ""
+    },
+    {
+     "name": "upMove",
+     "optional": false,
+     "type": "(rowNumber?: number) => void",
+     "doc": ""
+    },
+    {
+     "name": "scrollSelectedRowIntoView",
+     "optional": false,
+     "type": "() => void",
+     "doc": ""
+    },
+    {
+     "name": "scrollRowIntoView",
+     "optional": false,
+     "type": "(rowIndex: string) => void",
+     "doc": ""
+    },
+    {
+     "name": "handleTableScrollByScrollTop",
+     "optional": false,
+     "type": "(scrollTop: number) => void",
+     "doc": ""
+    },
+    {
+     "name": "refresh",
+     "optional": false,
+     "type": "() => void",
+     "doc": ""
+    },
+    {
+     "name": "cancelSortStatus",
+     "optional": false,
+     "type": "() => void",
+     "doc": ""
+    },
+    {
+     "name": "tableBodyDiv",
+     "optional": false,
+     "type": "HTMLDivElement | null",
+     "doc": ""
+    },
+    {
+     "name": "revertSelect",
+     "optional": false,
+     "type": "() => void",
+     "doc": ""
+    },
+    {
+     "name": "virtualScrollRowIndexIntoView",
+     "optional": false,
+     "type": "(rowIdx: number) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "ButtonProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "text",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "disabled",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "type",
+     "optional": true,
+     "type": "'default' | 'primary' | 'danger' | 'forbidden' | 'text'",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number | 'responsive'",
+     "doc": ""
+    },
+    {
+     "name": "icon",
+     "optional": true,
+     "type": "IconProps",
+     "doc": ""
+    },
+    {
+     "name": "onClick",
+     "optional": true,
+     "type": "() => void",
+     "doc": ""
+    }
+   ]
+  },
+  "InputProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "disabled",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "readonly",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "clearBtn",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "clickBtn",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "dropDownList",
+     "optional": true,
+     "type": "ListChildren$1[]",
+     "doc": ""
+    },
+    {
+     "name": "searchBtn",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "placeholder",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "preText",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "type",
+     "optional": false,
+     "type": "'text' | 'telephone' | 'number' | 'password' | 'color' | 'email'",
+     "doc": ""
+    },
+    {
+     "name": "otherAttr",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "testVal",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "onClick",
+     "optional": true,
+     "type": "() => void",
+     "doc": ""
+    },
+    {
+     "name": "onSearchClick",
+     "optional": true,
+     "type": "(data: string) => void",
+     "doc": ""
+    },
+    {
+     "name": "onFilterClick",
+     "optional": true,
+     "type": "(data: string) => void",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": true,
+     "type": "(data: string) => void",
+     "doc": ""
+    },
+    {
+     "name": "onAddClick",
+     "optional": true,
+     "type": "(data: string) => void",
+     "doc": ""
+    },
+    {
+     "name": "onBlur",
+     "optional": true,
+     "type": "(data: string) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "TextProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "value",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "fontFamily",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "textAlign",
+     "optional": true,
+     "type": "'left' | 'center' | 'right'",
+     "doc": ""
+    },
+    {
+     "name": "fontSize",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "color",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ContainerStyleProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "backgroundColor",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "borderWidth",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "borderColor",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "hide",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "color",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "padding",
+     "optional": true,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "margin",
+     "optional": true,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number | '100%'",
+     "doc": ""
+    },
+    {
+     "name": "height",
+     "optional": true,
+     "type": "number | '100%'",
+     "doc": ""
+    },
+    {
+     "name": "rotate",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "cursor",
+     "optional": true,
+     "type": "'pointer' | 'default' | 'none' | 'move' | 'text'",
+     "doc": ""
+    },
+    {
+     "name": "invisible",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "display",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "FlexProps": {
+   "extends": "ContainerStyleProps",
+   "fields": [
+    {
+     "name": "direction",
+     "optional": true,
+     "type": "'column' | 'column-reverse' | 'row' | 'row-reverse'",
+     "doc": ""
+    },
+    {
+     "name": "alignX",
+     "optional": true,
+     "type": "'start' | 'center' | 'end'",
+     "doc": ""
+    },
+    {
+     "name": "alignY",
+     "optional": true,
+     "type": "'start' | 'center' | 'end' | 'stretch'",
+     "doc": ""
+    },
+    {
+     "name": "gap",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "classes",
+     "optional": true,
+     "type": "string[]",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "React__default__default.ReactNode",
+     "doc": ""
+    },
+    {
+     "name": "onClick",
+     "optional": true,
+     "type": "() => void",
+     "doc": ""
+    }
+   ]
+  },
+  "FlexItemProps": {
+   "extends": "ContainerStyleProps",
+   "fields": [
+    {
+     "name": "flexRatio",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "React__default__default.ReactNode",
+     "doc": ""
+    },
+    {
+     "name": "onClick",
+     "optional": true,
+     "type": "() => void",
+     "doc": ""
+    }
+   ]
+  },
+  "GridProps": {
+   "extends": "ContainerStyleProps",
+   "fields": [
+    {
+     "name": "columns",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "rowGap",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "colGap",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "React__default__default.ReactNode",
+     "doc": ""
+    }
+   ]
+  },
+  "GridItemProps": {
+   "extends": "ContainerStyleProps",
+   "fields": [
+    {
+     "name": "colSpan",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "rowSpan",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "align",
+     "optional": true,
+     "type": "'start' | 'center' | 'end' | 'stretch'",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "React__default__default.ReactNode",
+     "doc": ""
+    }
+   ]
+  },
+  "ListChildren": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "title",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "id",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "clearBtn",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "ListChildren[]",
+     "doc": ""
+    },
+    {
+     "name": "childrenCollapse",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "selected",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "icons",
+     "optional": true,
+     "type": "IconProps[]",
+     "doc": ""
+    }
+   ]
+  },
+  "ListProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "height",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "list",
+     "optional": false,
+     "type": "ListChildren[]",
+     "doc": ""
+    },
+    {
+     "name": "itemHeight",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "border",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "expandEnable",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "onItemClick",
+     "optional": true,
+     "type": "(id: string, item: ListChildren) => void",
+     "doc": ""
+    },
+    {
+     "name": "onItemDblclick",
+     "optional": true,
+     "type": "(id: string) => void",
+     "doc": ""
+    },
+    {
+     "name": "onItemContextmenu",
+     "optional": true,
+     "type": "(id: string) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "CheckBoxProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "checked",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "disabled",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "text",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "onlyChangeByBox",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": true,
+     "type": "(checked: boolean) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "RadioProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "disabled",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "text",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    }
+   ]
+  },
+  "RadioGroupProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "group",
+     "optional": false,
+     "type": "RadioProps[]",
+     "doc": ""
+    },
+    {
+     "name": "selectedValue",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "onlyChangeByBox",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "lineBreak",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "gap",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": true,
+     "type": "(value: string) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "TextAreaProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "disabled",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "height",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "resizable",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "x",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "y",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "placeholder",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "name",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": true,
+     "type": "(value: string) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "ModalProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "top",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "left",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "height",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "overlay",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "maxDragX",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "maxDragY",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "hide",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "resizeX",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "resizeY",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "React__default__default.ReactNode",
+     "doc": ""
+    },
+    {
+     "name": "onMoved",
+     "optional": true,
+     "type": "(top: number, left: number) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "DialogProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "title",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "height",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "left",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "top",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "hide",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "overlay",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "maxDragY",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "modal",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "resizeX",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "resizeY",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "buttons",
+     "optional": true,
+     "type": "ButtonProps[]",
+     "doc": ""
+    },
+    {
+     "name": "onClose",
+     "optional": true,
+     "type": "() => void",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "React__default__default.ReactNode",
+     "doc": ""
+    },
+    {
+     "name": "footer",
+     "optional": true,
+     "type": "React__default__default.ReactNode",
+     "doc": ""
+    }
+   ]
+  },
+  "SelectListItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "title",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "selected",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "SelectListItem[]",
+     "doc": ""
+    }
+   ]
+  },
+  "SelectProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "disabled",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "readonly",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "dropDownList",
+     "optional": true,
+     "type": "SelectListItem[]",
+     "doc": ""
+    },
+    {
+     "name": "value",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "onChange",
+     "optional": true,
+     "type": "(value: string) => void",
+     "doc": ""
+    }
+   ]
+  },
+  "BoardProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "padding",
+     "optional": true,
+     "type": "number[]",
+     "doc": ""
+    },
+    {
+     "name": "bgColor",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "height",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "title",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "children",
+     "optional": true,
+     "type": "React__default__default.ReactNode",
+     "doc": ""
+    },
+    {
+     "name": "onClick",
+     "optional": true,
+     "type": "() => void",
+     "doc": ""
+    }
+   ]
+  },
+  "ImageProps": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "src",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "width",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "height",
+     "optional": true,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "title",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "onClick",
+     "optional": true,
+     "type": "() => void",
+     "doc": ""
+    }
+   ]
+  },
+  "ISYS_ReactComponentizationDialogReactInstance": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "createContext",
+     "optional": false,
+     "type": "<T>(defaultValue: T) => React.Context<T>",
+     "doc": "创建 React Context"
+    },
+    {
+     "name": "useContext",
+     "optional": false,
+     "type": "<T>(context: React.Context<T>) => T",
+     "doc": "读取和订阅 Context 的值"
+    },
+    {
+     "name": "useRef",
+     "optional": false,
+     "type": "<T>(initialValue: T) => React.MutableRefObject<T>",
+     "doc": "创建一个可变的 ref 对象"
+    },
+    {
+     "name": "useEffect",
+     "optional": false,
+     "type": "(effect: () => undefined | (() => undefined), deps?: React.DependencyList) => void",
+     "doc": "执行副作用操作"
+    },
+    {
+     "name": "createElement",
+     "optional": false,
+     "type": "<P extends Record<string, unknown>>(type: React.ElementType<P>, props?: P | null, ...children: React.ReactNode[]) => React.ReactElement<P>",
+     "doc": "创建并返回指定类型的新 React 元素"
+    }
+   ]
+  },
+  "ISYS_ReactComponentizationDialogReconcilerInstance": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "default",
+     "optional": false,
+     "type": "any",
+     "doc": "Reconciler 构造函数"
+    },
+    {
+     "name": "constants",
+     "optional": false,
+     "type": "{",
+     "doc": "Reconciler 常量"
+    },
+    {
+     "name": "ContinuousEventPriority",
+     "optional": false,
+     "type": "number",
+     "doc": "连续事件优先级"
+    },
+    {
+     "name": "DiscreteEventPriority",
+     "optional": false,
+     "type": "number",
+     "doc": "离散事件优先级"
+    },
+    {
+     "name": "DefaultEventPriority",
+     "optional": false,
+     "type": "number",
+     "doc": "默认事件优先级"
+    },
+    {
+     "name": "ConcurrentRoot",
+     "optional": false,
+     "type": "number",
+     "doc": "并发根节点标签"
+    }
+   ]
+  },
+  "ISYS_ReactComponentizationDialogWorkerPortal": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "Provider",
+     "optional": false,
+     "type": "React.ComponentType<React.PropsWithChildren<unknown>>",
+     "doc": "Provider 组件"
+    },
+    {
+     "name": "createComponent",
+     "optional": false,
+     "type": "(handle: string, type: string, props: Record<string, unknown>, parent: string) => void",
+     "doc": "创建组件"
+    },
+    {
+     "name": "updateComponent",
+     "optional": false,
+     "type": "(handle: string, props: Record<string, unknown>) => void",
+     "doc": "更新组件"
+    },
+    {
+     "name": "detachComponent",
+     "optional": false,
+     "type": "(handle: string) => void",
+     "doc": "销毁组件"
+    },
+    {
+     "name": "bindEvent",
+     "optional": false,
+     "type": "(handle: string, callback: (event: unknown) => void) => void",
+     "doc": "绑定事件处理器"
+    },
+    {
+     "name": "dispatchEvent",
+     "optional": false,
+     "type": "(handle: string, event: unknown) => void",
+     "doc": "触发事件"
+    }
+   ]
+  },
+  "ISYS_ReactComponentizationDialogVirtualRender": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "render",
+     "optional": false,
+     "type": "(element: React.ReactNode) => void",
+     "doc": "渲染 React 元素"
+    }
+   ]
+  },
+  "ISYS_ReactComponentizationDialogInterface": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "Components",
+     "optional": false,
+     "type": "LC_DESIGN_COMPONENTS",
+     "doc": "预制组件"
+    },
+    {
+     "name": "LC_DESIGN_COMPONENTS_NAMES",
+     "optional": false,
+     "type": "typeof LC_DESIGN_COMPONENTS_NAMES",
+     "doc": "组件名称常量"
+    },
+    {
+     "name": "WorkerPortal",
+     "optional": false,
+     "type": "new () => ISYS_ReactComponentizationDialogWorkerPortal",
+     "doc": "WorkerPortal 类"
+    },
+    {
+     "name": "VirtualRender",
+     "optional": false,
+     "type": "new () => ISYS_ReactComponentizationDialogVirtualRender",
+     "doc": "VirtualRender 类"
+    }
+   ]
+  },
+  "ISYS_FileSystemFileList": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "fileName",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "isDirectory",
+     "optional": false,
+     "type": "boolean",
+     "doc": ""
+    },
+    {
+     "name": "subFiles",
+     "optional": true,
+     "type": "Array<ISYS_FileSystemFileList>",
+     "doc": ""
+    },
+    {
+     "name": "relativePath",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "fullPath",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ISYS_HeaderMenus": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "home",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "blank",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "schematic",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "sch",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": "原理图"
+    },
+    {
+     "name": "symbol",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "pcb",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "footprint",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "pcbView",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "panel",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "panelLibrary",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "panelView",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "simulationSchematicNGspice",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    },
+    {
+     "name": "simulationSchematicSimulIDE",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuTopMenuItem>",
+     "doc": ""
+    }
+   ]
+  },
+  "ISYS_HeaderMenuTopMenuItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "id",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "title",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "registerFn",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "menuItems",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuSub1MenuItem | null>",
+     "doc": ""
+    }
+   ]
+  },
+  "ISYS_HeaderMenuSub1MenuItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "id",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "title",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "icon",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "registerFn",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "menuItems",
+     "optional": true,
+     "type": "Array<ISYS_HeaderMenuSub2MenuItem | null>",
+     "doc": ""
+    }
+   ]
+  },
+  "ISYS_HeaderMenuSub2MenuItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "id",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "title",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "icon",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "registerFn",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ISYS_LanguageKeyValuePairs": {
+   "extends": "",
+   "fields": []
+  },
+  "ISYS_MultilingualLanguagesData": {
+   "extends": "",
+   "fields": []
+  },
+  "ISYS_LogLine": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "timestamp",
+     "optional": false,
+     "type": "number",
+     "doc": ""
+    },
+    {
+     "name": "type",
+     "optional": false,
+     "type": "ESYS_LogType",
+     "doc": ""
+    },
+    {
+     "name": "message",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    }
+   ]
+  },
+  "ISYS_MessageBusTask": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "cancel",
+     "optional": false,
+     "type": "() => void",
+     "doc": ""
+    },
+    {
+     "name": "running",
+     "optional": false,
+     "type": "() => boolean",
+     "doc": "检查运行状态"
+    },
+    {
+     "name": "execute",
+     "optional": false,
+     "type": "(message: any) => Promise<void>",
+     "doc": "任务处理"
+    }
+   ]
+  },
+  "ISYS_RightClickMenuItem": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "id",
+     "optional": false,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "title",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "icon",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "registerFn",
+     "optional": true,
+     "type": "string",
+     "doc": ""
+    },
+    {
+     "name": "menuItems",
+     "optional": true,
+     "type": "Array<ISYS_RightClickMenuItem | null>",
+     "doc": ""
+    }
+   ]
+  },
+  "ISYS_WindowEventListenerRemovableObject": {
+   "extends": "",
+   "fields": [
+    {
+     "name": "type",
+     "optional": false,
+     "type": "ESYS_WindowEventType",
+     "doc": ""
+    },
+    {
+     "name": "listener",
+     "optional": false,
+     "type": "(ev: any) => any",
+     "doc": ""
+    },
+    {
+     "name": "options",
+     "optional": true,
+     "type": "{",
+     "doc": ""
+    },
+    {
+     "name": "capture",
+     "optional": true,
+     "type": "boolean",
+     "doc": ""
+    }
+   ]
+  }
+ },
+ "type_aliases": {
+  "TPCB_LayersInTheSelectable": {
+   "doc": "可选中图层",
+   "definition": "TPCB_LayersOfInner | TPCB_LayersOfCustom | EPCB_LayerId.TOP | EPCB_LayerId.TOP_SILKSCREEN | EPCB_LayerId.TOP_SOLDER_MASK | EPCB_LayerId.TOP_PASTE_MASK | EPCB_LayerId.TOP_ASSEMBLY | EPCB_LayerId.TOP_STIFFENER | EPCB_LayerId.BOTTOM | EPCB_LayerId.BOTTOM_SILKSCREEN | EPCB_LayerId.BOTTOM_SOLDER_MASK | EPCB_LayerId.BOTTOM_PASTE_MASK | EPCB_LayerId.BOTTOM_ASSEMBLY | EPCB_LayerId.BOTTOM_STIFFENER | EPCB_LayerId.BOARD_OUTLINE | EPCB_LayerId.MULTI | EPCB_LayerId.DOCUMENT | EPCB_LayerId.MECHANICAL | EPCB_LayerId.DRILL_DRAWING | EPCB_LayerId.RATLINE | EPCB_LayerId.COMPONENT_SHAPE | EPCB_LayerId.COMPONENT_MARKING | EPCB_LayerId.PIN_SOLDERING | EPCB_LayerId.PIN_FLOATING | EPCB_LayerId.SHELL_3D_OUTLINE | EPCB_LayerId.SHELL_3D_TOP | EPCB_LayerId.SHELL_3D_BOTTOM"
+  },
+  "TPCB_LayersOfInner": {
+   "doc": "内层",
+   "definition": "EPCB_LayerId.INNER_1 | EPCB_LayerId.INNER_2 | EPCB_LayerId.INNER_3 | EPCB_LayerId.INNER_4 | EPCB_LayerId.INNER_5 | EPCB_LayerId.INNER_6 | EPCB_LayerId.INNER_7 | EPCB_LayerId.INNER_8 | EPCB_LayerId.INNER_9 | EPCB_LayerId.INNER_10 | EPCB_LayerId.INNER_11 | EPCB_LayerId.INNER_12 | EPCB_LayerId.INNER_13 | EPCB_LayerId.INNER_14 | EPCB_LayerId.INNER_15 | EPCB_LayerId.INNER_16 | EPCB_LayerId.INNER_17 | EPCB_LayerId.INNER_18 | EPCB_LayerId.INNER_19 | EPCB_LayerId.INNER_20 | EPCB_LayerId.INNER_21 | EPCB_LayerId.INNER_22 | EPCB_LayerId.INNER_23 | EPCB_LayerId.INNER_24 | EPCB_LayerId.INNER_25 | EPCB_LayerId.INNER_26 | EPCB_LayerId.INNER_27 | EPCB_LayerId.INNER_28 | EPCB_LayerId.INNER_29 | EPCB_LayerId.INNER_30"
+  },
+  "TPCB_LayersOfCustom": {
+   "doc": "自定义层",
+   "definition": "EPCB_LayerId.CUSTOM_1 | EPCB_LayerId.CUSTOM_2 | EPCB_LayerId.CUSTOM_3 | EPCB_LayerId.CUSTOM_4 | EPCB_LayerId.CUSTOM_5 | EPCB_LayerId.CUSTOM_6 | EPCB_LayerId.CUSTOM_7 | EPCB_LayerId.CUSTOM_8 | EPCB_LayerId.CUSTOM_9 | EPCB_LayerId.CUSTOM_10 | EPCB_LayerId.CUSTOM_11 | EPCB_LayerId.CUSTOM_12 | EPCB_LayerId.CUSTOM_13 | EPCB_LayerId.CUSTOM_14 | EPCB_LayerId.CUSTOM_15 | EPCB_LayerId.CUSTOM_16 | EPCB_LayerId.CUSTOM_17 | EPCB_LayerId.CUSTOM_18 | EPCB_LayerId.CUSTOM_19 | EPCB_LayerId.CUSTOM_20 | EPCB_LayerId.CUSTOM_21 | EPCB_LayerId.CUSTOM_22 | EPCB_LayerId.CUSTOM_23 | EPCB_LayerId.CUSTOM_24 | EPCB_LayerId.CUSTOM_25 | EPCB_LayerId.CUSTOM_26 | EPCB_LayerId.CUSTOM_27 | EPCB_LayerId.CUSTOM_28 | EPCB_LayerId.CUSTOM_29 | EPCB_LayerId.CUSTOM_30"
+  },
+  "TPCB_LayersOfComponent": {
+   "doc": "器件所属层",
+   "definition": "EPCB_LayerId.TOP | EPCB_LayerId.BOTTOM"
+  },
+  "TPCB_LayersOfCopper": {
+   "doc": "铜箔所属层",
+   "definition": "TPCB_LayersOfInner | EPCB_LayerId.TOP | EPCB_LayerId.BOTTOM"
+  },
+  "TPCB_LayersOfPad": {
+   "doc": "焊盘所属层",
+   "definition": "EPCB_LayerId.TOP | EPCB_LayerId.BOTTOM | EPCB_LayerId.MULTI"
+  },
+  "TPCB_LayersOfLine": {
+   "doc": "线所属层",
+   "definition": "TPCB_LayersOfCopper | TPCB_LayersOfCustom | EPCB_LayerId.TOP_SILKSCREEN | EPCB_LayerId.TOP_SOLDER_MASK | EPCB_LayerId.TOP_PASTE_MASK | EPCB_LayerId.TOP_ASSEMBLY | EPCB_LayerId.BOTTOM_SILKSCREEN | EPCB_LayerId.BOTTOM_SOLDER_MASK | EPCB_LayerId.BOTTOM_PASTE_MASK | EPCB_LayerId.BOTTOM_ASSEMBLY | EPCB_LayerId.BOARD_OUTLINE | EPCB_LayerId.DOCUMENT | EPCB_LayerId.MECHANICAL | EPCB_LayerId.DRILL_DRAWING"
+  },
+  "TPCB_LayersOfDimension": {
+   "doc": "尺寸标注所属层",
+   "definition": "TPCB_LayersOfCustom | EPCB_LayerId.TOP_SILKSCREEN | EPCB_LayerId.BOTTOM_SILKSCREEN | EPCB_LayerId.DOCUMENT | EPCB_LayerId.MECHANICAL"
+  },
+  "TPCB_LayersOfImage": {
+   "doc": "复杂多边形图（SVG 图像、文本）所属层",
+   "definition": "TPCB_LayersOfCopper | TPCB_LayersOfCustom | EPCB_LayerId.TOP_SILKSCREEN | EPCB_LayerId.TOP_SOLDER_MASK | EPCB_LayerId.TOP_ASSEMBLY | EPCB_LayerId.BOTTOM_SILKSCREEN | EPCB_LayerId.BOTTOM_SOLDER_MASK | EPCB_LayerId.BOTTOM_ASSEMBLY | EPCB_LayerId.DOCUMENT | EPCB_LayerId.MECHANICAL | EPCB_LayerId.DRILL_DRAWING"
+  },
+  "TPCB_LayersOfFill": {
+   "doc": "填充所属层",
+   "definition": "TPCB_LayersOfCopper | TPCB_LayersOfCustom | EPCB_LayerId.TOP_SILKSCREEN | EPCB_LayerId.TOP_SOLDER_MASK | EPCB_LayerId.TOP_PASTE_MASK | EPCB_LayerId.TOP_ASSEMBLY | EPCB_LayerId.BOTTOM_SILKSCREEN | EPCB_LayerId.BOTTOM_SOLDER_MASK | EPCB_LayerId.BOTTOM_PASTE_MASK | EPCB_LayerId.BOTTOM_ASSEMBLY | EPCB_LayerId.DOCUMENT | EPCB_LayerId.MECHANICAL | EPCB_LayerId.MULTI"
+  },
+  "TPCB_LayersOfRegion": {
+   "doc": "区域所属层",
+   "definition": "TPCB_LayersOfCopper | EPCB_LayerId.MULTI"
+  },
+  "TPCB_LayersOfObject": {
+   "doc": "二进制内嵌对象所属层",
+   "definition": "EPCB_LayerId.TOP_SILKSCREEN | EPCB_LayerId.BOTTOM_SILKSCREEN | EPCB_LayerId.DOCUMENT"
+  },
+  "TPCB_LayerTypesOfInnerLayer": {
+   "doc": "内层允许设置的图层类型",
+   "definition": "EPCB_LayerType.SIGNAL | EPCB_LayerType.INTERNAL_ELECTRICAL"
+  },
+  "TPCB_PolygonSourceArray": {
+   "doc": "单多边形源数组",
+   "definition": "Array<'L' | 'ARC' | 'CARC' | 'C' | 'R' | 'CIRCLE' | number>"
+  },
+  "TPCB_PrimitivePadShape": {
+   "doc": "焊盘外形",
+   "definition": "[EPCB_PrimitivePadShapeType.ELLIPSE | EPCB_PrimitivePadShapeType.OBLONG | EPCB_PrimitivePadShapeType.REGULAR_POLYGON, number, number] | [EPCB_PrimitivePadShapeType.RECTANGLE, number, number, number] | [EPCB_PrimitivePadShapeType.POLYLINE_COMPLEX_POLYGON, TPCB_PolygonSourceArray | Array<TPCB_PolygonSourceArray>]"
+  },
+  "TPCB_PrimitiveSpecialPadShape": {
+   "doc": "特殊焊盘外形",
+   "definition": "Array<[number, number, TPCB_PrimitivePadShape]>"
+  },
+  "TPCB_PrimitivePadHole": {
+   "doc": "焊盘钻孔",
+   "definition": "[EPCB_PrimitivePadHoleType.ROUND, number] | [EPCB_PrimitivePadHoleType.SLOT, number, number]"
+  },
+  "TPCB_PrimitiveDimensionCoordinateSet": {
+   "doc": "尺寸标注坐标集",
+   "definition": "[number, number, number, number, number, number] | [number, number, number, number, number, number, number, number]"
+  },
+  "TableCellAlign": {
+   "doc": "表格对齐方式 */",
+   "definition": "'left' | 'center' | 'right'"
+  },
+  "TableColFixed": {
+   "doc": "列固定位置 */",
+   "definition": "'left' | 'right'"
+  },
+  "SortStatus": {
+   "doc": "排序状态 */",
+   "definition": "'asc' | 'desc' | 'unset'"
+  },
+  "TableCellProps": {
+   "doc": "单元格属性 */",
+   "definition": "string | TableCellConfig"
+  },
+  "PlainObject": {
+   "doc": "普通对象类型 */",
+   "definition": "{ [key: string]: any"
+  },
+  "IconProps": {
+   "doc": "",
+   "definition": "{ /** 模板名称 */ iconClass: string"
+  },
+  "TComponentsIndex": {
+   "doc": "",
+   "definition": "typeof ComponentsIndex"
+  },
+  "KComponentsIndex": {
+   "doc": "",
+   "definition": "keyof TComponentsIndex"
+  },
+  "ComponentProps": {
+   "doc": "",
+   "definition": "TComponentsIndex[T] extends React.ComponentType<infer P> ? P : never"
+  },
+  "ReactComponentProps": {
+   "doc": "",
+   "definition": "ComponentProps<T>"
+  },
+  "LC_DESIGN_COMPONENTS": {
+   "doc": "",
+   "definition": "{ [K in KComponentsIndex]: (props: ReactComponentProps<K>) => React.ReactElement"
+  },
+  "TSYS_ShortcutKeys": {
+   "doc": "快捷键按键",
+   "definition": "Array<'SHIFT' | 'LEFT_SHIFT' | 'RIGHT_SHIFT' | 'FN' | 'ALT' | 'LEFT_ALT' | 'RIGHT_ALT' | 'CONTROL' | 'LEFT_CONTROL' | 'RIGHT_CONTROL' | 'COMMAND' | 'WIN' | 'OPTION' | 'SUPER' | 'TAB' | 'SPACE' | 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6' | 'F7' | 'F8' | 'F9' | 'F10' | 'F11' | 'F12' | 'F13' | 'F14' | 'F15' | 'F16' | 'F17' | 'F18' | 'F19' | 'F20' | '`' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0' | '-' | '=' | 'Q' | 'W' | 'E' | 'R' | 'T' | 'Y' | 'U' | 'I' | 'O' | 'P' | '[' | ']' | 'A' | 'S' | 'D' | 'F' | 'G' | 'H' | 'J' | 'K' | 'L' | ';' | \"'\" | '\\\\' | 'Z' | 'X' | 'C' | 'V' | 'B' | 'N' | 'M' | ',' | '.' | '/'>"
   }
  }
 }
