@@ -423,6 +423,23 @@ rep.added, rep.dims_on_layer, rep.values   # values 为重载后 KiCad 量得的
 实测: 显式 40mm 跨距 → 量得 ≈40.0; `auto_board` 在 50×30 板上自动加两道 → 量得 ≈30 与 ≈50;
 dims 空且未启用 auto_board / 缺板文件如实报错 `ok=False`。
 
+### 〇.22 装配视觉基准点 (`native_fiducial.py`)
+
+> 反者道之动: 贴片机视觉对位用的 fiducial 本是人从库里拖一个封装手放上去的, 但落到本源它只是一个
+> F.Cu 露铜 + F.Mask 开窗的圆形焊盘。本层经子进程 (`_fiducial_worker.py`) 直接用本源 FOOTPRINT+PAD
+> 造基准点 (铜径/开窗径可控, 经 `LocalSolderMaskMargin` 控阻焊余量), 支持顶/底层, 落盘后**重载实测**
+> 真正加进去的基准点数与各自阻焊余量 (反臆造)。
+
+```python
+from kicad_origin.origin.native_fiducial import NativeFiducial
+rep = NativeFiducial().place("in.kicad_pcb", "out.kicad_pcb", fiducials=[
+    {"x": 5, "y": 5, "copper_mm": 1, "mask_mm": 2}])
+rep.fiducials, rep.mask_margins_mm   # 重载实测: 余量 = (mask-copper)/2
+```
+
+实测: 顶层 2 个 (铜1/窗2) → `fiducials=2`、阻焊余量均 0.5mm; 底层 (铜1.5/窗3) → 余量 0.75mm;
+`mask_mm<=copper_mm` / 空输入 / 缺板文件如实报错 `ok=False`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
