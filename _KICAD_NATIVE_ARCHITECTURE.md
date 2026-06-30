@@ -259,6 +259,24 @@ rep.panel_bbox_mm   # 整面外框尺寸 (重载实测)
 实测: 3 件单板 (39.8×11.2mm) → 3×2 拼板 = **18 件**, 整面 133.5×34.4mm (含 5mm 工艺边);
 2×1 条板 = 6 件; `1×1` (非拼板) 与 `cols=0` 均如实拒做。
 
+### 〇.13 双板逆差分 (`native_diff.py`)
+
+> 不断实践验证: 每做一步操作 (布线/自愈/拼板…) 都该能问"它到底改了什么"。本层用 KiCad 本源
+> 以 Reference 锚定比对两板封装 (added/removed/moved/changed), 以网名比对网表 (added/
+> removed), 统计走线/过孔/覆铜数量增量与外框尺寸。子进程 (`_diff_worker.py`) 在 pcbnew 内
+> **真读两文件**比对 (反臆造, 不臆测差异)。
+
+```python
+from kicad_origin.origin.native_diff import NativeDiff
+rep = NativeDiff().diff("before.kicad_pcb", "after.kicad_pcb")
+rep.fp_added; rep.fp_moved; rep.nets_added   # 增量明细
+rep.identical                                 # 封装/网表/走线计数全无变化 → True
+```
+
+实测: 同板自比 → `identical=True` (common=3); 改板 (R2 移 +20mm、加 R3、加 SIG 网) →
+`fp_added=['R3']`、`fp_moved` 含 R2 位移 20mm、`nets_added` 含 SIG; 删 C1 → `fp_removed`
+含 C1、`nets_removed` 含 GND。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
