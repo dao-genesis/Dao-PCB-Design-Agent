@@ -492,6 +492,26 @@ rep.vias_tented, rep.sample_pad_mask_mm   # 重载实测
 实测: 缝合 25 过孔后全设 `tented` → 重载 `vias_tented=25`(=全部); `not_tented`+`pad_mask_mm=0.05`
 → 6 焊盘开窗余量回读 0.05; 非法模式 / 无参 / 缺板文件如实报错 `ok=False`。
 
+### 〇.26 焊盘-覆铜连接 (`native_thermal.py`)
+
+> 反者道之动: 焊盘落在覆铜里是直接实连(散热好/难焊)、走热焊盘辐条(可焊/有阻抗)、还是干脆不连, 本是
+> 人在 GUI 焊盘属性里逐个选的, 但落到本源它只是 `PAD` 的 `LocalZoneConnection` 与
+> `LocalThermalSpokeWidthOverride`。本层经子进程 (`_thermal_worker.py`) 对(可按封装 ref 过滤的)焊盘
+> 批量设连接模式(`full`/`thermal`/`none`/`tht_thermal`)与辐条宽, 落盘后**重载逐焊盘实测**其本地覆铜
+> 连接模式与辐条宽 (反臆造) —— 这是地/电源平面散热与可焊性的根。
+
+```python
+from kicad_origin.origin.native_thermal import NativeThermal
+rep = NativeThermal().apply("in.kicad_pcb", "out.kicad_pcb",
+                            connection="thermal", spoke_mm=0.4)
+rep.pads_matched, rep.sample_spoke_mm   # 重载实测
+```
+
+实测: 全板 6 焊盘设 `thermal`+辐条 0.4 → 重载 `pads_matched=6`(=全部)、辐条回读 0.4; `refs=["R1"]`
++`full` 后命中数收窄且 >0; 非法连接模式 / 缺板文件如实报错 `ok=False`。
+> 注: `LocalThermalGapOverride` 在 9.0.9 SWIG 为 `optional<int>` 绑定异常(拒收 int), 故本层只下发
+> 连接模式与辐条宽两项可靠量, 不臆造热焊盘间隙。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
