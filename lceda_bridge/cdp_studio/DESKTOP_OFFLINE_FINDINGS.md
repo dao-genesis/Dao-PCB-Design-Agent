@@ -263,6 +263,21 @@ min_mm, max_mm)`——克隆既有 Track 子规则为模板、改各层 min/defa
   板密度匹配**；过激的全局间距会让布线无解。差异化规则的价值在「按类适度收紧」，非越严越好。
 - 至此 GUI 里「物理规则」可调的**线宽 / 过孔 / 安全间距**三大数值族，RPC 均能自定义精确落库。
 
+**自定义等长/长度规则落地（form 态·提炼出通用 `_add_form_rule`）**：`Net Length Range`
+（form：`netLengthMin/Max`）与 `Net Length Tolerance`（form：`netLengthTolerance`）皆 form 态，
+故把「克隆模板→改 form→整体写回→读回」抽成通用私有 `_add_form_rule(category, attr, name,
+form_updates)`，`add_length_rule`/`add_length_tolerance_rule` 与（回头可重构的）track/via 共用同一骨架。
+`apply_constraints` 新增 `length_rules`/`length_tolerance_rules`。
+
+- **实测落库**：medium 板 `ddr_len`(0–500mm)/`ddr_tol`(250mm) → `BUS6` 类 `Net Length
+  Range/Tolerance` → 读回确认、全链路 **DRC=0 CLEAN（1 试）**。
+- **本源教训（规则 vs 布线器能力的边界·如实记录）**：把范围收紧到 `5–80mm`、容差 `2.5mm`
+  时 **DRC=2 不收敛**——因为 freerouting **不做等长调节（length tuning）**，布线长度它管不了，
+  于是嘉立创 DRC 按长度规则判出真实违规。即：**子规则确已落库且被 DRC 执行（这恰恰证明规则
+  生效）**，但「等长/长度范围」要真正满足，须配**会做长度匹配的布线器**；当前 freerouting 链路
+  只能保证几何类规则（线宽/间距/过孔）收敛。这是「规则能下达」与「布线器能满足」两层能力的
+  清醒分界——下达已通，满足待引入长度调节器（留作下轮·阳向）。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`

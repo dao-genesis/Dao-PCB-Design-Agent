@@ -413,9 +413,12 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             "track_rules":{名: {"default_mm":, "min_mm":, "max_mm":}},
             "via_rules":  {名: {"outer_mm":, "inner_mm":}},
             "spacing_rules":{名: {"clearance_mm":}},
+            "length_rules":{名: {"min_mm":, "max_mm":}},
+            "length_tolerance_rules":{名: {"tolerance_mm":}},
             "class_rules": {类名: {属性: 具名子规则}}}。返回落库回执。"""
         out = {"net_classes": {}, "diff_pairs": {}, "equal_length": {},
                "track_rules": {}, "via_rules": {}, "spacing_rules": {},
+               "length_rules": {}, "length_tolerance_rules": {},
                "class_rules": {}}
         for nm, nets in (constraints.get("net_classes") or {}).items():
             out["net_classes"][nm] = self.net_class(nm, nets)
@@ -433,6 +436,12 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         for nm, p in (constraints.get("spacing_rules") or {}).items():
             out["spacing_rules"][nm] = self.add_spacing_rule(
                 nm, p["clearance_mm"])
+        for nm, p in (constraints.get("length_rules") or {}).items():
+            out["length_rules"][nm] = self.add_length_rule(
+                nm, p["min_mm"], p["max_mm"])
+        for nm, p in (constraints.get("length_tolerance_rules") or {}).items():
+            out["length_tolerance_rules"][nm] = self.add_length_tolerance_rule(
+                nm, p["tolerance_mm"])
         # 差异化规则须在网络类已建之后落（指向具名子规则）
         for cls, rules in (constraints.get("class_rules") or {}).items():
             out["class_rules"][cls] = {
@@ -554,6 +563,42 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         if name not in back:
             raise DaoRpcError("add_spacing_rule(%s) 未落库" % name)
         return {"name": name, "clearance": clearance_mm}
+
+    def _add_form_rule(self, category, attr, name, form_updates):
+        """form 态数值子规则的通用落地：克隆该属性既有子规则当模板、改其 form 字段、
+        经 `overwriteCurrentRuleConfiguration` 整体写回当前板、读回确认。内部复用。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        bucket = cfg.get(category, {}).get(attr, {})
+        if not bucket:
+            raise DaoRpcError("当前配置无 %s/%s" % (category, attr))
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(bucket.values())))
+        tmpl["editName"] = name
+        tmpl.setdefault("form", {}).update(form_updates)
+        bucket[name] = tmpl
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get(category, {}).get(attr, {}))
+        if name not in back:
+            raise DaoRpcError("_add_form_rule(%s/%s/%s) 未落库"
+                              % (category, attr, name))
+        return back[name].get("form", {})
+
+    def add_length_rule(self, name, min_mm, max_mm):
+        """新增**自定义网络长度范围子规则**（Physics/Net Length Range，form 态：
+        `netLengthMin`/`netLengthMax`，`ez` 校验 min≤max）。供 DDR/并行总线限定走线长度。
+        单位 mm。建好后 `set_net_class_rule(类, "Net Length Range", name)` 引用。"""
+        f = self._add_form_rule("Physics", "Net Length Range", name,
+                                {"netLengthMin": min_mm, "netLengthMax": max_mm})
+        return {"name": name, "min": min_mm, "max": max_mm, "form": f}
+
+    def add_length_tolerance_rule(self, name, tolerance_mm):
+        """新增**自定义等长容差子规则**（Physics/Net Length Tolerance，form 态：
+        `netLengthTolerance`）。供等长组限定组内走线长度差。单位 mm。"""
+        f = self._add_form_rule("Physics", "Net Length Tolerance", name,
+                                {"netLengthTolerance": tolerance_mm})
+        return {"name": name, "tolerance": tolerance_mm, "form": f}
 
     def net_rules(self):
         """网络/网络类的规则树（只读）。每个 netClass/net 节点带 Track、Safe Spacing、
