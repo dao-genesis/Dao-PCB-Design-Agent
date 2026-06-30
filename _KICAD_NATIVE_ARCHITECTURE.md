@@ -588,6 +588,27 @@ rep.added_vias, rep.vias   # 重载实测
 实测: 两通孔(GND 0.4/0.8mm + 裸孔 0.3/0.6mm) → 重载 `added_vias=2`、各孔钻径/外径/网回读一致; 空 vias /
 板上无此网名 / 尺寸非法(钻径≥外径) / 缺板文件如实报错 `ok=False`。
 
+### 〇.31 显式多边形覆铜 (`native_zonefill.py`)
+
+> 反者道之动: 分割电源面(split plane)、局部接地岛、大电流铜皮、避开某区的异形铺铜这些"我就要这块形状
+> 的铜浇在这层这网上"的诉求, 本是人在 GUI 里一笔一笔画多边形的, 落到本源它只是若干 `pcbnew.ZONE` 各持
+> outline(多边形角点)/layer/net/priority, 再交 `ZONE_FILLER` 真填充。本层经子进程 (`_zonefill_worker.py`)
+> 按**任意多边形轮廓**批量铺铜浇灌, 落盘后**重载实测**新增覆铜区数与各区填充面积/角点/是否已填 (反臆造)。
+> 与 〇.9 `native_zone` 互补: native_zone 是"覆盖整块板框的整面铺满", native_zonefill 是"任意形状的局部铺"。
+
+```python
+from kicad_origin.origin.native_zonefill import NativeZoneFill
+rep = NativeZoneFill().apply("in.kicad_pcb", "out.kicad_pcb", zones=[
+    {"outline": [[5, 5], [50, 5], [50, 15], [5, 15]],
+     "layer": "F.Cu", "net": "GND"}])
+rep.added_zones, rep.zones   # 重载实测
+```
+
+实测: 覆盖两 GND 焊盘的矩形轮廓 → 重载 `added_zones=1`、`is_filled=True`、填充面积 373mm²(真浇灌非估算,
+连通网才留铜); 空 zones / 轮廓<3角点 / 板上无此网名 / 未知铜层 / 缺板文件如实报错 `ok=False`。
+> 本源脾性(实测记录, 不臆造): 多边形若**未覆盖该网任何焊盘**, KiCad 填充期按孤岛移除, `is_filled=True`
+> 但 `filled_area_mm2=0` —— 局部铺铜须让轮廓压住目标网的焊盘/走线方留铜, 这是连通性本源, 非 bug。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
