@@ -279,6 +279,33 @@ def build_autofan():
             "components": comps}
 
 
+BGA64 = "BGA64"     # 8×8 栅格球阵(实测 0.65mm 间距,球 A1..H8)
+
+
+def build_bga():
+    """板⑩·栅格球阵周边逃逸:BGA64(实测 8×8、0.65mm 间距)外圈 28 球各串一阻向外
+    扇出,内 36 球留 NC。auto_fanout 同一原语驱动(读真实球坐标→四边就近逃逸)。
+
+    诚实边界:**内圈球**escape 需盲埋孔**布线级**能力(freerouting 仅通孔)或内电层
+    覆铜(headless 不出实铜——见 DESKTOP_OFFLINE_FINDINGS),故方向落在外圈可达前沿。
+    本板验证细间距 BGA 外圈在纯 RPC + freerouting 下 DRC=0 的可达性。"""
+    # 8×8 行列号 A..H × 1..8;外圈 = 第一/末行列
+    rows = "ABCDEFGH"
+    af = {}
+    k = 0
+    for r in range(8):
+        for c in range(8):
+            if r in (0, 7) or c in (0, 7):       # 仅外圈
+                af["%s%d" % (rows[r], c + 1)] = "S%d" % k
+                k += 1
+    comps = [{"ref": "U1", "query": BGA64, "rotation": 0, "x": 0, "y": 0,
+              "pins": {}, "auto_fanout": af, "fanout_query": R,
+              "fanout_offset": 520, "fanout_depth_step": 140}]
+    return {"name": "DAO_BGA1_PerimeterEscape", "gnd_net": None,
+            "track_width": 6, "margin": 260, "copper_layers": 4,
+            "components": comps}
+
+
 def build_soicfan():
     """板⑨·跨几何泛化:在**双边** SOIC-16(74HC595)上跑同一 auto_fanout 原语。
     QFP 是四边、SOIC 是左右两排——若原语真无硬假设,应自动判出 L/R 两边逃逸并布通。
@@ -306,4 +333,5 @@ BOARDS = {
     "qfp": build_qfp,
     "autofan": build_autofan,
     "soicfan": build_soicfan,
+    "bga": build_bga,
 }
