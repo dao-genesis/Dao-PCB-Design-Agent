@@ -215,6 +215,18 @@ Expansion:[Paste Mask Expansion, Solder Mask Expansion]
 `xZt` 对单个子规则（如新增的 `hs_wide`）的合法结构校验细则——届时按其要求构造子规则
 即可一次过，无需再试错。这正印证「读软件本体源码 = 把 False 的因果看穿」胜过盲试。
 
+**`xZt` 校验细则已读穿（关键：读写形态不一致）**：续读 `ui.js` 中 `xZt(attr, subrules)`
+发现——它要求每个子规则是**存储态** `{editName:str, unit:str, isSetDefault:bool,
+column:str[], row:str[], status:number, tables:object}`（再对 `tables` 逐项 `Tcr(...)`
+递归校验）。**而 `getCurrentRuleConfiguration` 读回的子规则是 `form`态**（`{editName,
+unit, isSetDefault, form:{status, data:{层: {min/default/max}}}}`）。**二者形态不同**：
+故不能把读到的子规则原样克隆去写——须先把 `form`态转成 `column/row/tables`态。
+
+> 本源结论：自定义数值子规则的**整条路已完全看穿**，只剩一个确定的工程动作——把
+> `form` 态映射成 `column/row/tables/status` 存储态（`tables` 满足 `Tcr`）。这是纯结构
+> 转换、无未知 API，留作下轮一次成型。**「读—改—写回」的前提是读到的就是能写回的形态；
+> 当软件读写形态不一致时，先吃透其存储态再回写**——这是比反复试错更稳的本源。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`
