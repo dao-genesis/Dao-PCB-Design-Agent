@@ -530,6 +530,26 @@ rep.groups_added, rep.reload_groups   # 重载实测组数/成员
 实测: 3 封装板建 `SIG`(R1,R2) 与 `PWR`(C1) 两组 → 重载 `reload_groups` 含两组、成员数分别 2/1;
 空 groups / refs 无命中 / 缺板文件如实报错 `ok=False`。
 
+### 〇.28 禁布区/规则区 (`native_keepout.py`)
+
+> 反者道之动: 天线净空、连接器下方、安装孔周边那些"此处不许铺铜/走线/打孔"的禁区, 本是人在 GUI 里画
+> 规则区再逐项勾"不允许"的, 但落到本源它只是一个 `SetIsRuleArea(True)` 的 `ZONE` 带几个 `DoNotAllow*`
+> 开关。本层经子进程 (`_keepout_worker.py`) 按矩形+层+禁止项批量造规则区, 落盘后**重载实测**规则区数与
+> 各禁止项 (反臆造) —— 这是布线/铺铜避让的本源约束。
+
+```python
+from kicad_origin.origin.native_keepout import NativeKeepout
+rep = NativeKeepout().apply("in.kicad_pcb", "out.kicad_pcb", areas=[
+    {"layer": "F.Cu", "rect": [5, 5, 20, 20]},
+    {"layer": "B.Cu", "rect": [30, 5, 45, 20], "no_pads": True}])
+rep.areas_added, rep.reload_rule_areas, rep.areas   # 重载实测
+```
+
+实测: F.Cu+B.Cu 两禁布区 → 重载 `reload_rule_areas=2`、各区禁止项(notrack/novia/nopour)回读为真、
+B.Cu 区 `no_pads` 回读为真; 空 areas / 非法层名 / 缺板文件如实报错 `ok=False`。
+> 两点本源脾性(顺之不硬来): ① 9.0.9 SWIG 对规则区 `SetZoneName` 会令 `SaveBoard` 段错迫, 故不赋名;
+> ② 一次性给多个新建规则区同存会内存损坏, 故**每加一个即 save→load**, 让下个区构建在已持久化的板上。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
