@@ -181,6 +181,30 @@ Layers Board)"[Spacing/Physics/Plane/Expansion], drc:0}`。**能力面盘点 = 9
 - 注：要严格按高速工艺核 DRC，还可 `setAsDefaultRuleConfiguration('High Frequency
   Board')` 切到高频档（与差异化 net-class 规则正交，二者可叠加）。
 
+### 覆铜「实铜」在 headless 不可得（本会话二次深挖·结论加固）
+
+GUI 里 `Shift+B` 重建覆铜会算出实铜填充；纯 RPC 下对应 `pcb_PrimitivePour` 活对象的
+`rebuildCopperRegion(): Promise<IPCB_PrimitivePoured | undefined>`（`@alpha`）。
+
+- **本会话沿目录新发现一条「转实铜」候选链**并 live 验证：`IPCB_PrimitivePoured` 上确有
+  `getState_PourFills(): IPCB_PrimitivePouredPourFill[]` + `convertToFill(fillId):
+  Promise<IPCB_PrimitiveFill>`（把算好的填充区落成真实铜皮 `IPCB_PrimitiveFill`，理论上
+  随 Gerber 导出为实铜）。
+- **实测被根因卡死**：`pour.create(...).done()` 后，`rebuildCopperRegion()` **恒返回
+  `undefined`**（连发 3 次、每次间隔 1.2s 仍 undefined；`pcb_PrimitivePoured.getAll()`
+  恒 0）。既然拿不到 `IPCB_PrimitivePoured`，`getState_PourFills`/`convertToFill` 这条
+  「转实铜」链**无的可转**——新路径就此排除。
+- **目录确认无更高层入口**：全目录唯一 `rebuild*` 即此 per-pour 的 `rebuildCopperRegion`，
+  无文档级/命令级「重建所有覆铜」，也无 `execCommand`/命令面板类 RPC。即覆铜计算所依赖的
+  渲染/Worker 在此 headless 上下文不产出回执。
+- **结论（加固）**：headless 纯 RPC **造得出覆铜边框、算不出实铜**。GND 平面连通走既有
+  本源解 `route_net_on_bottom`——**每 GND 焊盘打过孔(顶→底·同网) + 底层铜线串连各过孔**：
+  连通性按网成立、同网铜可重叠（无间距违规）、全在底层 → 与顶层信号零交叉、DRC 干净。
+  这条「以确定性布线取代不可得的实铜填充」即是本源取舍。
+- 复现诊断（一次 eval 内完成，pour 活对象不跨 eval 存活）：
+  `pcb_PrimitivePour.create→done→rebuildCopperRegion`（看返回 undefined）→
+  `pcb_PrimitivePoured.getAll`（看恒 0）。LCEDA 后续版本若放开此能力，于此复测即知。
+
 ### 再下一前沿：自定义数值子规则（schema 已探明·留作下轮）
 
 `set_net_class_rule` 现指向**既有**具名子规则（如 Track 的 `copperThickness1oz/2oz`）。
