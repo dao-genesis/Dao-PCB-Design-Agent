@@ -179,6 +179,28 @@ NativeAssembly().assemble("board.kicad_pcb", "out/") # pos+step+glb+bom → zip
 simple_fan_controller → `sch export bom` 出 5 行 (330R ×2 归并); 装配包 zip 含
 positions.csv+board.step+board.glb+bom.csv, **全产出 ok**。
 
+### 〇.9 本源覆铜与层叠 (`native_zone.py` / `native_stackup.py`)
+
+> 信号走线只是骨架; **覆铜回流地**靠 zone pour、**高速/多层**靠层叠。皆用 pcbnew 真改板。
+> - `native_zone`: 子进程 (`_layer_worker` op=pour) 用本源 `pcbnew.ZONE` + `ZONE_FILLER`
+>   为指定铜层+网络铺一块覆盖板框 (Edge.Cuts 包络 + margin) 的覆铜区, **真浇灌**后落盘,
+>   重载实测每区填充面积 (mm²)。网络/铜层不存在即报错, 绝不乱接网 (反臆造)。
+> - `native_stackup`: 子进程 (op=stackup) 用 `BOARD.SetCopperLayerCount` 真升降层数
+>   (2→4→6, 须 >=2 偶数), 落盘后重载实测启用铜层名回报。
+
+```python
+from kicad_origin.origin.native_zone import NativeZone
+from kicad_origin.origin.native_stackup import NativeStackup
+NativeZone().pour("b.kicad_pcb", "o.kicad_pcb",
+                  zones=[{"layer": "F.Cu", "net": "GND"},
+                         {"layer": "B.Cu", "net": "GND"}])
+NativeStackup().set_copper_layers("b.kicad_pcb", "o.kicad_pcb", 4)
+```
+
+实测: 真板双面铺 GND → 两区均 is_filled, 填充面积 366/389 mm² (真浇灌非估算);
+未知网络 `NOPE`/未知层 `In9.Cu`/奇数层 3 均如实拒做; 2→4 层后启用铜层
+`['F.Cu','In1.Cu','In2.Cu','B.Cu']`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
