@@ -181,6 +181,22 @@ Layers Board)"[Spacing/Physics/Plane/Expansion], drc:0}`。**能力面盘点 = 9
 - 注：要严格按高速工艺核 DRC，还可 `setAsDefaultRuleConfiguration('High Frequency
   Board')` 切到高频档（与差异化 net-class 规则正交，二者可叠加）。
 
+### 再下一前沿：自定义数值子规则（schema 已探明·留作下轮）
+
+`set_net_class_rule` 现指向**既有**具名子规则（如 Track 的 `copperThickness1oz/2oz`）。
+若要**自定义具体数值**（如给高速类一个精确线宽/间距），需在 `config` 里新增子规则项。
+其数值 schema 已实测（只读）：
+
+```json
+"copperThickness1oz": {"editName":"copperThickness1oz","unit":"mm","isSetDefault":true,
+  "form":{"status":1,"data":{"1":{"minValue":0.127,"defaultValue":0.254,"maxValue":2.54}}}}
+```
+
+即 `form.data.{层号}.{minValue/defaultValue/maxValue}`（单位 mm）。落地路径：①`saveRuleConfiguration`
+克隆当前档为**自定义档**（系统档不可改）；②在该档 `config` 里加一项自定义子规则（带上述 form 数值）；
+③`overwriteCurrentRuleConfiguration` 写回；④`set_net_class_rule` 把高速类指向它。
+属"克隆档+写回"较重操作，仍按知止不殆留作下轮在自定义档上小步验证后封装。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`
