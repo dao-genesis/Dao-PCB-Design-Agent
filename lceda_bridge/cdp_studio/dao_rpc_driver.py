@@ -245,16 +245,30 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         raise DaoRpcError("search_device failed for %r: %s" % (query, last))
 
     # ---------- 钥匙 2 + 3：放封装并绑网（单段 eval，活对象不出渲染层） ----------
-    def place_and_net(self, components):
+    def place_and_net(self, components, chunk=10):
         """放置一批封装并给焊盘绑网（全程纯 RPC）。
 
         components = [{"device":{uuid,libraryUuid}, "x","y","rotation",
                        "designator", "pins":{padNumber: net}}, ...]
         返回 {designator: primitiveId}。
-        """
+
+        本源教训（高脚数大板·本会话）：把「建件+枚举焊盘+逐脚绑网」全塞进**一发
+        大 eval**，在 ~37 件且含 48 脚 QFP（约 120 次 setState_Net→done）时单发耗时
+        破 90s → CDP `NO_RESULT`。故**按 `chunk` 件分批多发 eval**：每批工作量有界、
+        各批独立（器件间无依赖），ids/计数跨批累加。既治超时、又对任意规模线性可扩。"""
+        ids, bound = {}, 0
+        for i in range(0, len(components), max(1, chunk)):
+            part = components[i:i + max(1, chunk)]
+            o = self._place_chunk(part)
+            ids.update(o["ids"])
+            bound += o.get("bound", 0)
+        self._last_bound = bound
+        return ids
+
+    def _place_chunk(self, components):
         js = r'''(async function(){try{
   var PC=window._EXTAPI_ROOT_.pcb_PrimitiveComponent;
-  var spec=%s; var ids={}; var log=[];
+  var spec=%s; var ids={}; var log=0;
   for(var i=0;i<spec.length;i++){
     var s=spec[i];
     var c={uuid:s.device.uuid, libraryUuid:s.device.libraryUuid};
@@ -267,15 +281,15 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
       var p=pads[k];
       var num=p.getState_PadNumber?p.getState_PadNumber():p.padNumber;
       var net=s.pins?s.pins[String(num)]:null;
-      if(net){ p.setState_Net(net); await p.done(); log.push([s.designator,num,net]); }
+      if(net){ p.setState_Net(net); await p.done(); log++; }
     }
   }
-  return JSON.stringify({ids:ids, bound:log.length});
+  return JSON.stringify({ids:ids, bound:log});
 }catch(e){return JSON.stringify({err:String(e&&e.message||e), stack:String(e&&e.stack).slice(0,300)});}})()''' % json.dumps(components)
         o = self._eval(js, timeout=90)
         if not o or o.get("err"):
             raise DaoRpcError("place_and_net: %s" % (o and o.get("err")))
-        return o["ids"]
+        return o
 
     def pad_xy(self):
         """返回 {(designator, padNumber): (x,y,net)}，用于自动布线取脚坐标。"""
