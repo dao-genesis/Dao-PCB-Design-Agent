@@ -200,15 +200,19 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         `getAllProjectsUuid(path)` 触发扫描注册，`openProject` 即可正常加载板。
         （Web 在线版由 REST 建工程即注册，无需此步——这是桌面层独有的本源差异。）
         """
-        self._call("dmt_Project.getAllProjectsUuid", self.projects_dir, timeout=20)
-        self._call("dmt_Project.openProject", project_uuid, timeout=30)
-        time.sleep(settle)
-        boards = self._call("dmt_Board.getAllBoardsInfo")
-        if not boards:
-            # 注册可能有延迟；再扫描一次并稍等后重试一回。
+        # 本源教训（冷启动竞争）：刚启动的桌面客户端，**首个** createProject→scan→
+        # openProject 常出现 "open=True 但 getAllBoardsInfo 为空"——工作区索引尚未把
+        # 新落盘的 .eprj2 注册到位（启动期还在跑 autoBackup/库索引等异步初始化）。
+        # 暖机后此竞争消失。故此处不再「两发即弃」，而是**带退避地反复重扫+重开**，
+        # 让冷启动后的首块板也确定可达（实测首发失败、暖机后秒过 → 轮询即收敛）。
+        boards = None
+        for attempt in range(8):
             self._call("dmt_Project.getAllProjectsUuid", self.projects_dir, timeout=20)
-            time.sleep(settle)
+            self._call("dmt_Project.openProject", project_uuid, timeout=30)
+            time.sleep(settle + min(attempt, 4))  # 线性退避，给冷启动初始化留足时间
             boards = self._call("dmt_Board.getAllBoardsInfo")
+            if boards:
+                break
         if not boards:
             raise DaoRpcError("no boards after openProject")
         pcb_uuid = boards[0]["pcb"]["uuid"]

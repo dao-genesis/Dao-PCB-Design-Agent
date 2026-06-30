@@ -417,6 +417,41 @@ DRC 报 40+ 条**电源网 `pwr_trk` 线过窄**——但违规对象竟是 **VC
   工程/团队/工作区(dmt_*)；系统(文件系统/格式转换/对话框/存储/单位/快捷键/窗口 sys_*)。
   即「人类在嘉立创里能点到的一切」均有声明级入口，已全量在册。
 
+## 一键复现部署（`bootstrap_desktop.py` · 本会话沉淀）
+
+把上一会话「人肉摸索」的桌面端落地链路固化为**任意干净机器一条命令即起**的确定性脚本，
+让全链路建板有稳定运行时地基。每步幂等（已就位即跳过、可反复跑）：
+
+```bash
+# 首次部署(需提供激活文件;含 license,绝不入库,经 --license / 环境变量传入):
+python bootstrap_desktop.py --license /path/to/lceda-pro-activation.txt --with-freerouting --verify
+# 已部署过,仅(重新)拉起并自检:
+python bootstrap_desktop.py --launch-only --verify
+# 随后即可全链路:
+cd examples && PYTHONPATH=.. python3 run.py all --tries 5
+```
+
+四步：①并行分段下载官方 Linux zip（`image.lceda.cn/files/lceda-pro-linux-x64-<ver>.zip`，
+断点续传+大小校验）→ ②解压定位 `lceda-pro` 主程序（补回可执行位）→ ③安放离线激活文件到
+`~/Documents/LCEDA-Pro/lceda-pro-activation.txt` → ④以 `--remote-debugging-port` 拉起，
+**轮询到 `_EXTAPI_ROOT_` 命名空间数 ns>0 才算就绪**。
+
+### ⚠ 冷启动竞争（本会话新坑·已根治）
+
+刚启动的桌面客户端，**首个** `createProject → 扫描注册 → openProject` 常出现
+`open=True 但 getAllBoardsInfo 为空`（症状同上节「扫描注册」坑，但成因不同：此处是
+**工作区索引/库索引等异步初始化尚未跑完**，暖机后即消失）。两处根治：
+
+1. **就绪信号要看 RPC 总线、不看 page target**：编辑器 `page` target 出现 ≠ 可建板——
+   `_EXTAPI_ROOT_` 还要再等渲染层 bundle 跑起来才挂上（冷启动期 ns 由 `0 → 94`）。
+   `bootstrap_desktop.launch()` 据此**等到 ns>0 才返回**（仅等 `/json/version` 或仅等
+   editor target 都会让紧随其后的首次建板扑空）。
+2. **`open_pcb` 带退避反复重扫重开**：不再「两发即弃」，改为最多 8 轮「重扫描注册 +
+   重 openProject + 线性退避等待」直到 `getAllBoardsInfo` 非空。冷启动首块板由此确定可达。
+
+实测：冷启动（kill→bootstrap→立即 `run.py simple`）一次过 `DRC=0 CLEAN`；
+四板 simple/medium/complex/mcu（3/12/20/38 件，3/8/12/41 网）全 `DRC=0 CLEAN`、导出真字节。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`
