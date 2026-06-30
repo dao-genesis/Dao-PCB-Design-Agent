@@ -304,6 +304,69 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
                     p.get("x"), p.get("y"), p.get("net"))
         return out
 
+    def auto_fanout(self, designator, pad_net, device, query="0603 10k",
+                    offset=420, depth_step=170, term_prefix="FT"):
+        """几何驱动的**通用扇出**：读某器件**真实焊盘坐标**，沿「焊盘→器件中心」反向
+        把每条信号脚就近引一颗 2-pad 串接元件(默认 0603 电阻)到器件外侧，绑 pin1→该网、
+        pin2→悬空端子网。**不对任何封装的引脚布局做硬假设**——逃逸边/方向全由焊盘几何推出。
+
+        本源(qfp 板实证升华)：高脚数器件能否一次布通，命门在**放置质量**而非布线器——
+        detached 栅格放 32 扇出残留 8 Connection Error，改「就近同侧逃逸」即一次过 DRC=0。
+        本法把这套手调几何**自动化**：①取该器件各脚 (x,y) 算中心;②每脚按 dx/dy 主轴定
+        逃逸边(右/左/上/下);③同侧按沿边坐标排序、逐颗递增 `depth_step` 错开深度,使同侧
+        串件排成不抢道的一列;④串件落在「脚的垂直对齐线 × 外延深度」处,回连最短最直。
+
+        参数：`designator` 目标器件位号(须已 place);`pad_net` {焊盘号: 网名};
+        `device` 串件检索结果(search_device 返回)或 None 时用 `query` 现检索;
+        `offset` 首颗离脚的外延(mil);`depth_step` 同侧逐颗深度递增(mil)。
+        返回 {放下的串件位号: 网名}。"""
+        if device is None:
+            device = self.search_device(query)
+        pads = {pn: (x, y) for (des, pn), (x, y, _net) in self.pad_xy().items()
+                if des == designator and x is not None}
+        if not pads:
+            raise DaoRpcError("auto_fanout: 器件 %r 无可读焊盘坐标" % designator)
+        cx = sum(p[0] for p in pads.values()) / len(pads)
+        cy = sum(p[1] for p in pads.values()) / len(pads)
+        # 按逃逸边分组：主轴(|dx| vs |dy|)定边，sign 定朝向
+        sides = {"R": [], "L": [], "T": [], "B": []}
+        for pn in pad_net:
+            if pn not in pads:
+                raise DaoRpcError("auto_fanout: %s 无焊盘 %s" % (designator, pn))
+            px, py = pads[pn]
+            dx, dy = px - cx, py - cy
+            if abs(dx) >= abs(dy):
+                sides["R" if dx >= 0 else "L"].append((pn, px, py))
+            else:
+                sides["T" if dy >= 0 else "B"].append((pn, px, py))
+        comps, placed = [], {}
+        i = 0
+        for side, items in sides.items():
+            # 沿边坐标排序：左右边按 y、上下边按 x，使同侧串件顺次排开
+            items.sort(key=lambda t: t[2] if side in ("L", "R") else t[1])
+            for j, (pn, px, py) in enumerate(items):
+                net = pad_net[pn]
+                d = offset + j * depth_step
+                if side == "R":
+                    x, y, rot = px + d, py, 0
+                elif side == "L":
+                    x, y, rot = px - d, py, 0
+                elif side == "T":
+                    x, y, rot = px, py + d, 90
+                else:
+                    x, y, rot = px, py - d, 90
+                ref = "%s_%s%d" % (term_prefix, designator, i)
+                comps.append({"device": device, "layer": 1,
+                              "x": int(x), "y": int(y), "rotation": rot,
+                              "designator": ref,
+                              "pins": {"1": net, "2": "%s_%s_%d" %
+                                       (term_prefix, designator, i)}})
+                placed[ref] = net
+                i += 1
+        for k in range(0, len(comps), 10):
+            self._place_chunk(comps[k:k + 10])
+        return placed
+
     # ---------- 钥匙 5a：布线（按网聚合焊盘，画正交铜线） ----------
     def route_track(self, net, x1, y1, x2, y2, layer=TOP, width=10):
         return self._call("pcb_PrimitiveLine.create", net, layer,
@@ -1130,11 +1193,30 @@ return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return 
             q = c["query"]
             if q not in cache:
                 cache[q] = self.search_device(q)
+            # auto_fanout 的 {脚:网} 先并进器件 pins，使器件侧焊盘随放置即绑网；
+            # 配套串件待放置后按真实焊盘坐标几何落点（见下）。
+            pins = dict(c.get("pins", {}))
+            af = c.get("auto_fanout")
+            if af:
+                pins.update({str(k): v for k, v in af.items()})
             comps.append({"device": cache[q], "layer": c.get("layer", 1),
                           "x": c["x"], "y": c["y"],
                           "rotation": c.get("rotation", 0),
-                          "designator": c["ref"], "pins": c.get("pins", {})})
+                          "designator": c["ref"], "pins": pins})
         ids = self.place_and_net(comps)
+        # 几何驱动扇出：器件放定后，读其真实焊盘坐标就近落配套串件（不假设引脚布局）
+        fan = {}
+        for c in spec["components"]:
+            af = c.get("auto_fanout")
+            if af:
+                fq = c.get("fanout_query", "0603 10k")
+                fan[c["ref"]] = self.auto_fanout(
+                    c["ref"], {str(k): v for k, v in af.items()},
+                    device=(cache[fq] if fq in cache else None), query=fq,
+                    offset=c.get("fanout_offset", 420),
+                    depth_step=c.get("fanout_depth_step", 170))
+        if fan:
+            audit["steps"]["auto_fanout"] = {k: len(v) for k, v in fan.items()}
         audit["steps"]["place_and_net"] = {"placed": len(ids),
                                            "nets": self._call("pcb_Net.getAllNetsName")}
 

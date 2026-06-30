@@ -255,6 +255,30 @@ def build_qfp():
             "components": comps}
 
 
+def build_autofan():
+    """板⑧·几何驱动通用扇出:同 LQFP48,但串阻位置**不再手填坐标**,改用
+    `auto_fanout` 读真实焊盘几何自动就近落点。验证「扇出」已成可复用本源原语——
+    谱里只声明 `auto_fanout={脚:网}`,放置/逃逸边/错位深度全由器件实测坐标推导。
+    对照 qfp(手调四边)应得同样 DRC=0,印证自动化无损于手工几何。"""
+    SIG_PADS = [2, 4, 8, 10, 14, 16, 20, 22, 26, 28, 32, 34, 38, 40, 44, 46]
+    pins = {}
+    for pad in (6, 18, 30, 42):
+        pins[str(pad)] = "VCC"
+    for pad in (12, 24, 36, 48):
+        pins[str(pad)] = "GND"
+    af = {pad: "S%d" % k for k, pad in enumerate(SIG_PADS)}
+    comps = [{"ref": "U1", "query": LQFP48, "rotation": 0, "x": 0, "y": 0,
+              "pins": pins, "auto_fanout": af, "fanout_query": R,
+              "fanout_offset": 420, "fanout_depth_step": 180}]
+    for i, (cx, cy) in enumerate([(-450, 450), (450, 450),
+                                  (-450, -450), (450, -450)], 1):
+        comps.append({"ref": "C%d" % i, "query": C, "rotation": 90,
+                      "x": cx, "y": cy, "pins": {"1": "VCC", "2": "GND"}})
+    return {"name": "DAO_AF1_AutoFanout", "gnd_net": "GND",
+            "track_width": 8, "margin": 200, "copper_layers": 4,
+            "components": comps}
+
+
 BOARDS = {
     "simple": build_simple,
     "medium": build_medium,
@@ -263,4 +287,5 @@ BOARDS = {
     "hs": build_hs,
     "via6": build_via6,
     "qfp": build_qfp,
+    "autofan": build_autofan,
 }
