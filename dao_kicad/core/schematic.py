@@ -121,23 +121,45 @@ class SymbolParser:
         """Extract pins from a symbol block. Each pin is its own balanced
         ``(pin ...)`` sub-block; name/number/at are pulled from inside it so
         nested ``(effects (font ...))`` can't derail the parse (the old
-        single monolithic regex dropped every pin number)."""
+        single monolithic regex dropped every pin number).
+
+        Pins live inside per-unit sub-symbols named ``<Name>_<unit>_<style>``,
+        where ``style`` is the body style (0 = common, 1 = standard,
+        2 = DeMorgan alternate). The DeMorgan units redraw the *same* pins, so
+        scanning the whole block double-counts every pin of any part that has a
+        DeMorgan representation (e.g. a 74xx gate reports 26 pins for a 14-pin
+        package). Restrict to the standard representation: skip body style >= 2.
+        """
+        unit_hdr = re.compile(r'\(symbol\s+"[^"]*_(\d+)_(\d+)"')
+        scan_regions: list[str] = []
+        for m in unit_hdr.finditer(block):
+            body_style = int(m.group(2))
+            if body_style >= 2:  # DeMorgan/alternate — duplicates the pins
+                continue
+            sub = self._extract_balanced(block, m.start())
+            if sub:
+                scan_regions.append(sub)
+        # Flat symbols (no per-unit sub-symbols) keep pins at the top level.
+        if not scan_regions:
+            scan_regions = [block]
+
         pins = []
         head = re.compile(r'\(pin\s+(\w+)\s+\w+')
-        for m in head.finditer(block):
-            sub = self._extract_balanced(block, m.start())
-            if not sub:
-                continue
-            name_m = re.search(r'\(name\s+"([^"]*)"', sub)
-            num_m = re.search(r'\(number\s+"([^"]*)"', sub)
-            at_m = re.search(r'\(at\s+([\d.-]+)\s+([\d.-]+)', sub)
-            pins.append(Pin(
-                number=num_m.group(1) if num_m else "",
-                name=name_m.group(1) if name_m else "",
-                pin_type=m.group(1),
-                x=float(at_m.group(1)) if at_m else 0,
-                y=float(at_m.group(2)) if at_m else 0,
-            ))
+        for region in scan_regions:
+            for m in head.finditer(region):
+                sub = self._extract_balanced(region, m.start())
+                if not sub:
+                    continue
+                name_m = re.search(r'\(name\s+"([^"]*)"', sub)
+                num_m = re.search(r'\(number\s+"([^"]*)"', sub)
+                at_m = re.search(r'\(at\s+([\d.-]+)\s+([\d.-]+)', sub)
+                pins.append(Pin(
+                    number=num_m.group(1) if num_m else "",
+                    name=name_m.group(1) if name_m else "",
+                    pin_type=m.group(1),
+                    x=float(at_m.group(1)) if at_m else 0,
+                    y=float(at_m.group(2)) if at_m else 0,
+                ))
         return pins
 
     def search_symbols(self, query: str) -> list[tuple[str, str]]:
