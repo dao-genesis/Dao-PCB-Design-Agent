@@ -693,6 +693,32 @@ rep.moved, rep.footprints   # 重载实测
 实测: R1 绝对定位 (25,35)+转 90° → 重载读回 `x=25,y=35,orientation=90,flipped=False`; C1 相对 (+5,-3)
 自 (40,10) → `(45,7)` 且 `flip=True` 落 `B.Cu`; 空 moves / 板上无此 ref / 缺板文件如实报错 `ok=False`。
 
+### 〇.36 全链路实测闭合: 自取布线器, 纯代码 → 可投产 (`env.ensure_freerouting` + `test_native_endtoend`)
+
+> 反者道之动: 三主线讲了这么多原子与编排, 但"纯代码生成可投产 PCB"这条道**到底跑没跑通**? 此前
+> `native_route`/`native_flow` 的端到端断言因 VM 无 freerouting jar 而**全程 skip** —— 等于这条最关键
+> 的链从未被真正走过一遍。KiCad 自家**不带**自动布线器, 这正是"官方缺失、需我们自行补齐"的本源缺口。
+> `env.ensure_freerouting()` 把缺口闭合: 缺 jar 时按官方 release 自取 freerouting 1.9.0 (与既有
+> `-de/-do/-mp` CLI 约定一致) 落到候选位; `NativeRouter(auto_provision=True)` 据此让整条
+> build→route→fab 开箱即通。下载失败则降级 `router_unavailable` 不崩 (无为而无不为)。
+
+```python
+from kicad_origin.origin.env import ensure_freerouting
+ensure_freerouting()                 # 缺则自取 freerouting.jar (官方缺失, 我们补齐)
+from kicad_origin.origin.native_flow import run_flow
+rep = run_flow({                     # 纯代码声明的稳压小板 (4 件 / 4 网)
+    "size_mm": [30, 22],
+    "components": [{"ref": "U1", "lib": "Package_TO_SOT_SMD", "fp": "SOT-23", ...}, ...],
+    "nets": {"VIN": [["U1", "3"], ["C1", "1"]], "GND": [...], ...},
+}, "out/", heal=True, route=True, fab=True)
+```
+
+实测 (VM, KiCad 9.0.9 + freerouting 1.9.0): 纯代码 spec → 建板 4 件/5 网/5 未布线 → 自愈闸 pass0
+freerouting 真布线 **未布线 5→0、落 14 条铜走线**、pass1 **DRC 0 违规 / 0 未连**收敛 → 投厂真出
+**27 件 Gerber(全层)+ 钻孔 .drl + gerbjob + 贴装 csv + STEP 3D + 制造 PDF**, `drc.json` 实测
+`violations=[] unconnected=[]`。`test_native_endtoend` 把这条链固化: 布线器缺位优雅跳过, 在位即真跑真
+断言 (反臆造取自重载与真 DRC); 另含不联网的 `ensure_freerouting` 兜底逻辑断言 (已在位即返回, 绝不触网)。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |

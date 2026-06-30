@@ -54,13 +54,20 @@ class NativeRouter:
     """本源布线编排器: pcbnew Specctra 往返 + freerouting 无头引擎。"""
 
     def __init__(self, python: Optional[str] = None, java: Optional[str] = None,
-                 jar: Optional[str] = None) -> None:
+                 jar: Optional[str] = None, auto_provision: bool = False) -> None:
         self.python = str(python) if python else (
             str(find_kicad_python()) if find_kicad_python() else None)
         self.java = str(java) if java else (
             str(find_java()) if find_java() else None)
-        self.jar = str(jar) if jar else (
-            str(find_freerouting()) if find_freerouting() else None)
+        if jar:
+            self.jar = str(jar)
+        else:
+            found = find_freerouting()
+            # 官方缺失的布线器: 显式 auto_provision 时自取补齐 (不在构造里偷偷联网)。
+            if found is None and auto_provision:
+                from kicad_origin.origin.env import ensure_freerouting
+                found = ensure_freerouting()
+            self.jar = str(found) if found else None
 
     @property
     def router_available(self) -> bool:
