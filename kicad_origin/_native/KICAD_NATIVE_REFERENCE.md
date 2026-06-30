@@ -1,0 +1,2786 @@
+# KiCad 本源能力面 完整参考 (KICAD_NATIVE_REFERENCE)
+
+> 一次性全量逆流·一劳永逸。承 EXTAPI 同法, 把 KiCad 9 本源整张声明面逆流为唯一事实源。
+> 机器可读完整目录见同目录 `KICAD_NATIVE_CATALOG.json`。
+>
+> - KiCad 版本: `9.0.9-9.0.9~ubuntu22.04.1`　生成: `2026-06-30`
+> - pcbnew 原生: **类 164** · **方法 7913** · 自由函数 302 · 常量/枚举 852
+> - kicad-cli 叶子命令 **34** · IPC(kipy) 可达: **False**
+
+生成方式: `python -m kicad_origin.origin.native_catalog` (经 `_pcbnew_probe` 在 KiCad python 子进程内运行期 introspection, 随所装版本严格一致, 不臆造接口)。
+
+## 一、kicad-cli 命令面 (制造/DRC/导出)
+
+### `kicad-cli fp` — Footprint and Footprint Libraries
+
+- `kicad-cli fp export` — Export utilities (svg)
+    - `kicad-cli fp export svg` — Exports the footprint or entire footprint library to SVG (11 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output directory [nargs=0..1] [default: ""]
+      - `-l, --layers` Comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-t, --theme` Color theme to use (will default to footprint editor settings) [nargs=0..1] [default: ""]
+      - `--fp, --footprint` Specific footprint to export within the library [nargs=0..1] [default: ""]
+      - `--sp, --sketch-pads-on-fab-layers` Draw pad outlines and their numbers on front and back fab layers
+      - `--hdnp, --hide-DNP-footprints-on-fab-layers` Don't plot text & graphics of DNP footprints on fab layers
+      - `--sdnp, --sketch-DNP-footprints-on-fab-layers` Plot graphics of DNP footprints in sketch mode on fab layers
+      - `--cdnp, --crossout-DNP-footprints-on-fab-layers` Plot an 'X' over the courtyard of DNP footprints on fab layers, and strikeout their reference designators
+      - `--black-and-white` Black and white only
+  - `kicad-cli fp upgrade` — Upgrades the footprint library to the current kicad version format (3 选项)
+    - `-h, --help` Shows help message and exits
+    - `-o, --output` Output directory [nargs=0..1] [default: ""]
+    - `--force` Forces the footprint library to be resaved regardless of versioning
+
+### `kicad-cli jobset` — Jobset
+
+  - `kicad-cli jobset run` — Runs a jobset file (4 选项)
+    - `-h, --help` Shows help message and exits
+    - `--stop-on-error` Stops processing jobs as they are executed sequentially on the first failure of a job
+    - `-f, --file` Jobset file to be run [nargs=0..1] [default: ""]
+    - `--output` Jobset file output to generate, leave blank for all outputs defined in the jobset [nargs=0..1] [default: ""]
+
+### `kicad-cli pcb` — PCB
+
+  - `kicad-cli pcb drc` — Runs the Design Rules Check (DRC) on the PCB and creates a report (12 选项)
+    - `-h, --help` Shows help message and exits
+    - `-o, --output` Output file [nargs=0..1] [default: ""]
+    - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+    - `--format` Output file format, options: json, report [nargs=0..1] [default: "report"]
+    - `--all-track-errors` Report all errors for each track
+    - `--schematic-parity` Test for parity between PCB and schematic
+    - `--units` Report units; valid options: in, mm, mils [nargs=0..1] [default: "mm"]
+    - `--severity-all` Report all DRC violations, this is equivalent to including all the other severity arguments
+    - `--severity-error` Report all DRC error level violations, this can be combined with the other severity arguments
+    - `--severity-warning` Report all DRC warning level violations, this can be combined with the other severity arguments
+    - `--severity-exclusions` Report all excluded DRC violations, this can be combined with the other severity arguments
+    - `--exit-code-violations` Return a nonzero exit code if DRC violations exist
+- `kicad-cli pcb export` — Export utilities (Gerbers, drill, position files, etc)
+    - `kicad-cli pcb export brep` — Export BREP (25 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-f, --force` Overwrite output file
+      - `--no-unspecified` Exclude 3D models for components with 'Unspecified' footprint type
+      - `--no-dnp` Exclude 3D models for components with 'Do not populate' attribute
+      - `--grid-origin` Use Grid Origin for output origin
+      - `--drill-origin` Use Drill Origin for output origin
+      - `--subst-models` Substitute STEP or IGS models with the same name in place of VRML models
+      - `--board-only` Only generate a board with no components
+      - `--cut-vias-in-body` Cut via holes in board body even if conductor layers are not exported.
+      - `--no-board-body` Exclude board body
+      - `--no-components` Exclude 3D models for components
+      - `--component-filter` Only include component 3D models matching this list of reference designators (comma-separated, wildcards supported) [nargs=0..1] [default: ""]
+      - `--include-tracks` Export tracks and vias
+      - `--include-pads` Export pads
+      - `--include-zones` Export zones
+      - `--include-inner-copper` Export elements on inner copper layers
+      - `--include-silkscreen` Export silkscreen graphics as a set of flat faces
+      - `--include-soldermask` Export soldermask layers as a set of flat faces
+      - `--fuse-shapes` Fuse overlapping geometry together
+      - `--fill-all-vias` Don't cut via holes in conductor layers.
+      - `--min-distance` Minimum distance between points to treat them as separate ones [nargs=0..1] [default: "0.01mm"]
+      - `--net-filter` Only include copper items belonging to nets matching this wildcard [nargs=0..1] [default: ""]
+      - `--user-origin` User-specified output origin ex. 1x1in, 1x1inch, 25.4x25.4mm (default unit mm) [nargs=0..1] [default: ""]
+    - `kicad-cli pcb export drill` — Generate Drill Files (15 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output directory [nargs=0..1] [default: ""]
+      - `--format` Valid options excellon, gerber. [nargs=0..1] [default: "excellon"]
+      - `--drill-origin` Valid options are: absolute,plot [nargs=0..1] [default: "absolute"]
+      - `--excellon-zeros-format` Valid options are: decimal,suppressleading,suppresstrailing,keep. [nargs=0..1] [default: "decimal"]
+      - `--excellon-oval-format` Valid options are: route,alternate. [nargs=0..1] [default: "alternate"]
+      - `-u, --excellon-units` Output units, valid options:in,mm [nargs=0..1] [default: "mm"]
+      - `--excellon-mirror-y` Mirror Y axis
+      - `--excellon-min-header` Minimal header
+      - `--excellon-separate-th` Generate independent files for NPTH and PTH holes
+      - `--generate-map` Generate map / summary of drill hits
+      - `--generate-report` Generate report of drill hits
+      - `--report-path` Report output file path [nargs=0..1] [default: ""]
+      - `--map-format` Valid options: pdf,gerberx2,ps,dxf,svg [nargs=0..1] [default: "pdf"]
+      - `--gerber-precision` Precision of Gerber coordinates (5 or 6) [nargs=0..1] [default: 6]
+    - `kicad-cli pcb export dxf` — Generate a DXF from a list of layers (21 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-l, --layers` Comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--cl, --common-layers` Layers to include on each plot, comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `--erd, --exclude-refdes` Exclude the reference designator text
+      - `--ev, --exclude-value` Exclude the value text
+      - `--sp, --sketch-pads-on-fab-layers` Draw pad outlines and their numbers on front and back fab layers
+      - `--hdnp, --hide-DNP-footprints-on-fab-layers` Don't plot text & graphics of DNP footprints on fab layers
+      - `--sdnp, --sketch-DNP-footprints-on-fab-layers` Plot graphics of DNP footprints in sketch mode on fab layers
+      - `--cdnp, --crossout-DNP-footprints-on-fab-layers` Plot an 'X' over the courtyard of DNP footprints on fab layers, and strikeout their reference designators
+      - `--subtract-soldermask` Subtract soldermask from silkscreen
+      - `--uc, --use-contours` Plot graphic items using their contours
+      - `--udo, --use-drill-origin` Plot using the drill/place file origin
+      - `--ibt, --include-border-title` Include the border and title block
+      - `--ou, --output-units` Output units, valid options: mm, in [nargs=0..1] [default: "in"]
+      - `--drill-shape-opt` Set pad/via drill shape option (0 = no shape, 1 = small shape, 2 = actual shape) [nargs=0..1] [default: 2]
+      - `--mode-single` Generates a single file with the output arg path acting as the complete directory and filename path. COMMON_LAYER_LIST does not function in this mode. Instead LAYER_LIST controls all layers plotted.
+      - `--mode-multi` Generates one or more files with behavior similar to the KiCad GUI plotting. The given output path specifies a directory in which files may be output.
+      - `--plot-invisible-text` Deprecated.  Has no effect.
+    - `kicad-cli pcb export gencad` — Export the PCB in Gencad format (8 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-f, --flip-bottom-pads` Flip bottom footprint padstacks
+      - `--unique-pins` Generate unique pin names
+      - `--unique-footprints` Generate a new shape for each footprint instance (do not reuse shapes)
+      - `--use-drill-origin` Use drill/place file origin as origin
+      - `--store-origin-coord` Save the origin coordinates in the file
+    - `kicad-cli pcb export gerber` — Plot given layers to a single Gerber file (21 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-l, --layers` Comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--cl, --common-layers` Layers to include on each plot, comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `--erd, --exclude-refdes` Exclude the reference designator text
+      - `--ev, --exclude-value` Exclude the value text
+      - `--ibt, --include-border-title` Include the border and title block
+      - `--sp, --sketch-pads-on-fab-layers` Draw pad outlines and their numbers on front and back fab layers
+      - `--hdnp, --hide-DNP-footprints-on-fab-layers` Don't plot text & graphics of DNP footprints on fab layers
+      - `--sdnp, --sketch-DNP-footprints-on-fab-layers` Plot graphics of DNP footprints in sketch mode on fab layers
+      - `--cdnp, --crossout-DNP-footprints-on-fab-layers` Plot an 'X' over the courtyard of DNP footprints on fab layers, and strikeout their reference designators
+      - `--no-x2` Do not use the extended X2 format
+      - `--no-netlist` Do not generate netlist attributes
+      - `--subtract-soldermask` Subtract soldermask from silkscreen
+      - `--disable-aperture-macros` Disable aperture macros
+      - `--use-drill-file-origin` Use drill/place file origin
+      - `--precision` Precision of Gerber coordinates, valid options: 5 or 6 [nargs=0..1] [default: 6]
+      - `--no-protel-ext` Use KiCad Gerber file extension
+      - `--plot-invisible-text` Deprecated.  Has no effect.
+    - `kicad-cli pcb export gerbers` — Plot multiple Gerbers for a PCB, including the ability to use stored board plot settings (23 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output directory [nargs=0..1] [default: ""]
+      - `-l, --layers` Comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--cl, --common-layers` Layers to include on each plot, comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `--erd, --exclude-refdes` Exclude the reference designator text
+      - `--ev, --exclude-value` Exclude the value text
+      - `--ibt, --include-border-title` Include the border and title block
+      - `--sp, --sketch-pads-on-fab-layers` Draw pad outlines and their numbers on front and back fab layers
+      - `--hdnp, --hide-DNP-footprints-on-fab-layers` Don't plot text & graphics of DNP footprints on fab layers
+      - `--sdnp, --sketch-DNP-footprints-on-fab-layers` Plot graphics of DNP footprints in sketch mode on fab layers
+      - `--cdnp, --crossout-DNP-footprints-on-fab-layers` Plot an 'X' over the courtyard of DNP footprints on fab layers, and strikeout their reference designators
+      - `--no-x2` Do not use the extended X2 format
+      - `--no-netlist` Do not generate netlist attributes
+      - `--subtract-soldermask` Subtract soldermask from silkscreen
+      - `--disable-aperture-macros` Disable aperture macros
+      - `--use-drill-file-origin` Use drill/place file origin
+      - `--precision` Precision of Gerber coordinates, valid options: 5 or 6 [nargs=0..1] [default: 6]
+      - `--no-protel-ext` Use KiCad Gerber file extension
+      - `--plot-invisible-text` Deprecated.  Has no effect.
+      - `--cl, --common-layers` Layers to include on each plot, comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--board-plot-params` Use the Gerber plot settings already configured in the board file
+    - `kicad-cli pcb export glb` — Export GLB (binary GLTF) (25 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-f, --force` Overwrite output file
+      - `--no-unspecified` Exclude 3D models for components with 'Unspecified' footprint type
+      - `--no-dnp` Exclude 3D models for components with 'Do not populate' attribute
+      - `--grid-origin` Use Grid Origin for output origin
+      - `--drill-origin` Use Drill Origin for output origin
+      - `--subst-models` Substitute STEP or IGS models with the same name in place of VRML models
+      - `--board-only` Only generate a board with no components
+      - `--cut-vias-in-body` Cut via holes in board body even if conductor layers are not exported.
+      - `--no-board-body` Exclude board body
+      - `--no-components` Exclude 3D models for components
+      - `--component-filter` Only include component 3D models matching this list of reference designators (comma-separated, wildcards supported) [nargs=0..1] [default: ""]
+      - `--include-tracks` Export tracks and vias
+      - `--include-pads` Export pads
+      - `--include-zones` Export zones
+      - `--include-inner-copper` Export elements on inner copper layers
+      - `--include-silkscreen` Export silkscreen graphics as a set of flat faces
+      - `--include-soldermask` Export soldermask layers as a set of flat faces
+      - `--fuse-shapes` Fuse overlapping geometry together
+      - `--fill-all-vias` Don't cut via holes in conductor layers.
+      - `--min-distance` Minimum distance between points to treat them as separate ones [nargs=0..1] [default: "0.01mm"]
+      - `--net-filter` Only include copper items belonging to nets matching this wildcard [nargs=0..1] [default: ""]
+      - `--user-origin` User-specified output origin ex. 1x1in, 1x1inch, 25.4x25.4mm (default unit mm) [nargs=0..1] [default: ""]
+    - `kicad-cli pcb export ipc2581` — Export the PCB in IPC-2581 format (13 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `--precision` Precision [nargs=0..1] [default: 6]
+      - `--compress` Compress the output
+      - `--version` IPC-2581 standard version [nargs=0..1] [default: "C"]
+      - `--units` Units [nargs=0..1] [default: "mm"]
+      - `--bom-col-int-id` Name of the part field to use for the Bill of Material Internal Id Column [nargs=0..1] [default: ""]
+      - `--bom-col-mfg-pn` Name of the part field to use for the Bill of Material Manufacturer Part Number Column [nargs=0..1] [default: ""]
+      - `--bom-col-mfg` Name of the part field to use for the Bill of Material Manufacturer Column [nargs=0..1] [default: ""]
+      - `--bom-col-dist-pn` Name of the part field to use for the Bill of Material Distributor Part Number Column [nargs=0..1] [default: ""]
+      - `--bom-col-dist` Name to insert into Bill of Material Distributor Column [nargs=0..1] [default: ""]
+    - `kicad-cli pcb export ipcd356` — Generate IPC-D-356 netlist file (2 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+    - `kicad-cli pcb export odb` — Export the PCB in ODB++ format (7 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `--precision` Precision [nargs=0..1] [default: 2]
+      - `--compression` Compression mode [nargs=0..1] [default: "zip"]
+      - `--units` Units [nargs=0..1] [default: "mm"]
+    - `kicad-cli pcb export pdf` — Generate PDF from a list of layers (23 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-l, --layers` Comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--cl, --common-layers` Layers to include on each plot, comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-m, --mirror` Mirror the board (useful for trying to show bottom layers)
+      - `--erd, --exclude-refdes` Exclude the reference designator text
+      - `--ev, --exclude-value` Exclude the value text
+      - `--ibt, --include-border-title` Include the border and title block
+      - `--subtract-soldermask` Subtract soldermask from silkscreen
+      - `--sp, --sketch-pads-on-fab-layers` Draw pad outlines and their numbers on front and back fab layers
+      - `--hdnp, --hide-DNP-footprints-on-fab-layers` Don't plot text & graphics of DNP footprints on fab layers
+      - `--sdnp, --sketch-DNP-footprints-on-fab-layers` Plot graphics of DNP footprints in sketch mode on fab layers
+      - `--cdnp, --crossout-DNP-footprints-on-fab-layers` Plot an 'X' over the courtyard of DNP footprints on fab layers, and strikeout their reference designators
+      - `-n, --negative` Plot as negative (useful for directly etching from the export)
+      - `--black-and-white` Black and white only
+      - `-t, --theme` Color theme to use (will default to PCB Editor settings) [nargs=0..1] [default: ""]
+      - `--drill-shape-opt` Set pad/via drill shape option (0 = no shape, 1 = small shape, 2 = actual shape) [nargs=0..1] [default: 2]
+      - `--plot-invisible-text` Deprecated.  Has no effect.
+      - `--mode-single` Generates a single file with the output arg path acting as the complete directory and filename path. COMMON_LAYER_LIST does not function in this mode. Instead LAYER_LIST controls all layers plotted.
+      - `--mode-separate` Plot the layers to individual PDF files
+      - `--mode-multipage` Plot the layers to a single PDF file with multiple pages
+    - `kicad-cli pcb export ply` — Export PLY (25 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-f, --force` Overwrite output file
+      - `--no-unspecified` Exclude 3D models for components with 'Unspecified' footprint type
+      - `--no-dnp` Exclude 3D models for components with 'Do not populate' attribute
+      - `--grid-origin` Use Grid Origin for output origin
+      - `--drill-origin` Use Drill Origin for output origin
+      - `--subst-models` Substitute STEP or IGS models with the same name in place of VRML models
+      - `--board-only` Only generate a board with no components
+      - `--cut-vias-in-body` Cut via holes in board body even if conductor layers are not exported.
+      - `--no-board-body` Exclude board body
+      - `--no-components` Exclude 3D models for components
+      - `--component-filter` Only include component 3D models matching this list of reference designators (comma-separated, wildcards supported) [nargs=0..1] [default: ""]
+      - `--include-tracks` Export tracks and vias
+      - `--include-pads` Export pads
+      - `--include-zones` Export zones
+      - `--include-inner-copper` Export elements on inner copper layers
+      - `--include-silkscreen` Export silkscreen graphics as a set of flat faces
+      - `--include-soldermask` Export soldermask layers as a set of flat faces
+      - `--fuse-shapes` Fuse overlapping geometry together
+      - `--fill-all-vias` Don't cut via holes in conductor layers.
+      - `--min-distance` Minimum distance between points to treat them as separate ones [nargs=0..1] [default: "0.01mm"]
+      - `--net-filter` Only include copper items belonging to nets matching this wildcard [nargs=0..1] [default: ""]
+      - `--user-origin` User-specified output origin ex. 1x1in, 1x1inch, 25.4x25.4mm (default unit mm) [nargs=0..1] [default: ""]
+    - `kicad-cli pcb export pos` — Generate Position File (11 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `--side` Valid options: front,back,both. Gerber format only supports "front" or "back". [nargs=0..1] [default: "both"]
+      - `--format` Valid options: ascii,csv,gerber [nargs=0..1] [default: "ascii"]
+      - `--units` Output units; ascii or csv format only; valid options: in,mm [nargs=0..1] [default: "in"]
+      - `--bottom-negate-x` Use negative X coordinates for footprints on bottom layer (ascii or csv formats only)
+      - `--use-drill-file-origin` Use drill/place file origin (ascii or csv only)
+      - `--smd-only` Include only SMD footprints (ascii or csv only)
+      - `--exclude-fp-th` Exclude all footprints with through-hole pads (ascii or csv only)
+      - `--exclude-dnp` Exclude all footprints with the Do Not Populate flag set
+      - `--gerber-board-edge` Include board edge layer (Gerber only)
+    - `kicad-cli pcb export step` — Export STEP (26 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-f, --force` Overwrite output file
+      - `--no-unspecified` Exclude 3D models for components with 'Unspecified' footprint type
+      - `--no-dnp` Exclude 3D models for components with 'Do not populate' attribute
+      - `--grid-origin` Use Grid Origin for output origin
+      - `--drill-origin` Use Drill Origin for output origin
+      - `--subst-models` Substitute STEP or IGS models with the same name in place of VRML models
+      - `--board-only` Only generate a board with no components
+      - `--cut-vias-in-body` Cut via holes in board body even if conductor layers are not exported.
+      - `--no-board-body` Exclude board body
+      - `--no-components` Exclude 3D models for components
+      - `--component-filter` Only include component 3D models matching this list of reference designators (comma-separated, wildcards supported) [nargs=0..1] [default: ""]
+      - `--include-tracks` Export tracks and vias
+      - `--include-pads` Export pads
+      - `--include-zones` Export zones
+      - `--include-inner-copper` Export elements on inner copper layers
+      - `--include-silkscreen` Export silkscreen graphics as a set of flat faces
+      - `--include-soldermask` Export soldermask layers as a set of flat faces
+      - `--fuse-shapes` Fuse overlapping geometry together
+      - `--fill-all-vias` Don't cut via holes in conductor layers.
+      - `--min-distance` Minimum distance between points to treat them as separate ones [nargs=0..1] [default: "0.01mm"]
+      - `--net-filter` Only include copper items belonging to nets matching this wildcard [nargs=0..1] [default: ""]
+      - `--no-optimize-step` Do not optimize STEP file (enables writing parametric curves)
+      - `--user-origin` User-specified output origin ex. 1x1in, 1x1inch, 25.4x25.4mm (default unit mm) [nargs=0..1] [default: ""]
+    - `kicad-cli pcb export stl` — Export STL (25 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-f, --force` Overwrite output file
+      - `--no-unspecified` Exclude 3D models for components with 'Unspecified' footprint type
+      - `--no-dnp` Exclude 3D models for components with 'Do not populate' attribute
+      - `--grid-origin` Use Grid Origin for output origin
+      - `--drill-origin` Use Drill Origin for output origin
+      - `--subst-models` Substitute STEP or IGS models with the same name in place of VRML models
+      - `--board-only` Only generate a board with no components
+      - `--cut-vias-in-body` Cut via holes in board body even if conductor layers are not exported.
+      - `--no-board-body` Exclude board body
+      - `--no-components` Exclude 3D models for components
+      - `--component-filter` Only include component 3D models matching this list of reference designators (comma-separated, wildcards supported) [nargs=0..1] [default: ""]
+      - `--include-tracks` Export tracks and vias
+      - `--include-pads` Export pads
+      - `--include-zones` Export zones
+      - `--include-inner-copper` Export elements on inner copper layers
+      - `--include-silkscreen` Export silkscreen graphics as a set of flat faces
+      - `--include-soldermask` Export soldermask layers as a set of flat faces
+      - `--fuse-shapes` Fuse overlapping geometry together
+      - `--fill-all-vias` Don't cut via holes in conductor layers.
+      - `--min-distance` Minimum distance between points to treat them as separate ones [nargs=0..1] [default: "0.01mm"]
+      - `--net-filter` Only include copper items belonging to nets matching this wildcard [nargs=0..1] [default: ""]
+      - `--user-origin` User-specified output origin ex. 1x1in, 1x1inch, 25.4x25.4mm (default unit mm) [nargs=0..1] [default: ""]
+    - `kicad-cli pcb export svg` — Generate SVG outputs of a given layer list (22 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-l, --layers` Comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--cl, --common-layers` Layers to include on each plot, comma separated list of untranslated layer names to include such as F.Cu,B.Cu [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `--subtract-soldermask` Subtract soldermask from silkscreen
+      - `-m, --mirror` Mirror the board (useful for trying to show bottom layers)
+      - `-t, --theme` Color theme to use (will default to PCB editor settings) [nargs=0..1] [default: ""]
+      - `-n, --negative` Plot as negative (useful for directly etching from the export)
+      - `--black-and-white` Black and white only
+      - `--sp, --sketch-pads-on-fab-layers` Draw pad outlines and their numbers on front and back fab layers
+      - `--hdnp, --hide-DNP-footprints-on-fab-layers` Don't plot text & graphics of DNP footprints on fab layers
+      - `--sdnp, --sketch-DNP-footprints-on-fab-layers` Plot graphics of DNP footprints in sketch mode on fab layers
+      - `--cdnp, --crossout-DNP-footprints-on-fab-layers` Plot an 'X' over the courtyard of DNP footprints on fab layers, and strikeout their reference designators
+      - `--page-size-mode` Set page sizing mode (0 = page with frame and title block, 1 = current page size, 2 = board area only) [nargs=0..1] [default: 0]
+      - `--fit-page-to-board` Fit the page to the board
+      - `--exclude-drawing-sheet` No drawing sheet
+      - `--drill-shape-opt` Set pad/via drill shape option (0 = no shape, 1 = small shape, 2 = actual shape) [nargs=0..1] [default: 2]
+      - `--mode-single` Generates a single file with the output arg path acting as the complete directory and filename path. COMMON_LAYER_LIST does not function in this mode. Instead LAYER_LIST controls all layers plotted.
+      - `--mode-multi` Generates one or more files with behavior similar to the KiCad GUI plotting. The given output path specifies a directory in which files may be output.
+      - `--plot-invisible-text` Deprecated.  Has no effect.
+    - `kicad-cli pcb export vrml` — Export VRML (10 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-f, --force` Overwrite output file
+      - `--no-unspecified` Exclude 3D models for components with 'Unspecified' footprint type
+      - `--no-dnp` Exclude 3D models for components with 'Do not populate' attribute
+      - `--user-origin` User-specified output origin ex. 1x1in, 1x1inch, 25.4x25.4mm (default unit mm) [nargs=0..1] [default: ""]
+      - `--units` Output units; valid options: mm, m, in, tenths [nargs=0..1] [default: "in"]
+      - `--models-dir` Name of folder to create and store 3d models in, if not specified or empty, the models will be embedded in main exported VRML file [nargs=0..1] [default: ""]
+      - `--models-relative` Used with --models-dir to output relative paths in the resulting file
+    - `kicad-cli pcb export xao` — Export XAO (25 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-f, --force` Overwrite output file
+      - `--no-unspecified` Exclude 3D models for components with 'Unspecified' footprint type
+      - `--no-dnp` Exclude 3D models for components with 'Do not populate' attribute
+      - `--grid-origin` Use Grid Origin for output origin
+      - `--drill-origin` Use Drill Origin for output origin
+      - `--subst-models` Substitute STEP or IGS models with the same name in place of VRML models
+      - `--board-only` Only generate a board with no components
+      - `--cut-vias-in-body` Cut via holes in board body even if conductor layers are not exported.
+      - `--no-board-body` Exclude board body
+      - `--no-components` Exclude 3D models for components
+      - `--component-filter` Only include component 3D models matching this list of reference designators (comma-separated, wildcards supported) [nargs=0..1] [default: ""]
+      - `--include-tracks` Export tracks and vias
+      - `--include-pads` Export pads
+      - `--include-zones` Export zones
+      - `--include-inner-copper` Export elements on inner copper layers
+      - `--include-silkscreen` Export silkscreen graphics as a set of flat faces
+      - `--include-soldermask` Export soldermask layers as a set of flat faces
+      - `--fuse-shapes` Fuse overlapping geometry together
+      - `--fill-all-vias` Don't cut via holes in conductor layers.
+      - `--min-distance` Minimum distance between points to treat them as separate ones [nargs=0..1] [default: "0.01mm"]
+      - `--net-filter` Only include copper items belonging to nets matching this wildcard [nargs=0..1] [default: ""]
+      - `--user-origin` User-specified output origin ex. 1x1in, 1x1inch, 25.4x25.4mm (default unit mm) [nargs=0..1] [default: ""]
+  - `kicad-cli pcb render` — Renders the PCB in 3D view to PNG or JPEG image (21 选项)
+    - `-h, --help` Shows help message and exits
+    - `-o, --output` Output file [nargs=0..1] [default: ""]
+    - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+    - `-w, --width` Image width [nargs=0..1] [default: 1600]
+    - `-h, --height` Image height [nargs=0..1] [default: 900]
+    - `--side` Render from side. Options: top, bottom, left, right, front, back [nargs=0..1] [default: "top"]
+    - `--background` Image background. Options: default, transparent, opaque. Default: transparent for PNG, opaque for JPEG [nargs=0..1] [default: ""]
+    - `--quality` Render quality. Options: basic, high, user, job_settings [nargs=0..1] [default: "basic"]
+    - `--preset` Appearance preset. Options: follow_pcb_editor, follow_plot_settings, or user-defined preset name [nargs=0..1] [default: "follow_plot_settings"]
+    - `--use-board-stackup-colors` Colors defined in board stackup override those in preset [nargs=0..1] [default: true]
+    - `--floor` Enables floor, shadows and post-processing, even if disabled in quality setting
+    - `--perspective` Use perspective projection instead of orthogonal
+    - `--zoom` Camera zoom [nargs=0..1] [default: 1]
+    - `--pan` Pan camera, format 'X,Y,Z' e.g.: '3,0,0' [nargs=0..1] [default: ""]
+    - `--pivot` Set pivot point relative to the board center in centimeters, format 'X,Y,Z' e.g.: '-10,2,0' [nargs=0..1] [default: ""]
+    - `--rotate` Rotate board, format 'X,Y,Z' e.g.: '-45,0,45' for isometric view [nargs=0..1] [default: ""]
+    - `--light-top` Top light intensity, format 'R,G,B' or a single number, range: 0-1 [nargs=0..1] [default: ""]
+    - `--light-bottom` Bottom light intensity, format 'R,G,B' or a single number, range: 0-1 [nargs=0..1] [default: ""]
+    - `--light-side` Side lights intensity, format 'R,G,B' or a single number, range: 0-1 [nargs=0..1] [default: ""]
+    - `--light-camera` Camera light intensity, format 'R,G,B' or a single number, range: 0-1 [nargs=0..1] [default: ""]
+    - `--light-side-elevation` Side lights elevation angle in degrees, range: 0-90 [nargs=0..1] [default: 60]
+
+### `kicad-cli sch` — Schematics
+
+  - `kicad-cli sch erc` — Runs the Electrical Rules Check (ERC) on the schematic and creates a report (10 选项)
+    - `-h, --help` Shows help message and exits
+    - `-o, --output` Output file [nargs=0..1] [default: ""]
+    - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+    - `--format` Output file format, options: json, report [nargs=0..1] [default: "report"]
+    - `--units` Report units; valid options: in, mm, mils [nargs=0..1] [default: "mm"]
+    - `--severity-all` Report all ERC violations, this is equivalent to including all the other severity arguments
+    - `--severity-error` Report all ERC error level violations, this can be combined with the other severity arguments
+    - `--severity-warning` Report all ERC warning level violations, this can be combined with the other severity arguments
+    - `--severity-exclusions` Report all excluded ERC violations, this can be combined with the other severity arguments
+    - `--exit-code-violations` Return a nonzero exit code if ERC violations exist
+- `kicad-cli sch export` — Export utilities (netlist, pdf, bom, etc)
+    - `kicad-cli sch export bom` — Generate a Bill of Materials (BOM) (18 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `--preset` Use a named BOM preset setting from the schematic, e.g. "Grouped By Value". [nargs=0..1] [default: ""]
+      - `--format-preset` Use a named BOM format preset setting from the schematic, e.g. CSV. [nargs=0..1] [default: ""]
+      - `--fields` An ordered list of fields to export. See documentation for special substitutions. [nargs=0..1] [default: "Reference,Value,Footprint,${QUANTITY},${DNP}"]
+      - `--labels` An ordered list of labels to apply the exported fields. [nargs=0..1] [default: "Refs,Value,Footprint,Qty,DNP"]
+      - `--group-by` Fields to group references by when field values match. [nargs=0..1] [default: ""]
+      - `--sort-field` Field name to sort by. [nargs=0..1] [default: "Reference"]
+      - `--sort-asc` Sort ascending (true) or descending (false). [nargs=0..1] [default: true]
+      - `--filter` Filter string to remove output lines. [nargs=0..1] [default: ""]
+      - `--exclude-dnp` Exclude symbols marked Do-Not-Populate.
+      - `--include-excluded-from-bom` Include symbols marked 'Exclude from BOM'.
+      - `--field-delimiter` Separator between output fields/columns. [nargs=0..1] [default: ","]
+      - `--string-delimiter` Character to surround fields with. [nargs=0..1] [default: """]
+      - `--ref-delimiter` Character to place between individual references. [nargs=0..1] [default: ","]
+      - `--ref-range-delimiter` Character to place in ranges of references. Leave blank for no ranges. [nargs=0..1] [default: "-"]
+      - `--keep-tabs` Keep tab characters from input fields. Stripped by default.
+      - `--keep-line-breaks` Keep line break characters from input fields. Stripped by default.
+    - `kicad-cli sch export dxf` — Export DXF (9 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output directory [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-t, --theme` Color theme to use (will default to schematic settings) [nargs=0..1] [default: ""]
+      - `-b, --black-and-white` Black and white only
+      - `-e, --exclude-drawing-sheet` No drawing sheet
+      - `--default-font` Default font name [nargs=0..1] [default: ""]
+      - `--pages` List of page numbers separated by comma to print, blank or unspecified is equivalent to all pages [nargs=0..1] [default: ""]
+    - `kicad-cli sch export hpgl` — Export HPGL (9 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output directory [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-e, --exclude-drawing-sheet` No drawing sheet
+      - `--default-font` Default font name [nargs=0..1] [default: ""]
+      - `--pages` List of page numbers separated by comma to print, blank or unspecified is equivalent to all pages [nargs=0..1] [default: ""]
+      - `-p, --pen-size` Pen size [mm] [nargs=0..1] [default: 0.5]
+      - `-r, --origin` Origin and scale: 0 bottom left, 1 centered, 2 page fit, 3 content fit [nargs=0..1] [default: 1]
+    - `kicad-cli sch export netlist` — Export a netlist (3 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `--format` Netlist output format, valid options: kicadsexpr, kicadxml, cadstar, orcadpcb2, spice, spicemodel, pads, allegro [nargs=0..1] [default: "kicadsexpr"]
+    - `kicad-cli sch export pdf` — Export PDF (13 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output file [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-t, --theme` Color theme to use (will default to schematic settings) [nargs=0..1] [default: ""]
+      - `-b, --black-and-white` Black and white only
+      - `-e, --exclude-drawing-sheet` No drawing sheet
+      - `--default-font` Default font name [nargs=0..1] [default: ""]
+      - `--exclude-pdf-property-popups` Do not generate property popups in PDF
+      - `--exclude-pdf-hierarchical-links` Do not generate clickable links for hierarchical elements in PDF
+      - `--exclude-pdf-metadata` Do not generate PDF metadata from AUTHOR and SUBJECT variables
+      - `-n, --no-background-color` Avoid setting a background color (regardless of theme)
+      - `--pages` List of page numbers separated by comma to print, blank or unspecified is equivalent to all pages [nargs=0..1] [default: ""]
+    - `kicad-cli sch export ps` — Export PS (10 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output directory [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-t, --theme` Color theme to use (will default to schematic settings) [nargs=0..1] [default: ""]
+      - `-b, --black-and-white` Black and white only
+      - `-e, --exclude-drawing-sheet` No drawing sheet
+      - `--default-font` Default font name [nargs=0..1] [default: ""]
+      - `-n, --no-background-color` Avoid setting a background color (regardless of theme)
+      - `--pages` List of page numbers separated by comma to print, blank or unspecified is equivalent to all pages [nargs=0..1] [default: ""]
+    - `kicad-cli sch export svg` — Export SVG (10 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output directory [nargs=0..1] [default: ""]
+      - `--drawing-sheet` Path to drawing sheet, this overrides any existing project defined sheet when used [nargs=0..1] [default: ""]
+      - `-D, --define-var` Overrides or adds project variables, can be used multiple times to declare multiple variables.
+      - `-t, --theme` Color theme to use (will default to schematic settings) [nargs=0..1] [default: ""]
+      - `-b, --black-and-white` Black and white only
+      - `-e, --exclude-drawing-sheet` No drawing sheet
+      - `--default-font` Default font name [nargs=0..1] [default: ""]
+      - `-n, --no-background-color` Avoid setting a background color (regardless of theme)
+      - `--pages` List of page numbers separated by comma to print, blank or unspecified is equivalent to all pages [nargs=0..1] [default: ""]
+
+### `kicad-cli sym` — Symbol and Symbol Libraries
+
+- `kicad-cli sym export` — Export utilities (svg)
+    - `kicad-cli sym export svg` — Exports the symbol or entire symbol library to SVG (7 选项)
+      - `-h, --help` Shows help message and exits
+      - `-o, --output` Output directory [nargs=0..1] [default: ""]
+      - `-t, --theme` Color theme to use (will default to symbol editor settings) [nargs=0..1] [default: ""]
+      - `-s, --symbol` Specific symbol to export within the library [nargs=0..1] [default: ""]
+      - `--black-and-white` Black and white only
+      - `--include-hidden-pins` Include hidden pins
+      - `--include-hidden-fields` Include hidden fields
+  - `kicad-cli sym upgrade` — Upgrades the symbol library to the current kicad version format (3 选项)
+    - `-h, --help` Shows help message and exits
+    - `-o, --output` Output file [nargs=0..1] [default: ""]
+    - `--force` Forces the symbol library to be resaved regardless of versioning
+
+### `kicad-cli version` — Reports the version info in various formats
+
+- `kicad-cli version` — Reports the version info in various formats (2 选项)
+  - `-h, --help` Shows help message and exits
+  - `--format` version info format (plain, commit, about) [nargs=0..1] [default: "plain"]
+
+## 二、pcbnew 原生 API (SWIG, 进程内)
+
+### 2.1 类按域分组 (class × method count)
+
+**board** (34 类): `BOARD`(273), `BOARD_CONNECTED_ITEM`(146), `BOARD_DESIGN_SETTINGS`(62), `BOARD_ITEM`(109), `BOARD_ITEM_CONTAINER`(115), `BOARD_LISTENER`(10), `DELETED_BOARD_ITEM`(110), `FOOTPRINT`(275), `FOOTPRINTS`(22), `NETCLASS`(97), `NETINFO_ITEM`(124), `NETINFO_LIST`(7), `PAD`(286), `PADS`(22), `PADSTACK`(61), `PADS_VEC`(22), `PCB_ARC`(182), `PCB_DIMENSION_BASE`(255), `PCB_FIELD`(215), `PCB_FIELDS`(22), `PCB_FIELD_VEC`(22), `PCB_GROUP`(123), `PCB_MARKER`(133), `PCB_SHAPE`(238), `PCB_TARGET`(116), `PCB_TEXT`(203), `PCB_TEXTBOX`(337), `PCB_TRACK`(174), `PCB_VIA`(210), `PYTHON_FOOTPRINT_WIZARD_LIST`(2), `ZONE`(271), `ZONES`(22), `ZONE_FILLER`(4), `ZONE_SETTINGS`(32)
+
+**connectivity** (3 类): `CN_DISJOINT_NET_ENTRY`(0), `CONNECTIVITY_DATA`(38), `RN_DYNAMIC_LINE`(0)
+
+**drc** (2 类): `MARKERS`(22), `MARKER_BASE`(15)
+
+**io_plot** (11 类): `EXCELLON_WRITER`(11), `GENDRILL_WRITER_BASE`(7), `GERBER_JOBFILE_WRITER`(3), `GERBER_WRITER`(10), `IO_ERROR`(4), `PCB_IO`(20), `PCB_IO_KICAD_SEXPR`(30), `PCB_IO_MGR`(8), `PCB_PLOT_PARAMS`(97), `PLOTTER`(63), `PLOT_CONTROLLER`(13)
+
+**geometry** (29 类): `ARC_MID`(0), `BOX2I`(47), `EDA_ANGLE`(25), `EDA_SHAPE`(83), `FILE_LINE_READER`(8), `INPUTSTREAM_LINE_READER`(5), `LINE_READER`(5), `SEG`(30), `SHAPE`(21), `SHAPE_ARC`(47), `SHAPE_BASE`(5), `SHAPE_CIRCLE`(26), `SHAPE_COMPOUND`(27), `SHAPE_LINE_CHAIN`(86), `SHAPE_LINE_CHAIN_BASE`(29), `SHAPE_POLY_SET`(108), `SHAPE_RECT`(30), `SHAPE_SEGMENT`(26), `SHAPE_SIMPLE`(35), `STRING_LINE_READER`(5), `VECTOR2I`(11), `VECTOR2I_EXTENDED_TYPE`(0), `VECTOR2L`(11), `VECTOR_SHAPEPTR`(22), `VECTOR_VECTOR2I`(22), `wxPoint`(2), `wxPoint_Vector`(22), `wxRect`(11), `wxSize`(6)
+
+**settings** (2 类): `NET_SETTINGS`(31), `SETTINGS_MANAGER`(34)
+
+**fields_props** (2 类): `EDA_ITEM`(53), `EDA_TEXT`(90)
+
+**other** (81 类): `ActionPlugin`(11), `BASE_SET`(0), `CLIPPER_Z_VALUE`(0), `COLOR4D`(27), `CompareByUuid`(0), `D356_RECORD`(0), `DIFF_PAIR_DIMENSION`(0), `DRAWINGS`(22), `DRILL_PRECISION`(1), `DRILL_TOOL`(0), `EDA_IU_SCALE`(4), `EXPORTER_VRML`(1), `FILE_OUTPUTFORMATTER`(5), `FP_3DMODEL`(0), `FP_CACHE`(11), `FP_CACHE_ENTRY`(3), `FilePlugin`(3), `FootprintWizardParameter`(5), `FootprintWizardPlugin`(29), `GAL_SET`(4), `GENERATORS`(22), `GROUPS`(22), `HIGH_LIGHT_INFO`(0), `HOLE_INFO`(0), `IPC356D_WRITER`(1), `ISOLATED_ISLANDS`(0), `JOBFILE_PARAMS`(0), `KIID`(13), `KIID_NIL_SET_RESET`(0), `KIID_PATH`(25), `KIID_VECT_LIST`(22), `KI_PARAM_ERROR`(1), `KiCadPlugin`(3), `LAYER`(3), `LIB_ID`(21), `LSEQ`(23), `LSET`(48), `MAP_STRING_STRING`(25), `NETCODES_MAP`(25), `NETNAMES_MAP`(25), `OUTPUTFORMATTER`(5), `PCB_DIM_ALIGNED`(265), `PCB_DIM_CENTER`(255), `PCB_DIM_LEADER`(258), `PCB_DIM_ORTHOGONAL`(267), `PCB_DIM_RADIAL`(259), `PCB_REFERENCE_IMAGE`(112), `PCB_TABLE`(162), `PLACE_FILE_EXPORTER`(6), `PRETTIFIED_FILE_OUTPUTFORMATTER`(5), `PTR_LAYER_CACHE_KEY`(0), `PTR_PTR_CACHE_KEY`(0), `PTR_PTR_LAYER_CACHE_KEY`(0), `PYTHON_ACTION_PLUGINS`(2), `STRINGSET`(19), `STRING_FORMATTER`(8), `StructColors`(0), `SwigPyIterator`(9), `TEXT_ATTRIBUTES`(1), `TEXT_ITEM_INFO`(0), `TITLE_BLOCK`(15), `TRACKS`(22), `TRACKS_VEC`(22), `UNITS_PROVIDER`(12), `UTF8`(16), `UTILS_BOX3D`(4), `UTILS_STEP_MODEL`(5), `VECTOR3D`(7), `VECTOR_FP_3DMODEL`(22), `VIA_DIMENSION`(0), `VIA_DIMENSION_Vector`(22), `_SwigNonDynamicMeta`(1), `base_seqVect`(22), `cmp_drawings`(0), `cmp_pads`(0), `cmp_zones`(0), `intVector`(22), `netclasses_map`(25), `str_utf8_Map`(25), `string`(27), `wxString`(0)
+
+### 2.2 核心类方法全表 (节选高频本源类)
+
+#### `BOARD` : BOARD_ITEM_CONTAINER — 273 方法
+> Proxy of C++ BOARD class.
+
+- `Add(BOARD_ITEM_CONTAINER self, BOARD_ITEM aItem, BOARD_ADD_MODE aMode=BOARD_ADD_MODE::INSERT)`  — Add a BOARD_ITEM to this BOARD_ITEM_CONTAINER, clear the thisown to prevent
+- `AddListener(BOARD self, BOARD_LISTENER aListener)`
+- `AddNative(BOARD self, BOARD_ITEM aItem, ADD_MODE aMode=INSERT, bool aSkipConnectivity=False)`
+- `AllConnectedItems(BOARD self) -> std::vector< BOARD_CONNECTED_ITEM *,std::allocator< BOARD_CONNECTED_ITEM * > > const`
+- `BoardCopperLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerSet(BOARD_ITEM self) -> LSET`
+- `BuildConnectivity(BOARD self, PROGRESS_REPORTER * aReporter=None) -> bool`
+- `BuildListOfNets(BOARD self)`
+- `BulkRemoveStaleTeardrops(BOARD self, BOARD_COMMIT & aCommit)`
+- `CacheTriangulation(BOARD self, PROGRESS_REPORTER * aReporter=None, ZONES aZones={})`
+- `Cast(…)`
+- `ClassOf(EDA_ITEM aItem) -> bool`
+- `ClearBrightened(EDA_ITEM self)`
+- `ClearEditFlags(EDA_ITEM self)`
+- `ClearFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask=EDA_ITEM_ALL_FLAGS)`
+- `ClearProject(BOARD self)`
+- `ClearSelected(EDA_ITEM self)`
+- `ClearTempFlags(EDA_ITEM self)`
+- `Clone(EDA_ITEM self) -> EDA_ITEM`
+- `ComputeBoundingBox(BOARD self, bool aBoardEdgesOnly=False) -> BOX2I`
+- `ConvertBrdLayerToPolygonalContours(BOARD self, PCB_LAYER_ID aLayer, SHAPE_POLY_SET aOutlines, KIGFX::RENDER_SETTINGS * aRenderSettings=None)`
+- `ConvertCrossReferencesToKIIDs(BOARD self, wxString aSource) -> wxString`
+- `ConvertKIIDsToCrossReferences(BOARD self, wxString aSource) -> wxString`
+- `CopyFrom(BOARD_ITEM self, BOARD_ITEM aOther)`
+- `Delete(self, BOARD_ITEM)`  — Remove a BOARD_ITEM from this BOARD_ITEM_CONTAINER, set the thisdown flag so that
+- `DeleteAllFootprints(BOARD self)`
+- `DeleteMARKERs(BOARD self)`
+- `DeleteNative(BOARD_ITEM_CONTAINER self, BOARD_ITEM aItem)`
+- `DeleteStructure(BOARD_ITEM self)`
+- `DetachAllFootprints(BOARD self)`
+- `DpCoupledNet(BOARD self, NETINFO_ITEM aNet) -> NETINFO_ITEM`
+- `Drawings(BOARD self) -> DRAWINGS`
+- `Duplicate(…)`
+- `EmbedFonts(BOARD self)`
+- `FillItemMap(BOARD self, std::map< KIID,EDA_ITEM *,std::less< KIID >,std::allocator< std::pair< KIID const,EDA_ITEM * > > > & aMap)`
+- `FinalizeBulkAdd(BOARD self, std::vector< BOARD_ITEM *,std::allocator< BOARD_ITEM * > > & aNewItems)`
+- `FinalizeBulkRemove(BOARD self, std::vector< BOARD_ITEM *,std::allocator< BOARD_ITEM * > > & aRemovedItems)`
+- `FindFootprintByPath(BOARD self, KIID_PATH aPath) -> FOOTPRINT`
+- `FindFootprintByReference(BOARD self, wxString aReference) -> FOOTPRINT`
+- `FindNet(BOARD self, int aNetcode) -> NETINFO_ITEM`
+- `FixupEmbeddedData(BOARD self)`
+- `Flip(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `FlipLayer(BOARD self, PCB_LAYER_ID aLayer) -> PCB_LAYER_ID`
+- `Footprints(BOARD self) -> FOOTPRINTS`
+- `Generators(BOARD self) -> GENERATORS`
+- `GetAllNetClasses(…)`  — Return a dictionary like object with net_class_name as key and NETCLASSPTR as value
+- `GetArea(BOARD self, int index) -> ZONE`
+- `GetAreaCount(BOARD self) -> int`
+- `GetBoard(BOARD_ITEM self) -> BOARD`
+- `GetBoardEdgesBoundingBox(BOARD self) -> BOX2I`
+- `GetBoardPolygonOutlines(BOARD self, SHAPE_POLY_SET aOutlines, OUTLINE_ERROR_HANDLER * aErrorHandler=None, bool aAllowUseArcsInPolygons=False, bool aIncludeNPTHAsOutlines=False) -> bool`
+- `GetBoardUse(BOARD self) -> BOARD_USE`
+- `GetBoundingBox(EDA_ITEM self) -> BOX2I`
+- `GetCenter(BOARD_ITEM self) -> VECTOR2I`
+- `GetClass(BOARD self) -> wxString`
+- `GetComponentClassManager(BOARD self) -> COMPONENT_CLASS_MANAGER &`
+- `GetConnectivity(BOARD self) -> std::shared_ptr< CONNECTIVITY_DATA >`
+- `GetContextualTextVars(BOARD self, wxArrayString * aVars)`
+- `GetCopperLayerCount(BOARD self) -> int`
+- `GetCopperLayerStackMaxId(BOARD self) -> PCB_LAYER_ID`
+- `GetCurrentNetClassName(…)`
+- `GetDesignSettings(BOARD self) -> BOARD_DESIGN_SETTINGS`
+- `GetDrawings(…)`
+- `GetEditFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetEffectiveHoleShape(BOARD_ITEM self) -> std::shared_ptr< SHAPE_SEGMENT >`
+- `GetEffectiveShape(BOARD_ITEM self, PCB_LAYER_ID aLayer=UNDEFINED_LAYER, FLASHING aFlash=DEFAULT) -> std::shared_ptr< SHAPE >`
+- `GetEmbeddedFiles(BOARD self) -> EMBEDDED_FILES`
+- `GetEnabledLayers(BOARD self) -> LSET`
+- `GetFPRelativePosition(BOARD_ITEM self) -> VECTOR2I`
+- `GetFileFormatVersionAtLoad(BOARD self) -> int`
+- `GetFileName(BOARD self) -> wxString`
+- `GetFirstFootprint(BOARD self) -> FOOTPRINT`
+- `GetFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetFocusPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetFontMetrics(BOARD_ITEM self) -> KIFONT::METRICS const &`
+- `GetFonts(BOARD self) -> std::set< KIFONT::OUTLINE_FONT *,std::less< KIFONT::OUTLINE_FONT * >,std::allocator< KIFONT::OUTLINE_FONT * > >`
+- `GetFootprint(BOARD self, VECTOR2I aPosition, PCB_LAYER_ID aActiveLayer, bool aVisibleOnly, bool aIgnoreLocked=False) -> FOOTPRINT`
+- `GetFootprints(…)`
+- `GetFriendlyName(EDA_ITEM self) -> wxString`
+- `GetGenerator(BOARD self) -> wxString`
+- `GetHighLightNetCodes(BOARD self) -> std::set< int,std::less< int >,std::allocator< int > > const &`
+- `GetItem(BOARD self, KIID aID) -> BOARD_ITEM`
+- `GetItemDescription(EDA_ITEM self, UNITS_PROVIDER aUnitsProvider, bool aFull) -> wxString`
+- `GetItemSet(BOARD self) -> BOARD_ITEM_SET const`
+- `GetLayer(BOARD_ITEM self) -> PCB_LAYER_ID`
+- `GetLayerID(BOARD self, wxString aLayerName) -> PCB_LAYER_ID`
+- `GetLayerName(BOARD self, PCB_LAYER_ID aLayer) -> wxString`
+- `GetLayerSet(BOARD_ITEM self) -> LSET`
+- `GetLayerType(BOARD self, PCB_LAYER_ID aLayer) -> LAYER_T`
+- `GetMaxClearanceValue(BOARD self) -> int`
+- `GetMenuImage(EDA_ITEM self) -> BITMAPS`
+- `GetMsgPanelInfo(EDA_ITEM self, EDA_DRAW_FRAME * aFrame, std::vector< MSG_PANEL_ITEM,std::allocator< MSG_PANEL_ITEM > > & aList)`
+- `GetNetClassAssignmentCandidates(BOARD self) -> STRINGSET`
+- `GetNetClasses(…)`
+- `GetNetCount(BOARD self) -> unsigned int`
+- `GetNetInfo(BOARD self) -> NETINFO_LIST`
+- `GetNetcodeFromNetname(…)`  — Given a netname, return its netcode
+- `GetNetsByName(…)`  — Return a dictionary like object with key:wxString netname and value:NETINFO_ITEM
+- `GetNetsByNetcode(…)`  — Return a dictionary like object with key:int netcode and value:NETINFO_ITEM
+- `GetNodesCount(BOARD self, int aNet=-1) -> unsigned int`
+- `GetOutlinesChainingEpsilon(BOARD self) -> int`
+- `GetPad(BOARD self, VECTOR2I aPosition, LSET aLayerMask) -> PAD`
+- `GetPads(BOARD self) -> PADS_VEC`
+- `GetPageSettings(BOARD self) -> PAGE_INFO const &`
+- `GetParent(BOARD_ITEM self) -> BOARD_ITEM_CONTAINER`
+- `GetParentAsString(BOARD_ITEM self) -> wxString`
+- `GetParentFootprint(BOARD_ITEM self) -> FOOTPRINT`
+- `GetParentGroup(BOARD_ITEM self) -> PCB_GROUP`
+- `GetPlotOptions(BOARD self) -> PCB_PLOT_PARAMS`
+- `GetPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetProject(BOARD self) -> PROJECT *`
+- `GetProperties(BOARD self) -> MAP_STRING_STRING`
+- `GetSortPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetSortedPadListByXthenYCoord(BOARD self, PADS_VEC aVector, int aNetCode=-1)`
+- `GetStackupOrDefault(BOARD self) -> BOARD_STACKUP`
+- `GetStandardLayerName(PCB_LAYER_ID aLayerId) -> wxString`
+- `GetStroke(BOARD_ITEM self) -> STROKE_PARAMS`
+- `GetTempFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetTimeStamp(BOARD self) -> int`
+- `GetTitleBlock(BOARD self) -> TITLE_BLOCK`
+- `GetTrackLength(BOARD self, PCB_TRACK aTrack) -> std::tuple< int,double,double >`
+- `GetTrackWidthList(…)`
+- `GetTracks(…)`
+- `GetTypeDesc(EDA_ITEM self) -> wxString`
+- `GetUserDefinedLayerCount(BOARD self) -> int`
+- `GetUserUnits(BOARD self) -> EDA_UNITS`
+- `GetViasDimensionsList(…)`
+- `GetVisibleElements(BOARD self) -> GAL_SET`
+- `GetVisibleLayers(BOARD self) -> LSET`
+- `GetX(BOARD_ITEM self) -> int`
+- `GetY(BOARD_ITEM self) -> int`
+- `GetZoneList(BOARD self, bool aIncludeZonesInFootprints=False) -> std::list< ZONE *,std::allocator< ZONE * > >`
+- `GroupLegalOps(BOARD self, PCB_SELECTION const & selection) -> BOARD::GroupLegalOpsField`
+- `Groups(BOARD self) -> GROUPS`
+- `GroupsSanityCheck(BOARD self, bool repair=False) -> wxString`
+- `GroupsSanityCheckInternal(BOARD self, bool repair) -> wxString`
+- `HasDrilledHole(BOARD_ITEM self) -> bool`
+- `HasFlag(EDA_ITEM self, EDA_ITEM_FLAGS aFlag) -> bool`
+- `HasHole(BOARD_ITEM self) -> bool`
+- `HasItemsOnLayer(BOARD self, PCB_LAYER_ID aLayer) -> bool`
+- `HasLineStroke(BOARD_ITEM self) -> bool`
+- `HighLightOFF(BOARD self)`
+- `HighLightON(BOARD self, bool aValue=True)`
+- `HitTest(EDA_ITEM self, VECTOR2I aPosition, int aAccuracy=0) -> bool`
+- `IncrementTimeStamp(BOARD self)`
+- `InitializeClearanceCache(BOARD self)`
+- `InvalidateClearanceCache(BOARD self, KIID aUuid)`
+- `IsBackLayer(BOARD self, PCB_LAYER_ID aLayer) -> bool`
+- `IsBrightened(EDA_ITEM self) -> bool`
+- `IsConnected(BOARD_ITEM self) -> bool`
+- `IsElementVisible(BOARD self, GAL_LAYER_ID aLayer) -> bool`
+- `IsEmpty(BOARD self) -> bool`
+- `IsEntered(EDA_ITEM self) -> bool`
+- `IsFootprintHolder(BOARD self) -> bool`
+- `IsFootprintLayerVisible(BOARD self, PCB_LAYER_ID aLayer) -> bool`
+- `IsForceVisible(EDA_ITEM self) -> bool`
+- `IsFrontLayer(BOARD self, PCB_LAYER_ID aLayer) -> bool`
+- `IsHighLightNetON(BOARD self) -> bool`
+- `IsKnockout(BOARD_ITEM self) -> bool`
+- `IsLayerEnabled(BOARD self, PCB_LAYER_ID aLayer) -> bool`
+- `IsLayerVisible(BOARD self, PCB_LAYER_ID aLayer) -> bool`
+- `IsLocked(BOARD_ITEM self) -> bool`
+- `IsModified(EDA_ITEM self) -> bool`
+- `IsMoving(EDA_ITEM self) -> bool`
+- `IsNew(EDA_ITEM self) -> bool`
+- `IsOnCopperLayer(BOARD_ITEM self) -> bool`
+- `IsOnLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsReplaceable(EDA_ITEM self) -> bool`
+- `IsRollover(EDA_ITEM self) -> bool`
+- `IsSelected(EDA_ITEM self) -> bool`
+- `IsShownAsBitmap(EDA_ITEM self) -> bool`
+- `IsSideSpecific(BOARD_ITEM self) -> bool`
+- `IsTented(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsType(EDA_ITEM self, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> bool`
+- `LayerDepth(BOARD self, PCB_LAYER_ID aStartLayer, PCB_LAYER_ID aEndLayer) -> int`
+- `LayerMaskDescribe(BOARD_ITEM self) -> wxString`
+- `LegacyTeardrops(BOARD self) -> bool`
+- `MapNets(BOARD self, BOARD aDestBoard)`
+- `Markers(BOARD self) -> MARKERS`
+- `MatchDpSuffix(BOARD self, wxString aNetName, wxString aComplementNet) -> int`
+- `Matches(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, void * aAuxData) -> bool`
+- `Mirror(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `Move(BOARD_ITEM self, VECTOR2I aMoveVector)`
+- `Normalize(BOARD_ITEM self)`
+- `NormalizeForCompare(BOARD_ITEM self)`
+- `OnItemChanged(BOARD self, BOARD_ITEM aItem)`
+- `OnItemsChanged(BOARD self, std::vector< BOARD_ITEM *,std::allocator< BOARD_ITEM * > > & aItems)`
+- `OnItemsCompositeUpdate(BOARD self, std::vector< BOARD_ITEM *,std::allocator< BOARD_ITEM * > > & aAddedItems, std::vector< BOARD_ITEM *,std::allocator< BOARD_ITEM * > > & aRemovedItems, std::vector< BOARD_ITEM *,std::allocator< BOARD_ITEM * > > & aChangedItems)`
+- `OnRatsnestChanged(BOARD self)`
+- `PyGetClass(EDA_ITEM self) -> wxString`
+- `RecordDRCExclusions(BOARD self)`
+- `Remove(self, BOARD_ITEM)`  — Remove a BOARD_ITEM from this BOARD_ITEM_CONTAINER, set the thisdown flag so that
+- `RemoveAll(…)`  — RemoveAll(BOARD self, std::initializer_list< KICAD_T > aTypes={ PCB_NETINFO_T, PCB_MARKER_T,
+- `RemoveAllItemsOnLayer(BOARD self, PCB_LAYER_ID aLayer) -> bool`
+- `RemoveAllListeners(BOARD self)`
+- `RemoveListener(BOARD self, BOARD_LISTENER aListener)`
+- `RemoveNative(BOARD self, BOARD_ITEM aBoardItem, REMOVE_MODE aMode=NORMAL)`
+- `RemoveUnusedNets(BOARD self, BOARD_COMMIT * aCommit)`
+- `RenderAsBitmap(EDA_ITEM self, double aWorldScale) -> bool`
+- `Replace(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, wxString aText) -> bool`
+- `ResetNetHighLight(BOARD self)`
+- `ResolveDRCExclusions(BOARD self, bool aCreateMarkers) -> MARKERS`
+- `ResolveTextVar(BOARD self, wxString token, int aDepth) -> bool`
+- `Rotate(BOARD_ITEM self, VECTOR2I aRotCentre, EDA_ANGLE aAngle)`
+- `RunOnChildren(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction)`
+- `RunOnDescendants(BOARD self, std::function< void (BOARD_ITEM *) > const & aFunction, int aDepth=0)`
+- `RunOnNestedEmbeddedFiles(BOARD self, std::function< void (EMBEDDED_FILES *) > const & aFunction)`
+- `SanitizeNetcodes(BOARD self)`
+- `Save(…)`
+- `SetAreasNetCodesFromNetNames(BOARD self) -> int`
+- `SetBoardUse(BOARD self, BOARD_USE aUse)`
+- `SetBrightened(EDA_ITEM self)`
+- `SetCopperLayerCount(BOARD self, int aCount)`
+- `SetElementVisibility(BOARD self, GAL_LAYER_ID aLayer, bool aNewState)`
+- `SetEmbeddedFilesDelegate(BOARD self, EMBEDDED_FILES * aDelegate)`
+- `SetEnabledLayers(BOARD self, LSET aLayerMask)`
+- `SetFPRelativePosition(BOARD_ITEM self, VECTOR2I aPos)`
+- `SetFileFormatVersionAtLoad(BOARD self, int aVersion)`
+- `SetFileName(BOARD self, wxString aFileName)`
+- `SetFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `SetForceVisible(EDA_ITEM self, bool aEnable)`
+- `SetGenerator(BOARD self, wxString aGenerator)`
+- `SetHighLightNet(BOARD self, int aNetCode, bool aMulti=False)`
+- `SetIsKnockout(BOARD_ITEM self, bool aKnockout)`
+- `SetIsRollover(EDA_ITEM self, bool aIsRollover)`
+- `SetIsShownAsBitmap(EDA_ITEM self, bool aBitmap)`
+- `SetLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer)`
+- `SetLayerDescr(BOARD self, PCB_LAYER_ID aIndex, LAYER aLayer) -> bool`
+- `SetLayerName(BOARD self, PCB_LAYER_ID aLayer, wxString aLayerName) -> bool`
+- `SetLayerSet(BOARD_ITEM self, LSET aLayers)`
+- `SetLayerType(BOARD self, PCB_LAYER_ID aLayer, LAYER_T aLayerType) -> bool`
+- `SetLegacyTeardrops(BOARD self, bool aFlag)`
+- `SetLocked(BOARD_ITEM self, bool aLocked)`
+- `SetModified(EDA_ITEM self)`
+- `SetOutlinesChainingEpsilon(BOARD self, int aValue)`
+- `SetPageSettings(BOARD self, PAGE_INFO const & aPageSettings)`
+- `SetParent(EDA_ITEM self, EDA_ITEM aParent)`
+- `SetParentGroup(BOARD_ITEM self, PCB_GROUP aGroup)`
+- `SetPlotOptions(BOARD self, PCB_PLOT_PARAMS aOptions)`
+- `SetPos(…)`
+- `SetPosition(EDA_ITEM self, VECTOR2I aPos)`
+- `SetProject(BOARD self, PROJECT * aProject, bool aReferenceOnly=False)`
+- `SetProperties(BOARD self, MAP_STRING_STRING aProps)`
+- `SetSelected(EDA_ITEM self)`
+- `SetStartEnd(…)`
+- `SetStroke(BOARD_ITEM self, STROKE_PARAMS const & aStroke)`
+- `SetTitleBlock(BOARD self, TITLE_BLOCK aTitleBlock)`
+- `SetUserDefinedLayerCount(BOARD self, int aCount)`
+- `SetUserUnits(BOARD self, EDA_UNITS aUnits)`
+- `SetVisibleAlls(BOARD self)`
+- `SetVisibleElements(BOARD self, GAL_SET aMask)`
+- `SetVisibleLayers(BOARD self, LSET aLayerMask)`
+- `SetX(BOARD_ITEM self, int aX)`
+- `SetY(BOARD_ITEM self, int aY)`
+- `Similarity(BOARD_ITEM self, BOARD_ITEM aItem) -> double`
+- `Sort(EDA_ITEM aLeft, EDA_ITEM aRight) -> bool`
+- `StyleFromSettings(BOARD_ITEM self, BOARD_DESIGN_SETTINGS settings)`
+- `SwapItemData(BOARD_ITEM self, BOARD_ITEM aImage)`
+- `SynchronizeNetsAndNetClasses(BOARD self, bool aResetTrackAndViaSizes)`
+- `SynchronizeProperties(BOARD self)`
+- `TestZoneIntersection(BOARD self, ZONE aZone1, ZONE aZone2) -> bool`
+- `Tracks(BOARD self) -> TRACKS`
+- `TracksInNet(BOARD self, int aNetCode) -> TRACKS`
+- `TransformShapeToPolygon(BOARD_ITEM self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aError, ERROR_LOC aErrorLoc, bool ignoreLineWidth=False)`
+- `Type(EDA_ITEM self) -> KICAD_T`
+- `UpdateRatsnestExclusions(BOARD self)`
+- `UpdateUserUnits(BOARD self, BOARD_ITEM aItem, KIGFX::VIEW * aView)`
+- `ViewBBox(EDA_ITEM self) -> BOX2I`
+- `ViewGetLayers(EDA_ITEM self) -> intVector`
+- `Visit(EDA_ITEM self, INSPECTOR inspector, void * testData, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> INSPECT_RESULT`
+- `XorFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `Zones(BOARD self) -> ZONES`
+
+#### `FOOTPRINT` : BOARD_ITEM_CONTAINER — 275 方法
+> Proxy of C++ FOOTPRINT class.
+
+- `Add(BOARD_ITEM_CONTAINER self, BOARD_ITEM aItem, BOARD_ADD_MODE aMode=BOARD_ADD_MODE::INSERT)`  — Add a BOARD_ITEM to this BOARD_ITEM_CONTAINER, clear the thisown to prevent
+- `Add3DModel(FOOTPRINT self, FP_3DMODEL a3DModel)`
+- `AddField(FOOTPRINT self, PCB_FIELD aField) -> PCB_FIELD`
+- `AddNative(FOOTPRINT self, BOARD_ITEM aItem, ADD_MODE aMode=INSERT, bool aSkipConnectivity=False)`
+- `AddNetTiePadGroup(FOOTPRINT self, wxString aGroup)`
+- `AllowMissingCourtyard(FOOTPRINT self) -> bool`
+- `ApplyDefaultSettings(FOOTPRINT self, BOARD board, bool aStyleFields, bool aStyleText, bool aStyleShapes)`
+- `AutoPositionFields(FOOTPRINT self)`
+- `BoardCopperLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerSet(BOARD_ITEM self) -> LSET`
+- `BuildCourtyardCaches(FOOTPRINT self, OUTLINE_ERROR_HANDLER * aErrorHandler=None)`
+- `BuildNetTieCache(FOOTPRINT self)`
+- `Cast(…)`
+- `CheckClippedSilk(FOOTPRINT self, std::function< void (BOARD_ITEM *,BOARD_ITEM *,VECTOR2I const &) > const & aErrorHandler)`
+- `CheckFootprintAttributes(FOOTPRINT self, std::function< void (wxString const &) > const & aErrorHandler)`
+- `CheckNetTiePadGroups(FOOTPRINT self, std::function< void (wxString const &) > const & aErrorHandler)`
+- `CheckNetTies(FOOTPRINT self, std::function< void (BOARD_ITEM const *,BOARD_ITEM const *,BOARD_ITEM const *,VECTOR2I const &) > const & aErrorHandler)`
+- `CheckPads(FOOTPRINT self, UNITS_PROVIDER aUnitsProvider, std::function< void (PAD const *,int,wxString const &) > const & aErrorHandler)`
+- `CheckShortingPads(FOOTPRINT self, std::function< void (PAD const *,PAD const *,int,VECTOR2I const &) > const & aErrorHandler)`
+- `ClassOf(EDA_ITEM aItem) -> bool`
+- `ClearAllNets(FOOTPRINT self)`
+- `ClearBrightened(EDA_ITEM self)`
+- `ClearEditFlags(EDA_ITEM self)`
+- `ClearFields(FOOTPRINT self)`
+- `ClearFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask=EDA_ITEM_ALL_FLAGS)`
+- `ClearNetTiePadGroups(FOOTPRINT self)`
+- `ClearSelected(EDA_ITEM self)`
+- `ClearTempFlags(EDA_ITEM self)`
+- `ClearTransientComponentClassNames(FOOTPRINT self)`
+- `Clone(EDA_ITEM self) -> EDA_ITEM`
+- `CopyFrom(BOARD_ITEM self, BOARD_ITEM aOther)`
+- `CoverageRatio(FOOTPRINT self, GENERAL_COLLECTOR const & aCollector) -> double`
+- `Delete(self, BOARD_ITEM)`  — Remove a BOARD_ITEM from this BOARD_ITEM_CONTAINER, set the thisdown flag so that
+- `DeleteNative(BOARD_ITEM_CONTAINER self, BOARD_ITEM aItem)`
+- `DeleteStructure(BOARD_ITEM self)`
+- `Deserialize(FOOTPRINT self, google::protobuf::Any const & aContainer) -> bool`
+- `Duplicate(…)`
+- `DuplicateItem(FOOTPRINT self, BOARD_ITEM aItem, bool aAddToFootprint=False) -> BOARD_ITEM`
+- `EmbedFonts(FOOTPRINT self)`
+- `FindPadByNumber(FOOTPRINT self, wxString aPadNumber, PAD aSearchAfterMe=None) -> PAD`
+- `FixUpPadsForBoard(FOOTPRINT self, BOARD aBoard)`
+- `FixUuids(FOOTPRINT self) -> bool`
+- `Flip(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `FootprintNeedsUpdate(FOOTPRINT self, FOOTPRINT aLibFP, int aCompareFlags=0, REPORTER * aReporter=None) -> bool`
+- `GetArea(FOOTPRINT self, int aPadding=0) -> double`
+- `GetAttributes(FOOTPRINT self) -> int`
+- `GetBoard(BOARD_ITEM self) -> BOARD`
+- `GetBoundingBox(FOOTPRINT self) -> BOX2I`
+- `GetBoundingHull(FOOTPRINT self) -> SHAPE_POLY_SET`
+- `GetCachedCourtyard(FOOTPRINT self, PCB_LAYER_ID aLayer) -> SHAPE_POLY_SET`
+- `GetCenter(BOARD_ITEM self) -> VECTOR2I`
+- `GetClass(FOOTPRINT self) -> wxString`
+- `GetClearanceOverrides(FOOTPRINT self, wxString aSource) -> std::optional< int >`
+- `GetComponentClass(FOOTPRINT self) -> COMPONENT_CLASS const *`
+- `GetComponentClassAsString(FOOTPRINT self) -> wxString`
+- `GetContextualTextVars(FOOTPRINT self, wxArrayString * aVars)`
+- `GetCourtyard(FOOTPRINT self, PCB_LAYER_ID aLayer) -> SHAPE_POLY_SET`
+- `GetCoverageArea(BOARD_ITEM aItem, GENERAL_COLLECTOR const & aCollector) -> double`
+- `GetEditFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetEffectiveHoleShape(BOARD_ITEM self) -> std::shared_ptr< SHAPE_SEGMENT >`
+- `GetEffectiveShape(FOOTPRINT self, PCB_LAYER_ID aLayer=UNDEFINED_LAYER, FLASHING aFlash=DEFAULT) -> std::shared_ptr< SHAPE >`
+- `GetEmbeddedFiles(FOOTPRINT self) -> EMBEDDED_FILES`
+- `GetFPID(FOOTPRINT self) -> LIB_ID`
+- `GetFPIDAsString(FOOTPRINT self) -> wxString`
+- `GetFPRelativePosition(BOARD_ITEM self) -> VECTOR2I`
+- `GetField(FOOTPRINT self, MANDATORY_FIELD_T aFieldType) -> PCB_FIELD`
+- `GetFieldById(FOOTPRINT self, int aFieldId) -> PCB_FIELD`
+- `GetFieldByName(FOOTPRINT self, wxString aFieldName) -> PCB_FIELD`
+- `GetFieldShownText(…)`  — Returns Field shown text with a given key if it exists, throws KeyError otherwise.
+- `GetFieldText(…)`  — Returns Field text with a given key if it exists, throws KeyError otherwise.
+- `GetFields(FOOTPRINT self, PCB_FIELD_VEC aVector, bool aVisibleOnly)`
+- `GetFieldsShownText(…)`  — Returns footprint fields name to shown text map.
+- `GetFieldsText(…)`  — Returns footprint fields name to text map.
+- `GetFileFormatVersionAtLoad(FOOTPRINT self) -> int`
+- `GetFilters(FOOTPRINT self) -> wxString`
+- `GetFlag(FOOTPRINT self) -> int`
+- `GetFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetFocusPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetFontMetrics(BOARD_ITEM self) -> KIFONT::METRICS const &`
+- `GetFonts(FOOTPRINT self) -> std::set< KIFONT::OUTLINE_FONT *,std::less< KIFONT::OUTLINE_FONT * >,std::allocator< KIFONT::OUTLINE_FONT * > >`
+- `GetFpPadsLocalBbox(FOOTPRINT self) -> BOX2I`
+- `GetFriendlyName(EDA_ITEM self) -> wxString`
+- `GetInitialComments(FOOTPRINT self) -> wxArrayString const *`
+- `GetItemDescription(EDA_ITEM self, UNITS_PROVIDER aUnitsProvider, bool aFull) -> wxString`
+- `GetKeywords(FOOTPRINT self) -> wxString`
+- `GetLayer(BOARD_ITEM self) -> PCB_LAYER_ID`
+- `GetLayerBoundingBox(FOOTPRINT self, LSET aLayers) -> BOX2I`
+- `GetLayerName(BOARD_ITEM self) -> wxString`
+- `GetLayerSet(BOARD_ITEM self) -> LSET`
+- `GetLibDescription(FOOTPRINT self) -> wxString`
+- `GetLikelyAttribute(FOOTPRINT self) -> int`
+- `GetLink(FOOTPRINT self) -> KIID`
+- `GetLocalClearance(FOOTPRINT self) -> std::optional< int >`
+- `GetLocalSolderMaskMargin(FOOTPRINT self) -> std::optional< int >`
+- `GetLocalSolderPasteMargin(FOOTPRINT self) -> std::optional< int >`
+- `GetLocalSolderPasteMarginRatio(FOOTPRINT self) -> std::optional< double >`
+- `GetLocalZoneConnection(FOOTPRINT self) -> ZONE_CONNECTION`
+- `GetMenuImage(EDA_ITEM self) -> BITMAPS`
+- `GetMsgPanelInfo(EDA_ITEM self, EDA_DRAW_FRAME * aFrame, std::vector< MSG_PANEL_ITEM,std::allocator< MSG_PANEL_ITEM > > & aList)`
+- `GetNetTieCache(FOOTPRINT self, BOARD_ITEM aItem) -> std::set< int,std::less< int >,std::allocator< int > > const &`
+- `GetNetTiePadGroups(FOOTPRINT self) -> std::vector< wxString,std::allocator< wxString > > const &`
+- `GetNetTiePads(FOOTPRINT self, PAD aPad) -> PADS_VEC`
+- `GetNextFieldId(FOOTPRINT self) -> int`
+- `GetNextPadNumber(FOOTPRINT self, wxString aLastPadName) -> wxString`
+- `GetOrientation(FOOTPRINT self) -> EDA_ANGLE`
+- `GetOrientationDegrees(FOOTPRINT self) -> double`
+- `GetPad(FOOTPRINT self, VECTOR2I aPosition, LSET aLayerMask=LSET::AllLayersMask()) -> PAD`
+- `GetPadCount(FOOTPRINT self, INCLUDE_NPTH_T aIncludeNPTH=INCLUDE_NPTH_T(INCLUDE_NPTH)) -> unsigned int`
+- `GetPads(FOOTPRINT self, wxString aPadNumber, PAD aIgnore=None) -> std::vector< PAD const *,std::allocator< PAD const * > >`
+- `GetParent(BOARD_ITEM self) -> BOARD_ITEM_CONTAINER`
+- `GetParentAsString(BOARD_ITEM self) -> wxString`
+- `GetParentFootprint(BOARD_ITEM self) -> FOOTPRINT`
+- `GetParentGroup(BOARD_ITEM self) -> PCB_GROUP`
+- `GetPath(FOOTPRINT self) -> KIID_PATH`
+- `GetPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetPrivateLayers(FOOTPRINT self) -> LSET`
+- `GetReference(FOOTPRINT self) -> wxString`
+- `GetReferenceAsString(FOOTPRINT self) -> wxString`
+- `GetSheetfile(FOOTPRINT self) -> wxString`
+- `GetSheetname(FOOTPRINT self) -> wxString`
+- `GetSide(FOOTPRINT self) -> PCB_LAYER_ID`
+- `GetSortPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetStroke(BOARD_ITEM self) -> STROKE_PARAMS`
+- `GetTempFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetTransientComponentClassNames(FOOTPRINT self) -> std::unordered_set< wxString > const &`
+- `GetTypeDesc(EDA_ITEM self) -> wxString`
+- `GetTypeName(FOOTPRINT self) -> wxString`
+- `GetUniquePadCount(FOOTPRINT self, INCLUDE_NPTH_T aIncludeNPTH=INCLUDE_NPTH_T(INCLUDE_NPTH)) -> unsigned int`
+- `GetUniquePadNumbers(FOOTPRINT self, INCLUDE_NPTH_T aIncludeNPTH=INCLUDE_NPTH_T(INCLUDE_NPTH)) -> STRINGSET`
+- `GetValue(FOOTPRINT self) -> wxString`
+- `GetValueAsString(FOOTPRINT self) -> wxString`
+- `GetX(BOARD_ITEM self) -> int`
+- `GetY(BOARD_ITEM self) -> int`
+- `GetZoneConnectionOverrides(FOOTPRINT self, wxString aSource) -> ZONE_CONNECTION`
+- `GraphicalItems(FOOTPRINT self) -> DRAWINGS`
+- `Groups(FOOTPRINT self) -> GROUPS`
+- `HasDrilledHole(BOARD_ITEM self) -> bool`
+- `HasField(…)`
+- `HasFieldByName(FOOTPRINT self, wxString aFieldName) -> bool`
+- `HasFlag(EDA_ITEM self, EDA_ITEM_FLAGS aFlag) -> bool`
+- `HasHole(BOARD_ITEM self) -> bool`
+- `HasLineStroke(BOARD_ITEM self) -> bool`
+- `HasThroughHolePads(FOOTPRINT self) -> bool`
+- `HitTest(FOOTPRINT self, VECTOR2I aPosition, int aAccuracy=0) -> bool`
+- `HitTestAccurate(FOOTPRINT self, VECTOR2I aPosition, int aAccuracy=0) -> bool`
+- `HitTestOnLayer(FOOTPRINT self, VECTOR2I aPosition, PCB_LAYER_ID aLayer, int aAccuracy=0) -> bool`
+- `IncrementFlag(FOOTPRINT self)`
+- `IncrementReference(FOOTPRINT self, int aDelta)`
+- `InvalidateGeometryCaches(FOOTPRINT self)`
+- `IsBoardOnly(FOOTPRINT self) -> bool`
+- `IsBrightened(EDA_ITEM self) -> bool`
+- `IsConflicting(FOOTPRINT self) -> bool`
+- `IsConnected(BOARD_ITEM self) -> bool`
+- `IsDNP(FOOTPRINT self) -> bool`
+- `IsEntered(EDA_ITEM self) -> bool`
+- `IsExcludedFromBOM(FOOTPRINT self) -> bool`
+- `IsExcludedFromPosFiles(FOOTPRINT self) -> bool`
+- `IsFlipped(FOOTPRINT self) -> bool`
+- `IsForceVisible(EDA_ITEM self) -> bool`
+- `IsKnockout(BOARD_ITEM self) -> bool`
+- `IsLibNameValid(wxString aName) -> bool`
+- `IsLocked(BOARD_ITEM self) -> bool`
+- `IsModified(EDA_ITEM self) -> bool`
+- `IsMoving(EDA_ITEM self) -> bool`
+- `IsNetTie(FOOTPRINT self) -> bool`
+- `IsNew(EDA_ITEM self) -> bool`
+- `IsOnCopperLayer(BOARD_ITEM self) -> bool`
+- `IsOnLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsPlaced(FOOTPRINT self) -> bool`
+- `IsReplaceable(EDA_ITEM self) -> bool`
+- `IsRollover(EDA_ITEM self) -> bool`
+- `IsSelected(EDA_ITEM self) -> bool`
+- `IsShownAsBitmap(EDA_ITEM self) -> bool`
+- `IsSideSpecific(BOARD_ITEM self) -> bool`
+- `IsTented(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsType(EDA_ITEM self, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> bool`
+- `LayerMaskDescribe(BOARD_ITEM self) -> wxString`
+- `LegacyPadsLocked(FOOTPRINT self) -> bool`
+- `MapPadNumbersToNetTieGroups(FOOTPRINT self) -> std::map< wxString,int,std::less< wxString >,std::allocator< std::pair< wxString const,int > > >`
+- `Matches(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, void * aAuxData) -> bool`
+- `Mirror(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `Models(FOOTPRINT self) -> VECTOR_FP_3DMODEL`
+- `Move(BOARD_ITEM self, VECTOR2I aMoveVector)`
+- `MoveAnchorPosition(FOOTPRINT self, VECTOR2I aMoveVector)`
+- `NeedsPlaced(FOOTPRINT self) -> bool`
+- `Normalize(BOARD_ITEM self)`
+- `NormalizeForCompare(BOARD_ITEM self)`
+- `Pads(FOOTPRINT self) -> PADS`
+- `PyGetClass(EDA_ITEM self) -> wxString`
+- `Reference(FOOTPRINT self) -> PCB_FIELD`
+- `Remove(self, BOARD_ITEM)`  — Remove a BOARD_ITEM from this BOARD_ITEM_CONTAINER, set the thisdown flag so that
+- `RemoveField(FOOTPRINT self, wxString aFieldName)`
+- `RemoveNative(FOOTPRINT self, BOARD_ITEM aItem, REMOVE_MODE aMode=NORMAL)`
+- `RenderAsBitmap(EDA_ITEM self, double aWorldScale) -> bool`
+- `Replace(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, wxString aText) -> bool`
+- `ResolveComponentClassNames(FOOTPRINT self, BOARD aBoard, std::unordered_set< wxString > const & aComponentClassNames)`
+- `ResolveTextVar(FOOTPRINT self, wxString token, int aDepth=0) -> bool`
+- `Rotate(BOARD_ITEM self, VECTOR2I aRotCentre, EDA_ANGLE aAngle)`
+- `RunOnChildren(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction)`
+- `RunOnDescendants(FOOTPRINT self, std::function< void (BOARD_ITEM *) > const & aFunction, int aDepth=0)`
+- `Serialize(FOOTPRINT self, google::protobuf::Any & aContainer)`
+- `SetAllowMissingCourtyard(FOOTPRINT self, bool aAllow=True)`
+- `SetAttributes(FOOTPRINT self, int aAttributes)`
+- `SetBoardOnly(FOOTPRINT self, bool aIsBoardOnly=True)`
+- `SetBrightened(EDA_ITEM self)`
+- `SetComponentClass(FOOTPRINT self, COMPONENT_CLASS const * aClass)`
+- `SetDNP(FOOTPRINT self, bool aDNP=True)`
+- `SetExcludedFromBOM(FOOTPRINT self, bool aExclude=True)`
+- `SetExcludedFromPosFiles(FOOTPRINT self, bool aExclude=True)`
+- `SetFPID(FOOTPRINT self, LIB_ID aFPID)`
+- `SetFPIDAsString(FOOTPRINT self, wxString aFPID)`
+- `SetFPRelativePosition(BOARD_ITEM self, VECTOR2I aPos)`
+- `SetField(…)`
+- `SetFields(…)`  — Sets footprint fields map.
+- `SetFileFormatVersionAtLoad(FOOTPRINT self, int aVersion)`
+- `SetFilters(FOOTPRINT self, wxString aFilters)`
+- `SetFlag(FOOTPRINT self, int aFlag)`
+- `SetFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `SetForceVisible(EDA_ITEM self, bool aEnable)`
+- `SetInitialComments(FOOTPRINT self, wxArrayString * aInitialComments)`
+- `SetIsKnockout(BOARD_ITEM self, bool aKnockout)`
+- `SetIsPlaced(FOOTPRINT self, bool isPlaced)`
+- `SetIsRollover(EDA_ITEM self, bool aIsRollover)`
+- `SetIsShownAsBitmap(EDA_ITEM self, bool aBitmap)`
+- `SetKeywords(FOOTPRINT self, wxString aKeywords)`
+- `SetLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer)`
+- `SetLayerAndFlip(FOOTPRINT self, PCB_LAYER_ID aLayer)`
+- `SetLayerSet(BOARD_ITEM self, LSET aLayers)`
+- `SetLibDescription(FOOTPRINT self, wxString aDesc)`
+- `SetLink(FOOTPRINT self, KIID aLink)`
+- `SetLocalClearance(FOOTPRINT self, std::optional< int > aClearance)`
+- `SetLocalSolderMaskMargin(FOOTPRINT self, std::optional< int > aMargin)`
+- `SetLocalSolderPasteMargin(FOOTPRINT self, std::optional< int > aMargin)`
+- `SetLocalSolderPasteMarginRatio(FOOTPRINT self, std::optional< double > aRatio)`
+- `SetLocalZoneConnection(FOOTPRINT self, ZONE_CONNECTION aType)`
+- `SetLocked(BOARD_ITEM self, bool aLocked)`
+- `SetModified(EDA_ITEM self)`
+- `SetNeedsPlaced(FOOTPRINT self, bool needsPlaced)`
+- `SetOrientation(FOOTPRINT self, EDA_ANGLE aNewAngle)`
+- `SetOrientationDegrees(FOOTPRINT self, double aOrientation)`
+- `SetParent(EDA_ITEM self, EDA_ITEM aParent)`
+- `SetParentGroup(BOARD_ITEM self, PCB_GROUP aGroup)`
+- `SetPath(FOOTPRINT self, KIID_PATH aPath)`
+- `SetPos(…)`
+- `SetPosition(EDA_ITEM self, VECTOR2I aPos)`
+- `SetPrivateLayers(FOOTPRINT self, LSET aLayers)`
+- `SetReference(FOOTPRINT self, wxString aReference)`
+- `SetSelected(EDA_ITEM self)`
+- `SetSheetfile(FOOTPRINT self, wxString aSheetfile)`
+- `SetSheetname(FOOTPRINT self, wxString aSheetname)`
+- `SetStartEnd(…)`
+- `SetStroke(BOARD_ITEM self, STROKE_PARAMS const & aStroke)`
+- `SetTransientComponentClassNames(FOOTPRINT self, std::unordered_set< wxString > const & classNames)`
+- `SetValue(FOOTPRINT self, wxString aValue)`
+- `SetX(BOARD_ITEM self, int aX)`
+- `SetY(BOARD_ITEM self, int aY)`
+- `Similarity(BOARD_ITEM self, BOARD_ITEM aItem) -> double`
+- `Sort(EDA_ITEM aLeft, EDA_ITEM aRight) -> bool`
+- `StringLibNameInvalidChars(bool aUserReadable) -> wxChar const *`
+- `StyleFromSettings(BOARD_ITEM self, BOARD_DESIGN_SETTINGS settings)`
+- `SwapItemData(BOARD_ITEM self, BOARD_ITEM aImage)`
+- `TextOnly(FOOTPRINT self) -> bool`
+- `TransformFPShapesToPolySet(FOOTPRINT self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aError, ERROR_LOC aErrorLoc, bool aIncludeText=True, bool aIncludeShapes=True, bool aIncludePrivateItems=False)`
+- `TransformFPTextToPolySet(FOOTPRINT self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aError, ERROR_LOC aErrorLoc)`
+- `TransformPadsToPolySet(FOOTPRINT self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aMaxError, ERROR_LOC aErrorLoc, bool aSkipNPTHPadsWihNoCopper=False)`
+- `TransformShapeToPolygon(BOARD_ITEM self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aError, ERROR_LOC aErrorLoc, bool ignoreLineWidth=False)`
+- `Type(EDA_ITEM self) -> KICAD_T`
+- `Value(FOOTPRINT self) -> PCB_FIELD`
+- `ViewBBox(EDA_ITEM self) -> BOX2I`
+- `ViewGetLOD(FOOTPRINT self, int aLayer, KIGFX::VIEW const * aView) -> double`
+- `ViewGetLayers(EDA_ITEM self) -> intVector`
+- `Visit(EDA_ITEM self, INSPECTOR inspector, void * testData, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> INSPECT_RESULT`
+- `XorFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `Zones(FOOTPRINT self) -> ZONES`
+
+#### `PAD` : BOARD_CONNECTED_ITEM — 286 方法
+> Proxy of C++ PAD class.
+
+- `AddPrimitive(…)`
+- `AddPrimitivePoly(PAD self, PCB_LAYER_ID aLayer, SHAPE_POLY_SET aPoly, int aThickness, bool aFilled)`
+- `AddPrimitiveShape(PAD self, PCB_LAYER_ID aLayer, PCB_SHAPE aPrimitive)`
+- `ApertureMask() -> LSET`
+- `AppendPrimitives(PAD self, PCB_LAYER_ID aLayer, std::vector< std::shared_ptr< PCB_SHAPE >,std::allocator< std::shared_ptr< PCB_SHAPE > > > const & aPrimitivesList)`
+- `BoardCopperLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerSet(BOARD_ITEM self) -> LSET`
+- `BuildEffectivePolygon(PAD self, ERROR_LOC aErrorLoc=ERROR_INSIDE)`
+- `BuildEffectiveShapes(PAD self)`
+- `CanFlashLayer(PAD self, int aLayer) -> bool`
+- `CanHaveNumber(PAD self) -> bool`
+- `Cast(…)`
+- `CheckPad(PAD self, UNITS_PROVIDER aUnitsProvider, bool aForPadProperties, std::function< void (int,wxString const &) > const & aErrorHandler)`
+- `ClassOf(EDA_ITEM aItem) -> bool`
+- `ClearBrightened(EDA_ITEM self)`
+- `ClearEditFlags(EDA_ITEM self)`
+- `ClearFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask=EDA_ITEM_ALL_FLAGS)`
+- `ClearSelected(EDA_ITEM self)`
+- `ClearTempFlags(EDA_ITEM self)`
+- `ClearZoneLayerOverrides(PAD self)`
+- `Clone(EDA_ITEM self) -> EDA_ITEM`
+- `ClonePad(PAD self) -> PAD`
+- `Compare(PAD aPadRef, PAD aPadCmp) -> int`
+- `ConditionallyFlashed(PAD self, PCB_LAYER_ID aLayer) -> bool`
+- `ConnSMDMask() -> LSET`
+- `CopyFrom(BOARD_ITEM self, BOARD_ITEM aOther)`
+- `DeletePrimitivesList(PAD self, PCB_LAYER_ID aLayer=UNDEFINED_LAYER)`
+- `DeleteStructure(BOARD_ITEM self)`
+- `Deserialize(PAD self, google::protobuf::Any const & aContainer) -> bool`
+- `Duplicate(…)`
+- `FlashLayer(PAD self, int aLayer, bool aOnlyCheckIfPermitted=False) -> bool`
+- `Flip(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `FlipPrimitives(PAD self, FLIP_DIRECTION aFlipDirection)`
+- `GetAnchorPadShape(PAD self, PCB_LAYER_ID aLayer) -> PAD_SHAPE`
+- `GetAttribute(PAD self) -> PAD_ATTRIB`
+- `GetBoard(BOARD_ITEM self) -> BOARD`
+- `GetBoundingBox(PAD self) -> BOX2I`
+- `GetBoundingRadius(PAD self) -> int`
+- `GetCenter(BOARD_ITEM self) -> VECTOR2I`
+- `GetChamferPositions(PAD self, PCB_LAYER_ID aLayer) -> int`
+- `GetChamferRectRatio(PAD self, PCB_LAYER_ID aLayer) -> double`
+- `GetClass(PAD self) -> wxString`
+- `GetClearanceOverrides(BOARD_CONNECTED_ITEM self, wxString aSource) -> std::optional< int >`
+- `GetCustomShapeAsPolygon(…)`
+- `GetCustomShapeInZoneOpt(PAD self) -> PADSTACK::CUSTOM_SHAPE_ZONE_MODE`
+- `GetDelta(PAD self, PCB_LAYER_ID aLayer) -> VECTOR2I`
+- `GetDisplayNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetDrillShape(PAD self) -> PAD_DRILL_SHAPE`
+- `GetDrillSize(PAD self) -> VECTOR2I`
+- `GetDrillSizeX(PAD self) -> int`
+- `GetDrillSizeY(PAD self) -> int`
+- `GetEditFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetEffectiveHoleShape(BOARD_ITEM self) -> std::shared_ptr< SHAPE_SEGMENT >`
+- `GetEffectiveNetClass(BOARD_CONNECTED_ITEM self) -> NETCLASS`
+- `GetEffectivePolygon(PAD self, PCB_LAYER_ID aLayer, ERROR_LOC aErrorLoc=ERROR_INSIDE) -> std::shared_ptr< SHAPE_POLY_SET > const`
+- `GetEffectiveShape(PAD self, PCB_LAYER_ID aLayer, FLASHING flashPTHPads=DEFAULT) -> std::shared_ptr< SHAPE >`
+- `GetEmbeddedFiles(EDA_ITEM self) -> EMBEDDED_FILES *`
+- `GetFPRelativeOrientation(PAD self) -> EDA_ANGLE`
+- `GetFPRelativePosition(BOARD_ITEM self) -> VECTOR2I`
+- `GetFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetFocusPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetFontMetrics(BOARD_ITEM self) -> KIFONT::METRICS const &`
+- `GetFriendlyName(EDA_ITEM self) -> wxString`
+- `GetFrontRoundRectRadiusRatio(PAD self) -> double`
+- `GetFrontRoundRectRadiusSize(PAD self) -> int`
+- `GetFrontShape(PAD self) -> PAD_SHAPE`
+- `GetItemDescription(EDA_ITEM self, UNITS_PROVIDER aUnitsProvider, bool aFull) -> wxString`
+- `GetKeepTopBottom(PAD self) -> bool`
+- `GetLayer(BOARD_ITEM self) -> PCB_LAYER_ID`
+- `GetLayerName(BOARD_ITEM self) -> wxString`
+- `GetLayerSet(BOARD_ITEM self) -> LSET`
+- `GetLocalClearance(PAD self) -> std::optional< int >`
+- `GetLocalRatsnestVisible(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetLocalSolderMaskMargin(PAD self) -> std::optional< int >`
+- `GetLocalSolderPasteMargin(PAD self) -> std::optional< int >`
+- `GetLocalSolderPasteMarginRatio(PAD self) -> std::optional< double >`
+- `GetLocalSpokeWidthOverride(PAD self, wxString aSource=None) -> int`
+- `GetLocalThermalGapOverride(PAD self, wxString aSource) -> int`
+- `GetLocalThermalSpokeWidthOverride(PAD self) -> std::optional< int >`
+- `GetLocalZoneConnection(PAD self) -> ZONE_CONNECTION`
+- `GetMenuImage(EDA_ITEM self) -> BITMAPS`
+- `GetMsgPanelInfo(EDA_ITEM self, EDA_DRAW_FRAME * aFrame, std::vector< MSG_PANEL_ITEM,std::allocator< MSG_PANEL_ITEM > > & aList)`
+- `GetName(…)`
+- `GetNet(BOARD_CONNECTED_ITEM self) -> NETINFO_ITEM`
+- `GetNetClassName(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNetCode(BOARD_CONNECTED_ITEM self) -> int`
+- `GetNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNetnameMsg(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNumber(PAD self) -> wxString`
+- `GetOffset(PAD self, PCB_LAYER_ID aLayer) -> VECTOR2I`
+- `GetOrientation(PAD self) -> EDA_ANGLE`
+- `GetOrientationDegrees(PAD self) -> double`
+- `GetOwnClearance(PAD self, PCB_LAYER_ID aLayer, wxString aSource=None) -> int`
+- `GetPadName(…)`
+- `GetPadToDieLength(PAD self) -> int`
+- `GetParent(BOARD_ITEM self) -> BOARD_ITEM_CONTAINER`
+- `GetParentAsString(BOARD_ITEM self) -> wxString`
+- `GetParentFootprint(BOARD_ITEM self) -> FOOTPRINT`
+- `GetParentGroup(BOARD_ITEM self) -> PCB_GROUP`
+- `GetPinFunction(PAD self) -> wxString`
+- `GetPinType(PAD self) -> wxString`
+- `GetPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetPrimitives(PAD self, PCB_LAYER_ID aLayer) -> std::vector< std::shared_ptr< PCB_SHAPE >,std::allocator< std::shared_ptr< PCB_SHAPE > > > const &`
+- `GetPrincipalLayer(PAD self) -> PCB_LAYER_ID`
+- `GetProperty(PAD self) -> PAD_PROP`
+- `GetRemoveUnconnected(PAD self) -> bool`
+- `GetRoundRectCornerRadius(PAD self, PCB_LAYER_ID aLayer) -> int`
+- `GetRoundRectRadiusRatio(PAD self, PCB_LAYER_ID aLayer) -> double`
+- `GetShape(PAD self, PCB_LAYER_ID aLayer) -> PAD_SHAPE`
+- `GetShortNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetSize(PAD self, PCB_LAYER_ID aLayer) -> VECTOR2I`
+- `GetSizeX(PAD self) -> int`
+- `GetSizeY(PAD self) -> int`
+- `GetSolderMaskExpansion(PAD self, PCB_LAYER_ID aLayer) -> int`
+- `GetSolderPasteMargin(PAD self, PCB_LAYER_ID aLayer) -> VECTOR2I`
+- `GetSortPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetStroke(BOARD_ITEM self) -> STROKE_PARAMS`
+- `GetSubRatsnest(PAD self) -> int`
+- `GetTeardropAllowSpanTwoTracks(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropBestLengthRatio(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropBestWidthRatio(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropCurved(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropMaxLength(BOARD_CONNECTED_ITEM self) -> int`
+- `GetTeardropMaxTrackWidth(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropMaxWidth(BOARD_CONNECTED_ITEM self) -> int`
+- `GetTeardropParams(BOARD_CONNECTED_ITEM self) -> TEARDROP_PARAMETERS`
+- `GetTeardropPreferZoneConnections(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropsEnabled(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTempFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetThermalGap(PAD self) -> int`
+- `GetThermalSpokeAngle(PAD self) -> EDA_ANGLE`
+- `GetThermalSpokeAngleDegrees(PAD self) -> double`
+- `GetTypeDesc(EDA_ITEM self) -> wxString`
+- `GetUnconnectedLayerMode(PAD self) -> PADSTACK::UNCONNECTED_LAYER_MODE`
+- `GetX(BOARD_ITEM self) -> int`
+- `GetY(BOARD_ITEM self) -> int`
+- `GetZoneConnectionOverrides(PAD self, wxString aSource=None) -> ZONE_CONNECTION`
+- `GetZoneLayerOverride(PAD self, PCB_LAYER_ID aLayer) -> ZONE_LAYER_OVERRIDE const &`
+- `HasDrilledHole(BOARD_ITEM self) -> bool`
+- `HasFlag(EDA_ITEM self, EDA_ITEM_FLAGS aFlag) -> bool`
+- `HasHole(BOARD_ITEM self) -> bool`
+- `HasLineStroke(BOARD_ITEM self) -> bool`
+- `HitTest(PAD self, VECTOR2I aPosition, int aAccuracy=0) -> bool`
+- `ImportSettingsFrom(PAD self, PAD aMasterPad)`
+- `IsAperturePad(PAD self) -> bool`
+- `IsBrightened(EDA_ITEM self) -> bool`
+- `IsConnected(BOARD_ITEM self) -> bool`
+- `IsDirty(PAD self) -> bool`
+- `IsEntered(EDA_ITEM self) -> bool`
+- `IsFlipped(PAD self) -> bool`
+- `IsForceVisible(EDA_ITEM self) -> bool`
+- `IsFreePad(PAD self) -> bool`
+- `IsKnockout(BOARD_ITEM self) -> bool`
+- `IsLocked(BOARD_ITEM self) -> bool`
+- `IsModified(EDA_ITEM self) -> bool`
+- `IsMoving(EDA_ITEM self) -> bool`
+- `IsNew(EDA_ITEM self) -> bool`
+- `IsNoConnectPad(PAD self) -> bool`
+- `IsOnCopperLayer(BOARD_ITEM self) -> bool`
+- `IsOnLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsReplaceable(EDA_ITEM self) -> bool`
+- `IsRollover(EDA_ITEM self) -> bool`
+- `IsSelected(EDA_ITEM self) -> bool`
+- `IsShownAsBitmap(EDA_ITEM self) -> bool`
+- `IsSideSpecific(BOARD_ITEM self) -> bool`
+- `IsTented(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsType(EDA_ITEM self, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> bool`
+- `LayerMaskDescribe(BOARD_ITEM self) -> wxString`
+- `Matches(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, void * aAuxData) -> bool`
+- `MergePrimitivesAsPolygon(PAD self, PCB_LAYER_ID aLayer, SHAPE_POLY_SET aMergedPolygon, ERROR_LOC aErrorLoc=ERROR_INSIDE)`
+- `Mirror(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `Move(BOARD_ITEM self, VECTOR2I aMoveVector)`
+- `Normalize(BOARD_ITEM self)`
+- `NormalizeForCompare(BOARD_ITEM self)`
+- `PTHMask() -> LSET`
+- `PackNet(BOARD_CONNECTED_ITEM self, kiapi::board::types::Net * aProto)`
+- `Padstack(PAD self) -> PADSTACK`
+- `PyGetClass(EDA_ITEM self) -> wxString`
+- `Recombine(PAD self, bool aIsDryRun, int aMaxError) -> std::vector< PCB_SHAPE *,std::allocator< PCB_SHAPE * > >`
+- `RenderAsBitmap(EDA_ITEM self, double aWorldScale) -> bool`
+- `Replace(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, wxString aText) -> bool`
+- `ReplacePrimitives(PAD self, PCB_LAYER_ID aLayer, std::vector< std::shared_ptr< PCB_SHAPE >,std::allocator< std::shared_ptr< PCB_SHAPE > > > const & aPrimitivesList)`
+- `Rotate(BOARD_ITEM self, VECTOR2I aRotCentre, EDA_ANGLE aAngle)`
+- `RunOnChildren(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction)`
+- `RunOnDescendants(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction, int aDepth=0)`
+- `SMDMask() -> LSET`
+- `SameLogicalPadAs(PAD self, PAD aOther) -> bool`
+- `Serialize(PAD self, google::protobuf::Any & aContainer)`
+- `SetAnchorPadShape(PAD self, PCB_LAYER_ID aLayer, PAD_SHAPE aShape)`
+- `SetAttribute(PAD self, PAD_ATTRIB aAttribute)`
+- `SetBrightened(EDA_ITEM self)`
+- `SetChamferPositions(PAD self, PCB_LAYER_ID aLayer, int aPositions)`
+- `SetChamferRectRatio(PAD self, PCB_LAYER_ID aLayer, double aChamferScale)`
+- `SetCustomShapeInZoneOpt(PAD self, PADSTACK::CUSTOM_SHAPE_ZONE_MODE aOption)`
+- `SetDelta(PAD self, PCB_LAYER_ID aLayer, VECTOR2I aSize)`
+- `SetDirty(PAD self)`
+- `SetDrillShape(PAD self, PAD_DRILL_SHAPE aShape)`
+- `SetDrillSize(PAD self, VECTOR2I aSize)`
+- `SetDrillSizeX(PAD self, int aX)`
+- `SetDrillSizeY(PAD self, int aY)`
+- `SetFPRelativeOrientation(PAD self, EDA_ANGLE aAngle)`
+- `SetFPRelativePosition(BOARD_ITEM self, VECTOR2I aPos)`
+- `SetFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `SetForceVisible(EDA_ITEM self, bool aEnable)`
+- `SetFrontRoundRectRadiusRatio(PAD self, double aRadiusScale)`
+- `SetFrontRoundRectRadiusSize(PAD self, int aRadius)`
+- `SetFrontShape(PAD self, PAD_SHAPE aShape)`
+- `SetIsKnockout(BOARD_ITEM self, bool aKnockout)`
+- `SetIsRollover(EDA_ITEM self, bool aIsRollover)`
+- `SetIsShownAsBitmap(EDA_ITEM self, bool aBitmap)`
+- `SetKeepTopBottom(PAD self, bool aSet)`
+- `SetLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer)`
+- `SetLayerSet(BOARD_ITEM self, LSET aLayers)`
+- `SetLocalClearance(PAD self, std::optional< int > aClearance)`
+- `SetLocalRatsnestVisible(BOARD_CONNECTED_ITEM self, bool aVisible)`
+- `SetLocalSolderMaskMargin(PAD self, std::optional< int > aMargin)`
+- `SetLocalSolderPasteMargin(PAD self, std::optional< int > aMargin)`
+- `SetLocalSolderPasteMarginRatio(PAD self, std::optional< double > aRatio)`
+- `SetLocalThermalGapOverride(PAD self, std::optional< int > const & aOverride)`
+- `SetLocalThermalSpokeWidthOverride(PAD self, std::optional< int > aWidth)`
+- `SetLocalZoneConnection(PAD self, ZONE_CONNECTION aType)`
+- `SetLocked(BOARD_ITEM self, bool aLocked)`
+- `SetModified(EDA_ITEM self)`
+- `SetName(…)`
+- `SetNet(BOARD_CONNECTED_ITEM self, NETINFO_ITEM aNetInfo)`
+- `SetNetCode(BOARD_CONNECTED_ITEM self, int aNetCode, bool aNoAssert) -> bool`
+- `SetNumber(PAD self, wxString aNumber)`
+- `SetOffset(PAD self, PCB_LAYER_ID aLayer, VECTOR2I aOffset)`
+- `SetOrientation(PAD self, EDA_ANGLE aAngle)`
+- `SetOrientationDegrees(PAD self, double aOrientation)`
+- `SetPadName(…)`
+- `SetPadToDieLength(PAD self, int aLength)`
+- `SetPadstack(PAD self, PADSTACK aPadstack)`
+- `SetParent(EDA_ITEM self, EDA_ITEM aParent)`
+- `SetParentGroup(BOARD_ITEM self, PCB_GROUP aGroup)`
+- `SetPinFunction(PAD self, wxString aName)`
+- `SetPinType(PAD self, wxString aType)`
+- `SetPos(…)`
+- `SetPosition(EDA_ITEM self, VECTOR2I aPos)`
+- `SetProperty(PAD self, PAD_PROP aProperty)`
+- `SetRemoveUnconnected(PAD self, bool aSet)`
+- `SetRoundRectCornerRadius(PAD self, PCB_LAYER_ID aLayer, double aRadius)`
+- `SetRoundRectRadiusRatio(PAD self, PCB_LAYER_ID aLayer, double aRadiusScale)`
+- `SetSelected(EDA_ITEM self)`
+- `SetShape(PAD self, PCB_LAYER_ID aLayer, PAD_SHAPE aShape)`
+- `SetSize(PAD self, PCB_LAYER_ID aLayer, VECTOR2I aSize)`
+- `SetSizeX(PAD self, int const aX)`
+- `SetSizeY(PAD self, int const aY)`
+- `SetStartEnd(…)`
+- `SetStroke(BOARD_ITEM self, STROKE_PARAMS const & aStroke)`
+- `SetSubRatsnest(PAD self, int aSubRatsnest)`
+- `SetTeardropAllowSpanTwoTracks(BOARD_CONNECTED_ITEM self, bool aAllow)`
+- `SetTeardropBestLengthRatio(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropBestWidthRatio(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropCurved(BOARD_CONNECTED_ITEM self, bool aCurve)`
+- `SetTeardropMaxLength(BOARD_CONNECTED_ITEM self, int aMaxLength)`
+- `SetTeardropMaxTrackWidth(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropMaxWidth(BOARD_CONNECTED_ITEM self, int aMaxWidth)`
+- `SetTeardropPreferZoneConnections(BOARD_CONNECTED_ITEM self, bool aPrefer)`
+- `SetTeardropsEnabled(BOARD_CONNECTED_ITEM self, bool aEnable)`
+- `SetThermalGap(PAD self, int aGap)`
+- `SetThermalSpokeAngle(PAD self, EDA_ANGLE aAngle)`
+- `SetThermalSpokeAngleDegrees(PAD self, double aAngle)`
+- `SetUnconnectedLayerMode(PAD self, PADSTACK::UNCONNECTED_LAYER_MODE aMode)`
+- `SetX(PAD self, int x)`
+- `SetY(PAD self, int y)`
+- `SetZoneLayerOverride(PAD self, PCB_LAYER_ID aLayer, ZONE_LAYER_OVERRIDE aOverride)`
+- `ShapePos(PAD self, PCB_LAYER_ID aLayer) -> VECTOR2I`
+- `SharesNetTieGroup(PAD self, PAD aOther) -> bool`
+- `ShowPadAttr(PAD self) -> wxString`
+- `ShowPadShape(PAD self, PCB_LAYER_ID aLayer) -> wxString`
+- `Similarity(BOARD_ITEM self, BOARD_ITEM aItem) -> double`
+- `Sort(EDA_ITEM aLeft, EDA_ITEM aRight) -> bool`
+- `StyleFromSettings(BOARD_ITEM self, BOARD_DESIGN_SETTINGS settings)`
+- `SwapItemData(BOARD_ITEM self, BOARD_ITEM aImage)`
+- `TransformHoleToPolygon(PAD self, SHAPE_POLY_SET aBuffer, int aClearance, int aError, ERROR_LOC aErrorLoc=ERROR_INSIDE) -> bool`
+- `TransformShapeToPolygon(PAD self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aMaxError, ERROR_LOC aErrorLoc=ERROR_INSIDE, bool ignoreLineWidth=False)`
+- `Type(EDA_ITEM self) -> KICAD_T`
+- `UnpackNet(BOARD_CONNECTED_ITEM self, kiapi::board::types::Net const & aProto)`
+- `UnplatedHoleMask() -> LSET`
+- `ViewBBox(EDA_ITEM self) -> BOX2I`
+- `ViewGetLOD(PAD self, int aLayer, KIGFX::VIEW const * aView) -> double`
+- `ViewGetLayers(EDA_ITEM self) -> intVector`
+- `Visit(EDA_ITEM self, INSPECTOR inspector, void * testData, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> INSPECT_RESULT`
+- `XorFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+
+#### `PCB_TRACK` : BOARD_CONNECTED_ITEM — 174 方法
+> Proxy of C++ PCB_TRACK class.
+
+- `ApproxCollinear(PCB_TRACK self, PCB_TRACK aTrack) -> bool`
+- `BoardCopperLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerSet(BOARD_ITEM self) -> LSET`
+- `Cast(…)`
+- `ClassOf(EDA_ITEM aItem) -> bool`
+- `ClearBrightened(EDA_ITEM self)`
+- `ClearEditFlags(EDA_ITEM self)`
+- `ClearFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask=EDA_ITEM_ALL_FLAGS)`
+- `ClearSelected(EDA_ITEM self)`
+- `ClearTempFlags(EDA_ITEM self)`
+- `Clone(EDA_ITEM self) -> EDA_ITEM`
+- `CopyFrom(BOARD_ITEM self, BOARD_ITEM aOther)`
+- `DeleteStructure(BOARD_ITEM self)`
+- `Deserialize(PCB_TRACK self, google::protobuf::Any const & aContainer) -> bool`
+- `Duplicate(…)`
+- `Flip(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `GetBoard(BOARD_ITEM self) -> BOARD`
+- `GetBoundingBox(EDA_ITEM self) -> BOX2I`
+- `GetCenter(BOARD_ITEM self) -> VECTOR2I`
+- `GetClass(PCB_TRACK self) -> wxString`
+- `GetClearanceOverrides(BOARD_CONNECTED_ITEM self, wxString aSource) -> std::optional< int >`
+- `GetDisplayNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetEditFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetEffectiveHoleShape(BOARD_ITEM self) -> std::shared_ptr< SHAPE_SEGMENT >`
+- `GetEffectiveNetClass(BOARD_CONNECTED_ITEM self) -> NETCLASS`
+- `GetEffectiveShape(PCB_TRACK self, PCB_LAYER_ID aLayer=UNDEFINED_LAYER, FLASHING aFlash=DEFAULT) -> std::shared_ptr< SHAPE >`
+- `GetEmbeddedFiles(EDA_ITEM self) -> EMBEDDED_FILES *`
+- `GetEnd(PCB_TRACK self) -> VECTOR2I`
+- `GetEndPoint(PCB_TRACK self, ENDPOINT_T aEndPoint) -> VECTOR2I`
+- `GetEndX(PCB_TRACK self) -> int`
+- `GetEndY(PCB_TRACK self) -> int`
+- `GetFPRelativePosition(BOARD_ITEM self) -> VECTOR2I`
+- `GetFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetFocusPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetFontMetrics(BOARD_ITEM self) -> KIFONT::METRICS const &`
+- `GetFriendlyName(EDA_ITEM self) -> wxString`
+- `GetItemDescription(EDA_ITEM self, UNITS_PROVIDER aUnitsProvider, bool aFull) -> wxString`
+- `GetLayer(BOARD_ITEM self) -> PCB_LAYER_ID`
+- `GetLayerName(BOARD_ITEM self) -> wxString`
+- `GetLayerSet(BOARD_ITEM self) -> LSET`
+- `GetLength(PCB_TRACK self) -> double`
+- `GetLocalClearance(BOARD_CONNECTED_ITEM self) -> std::optional< int >`
+- `GetLocalRatsnestVisible(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetLocalSolderMaskMargin(PCB_TRACK self) -> std::optional< int >`
+- `GetMenuImage(EDA_ITEM self) -> BITMAPS`
+- `GetMsgPanelInfo(EDA_ITEM self, EDA_DRAW_FRAME * aFrame, std::vector< MSG_PANEL_ITEM,std::allocator< MSG_PANEL_ITEM > > & aList)`
+- `GetNet(BOARD_CONNECTED_ITEM self) -> NETINFO_ITEM`
+- `GetNetClassName(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNetCode(BOARD_CONNECTED_ITEM self) -> int`
+- `GetNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNetnameMsg(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetOwnClearance(BOARD_CONNECTED_ITEM self, PCB_LAYER_ID aLayer, wxString aSource=None) -> int`
+- `GetParent(BOARD_ITEM self) -> BOARD_ITEM_CONTAINER`
+- `GetParentAsString(BOARD_ITEM self) -> wxString`
+- `GetParentFootprint(BOARD_ITEM self) -> FOOTPRINT`
+- `GetParentGroup(BOARD_ITEM self) -> PCB_GROUP`
+- `GetPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetShortNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetSolderMaskExpansion(PCB_TRACK self) -> int`
+- `GetSortPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetStart(PCB_TRACK self) -> VECTOR2I`
+- `GetStartX(PCB_TRACK self) -> int`
+- `GetStartY(PCB_TRACK self) -> int`
+- `GetStroke(BOARD_ITEM self) -> STROKE_PARAMS`
+- `GetTeardropAllowSpanTwoTracks(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropBestLengthRatio(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropBestWidthRatio(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropCurved(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropMaxLength(BOARD_CONNECTED_ITEM self) -> int`
+- `GetTeardropMaxTrackWidth(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropMaxWidth(BOARD_CONNECTED_ITEM self) -> int`
+- `GetTeardropParams(BOARD_CONNECTED_ITEM self) -> TEARDROP_PARAMETERS`
+- `GetTeardropPreferZoneConnections(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropsEnabled(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTempFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetTypeDesc(EDA_ITEM self) -> wxString`
+- `GetWidth(PCB_TRACK self) -> int`
+- `GetWidthConstraint(PCB_TRACK self, wxString aSource=None) -> MINOPTMAX< int >`
+- `GetX(BOARD_ITEM self) -> int`
+- `GetY(BOARD_ITEM self) -> int`
+- `HasDrilledHole(BOARD_ITEM self) -> bool`
+- `HasFlag(EDA_ITEM self, EDA_ITEM_FLAGS aFlag) -> bool`
+- `HasHole(BOARD_ITEM self) -> bool`
+- `HasLineStroke(BOARD_ITEM self) -> bool`
+- `HasSolderMask(PCB_TRACK self) -> bool`
+- `HitTest(PCB_TRACK self, VECTOR2I aPosition, int aAccuracy=0) -> bool`
+- `IsBrightened(EDA_ITEM self) -> bool`
+- `IsConnected(BOARD_ITEM self) -> bool`
+- `IsEntered(EDA_ITEM self) -> bool`
+- `IsForceVisible(EDA_ITEM self) -> bool`
+- `IsKnockout(BOARD_ITEM self) -> bool`
+- `IsLocked(BOARD_ITEM self) -> bool`
+- `IsModified(EDA_ITEM self) -> bool`
+- `IsMoving(EDA_ITEM self) -> bool`
+- `IsNew(EDA_ITEM self) -> bool`
+- `IsNull(PCB_TRACK self) -> bool`
+- `IsOnCopperLayer(BOARD_ITEM self) -> bool`
+- `IsOnLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsPointOnEnds(PCB_TRACK self, VECTOR2I point, int min_dist=0) -> EDA_ITEM_FLAGS`
+- `IsReplaceable(EDA_ITEM self) -> bool`
+- `IsRollover(EDA_ITEM self) -> bool`
+- `IsSelected(EDA_ITEM self) -> bool`
+- `IsShownAsBitmap(EDA_ITEM self) -> bool`
+- `IsSideSpecific(BOARD_ITEM self) -> bool`
+- `IsTented(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsType(EDA_ITEM self, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> bool`
+- `LayerMaskDescribe(BOARD_ITEM self) -> wxString`
+- `Matches(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, void * aAuxData) -> bool`
+- `Mirror(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `Move(BOARD_ITEM self, VECTOR2I aMoveVector)`
+- `Normalize(BOARD_ITEM self)`
+- `NormalizeForCompare(BOARD_ITEM self)`
+- `PackNet(BOARD_CONNECTED_ITEM self, kiapi::board::types::Net * aProto)`
+- `PyGetClass(EDA_ITEM self) -> wxString`
+- `RenderAsBitmap(EDA_ITEM self, double aWorldScale) -> bool`
+- `Replace(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, wxString aText) -> bool`
+- `Rotate(BOARD_ITEM self, VECTOR2I aRotCentre, EDA_ANGLE aAngle)`
+- `RunOnChildren(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction)`
+- `RunOnDescendants(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction, int aDepth=0)`
+- `Serialize(PCB_TRACK self, google::protobuf::Any & aContainer)`
+- `SetBrightened(EDA_ITEM self)`
+- `SetEnd(PCB_TRACK self, VECTOR2I aEnd)`
+- `SetEndX(PCB_TRACK self, int aX)`
+- `SetEndY(PCB_TRACK self, int aY)`
+- `SetFPRelativePosition(BOARD_ITEM self, VECTOR2I aPos)`
+- `SetFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `SetForceVisible(EDA_ITEM self, bool aEnable)`
+- `SetHasSolderMask(PCB_TRACK self, bool aVal)`
+- `SetIsKnockout(BOARD_ITEM self, bool aKnockout)`
+- `SetIsRollover(EDA_ITEM self, bool aIsRollover)`
+- `SetIsShownAsBitmap(EDA_ITEM self, bool aBitmap)`
+- `SetLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer)`
+- `SetLayerSet(BOARD_ITEM self, LSET aLayers)`
+- `SetLocalRatsnestVisible(BOARD_CONNECTED_ITEM self, bool aVisible)`
+- `SetLocalSolderMaskMargin(PCB_TRACK self, std::optional< int > aMargin)`
+- `SetLocked(BOARD_ITEM self, bool aLocked)`
+- `SetModified(EDA_ITEM self)`
+- `SetNet(BOARD_CONNECTED_ITEM self, NETINFO_ITEM aNetInfo)`
+- `SetNetCode(BOARD_CONNECTED_ITEM self, int aNetCode, bool aNoAssert) -> bool`
+- `SetParent(EDA_ITEM self, EDA_ITEM aParent)`
+- `SetParentGroup(BOARD_ITEM self, PCB_GROUP aGroup)`
+- `SetPos(…)`
+- `SetPosition(EDA_ITEM self, VECTOR2I aPos)`
+- `SetSelected(EDA_ITEM self)`
+- `SetStart(PCB_TRACK self, VECTOR2I aStart)`
+- `SetStartEnd(…)`
+- `SetStartX(PCB_TRACK self, int aX)`
+- `SetStartY(PCB_TRACK self, int aY)`
+- `SetStroke(BOARD_ITEM self, STROKE_PARAMS const & aStroke)`
+- `SetTeardropAllowSpanTwoTracks(BOARD_CONNECTED_ITEM self, bool aAllow)`
+- `SetTeardropBestLengthRatio(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropBestWidthRatio(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropCurved(BOARD_CONNECTED_ITEM self, bool aCurve)`
+- `SetTeardropMaxLength(BOARD_CONNECTED_ITEM self, int aMaxLength)`
+- `SetTeardropMaxTrackWidth(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropMaxWidth(BOARD_CONNECTED_ITEM self, int aMaxWidth)`
+- `SetTeardropPreferZoneConnections(BOARD_CONNECTED_ITEM self, bool aPrefer)`
+- `SetTeardropsEnabled(BOARD_CONNECTED_ITEM self, bool aEnable)`
+- `SetWidth(PCB_TRACK self, int aWidth)`
+- `SetX(BOARD_ITEM self, int aX)`
+- `SetY(BOARD_ITEM self, int aY)`
+- `Similarity(BOARD_ITEM self, BOARD_ITEM aItem) -> double`
+- `Sort(EDA_ITEM aLeft, EDA_ITEM aRight) -> bool`
+- `StyleFromSettings(BOARD_ITEM self, BOARD_DESIGN_SETTINGS settings)`
+- `SwapItemData(BOARD_ITEM self, BOARD_ITEM aImage)`
+- `TransformShapeToPolygon(PCB_TRACK self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aError, ERROR_LOC aErrorLoc, bool ignoreLineWidth=False)`
+- `Type(EDA_ITEM self) -> KICAD_T`
+- `UnpackNet(BOARD_CONNECTED_ITEM self, kiapi::board::types::Net const & aProto)`
+- `ViewBBox(EDA_ITEM self) -> BOX2I`
+- `ViewGetLOD(PCB_TRACK self, int aLayer, KIGFX::VIEW const * aView) -> double`
+- `ViewGetLayers(EDA_ITEM self) -> intVector`
+- `Visit(EDA_ITEM self, INSPECTOR inspector, void * testData, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> INSPECT_RESULT`
+- `XorFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+
+#### `PCB_VIA` : PCB_TRACK — 210 方法
+> Proxy of C++ PCB_VIA class.
+
+- `ApproxCollinear(PCB_TRACK self, PCB_TRACK aTrack) -> bool`
+- `BoardCopperLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerSet(BOARD_ITEM self) -> LSET`
+- `BottomLayer(PCB_VIA self) -> PCB_LAYER_ID`
+- `Cast(…)`
+- `ClassOf(EDA_ITEM aItem) -> bool`
+- `ClearBrightened(EDA_ITEM self)`
+- `ClearEditFlags(EDA_ITEM self)`
+- `ClearFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask=EDA_ITEM_ALL_FLAGS)`
+- `ClearSelected(EDA_ITEM self)`
+- `ClearTempFlags(EDA_ITEM self)`
+- `ClearZoneLayerOverrides(PCB_VIA self)`
+- `Clone(EDA_ITEM self) -> EDA_ITEM`
+- `ConditionallyFlashed(PCB_VIA self, PCB_LAYER_ID aLayer) -> bool`
+- `CopyFrom(BOARD_ITEM self, BOARD_ITEM aOther)`
+- `DeleteStructure(BOARD_ITEM self)`
+- `Deserialize(PCB_VIA self, google::protobuf::Any const & aContainer) -> bool`
+- `Duplicate(…)`
+- `FlashLayer(PCB_VIA self, int aLayer) -> bool`
+- `Flip(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `GetBackTentingMode(PCB_VIA self) -> TENTING_MODE`
+- `GetBoard(BOARD_ITEM self) -> BOARD`
+- `GetBoundingBox(EDA_ITEM self) -> BOX2I`
+- `GetCenter(BOARD_ITEM self) -> VECTOR2I`
+- `GetClass(PCB_VIA self) -> wxString`
+- `GetClearanceOverrides(BOARD_CONNECTED_ITEM self, wxString aSource) -> std::optional< int >`
+- `GetDisplayNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetDrill(PCB_VIA self) -> int`
+- `GetDrillConstraint(PCB_VIA self, wxString aSource=None) -> MINOPTMAX< int >`
+- `GetDrillValue(PCB_VIA self) -> int`
+- `GetEditFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetEffectiveHoleShape(BOARD_ITEM self) -> std::shared_ptr< SHAPE_SEGMENT >`
+- `GetEffectiveNetClass(BOARD_CONNECTED_ITEM self) -> NETCLASS`
+- `GetEffectiveShape(PCB_VIA self, PCB_LAYER_ID aLayer=UNDEFINED_LAYER, FLASHING aFlash=DEFAULT) -> std::shared_ptr< SHAPE >`
+- `GetEmbeddedFiles(EDA_ITEM self) -> EMBEDDED_FILES *`
+- `GetEnd(PCB_TRACK self) -> VECTOR2I`
+- `GetEndPoint(PCB_TRACK self, ENDPOINT_T aEndPoint) -> VECTOR2I`
+- `GetEndX(PCB_TRACK self) -> int`
+- `GetEndY(PCB_TRACK self) -> int`
+- `GetFPRelativePosition(BOARD_ITEM self) -> VECTOR2I`
+- `GetFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetFocusPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetFontMetrics(BOARD_ITEM self) -> KIFONT::METRICS const &`
+- `GetFriendlyName(EDA_ITEM self) -> wxString`
+- `GetFrontTentingMode(PCB_VIA self) -> TENTING_MODE`
+- `GetFrontWidth(PCB_VIA self) -> int`
+- `GetIsFree(PCB_VIA self) -> bool`
+- `GetItemDescription(EDA_ITEM self, UNITS_PROVIDER aUnitsProvider, bool aFull) -> wxString`
+- `GetKeepStartEnd(PCB_VIA self) -> bool`
+- `GetLayer(BOARD_ITEM self) -> PCB_LAYER_ID`
+- `GetLayerName(BOARD_ITEM self) -> wxString`
+- `GetLayerSet(BOARD_ITEM self) -> LSET`
+- `GetLength(PCB_TRACK self) -> double`
+- `GetLocalClearance(BOARD_CONNECTED_ITEM self) -> std::optional< int >`
+- `GetLocalRatsnestVisible(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetLocalSolderMaskMargin(PCB_TRACK self) -> std::optional< int >`
+- `GetMenuImage(EDA_ITEM self) -> BITMAPS`
+- `GetMinAnnulus(PCB_VIA self, PCB_LAYER_ID aLayer, wxString aSource) -> int`
+- `GetMsgPanelInfo(EDA_ITEM self, EDA_DRAW_FRAME * aFrame, std::vector< MSG_PANEL_ITEM,std::allocator< MSG_PANEL_ITEM > > & aList)`
+- `GetNet(BOARD_CONNECTED_ITEM self) -> NETINFO_ITEM`
+- `GetNetClassName(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNetCode(BOARD_CONNECTED_ITEM self) -> int`
+- `GetNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNetnameMsg(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetOutermostConnectedLayers(PCB_VIA self, PCB_LAYER_ID * aTopmost, PCB_LAYER_ID * aBottommost)`
+- `GetOwnClearance(BOARD_CONNECTED_ITEM self, PCB_LAYER_ID aLayer, wxString aSource=None) -> int`
+- `GetParent(BOARD_ITEM self) -> BOARD_ITEM_CONTAINER`
+- `GetParentAsString(BOARD_ITEM self) -> wxString`
+- `GetParentFootprint(BOARD_ITEM self) -> FOOTPRINT`
+- `GetParentGroup(BOARD_ITEM self) -> PCB_GROUP`
+- `GetPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetRemoveUnconnected(PCB_VIA self) -> bool`
+- `GetShortNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetSolderMaskExpansion(PCB_VIA self) -> int`
+- `GetSortPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetStart(PCB_TRACK self) -> VECTOR2I`
+- `GetStartX(PCB_TRACK self) -> int`
+- `GetStartY(PCB_TRACK self) -> int`
+- `GetStroke(BOARD_ITEM self) -> STROKE_PARAMS`
+- `GetTeardropAllowSpanTwoTracks(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropBestLengthRatio(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropBestWidthRatio(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropCurved(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropMaxLength(BOARD_CONNECTED_ITEM self) -> int`
+- `GetTeardropMaxTrackWidth(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropMaxWidth(BOARD_CONNECTED_ITEM self) -> int`
+- `GetTeardropParams(BOARD_CONNECTED_ITEM self) -> TEARDROP_PARAMETERS`
+- `GetTeardropPreferZoneConnections(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropsEnabled(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTempFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetTypeDesc(EDA_ITEM self) -> wxString`
+- `GetViaType(PCB_VIA self) -> VIATYPE`
+- `GetWidth(PCB_VIA self) -> int`
+- `GetWidthConstraint(PCB_VIA self, wxString aSource=None) -> MINOPTMAX< int >`
+- `GetX(BOARD_ITEM self) -> int`
+- `GetY(BOARD_ITEM self) -> int`
+- `GetZoneLayerOverride(PCB_VIA self, PCB_LAYER_ID aLayer) -> ZONE_LAYER_OVERRIDE const &`
+- `HasDrilledHole(BOARD_ITEM self) -> bool`
+- `HasFlag(EDA_ITEM self, EDA_ITEM_FLAGS aFlag) -> bool`
+- `HasHole(BOARD_ITEM self) -> bool`
+- `HasLineStroke(BOARD_ITEM self) -> bool`
+- `HasSolderMask(PCB_TRACK self) -> bool`
+- `HasValidLayerPair(PCB_VIA self, int aCopperLayerCount) -> bool`
+- `HitTest(PCB_VIA self, VECTOR2I aPosition, int aAccuracy=0) -> bool`
+- `IsBrightened(EDA_ITEM self) -> bool`
+- `IsConnected(BOARD_ITEM self) -> bool`
+- `IsEntered(EDA_ITEM self) -> bool`
+- `IsForceVisible(EDA_ITEM self) -> bool`
+- `IsKnockout(BOARD_ITEM self) -> bool`
+- `IsLocked(BOARD_ITEM self) -> bool`
+- `IsModified(EDA_ITEM self) -> bool`
+- `IsMoving(EDA_ITEM self) -> bool`
+- `IsNew(EDA_ITEM self) -> bool`
+- `IsNull(PCB_TRACK self) -> bool`
+- `IsOnCopperLayer(BOARD_ITEM self) -> bool`
+- `IsOnLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsPointOnEnds(PCB_TRACK self, VECTOR2I point, int min_dist=0) -> EDA_ITEM_FLAGS`
+- `IsReplaceable(EDA_ITEM self) -> bool`
+- `IsRollover(EDA_ITEM self) -> bool`
+- `IsSelected(EDA_ITEM self) -> bool`
+- `IsShownAsBitmap(EDA_ITEM self) -> bool`
+- `IsSideSpecific(BOARD_ITEM self) -> bool`
+- `IsTented(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsType(EDA_ITEM self, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> bool`
+- `LayerMaskDescribe(BOARD_ITEM self) -> wxString`
+- `LayerPair(PCB_VIA self, PCB_LAYER_ID * top_layer, PCB_LAYER_ID * bottom_layer)`
+- `Matches(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, void * aAuxData) -> bool`
+- `Mirror(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `Move(BOARD_ITEM self, VECTOR2I aMoveVector)`
+- `Normalize(BOARD_ITEM self)`
+- `NormalizeForCompare(BOARD_ITEM self)`
+- `PackNet(BOARD_CONNECTED_ITEM self, kiapi::board::types::Net * aProto)`
+- `Padstack(PCB_VIA self) -> PADSTACK`
+- `PyGetClass(EDA_ITEM self) -> wxString`
+- `RenderAsBitmap(EDA_ITEM self, double aWorldScale) -> bool`
+- `Replace(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, wxString aText) -> bool`
+- `Rotate(BOARD_ITEM self, VECTOR2I aRotCentre, EDA_ANGLE aAngle)`
+- `RunOnChildren(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction)`
+- `RunOnDescendants(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction, int aDepth=0)`
+- `SanitizeLayers(PCB_VIA self)`
+- `Serialize(PCB_VIA self, google::protobuf::Any & aContainer)`
+- `SetBackTentingMode(PCB_VIA self, TENTING_MODE aMode)`
+- `SetBottomLayer(PCB_VIA self, PCB_LAYER_ID aLayer)`
+- `SetBrightened(EDA_ITEM self)`
+- `SetDrill(PCB_VIA self, int aDrill)`
+- `SetDrillDefault(PCB_VIA self)`
+- `SetEnd(PCB_TRACK self, VECTOR2I aEnd)`
+- `SetEndX(PCB_TRACK self, int aX)`
+- `SetEndY(PCB_TRACK self, int aY)`
+- `SetFPRelativePosition(BOARD_ITEM self, VECTOR2I aPos)`
+- `SetFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `SetForceVisible(EDA_ITEM self, bool aEnable)`
+- `SetFrontTentingMode(PCB_VIA self, TENTING_MODE aMode)`
+- `SetFrontWidth(PCB_VIA self, int aWidth)`
+- `SetHasSolderMask(PCB_TRACK self, bool aVal)`
+- `SetIsFree(PCB_VIA self, bool aFree=True)`
+- `SetIsKnockout(BOARD_ITEM self, bool aKnockout)`
+- `SetIsRollover(EDA_ITEM self, bool aIsRollover)`
+- `SetIsShownAsBitmap(EDA_ITEM self, bool aBitmap)`
+- `SetKeepStartEnd(PCB_VIA self, bool aSet)`
+- `SetLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer)`
+- `SetLayerPair(PCB_VIA self, PCB_LAYER_ID aTopLayer, PCB_LAYER_ID aBottomLayer)`
+- `SetLayerSet(BOARD_ITEM self, LSET aLayers)`
+- `SetLocalRatsnestVisible(BOARD_CONNECTED_ITEM self, bool aVisible)`
+- `SetLocalSolderMaskMargin(PCB_TRACK self, std::optional< int > aMargin)`
+- `SetLocked(BOARD_ITEM self, bool aLocked)`
+- `SetModified(EDA_ITEM self)`
+- `SetNet(BOARD_CONNECTED_ITEM self, NETINFO_ITEM aNetInfo)`
+- `SetNetCode(BOARD_CONNECTED_ITEM self, int aNetCode, bool aNoAssert) -> bool`
+- `SetPadstack(PCB_VIA self, PADSTACK aPadstack)`
+- `SetParent(EDA_ITEM self, EDA_ITEM aParent)`
+- `SetParentGroup(BOARD_ITEM self, PCB_GROUP aGroup)`
+- `SetPos(…)`
+- `SetPosition(EDA_ITEM self, VECTOR2I aPos)`
+- `SetRemoveUnconnected(PCB_VIA self, bool aSet)`
+- `SetSelected(EDA_ITEM self)`
+- `SetStart(PCB_TRACK self, VECTOR2I aStart)`
+- `SetStartEnd(…)`
+- `SetStartX(PCB_TRACK self, int aX)`
+- `SetStartY(PCB_TRACK self, int aY)`
+- `SetStroke(BOARD_ITEM self, STROKE_PARAMS const & aStroke)`
+- `SetTeardropAllowSpanTwoTracks(BOARD_CONNECTED_ITEM self, bool aAllow)`
+- `SetTeardropBestLengthRatio(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropBestWidthRatio(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropCurved(BOARD_CONNECTED_ITEM self, bool aCurve)`
+- `SetTeardropMaxLength(BOARD_CONNECTED_ITEM self, int aMaxLength)`
+- `SetTeardropMaxTrackWidth(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropMaxWidth(BOARD_CONNECTED_ITEM self, int aMaxWidth)`
+- `SetTeardropPreferZoneConnections(BOARD_CONNECTED_ITEM self, bool aPrefer)`
+- `SetTeardropsEnabled(BOARD_CONNECTED_ITEM self, bool aEnable)`
+- `SetTopLayer(PCB_VIA self, PCB_LAYER_ID aLayer)`
+- `SetViaType(PCB_VIA self, VIATYPE aViaType)`
+- `SetWidth(PCB_VIA self, int aWidth)`
+- `SetX(BOARD_ITEM self, int aX)`
+- `SetY(BOARD_ITEM self, int aY)`
+- `SetZoneLayerOverride(PCB_VIA self, PCB_LAYER_ID aLayer, ZONE_LAYER_OVERRIDE aOverride)`
+- `Similarity(BOARD_ITEM self, BOARD_ITEM aItem) -> double`
+- `Sort(EDA_ITEM aLeft, EDA_ITEM aRight) -> bool`
+- `StyleFromSettings(BOARD_ITEM self, BOARD_DESIGN_SETTINGS settings)`
+- `SwapItemData(BOARD_ITEM self, BOARD_ITEM aImage)`
+- `TopLayer(PCB_VIA self) -> PCB_LAYER_ID`
+- `TransformShapeToPolygon(PCB_TRACK self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aError, ERROR_LOC aErrorLoc, bool ignoreLineWidth=False)`
+- `Type(EDA_ITEM self) -> KICAD_T`
+- `UnpackNet(BOARD_CONNECTED_ITEM self, kiapi::board::types::Net const & aProto)`
+- `ViewBBox(EDA_ITEM self) -> BOX2I`
+- `ViewGetLOD(PCB_VIA self, int aLayer, KIGFX::VIEW const * aView) -> double`
+- `ViewGetLayers(EDA_ITEM self) -> intVector`
+- `Visit(EDA_ITEM self, INSPECTOR inspector, void * testData, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> INSPECT_RESULT`
+- `XorFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+
+#### `ZONE` : BOARD_CONNECTED_ITEM — 271 方法
+> Proxy of C++ ZONE class.
+
+- `AddPolygon(ZONE self, VECTOR_VECTOR2I aPolygon)`
+- `AppendCorner(ZONE self, VECTOR2I aPosition, int aHoleIdx, bool aAllowDuplication=False) -> bool`
+- `BoardCopperLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerSet(BOARD_ITEM self) -> LSET`
+- `BuildHashValue(ZONE self, PCB_LAYER_ID aLayer)`
+- `BuildSmoothedPoly(ZONE self, SHAPE_POLY_SET aSmoothedPoly, PCB_LAYER_ID aLayer, SHAPE_POLY_SET aBoardOutline, SHAPE_POLY_SET aSmoothedPolyWithApron=None) -> bool`
+- `CIterateWithHoles(ZONE self) -> SHAPE_POLY_SET::CONST_ITERATOR`
+- `CacheBoundingBox(ZONE self)`
+- `CacheTriangulation(ZONE self, PCB_LAYER_ID aLayer=UNDEFINED_LAYER)`
+- `CalculateFilledArea(ZONE self) -> double`
+- `CalculateOutlineArea(ZONE self) -> double`
+- `Cast(…)`
+- `ClassOf(EDA_ITEM aItem) -> bool`
+- `ClearBrightened(EDA_ITEM self)`
+- `ClearEditFlags(EDA_ITEM self)`
+- `ClearFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask=EDA_ITEM_ALL_FLAGS)`
+- `ClearSelected(EDA_ITEM self)`
+- `ClearTempFlags(EDA_ITEM self)`
+- `Clone(EDA_ITEM self) -> EDA_ITEM`
+- `CopyFrom(BOARD_ITEM self, BOARD_ITEM aOther)`
+- `DeleteStructure(BOARD_ITEM self)`
+- `Deserialize(ZONE self, google::protobuf::Any const & aContainer) -> bool`
+- `Duplicate(…)`
+- `Flip(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `GetAssignedPriority(ZONE self) -> unsigned int`
+- `GetBoard(BOARD_ITEM self) -> BOARD`
+- `GetBorderHatchPitch(ZONE self) -> int`
+- `GetBoundingBox(EDA_ITEM self) -> BOX2I`
+- `GetCenter(BOARD_ITEM self) -> VECTOR2I`
+- `GetClass(ZONE self) -> wxString`
+- `GetClearanceOverrides(BOARD_CONNECTED_ITEM self, wxString aSource) -> std::optional< int >`
+- `GetCornerPosition(ZONE self, int aCornerIndex) -> VECTOR2I`
+- `GetCornerRadius(ZONE self) -> unsigned int`
+- `GetCornerSmoothingType(ZONE self) -> int`
+- `GetDefaultHatchPitch() -> int`
+- `GetDisplayNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetDoNotAllowCopperPour(ZONE self) -> bool`
+- `GetDoNotAllowFootprints(ZONE self) -> bool`
+- `GetDoNotAllowPads(ZONE self) -> bool`
+- `GetDoNotAllowTracks(ZONE self) -> bool`
+- `GetDoNotAllowVias(ZONE self) -> bool`
+- `GetEditFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetEffectiveHoleShape(BOARD_ITEM self) -> std::shared_ptr< SHAPE_SEGMENT >`
+- `GetEffectiveNetClass(BOARD_CONNECTED_ITEM self) -> NETCLASS`
+- `GetEffectiveShape(ZONE self, PCB_LAYER_ID aLayer=UNDEFINED_LAYER, FLASHING aFlash=DEFAULT) -> std::shared_ptr< SHAPE >`
+- `GetEmbeddedFiles(EDA_ITEM self) -> EMBEDDED_FILES *`
+- `GetFPRelativePosition(BOARD_ITEM self) -> VECTOR2I`
+- `GetFill(ZONE self, PCB_LAYER_ID aLayer) -> SHAPE_POLY_SET`
+- `GetFillFlag(ZONE self, PCB_LAYER_ID aLayer) -> int`
+- `GetFillMode(ZONE self) -> ZONE_FILL_MODE`
+- `GetFilledArea(ZONE self) -> double`
+- `GetFilledPolysList(ZONE self, PCB_LAYER_ID aLayer) -> std::shared_ptr< SHAPE_POLY_SET > const &`
+- `GetFirstLayer(ZONE self) -> PCB_LAYER_ID`
+- `GetFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetFocusPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetFontMetrics(BOARD_ITEM self) -> KIFONT::METRICS const &`
+- `GetFriendlyName(EDA_ITEM self) -> wxString`
+- `GetHashValue(ZONE self, PCB_LAYER_ID aLayer) -> HASH_128`
+- `GetHatchBorderAlgorithm(ZONE self) -> int`
+- `GetHatchGap(ZONE self) -> int`
+- `GetHatchHoleMinArea(ZONE self) -> double`
+- `GetHatchLines(ZONE self) -> std::vector< SEG,std::allocator< SEG > > const &`
+- `GetHatchOrientation(ZONE self) -> EDA_ANGLE`
+- `GetHatchSmoothingLevel(ZONE self) -> int`
+- `GetHatchSmoothingValue(ZONE self) -> double`
+- `GetHatchStyle(ZONE self) -> ZONE_BORDER_DISPLAY_STYLE`
+- `GetHatchThickness(ZONE self) -> int`
+- `GetInteractingZones(ZONE self, PCB_LAYER_ID aLayer, ZONES aSameNetCollidingZones, ZONES aOtherNetIntersectingZones)`
+- `GetIsRuleArea(ZONE self) -> bool`
+- `GetIslandRemovalMode(ZONE self) -> ISLAND_REMOVAL_MODE`
+- `GetItemDescription(EDA_ITEM self, UNITS_PROVIDER aUnitsProvider, bool aFull) -> wxString`
+- `GetLayer(BOARD_ITEM self) -> PCB_LAYER_ID`
+- `GetLayerName(BOARD_ITEM self) -> wxString`
+- `GetLayerSet(BOARD_ITEM self) -> LSET`
+- `GetLocalClearance(ZONE self) -> std::optional< int >`
+- `GetLocalFlags(ZONE self) -> int`
+- `GetLocalRatsnestVisible(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetLock(ZONE self) -> std::mutex &`
+- `GetMenuImage(EDA_ITEM self) -> BITMAPS`
+- `GetMinIslandArea(ZONE self) -> long long`
+- `GetMinThickness(ZONE self) -> int`
+- `GetMsgPanelInfo(EDA_ITEM self, EDA_DRAW_FRAME * aFrame, std::vector< MSG_PANEL_ITEM,std::allocator< MSG_PANEL_ITEM > > & aList)`
+- `GetNet(BOARD_CONNECTED_ITEM self) -> NETINFO_ITEM`
+- `GetNetClassName(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNetCode(BOARD_CONNECTED_ITEM self) -> int`
+- `GetNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNetnameMsg(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetNumCorners(ZONE self) -> int`
+- `GetOutlineArea(ZONE self) -> double`
+- `GetOwnClearance(BOARD_CONNECTED_ITEM self, PCB_LAYER_ID aLayer, wxString aSource=None) -> int`
+- `GetPadConnection(ZONE self) -> ZONE_CONNECTION`
+- `GetParent(BOARD_ITEM self) -> BOARD_ITEM_CONTAINER`
+- `GetParentAsString(BOARD_ITEM self) -> wxString`
+- `GetParentFootprint(BOARD_ITEM self) -> FOOTPRINT`
+- `GetParentGroup(BOARD_ITEM self) -> PCB_GROUP`
+- `GetPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetRuleAreaPlacementEnabled(ZONE self) -> bool`
+- `GetRuleAreaPlacementSource(ZONE self) -> wxString`
+- `GetRuleAreaPlacementSourceType(ZONE self) -> RULE_AREA_PLACEMENT_SOURCE_TYPE`
+- `GetSelectedCorner(ZONE self) -> int`
+- `GetShortNetname(BOARD_CONNECTED_ITEM self) -> wxString`
+- `GetSortPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetStroke(BOARD_ITEM self) -> STROKE_PARAMS`
+- `GetTeardropAllowSpanTwoTracks(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropAreaType(ZONE self) -> TEARDROP_TYPE`
+- `GetTeardropBestLengthRatio(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropBestWidthRatio(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropCurved(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropMaxLength(BOARD_CONNECTED_ITEM self) -> int`
+- `GetTeardropMaxTrackWidth(BOARD_CONNECTED_ITEM self) -> double`
+- `GetTeardropMaxWidth(BOARD_CONNECTED_ITEM self) -> int`
+- `GetTeardropParams(BOARD_CONNECTED_ITEM self) -> TEARDROP_PARAMETERS`
+- `GetTeardropPreferZoneConnections(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTeardropsEnabled(BOARD_CONNECTED_ITEM self) -> bool`
+- `GetTempFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetThermalReliefGap(ZONE self) -> int`
+- `GetThermalReliefSpokeWidth(ZONE self) -> int`
+- `GetTypeDesc(EDA_ITEM self) -> wxString`
+- `GetX(BOARD_ITEM self) -> int`
+- `GetY(BOARD_ITEM self) -> int`
+- `GetZoneName(ZONE self) -> wxString`
+- `HasDrilledHole(BOARD_ITEM self) -> bool`
+- `HasFilledPolysForLayer(ZONE self, PCB_LAYER_ID aLayer) -> bool`
+- `HasFlag(EDA_ITEM self, EDA_ITEM_FLAGS aFlag) -> bool`
+- `HasHole(BOARD_ITEM self) -> bool`
+- `HasKeepoutParametersSet(ZONE self) -> bool`
+- `HasLineStroke(BOARD_ITEM self) -> bool`
+- `HatchBorder(ZONE self)`
+- `HigherPriority(ZONE self, ZONE aOther) -> bool`
+- `HitTest(ZONE self, VECTOR2I aPosition, int aAccuracy=0) -> bool`
+- `HitTestCutout(ZONE self, VECTOR2I aRefPos, int * aOutlineIdx=None, int * aHoleIdx=None) -> bool`
+- `HitTestFilledArea(ZONE self, PCB_LAYER_ID aLayer, VECTOR2I aRefPos, int aAccuracy=0) -> bool`
+- `HitTestForCorner(ZONE self, VECTOR2I refPos, int aAccuracy, SHAPE_POLY_SET::VERTEX_INDEX * aCornerHit=None) -> bool`
+- `HitTestForEdge(ZONE self, VECTOR2I refPos, int aAccuracy, SHAPE_POLY_SET::VERTEX_INDEX * aCornerHit=None) -> bool`
+- `InitDataFromSrcInCopyCtor(ZONE self, ZONE aZone)`
+- `IsBrightened(EDA_ITEM self) -> bool`
+- `IsConflicting(ZONE self) -> bool`
+- `IsConnected(BOARD_ITEM self) -> bool`
+- `IsEntered(EDA_ITEM self) -> bool`
+- `IsFilled(ZONE self) -> bool`
+- `IsForceVisible(EDA_ITEM self) -> bool`
+- `IsIsland(ZONE self, PCB_LAYER_ID aLayer, int aPolyIdx) -> bool`
+- `IsKnockout(BOARD_ITEM self) -> bool`
+- `IsLocked(BOARD_ITEM self) -> bool`
+- `IsModified(EDA_ITEM self) -> bool`
+- `IsMoving(EDA_ITEM self) -> bool`
+- `IsNew(EDA_ITEM self) -> bool`
+- `IsOnCopperLayer(BOARD_ITEM self) -> bool`
+- `IsOnLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsReplaceable(EDA_ITEM self) -> bool`
+- `IsRollover(EDA_ITEM self) -> bool`
+- `IsSelected(EDA_ITEM self) -> bool`
+- `IsShownAsBitmap(EDA_ITEM self) -> bool`
+- `IsSideSpecific(BOARD_ITEM self) -> bool`
+- `IsTeardropArea(ZONE self) -> bool`
+- `IsTented(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsType(EDA_ITEM self, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> bool`
+- `Iterate(ZONE self) -> SHAPE_POLY_SET::ITERATOR`
+- `IterateWithHoles(ZONE self) -> SHAPE_POLY_SET::ITERATOR`
+- `LayerMaskDescribe(BOARD_ITEM self) -> wxString`
+- `Matches(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, void * aAuxData) -> bool`
+- `Mirror(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `Move(BOARD_ITEM self, VECTOR2I aMoveVector)`
+- `MoveEdge(ZONE self, VECTOR2I offset, int aEdge)`
+- `NeedRefill(ZONE self) -> bool`
+- `NewHole(ZONE self)`
+- `Normalize(BOARD_ITEM self)`
+- `NormalizeForCompare(BOARD_ITEM self)`
+- `Outline(ZONE self) -> SHAPE_POLY_SET`
+- `PackNet(BOARD_CONNECTED_ITEM self, kiapi::board::types::Net * aProto)`
+- `PyGetClass(EDA_ITEM self) -> wxString`
+- `RemoveAllContours(ZONE self)`
+- `RemoveCutout(ZONE self, int aOutlineIdx, int aHoleIdx)`
+- `RenderAsBitmap(EDA_ITEM self, double aWorldScale) -> bool`
+- `Replace(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, wxString aText) -> bool`
+- `Rotate(BOARD_ITEM self, VECTOR2I aRotCentre, EDA_ANGLE aAngle)`
+- `RunOnChildren(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction)`
+- `RunOnDescendants(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction, int aDepth=0)`
+- `SameNet(ZONE self, ZONE aOther) -> bool`
+- `Serialize(ZONE self, google::protobuf::Any & aContainer)`
+- `SetAssignedPriority(ZONE self, unsigned int aPriority)`
+- `SetBorderDisplayStyle(ZONE self, ZONE_BORDER_DISPLAY_STYLE aBorderHatchStyle, int aBorderHatchPitch, bool aRebuilBorderdHatch)`
+- `SetBorderHatchPitch(ZONE self, int aPitch)`
+- `SetBrightened(EDA_ITEM self)`
+- `SetCornerPosition(ZONE self, int aCornerIndex, VECTOR2I new_pos)`
+- `SetCornerRadius(ZONE self, unsigned int aRadius)`
+- `SetCornerSmoothingType(ZONE self, int aType)`
+- `SetDoNotAllowCopperPour(ZONE self, bool aEnable)`
+- `SetDoNotAllowFootprints(ZONE self, bool aEnable)`
+- `SetDoNotAllowPads(ZONE self, bool aEnable)`
+- `SetDoNotAllowTracks(ZONE self, bool aEnable)`
+- `SetDoNotAllowVias(ZONE self, bool aEnable)`
+- `SetFPRelativePosition(BOARD_ITEM self, VECTOR2I aPos)`
+- `SetFillFlag(ZONE self, PCB_LAYER_ID aLayer, bool aFlag)`
+- `SetFillMode(ZONE self, ZONE_FILL_MODE aFillMode)`
+- `SetFilledPolysList(ZONE self, PCB_LAYER_ID aLayer, SHAPE_POLY_SET aPolysList)`
+- `SetFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `SetForceVisible(EDA_ITEM self, bool aEnable)`
+- `SetHatchBorderAlgorithm(ZONE self, int aAlgo)`
+- `SetHatchGap(ZONE self, int aStep)`
+- `SetHatchHoleMinArea(ZONE self, double aPct)`
+- `SetHatchOrientation(ZONE self, EDA_ANGLE aStep)`
+- `SetHatchSmoothingLevel(ZONE self, int aLevel)`
+- `SetHatchSmoothingValue(ZONE self, double aValue)`
+- `SetHatchStyle(ZONE self, ZONE_BORDER_DISPLAY_STYLE aStyle)`
+- `SetHatchThickness(ZONE self, int aThickness)`
+- `SetIsFilled(ZONE self, bool isFilled)`
+- `SetIsIsland(ZONE self, PCB_LAYER_ID aLayer, int aPolyIdx)`
+- `SetIsKnockout(BOARD_ITEM self, bool aKnockout)`
+- `SetIsRollover(EDA_ITEM self, bool aIsRollover)`
+- `SetIsRuleArea(ZONE self, bool aEnable)`
+- `SetIsShownAsBitmap(EDA_ITEM self, bool aBitmap)`
+- `SetIslandRemovalMode(ZONE self, ISLAND_REMOVAL_MODE aRemove)`
+- `SetLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer)`
+- `SetLayerSet(BOARD_ITEM self, LSET aLayers)`
+- `SetLayerSetAndRemoveUnusedFills(ZONE self, LSET aLayerSet)`
+- `SetLocalClearance(ZONE self, std::optional< int > aClearance)`
+- `SetLocalFlags(ZONE self, int aFlags)`
+- `SetLocalRatsnestVisible(BOARD_CONNECTED_ITEM self, bool aVisible)`
+- `SetLocked(BOARD_ITEM self, bool aLocked)`
+- `SetMinIslandArea(ZONE self, long long aArea)`
+- `SetMinThickness(ZONE self, int aMinThickness)`
+- `SetModified(EDA_ITEM self)`
+- `SetNeedRefill(ZONE self, bool aNeedRefill)`
+- `SetNet(BOARD_CONNECTED_ITEM self, NETINFO_ITEM aNetInfo)`
+- `SetNetCode(BOARD_CONNECTED_ITEM self, int aNetCode, bool aNoAssert) -> bool`
+- `SetOutline(ZONE self, SHAPE_POLY_SET aOutline)`
+- `SetPadConnection(ZONE self, ZONE_CONNECTION aPadConnection)`
+- `SetParent(EDA_ITEM self, EDA_ITEM aParent)`
+- `SetParentGroup(BOARD_ITEM self, PCB_GROUP aGroup)`
+- `SetPos(…)`
+- `SetPosition(EDA_ITEM self, VECTOR2I aPos)`
+- `SetRuleAreaPlacementEnabled(ZONE self, bool aEnabled)`
+- `SetRuleAreaPlacementSource(ZONE self, wxString aSource)`
+- `SetRuleAreaPlacementSourceType(ZONE self, RULE_AREA_PLACEMENT_SOURCE_TYPE aType)`
+- `SetSelected(EDA_ITEM self)`
+- `SetSelectedCorner(ZONE self, int aCorner)`
+- `SetStartEnd(…)`
+- `SetStroke(BOARD_ITEM self, STROKE_PARAMS const & aStroke)`
+- `SetTeardropAllowSpanTwoTracks(BOARD_CONNECTED_ITEM self, bool aAllow)`
+- `SetTeardropAreaType(ZONE self, TEARDROP_TYPE aType)`
+- `SetTeardropBestLengthRatio(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropBestWidthRatio(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropCurved(BOARD_CONNECTED_ITEM self, bool aCurve)`
+- `SetTeardropMaxLength(BOARD_CONNECTED_ITEM self, int aMaxLength)`
+- `SetTeardropMaxTrackWidth(BOARD_CONNECTED_ITEM self, double aRatio)`
+- `SetTeardropMaxWidth(BOARD_CONNECTED_ITEM self, int aMaxWidth)`
+- `SetTeardropPreferZoneConnections(BOARD_CONNECTED_ITEM self, bool aPrefer)`
+- `SetTeardropsEnabled(BOARD_CONNECTED_ITEM self, bool aEnable)`
+- `SetThermalReliefGap(ZONE self, int aThermalReliefGap)`
+- `SetThermalReliefSpokeWidth(ZONE self, int aThermalReliefSpokeWidth)`
+- `SetX(BOARD_ITEM self, int aX)`
+- `SetY(BOARD_ITEM self, int aY)`
+- `SetZoneName(ZONE self, wxString aName)`
+- `Similarity(BOARD_ITEM self, BOARD_ITEM aItem) -> double`
+- `Sort(EDA_ITEM aLeft, EDA_ITEM aRight) -> bool`
+- `StyleFromSettings(BOARD_ITEM self, BOARD_DESIGN_SETTINGS settings)`
+- `SwapItemData(BOARD_ITEM self, BOARD_ITEM aImage)`
+- `TransformShapeToPolygon(ZONE self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aError, ERROR_LOC aErrorLoc, bool ignoreLineWidth=False)`
+- `TransformSmoothedOutlineToPolygon(ZONE self, SHAPE_POLY_SET aBuffer, int aClearance, int aError, ERROR_LOC aErrorLoc, SHAPE_POLY_SET aBoardOutline)`
+- `TransformSolidAreasShapesToPolygon(ZONE self, PCB_LAYER_ID aLayer, SHAPE_POLY_SET aBuffer)`
+- `Type(EDA_ITEM self) -> KICAD_T`
+- `UnFill(ZONE self) -> bool`
+- `UnHatchBorder(ZONE self)`
+- `UnpackNet(BOARD_CONNECTED_ITEM self, kiapi::board::types::Net const & aProto)`
+- `ViewBBox(EDA_ITEM self) -> BOX2I`
+- `ViewGetLOD(ZONE self, int aLayer, KIGFX::VIEW const * aView) -> double`
+- `ViewGetLayers(EDA_ITEM self) -> intVector`
+- `Visit(EDA_ITEM self, INSPECTOR inspector, void * testData, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> INSPECT_RESULT`
+- `XorFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+
+#### `NETINFO_ITEM` : BOARD_ITEM — 124 方法
+> Proxy of C++ NETINFO_ITEM class.
+
+- `BoardCopperLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerCount(BOARD_ITEM self) -> int`
+- `BoardLayerSet(BOARD_ITEM self) -> LSET`
+- `Cast(…)`
+- `ClassOf(EDA_ITEM aItem) -> bool`
+- `Clear(NETINFO_ITEM self)`
+- `ClearBrightened(EDA_ITEM self)`
+- `ClearEditFlags(EDA_ITEM self)`
+- `ClearFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask=EDA_ITEM_ALL_FLAGS)`
+- `ClearSelected(EDA_ITEM self)`
+- `ClearTempFlags(EDA_ITEM self)`
+- `Clone(EDA_ITEM self) -> EDA_ITEM`
+- `CopyFrom(BOARD_ITEM self, BOARD_ITEM aOther)`
+- `DeleteStructure(BOARD_ITEM self)`
+- `Duplicate(…)`
+- `Flip(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `GetBoard(BOARD_ITEM self) -> BOARD`
+- `GetBoundingBox(EDA_ITEM self) -> BOX2I`
+- `GetCenter(BOARD_ITEM self) -> VECTOR2I`
+- `GetClass(NETINFO_ITEM self) -> wxString`
+- `GetDisplayNetname(NETINFO_ITEM self) -> wxString`
+- `GetEditFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetEffectiveHoleShape(BOARD_ITEM self) -> std::shared_ptr< SHAPE_SEGMENT >`
+- `GetEffectiveShape(BOARD_ITEM self, PCB_LAYER_ID aLayer=UNDEFINED_LAYER, FLASHING aFlash=DEFAULT) -> std::shared_ptr< SHAPE >`
+- `GetEmbeddedFiles(EDA_ITEM self) -> EMBEDDED_FILES *`
+- `GetFPRelativePosition(BOARD_ITEM self) -> VECTOR2I`
+- `GetFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetFocusPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetFontMetrics(BOARD_ITEM self) -> KIFONT::METRICS const &`
+- `GetFriendlyName(EDA_ITEM self) -> wxString`
+- `GetItemDescription(EDA_ITEM self, UNITS_PROVIDER aUnitsProvider, bool aFull) -> wxString`
+- `GetLayer(BOARD_ITEM self) -> PCB_LAYER_ID`
+- `GetLayerName(BOARD_ITEM self) -> wxString`
+- `GetLayerSet(BOARD_ITEM self) -> LSET`
+- `GetMenuImage(EDA_ITEM self) -> BITMAPS`
+- `GetMsgPanelInfo(EDA_ITEM self, EDA_DRAW_FRAME * aFrame, std::vector< MSG_PANEL_ITEM,std::allocator< MSG_PANEL_ITEM > > & aList)`
+- `GetNetClass(NETINFO_ITEM self) -> NETCLASS`
+- `GetNetClassName(…)`
+- `GetNetClassSlow(NETINFO_ITEM self) -> std::shared_ptr< NETCLASS >`
+- `GetNetCode(NETINFO_ITEM self) -> int`
+- `GetNetname(NETINFO_ITEM self) -> wxString`
+- `GetParent(NETINFO_ITEM self) -> BOARD`
+- `GetParentAsString(BOARD_ITEM self) -> wxString`
+- `GetParentFootprint(BOARD_ITEM self) -> FOOTPRINT`
+- `GetParentGroup(BOARD_ITEM self) -> PCB_GROUP`
+- `GetPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetShortNetname(NETINFO_ITEM self) -> wxString`
+- `GetSortPosition(EDA_ITEM self) -> VECTOR2I`
+- `GetStroke(BOARD_ITEM self) -> STROKE_PARAMS`
+- `GetTempFlags(EDA_ITEM self) -> EDA_ITEM_FLAGS`
+- `GetTypeDesc(EDA_ITEM self) -> wxString`
+- `GetX(BOARD_ITEM self) -> int`
+- `GetY(BOARD_ITEM self) -> int`
+- `HasAutoGeneratedNetname(NETINFO_ITEM self) -> bool`
+- `HasDrilledHole(BOARD_ITEM self) -> bool`
+- `HasFlag(EDA_ITEM self, EDA_ITEM_FLAGS aFlag) -> bool`
+- `HasHole(BOARD_ITEM self) -> bool`
+- `HasLineStroke(BOARD_ITEM self) -> bool`
+- `HitTest(EDA_ITEM self, VECTOR2I aPosition, int aAccuracy=0) -> bool`
+- `IsBrightened(EDA_ITEM self) -> bool`
+- `IsConnected(BOARD_ITEM self) -> bool`
+- `IsCurrent(NETINFO_ITEM self) -> bool`
+- `IsEntered(EDA_ITEM self) -> bool`
+- `IsForceVisible(EDA_ITEM self) -> bool`
+- `IsKnockout(BOARD_ITEM self) -> bool`
+- `IsLocked(BOARD_ITEM self) -> bool`
+- `IsModified(EDA_ITEM self) -> bool`
+- `IsMoving(EDA_ITEM self) -> bool`
+- `IsNew(EDA_ITEM self) -> bool`
+- `IsOnCopperLayer(BOARD_ITEM self) -> bool`
+- `IsOnLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsReplaceable(EDA_ITEM self) -> bool`
+- `IsRollover(EDA_ITEM self) -> bool`
+- `IsSelected(EDA_ITEM self) -> bool`
+- `IsShownAsBitmap(EDA_ITEM self) -> bool`
+- `IsSideSpecific(BOARD_ITEM self) -> bool`
+- `IsTented(BOARD_ITEM self, PCB_LAYER_ID aLayer) -> bool`
+- `IsType(EDA_ITEM self, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> bool`
+- `LayerMaskDescribe(BOARD_ITEM self) -> wxString`
+- `Matches(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, void * aAuxData) -> bool`
+- `Mirror(BOARD_ITEM self, VECTOR2I aCentre, FLIP_DIRECTION aFlipDirection)`
+- `Move(BOARD_ITEM self, VECTOR2I aMoveVector)`
+- `Normalize(BOARD_ITEM self)`
+- `NormalizeForCompare(BOARD_ITEM self)`
+- `PyGetClass(EDA_ITEM self) -> wxString`
+- `RenderAsBitmap(EDA_ITEM self, double aWorldScale) -> bool`
+- `Replace(EDA_ITEM self, EDA_SEARCH_DATA const & aSearchData, wxString aText) -> bool`
+- `Rotate(BOARD_ITEM self, VECTOR2I aRotCentre, EDA_ANGLE aAngle)`
+- `RunOnChildren(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction)`
+- `RunOnDescendants(BOARD_ITEM self, std::function< void (BOARD_ITEM *) > const & aFunction, int aDepth=0)`
+- `SetBrightened(EDA_ITEM self)`
+- `SetFPRelativePosition(BOARD_ITEM self, VECTOR2I aPos)`
+- `SetFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+- `SetForceVisible(EDA_ITEM self, bool aEnable)`
+- `SetIsCurrent(NETINFO_ITEM self, bool isCurrent)`
+- `SetIsKnockout(BOARD_ITEM self, bool aKnockout)`
+- `SetIsRollover(EDA_ITEM self, bool aIsRollover)`
+- `SetIsShownAsBitmap(EDA_ITEM self, bool aBitmap)`
+- `SetLayer(BOARD_ITEM self, PCB_LAYER_ID aLayer)`
+- `SetLayerSet(BOARD_ITEM self, LSET aLayers)`
+- `SetLocked(BOARD_ITEM self, bool aLocked)`
+- `SetModified(EDA_ITEM self)`
+- `SetNetClass(NETINFO_ITEM self, std::shared_ptr< NETCLASS > const & aNetClass)`
+- `SetNetCode(NETINFO_ITEM self, int aNetCode)`
+- `SetNetname(NETINFO_ITEM self, wxString aNewName)`
+- `SetParent(EDA_ITEM self, EDA_ITEM aParent)`
+- `SetParentGroup(BOARD_ITEM self, PCB_GROUP aGroup)`
+- `SetPos(…)`
+- `SetPosition(EDA_ITEM self, VECTOR2I aPos)`
+- `SetSelected(EDA_ITEM self)`
+- `SetStartEnd(…)`
+- `SetStroke(BOARD_ITEM self, STROKE_PARAMS const & aStroke)`
+- `SetX(BOARD_ITEM self, int aX)`
+- `SetY(BOARD_ITEM self, int aY)`
+- `Similarity(BOARD_ITEM self, BOARD_ITEM aItem) -> double`
+- `Sort(EDA_ITEM aLeft, EDA_ITEM aRight) -> bool`
+- `StyleFromSettings(BOARD_ITEM self, BOARD_DESIGN_SETTINGS settings)`
+- `SwapItemData(BOARD_ITEM self, BOARD_ITEM aImage)`
+- `TransformShapeToPolygon(BOARD_ITEM self, SHAPE_POLY_SET aBuffer, PCB_LAYER_ID aLayer, int aClearance, int aError, ERROR_LOC aErrorLoc, bool ignoreLineWidth=False)`
+- `Type(EDA_ITEM self) -> KICAD_T`
+- `ViewBBox(EDA_ITEM self) -> BOX2I`
+- `ViewGetLayers(EDA_ITEM self) -> intVector`
+- `Visit(EDA_ITEM self, INSPECTOR inspector, void * testData, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aScanTypes) -> INSPECT_RESULT`
+- `XorFlags(EDA_ITEM self, EDA_ITEM_FLAGS aMask)`
+
+#### `NETCLASS` — 97 方法
+> Proxy of C++ NETCLASS class.
+
+- `ContainsNetclassWithName(NETCLASS self, wxString netclass) -> bool`
+- `Deserialize(NETCLASS self, google::protobuf::Any const & aContainer) -> bool`
+- `GetBusWidth(NETCLASS self) -> int`
+- `GetBusWidthOpt(NETCLASS self) -> std::optional< int >`
+- `GetBusWidthParent(NETCLASS self) -> NETCLASS`
+- `GetClass(NETCLASS self) -> wxString`
+- `GetClearance(NETCLASS self) -> int`
+- `GetClearanceOpt(NETCLASS self) -> std::optional< int >`
+- `GetClearanceParent(NETCLASS self) -> NETCLASS`
+- `GetConstituentNetclasses(NETCLASS self) -> std::vector< NETCLASS *,std::allocator< NETCLASS * > > const &`
+- `GetDescription(NETCLASS self) -> wxString`
+- `GetDiffPairGap(NETCLASS self) -> int`
+- `GetDiffPairGapOpt(NETCLASS self) -> std::optional< int >`
+- `GetDiffPairGapParent(NETCLASS self) -> NETCLASS`
+- `GetDiffPairViaGap(NETCLASS self) -> int`
+- `GetDiffPairViaGapOpt(NETCLASS self) -> std::optional< int >`
+- `GetDiffPairViaGapParent(NETCLASS self) -> NETCLASS`
+- `GetDiffPairWidth(NETCLASS self) -> int`
+- `GetDiffPairWidthOpt(NETCLASS self) -> std::optional< int >`
+- `GetDiffPairWidthParent(NETCLASS self) -> NETCLASS`
+- `GetHumanReadableName(NETCLASS self) -> wxString`
+- `GetLineStyle(NETCLASS self) -> int`
+- `GetLineStyleOpt(NETCLASS self) -> std::optional< int >`
+- `GetLineStyleParent(NETCLASS self) -> NETCLASS`
+- `GetName(NETCLASS self) -> wxString`
+- `GetPcbColor(NETCLASS self, bool aIsForSave=False) -> COLOR4D`
+- `GetPcbColorParent(NETCLASS self) -> NETCLASS`
+- `GetPriority(NETCLASS self) -> int`
+- `GetSchematicColor(NETCLASS self, bool aIsForSave=False) -> COLOR4D`
+- `GetSchematicColorParent(NETCLASS self) -> NETCLASS`
+- `GetTrackWidth(NETCLASS self) -> int`
+- `GetTrackWidthOpt(NETCLASS self) -> std::optional< int >`
+- `GetTrackWidthParent(NETCLASS self) -> NETCLASS`
+- `GetViaDiameter(NETCLASS self) -> int`
+- `GetViaDiameterOpt(NETCLASS self) -> std::optional< int >`
+- `GetViaDiameterParent(NETCLASS self) -> NETCLASS`
+- `GetViaDrill(NETCLASS self) -> int`
+- `GetViaDrillOpt(NETCLASS self) -> std::optional< int >`
+- `GetViaDrillParent(NETCLASS self) -> NETCLASS`
+- `GetWireWidth(NETCLASS self) -> int`
+- `GetWireWidthOpt(NETCLASS self) -> std::optional< int >`
+- `GetWireWidthParent(NETCLASS self) -> NETCLASS`
+- `GetuViaDiameter(NETCLASS self) -> int`
+- `GetuViaDiameterOpt(NETCLASS self) -> std::optional< int >`
+- `GetuViaDiameterParent(NETCLASS self) -> NETCLASS`
+- `GetuViaDrill(NETCLASS self) -> int`
+- `GetuViaDrillOpt(NETCLASS self) -> std::optional< int >`
+- `GetuViaDrillParent(NETCLASS self) -> NETCLASS`
+- `HasBusWidth(NETCLASS self) -> bool`
+- `HasClearance(NETCLASS self) -> bool`
+- `HasDiffPairGap(NETCLASS self) -> bool`
+- `HasDiffPairViaGap(NETCLASS self) -> bool`
+- `HasDiffPairWidth(NETCLASS self) -> bool`
+- `HasLineStyle(NETCLASS self) -> bool`
+- `HasPcbColor(NETCLASS self) -> bool`
+- `HasTrackWidth(NETCLASS self) -> bool`
+- `HasViaDiameter(NETCLASS self) -> bool`
+- `HasViaDrill(NETCLASS self) -> int`
+- `HasWireWidth(NETCLASS self) -> bool`
+- `HasuViaDiameter(NETCLASS self) -> bool`
+- `HasuViaDrill(NETCLASS self) -> bool`
+- `IsDefault(NETCLASS self) -> bool`
+- `ResetParameters(NETCLASS self)`
+- `ResetParents(NETCLASS self)`
+- `Serialize(NETCLASS self, google::protobuf::Any & aContainer)`
+- `SetBusWidth(NETCLASS self, int aWidth)`
+- `SetBusWidthParent(NETCLASS self, NETCLASS parent)`
+- `SetClearance(NETCLASS self, int aClearance)`
+- `SetClearanceParent(NETCLASS self, NETCLASS parent)`
+- `SetConstituentNetclasses(NETCLASS self, std::vector< NETCLASS *,std::allocator< NETCLASS * > > && constituents)`
+- `SetDescription(NETCLASS self, wxString aDesc)`
+- `SetDiffPairGap(NETCLASS self, int aSize)`
+- `SetDiffPairGapParent(NETCLASS self, NETCLASS parent)`
+- `SetDiffPairViaGap(NETCLASS self, int aSize)`
+- `SetDiffPairViaGapParent(NETCLASS self, NETCLASS parent)`
+- `SetDiffPairWidth(NETCLASS self, int aSize)`
+- `SetDiffPairWidthParent(NETCLASS self, NETCLASS parent)`
+- `SetLineStyle(NETCLASS self, int aStyle)`
+- `SetLineStyleParent(NETCLASS self, NETCLASS parent)`
+- `SetName(NETCLASS self, wxString aName)`
+- `SetPcbColor(NETCLASS self, COLOR4D aColor)`
+- `SetPcbColorParent(NETCLASS self, NETCLASS parent)`
+- `SetPriority(NETCLASS self, int aPriority)`
+- `SetSchematicColor(NETCLASS self, COLOR4D aColor)`
+- `SetSchematicColorParent(NETCLASS self, NETCLASS parent)`
+- `SetTrackWidth(NETCLASS self, int aWidth)`
+- `SetTrackWidthParent(NETCLASS self, NETCLASS parent)`
+- `SetViaDiameter(NETCLASS self, int aDia)`
+- `SetViaDiameterParent(NETCLASS self, NETCLASS parent)`
+- `SetViaDrill(NETCLASS self, int aSize)`
+- `SetViaDrillParent(NETCLASS self, NETCLASS parent)`
+- `SetWireWidth(NETCLASS self, int aWidth)`
+- `SetWireWidthParent(NETCLASS self, NETCLASS parent)`
+- `SetuViaDiameter(NETCLASS self, int aSize)`
+- `SetuViaDiameterParent(NETCLASS self, NETCLASS parent)`
+- `SetuViaDrill(NETCLASS self, int aSize)`
+- `SetuViaDrillParent(NETCLASS self, NETCLASS parent)`
+
+#### `CONNECTIVITY_DATA` — 38 方法
+> Proxy of C++ CONNECTIVITY_DATA class.
+
+- `Add(CONNECTIVITY_DATA self, BOARD_ITEM aItem) -> bool`
+- `BlockRatsnestItems(CONNECTIVITY_DATA self, std::vector< BOARD_ITEM *,std::allocator< BOARD_ITEM * > > const & aItems)`
+- `Build(CONNECTIVITY_DATA self, BOARD aBoard, PROGRESS_REPORTER * aReporter=None) -> bool`
+- `ClearLocalRatsnest(CONNECTIVITY_DATA self)`
+- `ClearRatsnest(CONNECTIVITY_DATA self)`
+- `ComputeLocalRatsnest(CONNECTIVITY_DATA self, std::vector< BOARD_ITEM *,std::allocator< BOARD_ITEM * > > const & aItems, CONNECTIVITY_DATA aDynamicData, VECTOR2I aInternalOffset={ 0, 0 })`
+- `FillIsolatedIslandsMap(CONNECTIVITY_DATA self, std::map< ZONE *,std::map< PCB_LAYER_ID,ISOLATED_ISLANDS,std::less< PCB_LAYER_ID >,std::allocator< std::pair< PCB_LAYER_ID const,ISOLATED_ISLANDS > > >,std::less< ZONE * >,std::allocator< std::pair< ZONE *const,std::map< PCB_LAYER_ID,ISOLATED_ISLANDS,std::less< PCB_LAYER_ID >,std::allocator< std::pair< PCB_LAYER_ID const,ISOLATED_ISLANDS > > > > > > & aMap, bool aConnectivityAlreadyRebuilt=False)`
+- `GetConnectedItems(CONNECTIVITY_DATA self, BOARD_CONNECTED_ITEM aItem, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aTypes, bool aIgnoreNetcodes=False) -> std::vector< BOARD_CONNECTED_ITEM *,std::allocator< BOARD_CONNECTED_ITEM * > > const`
+- `GetConnectedItemsAtAnchor(CONNECTIVITY_DATA self, BOARD_CONNECTED_ITEM aItem, VECTOR2I aAnchor, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aTypes, int const & aMaxError=0) -> std::vector< BOARD_CONNECTED_ITEM *,std::allocator< BOARD_CONNECTED_ITEM * > > const`
+- `GetConnectedPads(CONNECTIVITY_DATA self, BOARD_CONNECTED_ITEM aItem) -> PADS_VEC`
+- `GetConnectedPadsAndVias(CONNECTIVITY_DATA self, BOARD_CONNECTED_ITEM aItem, PADS_VEC pads, std::vector< PCB_VIA *,std::allocator< PCB_VIA * > > * vias)`
+- `GetConnectedTracks(CONNECTIVITY_DATA self, BOARD_CONNECTED_ITEM aItem) -> TRACKS_VEC`
+- `GetConnectivityAlgo(CONNECTIVITY_DATA self) -> std::shared_ptr< CN_CONNECTIVITY_ALGO >`
+- `GetFromToCache(CONNECTIVITY_DATA self) -> std::shared_ptr< FROM_TO_CACHE >`
+- `GetLocalRatsnest(CONNECTIVITY_DATA self) -> std::vector< RN_DYNAMIC_LINE,std::allocator< RN_DYNAMIC_LINE > > const &`
+- `GetLock(CONNECTIVITY_DATA self) -> KISPINLOCK &`
+- `GetNetCount(CONNECTIVITY_DATA self) -> int`
+- `GetNetItems(CONNECTIVITY_DATA self, int aNetCode, std::vector< KICAD_T,std::allocator< KICAD_T > > const & aTypes) -> std::vector< BOARD_CONNECTED_ITEM *,std::allocator< BOARD_CONNECTED_ITEM * > > const`
+- `GetNetNameForNetCode(CONNECTIVITY_DATA self, int nc) -> wxString`
+- `GetNetSettings(CONNECTIVITY_DATA self) -> NET_SETTINGS`
+- `GetNodeCount(CONNECTIVITY_DATA self, int aNet=-1) -> unsigned int`
+- `GetPadCount(CONNECTIVITY_DATA self, int aNet=-1) -> unsigned int`
+- `GetRatsnestForNet(CONNECTIVITY_DATA self, int aNet) -> RN_NET *`
+- `GetUnconnectedCount(CONNECTIVITY_DATA self, bool aVisibileOnly) -> unsigned int`
+- `HasNetNameForNetCode(CONNECTIVITY_DATA self, int nc) -> bool`
+- `HideLocalRatsnest(CONNECTIVITY_DATA self)`
+- `IsConnectedOnLayer(CONNECTIVITY_DATA self, BOARD_CONNECTED_ITEM aItem, int aLayer, std::initializer_list< KICAD_T > const & aTypes={}) -> bool`
+- `MarkItemNetAsDirty(CONNECTIVITY_DATA self, BOARD_ITEM aItem)`
+- `Move(CONNECTIVITY_DATA self, VECTOR2I aDelta)`
+- `PropagateNets(CONNECTIVITY_DATA self, BOARD_COMMIT * aCommit=None)`
+- `RecalculateRatsnest(CONNECTIVITY_DATA self, BOARD_COMMIT * aCommit=None)`
+- `RefreshNetcodeMap(CONNECTIVITY_DATA self, BOARD aBoard)`
+- `Remove(CONNECTIVITY_DATA self, BOARD_ITEM aItem) -> bool`
+- `RemoveInvalidRefs(CONNECTIVITY_DATA self)`
+- `RunOnUnconnectedEdges(CONNECTIVITY_DATA self, std::function< bool (CN_EDGE &) > aFunc)`
+- `SetProgressReporter(CONNECTIVITY_DATA self, PROGRESS_REPORTER * aReporter)`
+- `TestTrackEndpointDangling(CONNECTIVITY_DATA self, PCB_TRACK aTrack, bool aIgnoreTracksInPads, VECTOR2I aPos=None) -> bool`
+- `Update(CONNECTIVITY_DATA self, BOARD_ITEM aItem) -> bool`
+
+#### `BOARD_DESIGN_SETTINGS` — 62 方法
+> Proxy of C++ BOARD_DESIGN_SETTINGS class.
+
+- `CloneFrom(BOARD_DESIGN_SETTINGS self, BOARD_DESIGN_SETTINGS aOther)`
+- `GetAuxOrigin(BOARD_DESIGN_SETTINGS self) -> VECTOR2I`
+- `GetBiggestClearanceValue(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetBoardThickness(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCopperLayerCount(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCurrentDiffPairGap(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCurrentDiffPairViaGap(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCurrentDiffPairWidth(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCurrentNetClassName(BOARD_DESIGN_SETTINGS self) -> wxString`
+- `GetCurrentTrackWidth(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCurrentViaDrill(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCurrentViaSize(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCustomDiffPairGap(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCustomDiffPairViaGap(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCustomDiffPairWidth(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCustomTrackWidth(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCustomViaDrill(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetCustomViaSize(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetDRCEpsilon(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetDefaultZoneSettings(BOARD_DESIGN_SETTINGS self) -> ZONE_SETTINGS`
+- `GetDiffPairIndex(BOARD_DESIGN_SETTINGS self) -> unsigned int`
+- `GetEnabledLayers(BOARD_DESIGN_SETTINGS self) -> LSET`
+- `GetGridOrigin(BOARD_DESIGN_SETTINGS self) -> VECTOR2I`
+- `GetHolePlatingThickness(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetLayerClass(BOARD_DESIGN_SETTINGS self, PCB_LAYER_ID aLayer) -> int`
+- `GetLineThickness(BOARD_DESIGN_SETTINGS self, PCB_LAYER_ID aLayer) -> int`
+- `GetSeverity(BOARD_DESIGN_SETTINGS self, int aDRCErrorCode) -> SEVERITY`
+- `GetSmallestClearanceValue(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetStackupDescriptor(BOARD_DESIGN_SETTINGS self) -> BOARD_STACKUP`
+- `GetTeadropParamsList(BOARD_DESIGN_SETTINGS self) -> TEARDROP_PARAMETERS_LIST *`
+- `GetTextItalic(BOARD_DESIGN_SETTINGS self, PCB_LAYER_ID aLayer) -> bool`
+- `GetTextSize(BOARD_DESIGN_SETTINGS self, PCB_LAYER_ID aLayer) -> VECTOR2I`
+- `GetTextThickness(BOARD_DESIGN_SETTINGS self, PCB_LAYER_ID aLayer) -> int`
+- `GetTextUpright(BOARD_DESIGN_SETTINGS self, PCB_LAYER_ID aLayer) -> bool`
+- `GetTrackWidthIndex(BOARD_DESIGN_SETTINGS self) -> unsigned int`
+- `GetUserDefinedLayerCount(BOARD_DESIGN_SETTINGS self) -> int`
+- `GetViaSizeIndex(BOARD_DESIGN_SETTINGS self) -> unsigned int`
+- `Ignore(BOARD_DESIGN_SETTINGS self, int aDRCErrorCode) -> bool`
+- `IsLayerEnabled(BOARD_DESIGN_SETTINGS self, PCB_LAYER_ID aLayerId) -> bool`
+- `LoadFromFile(BOARD_DESIGN_SETTINGS self, wxString aDirectory="") -> bool`
+- `SetAuxOrigin(BOARD_DESIGN_SETTINGS self, VECTOR2I aOrigin)`
+- `SetBoardThickness(BOARD_DESIGN_SETTINGS self, int aThickness)`
+- `SetCopperLayerCount(BOARD_DESIGN_SETTINGS self, int aNewLayerCount)`
+- `SetCustomDiffPairGap(BOARD_DESIGN_SETTINGS self, int aGap)`
+- `SetCustomDiffPairViaGap(BOARD_DESIGN_SETTINGS self, int aGap)`
+- `SetCustomDiffPairWidth(BOARD_DESIGN_SETTINGS self, int aWidth)`
+- `SetCustomTrackWidth(BOARD_DESIGN_SETTINGS self, int aWidth)`
+- `SetCustomViaDrill(BOARD_DESIGN_SETTINGS self, int aDrill)`
+- `SetCustomViaSize(BOARD_DESIGN_SETTINGS self, int aSize)`
+- `SetDefaultMasterPad(BOARD_DESIGN_SETTINGS self)`
+- `SetDefaultZoneSettings(BOARD_DESIGN_SETTINGS self, ZONE_SETTINGS aSettings)`
+- `SetDiffPairIndex(BOARD_DESIGN_SETTINGS self, unsigned int aIndex)`
+- `SetEnabledLayers(BOARD_DESIGN_SETTINGS self, LSET aMask)`
+- `SetGridOrigin(BOARD_DESIGN_SETTINGS self, VECTOR2I aOrigin)`
+- `SetTrackWidthIndex(BOARD_DESIGN_SETTINGS self, unsigned int aIndex)`
+- `SetUserDefinedLayerCount(BOARD_DESIGN_SETTINGS self, int aNewLayerCount)`
+- `SetViaSizeIndex(BOARD_DESIGN_SETTINGS self, unsigned int aIndex)`
+- `UseCustomDiffPairDimensions(BOARD_DESIGN_SETTINGS self, bool aEnabled)`
+- `UseCustomTrackViaSize(BOARD_DESIGN_SETTINGS self, bool aEnabled)`
+- `UseNetClassDiffPair(BOARD_DESIGN_SETTINGS self) -> bool`
+- `UseNetClassTrack(BOARD_DESIGN_SETTINGS self) -> bool`
+- `UseNetClassVia(BOARD_DESIGN_SETTINGS self) -> bool`
+
+### 2.3 自由函数 (module-level)
+
+- `BOARD_CONNECTED_ITEM_ClassOf(EDA_ITEM aItem) -> bool`
+- `BOARD_ClassOf(EDA_ITEM aItem) -> bool`
+- `BOARD_GetStandardLayerName(PCB_LAYER_ID aLayerId) -> wxString`
+- `BOX2ISafe(BOX2D const & aInput) -> BOX2I`
+- `BOX2I_ByCenter(VECTOR2I aCenter, VECTOR2L aSize) -> BOX2I`
+- `BOX2I_ByCorners(VECTOR2I aCorner1, VECTOR2I aCorner2) -> BOX2I`
+- `BaseType(KICAD_T const aType) -> KICAD_T`
+- `BoardLayerFromLegacyId(int aLegacyId) -> PCB_LAYER_ID`
+- `COLOR4D_ContrastRatio(COLOR4D aLeft, COLOR4D aRight) -> double`
+- `COLOR4D_FindNearestLegacyColor(int aR, int aG, int aB) -> EDA_COLOR_T`
+- `Cast_to_BOARD(BOARD_ITEM arg1) -> BOARD`
+- `Cast_to_BOARD_ITEM(EDA_ITEM base) -> BOARD_ITEM`
+- `Cast_to_FOOTPRINT(BOARD_ITEM arg1) -> FOOTPRINT`
+- `Cast_to_PAD(BOARD_ITEM arg1) -> PAD`
+- `Cast_to_PCB_ARC(BOARD_ITEM arg1) -> PCB_ARC`
+- `Cast_to_PCB_DIM_ALIGNED(BOARD_ITEM arg1) -> PCB_DIM_ALIGNED`
+- `Cast_to_PCB_DIM_CENTER(BOARD_ITEM arg1) -> PCB_DIM_CENTER`
+- `Cast_to_PCB_DIM_LEADER(BOARD_ITEM arg1) -> PCB_DIM_LEADER`
+- `Cast_to_PCB_DIM_ORTHOGONAL(BOARD_ITEM arg1) -> PCB_DIM_ORTHOGONAL`
+- `Cast_to_PCB_DIM_RADIAL(BOARD_ITEM arg1) -> PCB_DIM_RADIAL`
+- `Cast_to_PCB_GROUP(BOARD_ITEM arg1) -> PCB_GROUP`
+- `Cast_to_PCB_MARKER(BOARD_ITEM arg1) -> PCB_MARKER`
+- `Cast_to_PCB_REFERENCE_IMAGE(BOARD_ITEM arg1) -> PCB_REFERENCE_IMAGE`
+- `Cast_to_PCB_SHAPE(BOARD_ITEM arg1) -> PCB_SHAPE`
+- `Cast_to_PCB_TABLE(BOARD_ITEM arg1) -> PCB_TABLE`
+- `Cast_to_PCB_TARGET(BOARD_ITEM arg1) -> PCB_TARGET`
+- `Cast_to_PCB_TEXT(BOARD_ITEM arg1) -> PCB_TEXT`
+- `Cast_to_PCB_TEXTBOX(BOARD_ITEM arg1) -> PCB_TEXTBOX`
+- `Cast_to_PCB_TRACK(BOARD_ITEM arg1) -> PCB_TRACK`
+- `Cast_to_PCB_VIA(BOARD_ITEM arg1) -> PCB_VIA`
+- `Cast_to_SHAPE_ARC(std::shared_ptr< SHAPE > _self) -> std::shared_ptr< SHAPE_ARC >`
+- `Cast_to_SHAPE_CIRCLE(std::shared_ptr< SHAPE > _self) -> std::shared_ptr< SHAPE_CIRCLE >`
+- `Cast_to_SHAPE_COMPOUND(std::shared_ptr< SHAPE > _self) -> std::shared_ptr< SHAPE_COMPOUND >`
+- `Cast_to_SHAPE_LINE_CHAIN(std::shared_ptr< SHAPE > _self) -> std::shared_ptr< SHAPE_LINE_CHAIN >`
+- `Cast_to_SHAPE_POLY_SET(std::shared_ptr< SHAPE > _self) -> std::shared_ptr< SHAPE_POLY_SET >`
+- `Cast_to_SHAPE_RECT(std::shared_ptr< SHAPE > _self) -> std::shared_ptr< SHAPE_RECT >`
+- `Cast_to_SHAPE_SEGMENT(std::shared_ptr< SHAPE > _self) -> std::shared_ptr< SHAPE_SEGMENT >`
+- `Cast_to_SHAPE_SIMPLE(std::shared_ptr< SHAPE > _self) -> std::shared_ptr< SHAPE_SIMPLE >`
+- `Cast_to_ZONE(BOARD_ITEM arg1) -> ZONE`
+- `CopperLayerToOrdinal(PCB_LAYER_ID aLayer) -> size_t`
+- `CreateEmptyBoard() -> BOARD`
+- `DELETED_BOARD_ITEM_GetInstance() -> DELETED_BOARD_ITEM`
+- `DoubleValueFromString(EDA_IU_SCALE aIuScale, EDA_UNITS aUnits, wxString aTextValue, EDA_DATA_TYPE aType=DISTANCE) -> double`
+- `EDA_ANGLE_Arccos(double x) -> EDA_ANGLE`
+- `EDA_ANGLE_Arcsin(double x) -> EDA_ANGLE`
+- `EDA_ANGLE_Arctan(double x) -> EDA_ANGLE`
+- `EDA_ANGLE_Arctan2(double y, double x) -> EDA_ANGLE`
+- `EDA_ITEM_Sort(EDA_ITEM aLeft, EDA_ITEM aRight) -> bool`
+- `EDA_TEXT_GotoPageHref(wxString aDestination) -> wxString`
+- `EDA_TEXT_IsGotoPageHref(wxString aHref, wxString aDestination=None) -> bool`
+- `EDA_TEXT_MapHorizJustify(int aHorizJustify) -> GR_TEXT_H_ALIGN_T`
+- `EDA_TEXT_MapVertJustify(int aVertJustify) -> GR_TEXT_V_ALIGN_T`
+- `EDA_TEXT_ValidateHyperlink(wxString aURL) -> bool`
+- `EnsureFileDirectoryExists(wxFileName * aTargetFullFileName, wxString aBaseFilename, REPORTER * aReporter=None) -> bool`
+- `EnsureFileExtension(wxString aFilename, wxString aExtension) -> wxString`
+- `ExpandEnvVarSubstitutions(wxString aString, PROJECT const * aProject) -> wxString`
+- `ExpandTextVars(wxString aSource, std::function< bool (wxString *) > const * aResolver, int aFlags=0) -> wxString`
+- `ExportFootprintsToLibrary(bool aStoreInNewLib, wxString aLibName=wxEmptyString, wxString aLibPath=None) -> bool`
+- `ExportSpecctraDSN(wxString aFullFilename) -> bool`
+- `ExportVRML(wxString aFullFileName, double aMMtoWRMLunit, bool aIncludeUnspecified, bool aIncludeDNP, bool aExport3DFiles, bool aUseRelativePaths, wxString a3D_Subdir, double aXRef, double aYRef) -> bool`
+- `FOOTPRINT_ClassOf(EDA_ITEM aItem) -> bool`
+- `FOOTPRINT_GetCoverageArea(BOARD_ITEM aItem, GENERAL_COLLECTOR const & aCollector) -> double`
+- `FOOTPRINT_IsLibNameValid(wxString aName) -> bool`
+- `FOOTPRINT_StringLibNameInvalidChars(bool aUserReadable) -> wxChar const *`
+- `FP_CACHE_GetTimestamp(wxString aLibPath) -> long long`
+- `FetchUnitsFromString(wxString aTextValue, EDA_UNITS & aUnits) -> bool`
+- `FlipLayer(PCB_LAYER_ID aLayerId, int aCopperLayersCount=0) -> PCB_LAYER_ID`
+- `FocusOnItem(BOARD_ITEM aItem, PCB_LAYER_ID aLayer=UNDEFINED_LAYER)`
+- `FootprintDelete(…)`
+- `FootprintEnumerate(…)`
+- `FootprintIsWritable(…)`
+- `FootprintLibCreate(…)`
+- `FootprintLibDelete(…)`
+- `FootprintLoad(…)`
+- `FootprintSave(…)`
+- `FormatAngle(EDA_ANGLE aAngle) -> string`
+- `FormatInternalUnits(EDA_IU_SCALE aIuScale, int aValue) -> string`
+- `FromMM(…)`
+- `FromMils(…)`
+- `FromUserUnit(EDA_IU_SCALE aIuScale, EDA_UNITS aUnit, double aValue) -> double`
+- `FullVersion(…)`  — Return the full, git-based version of KiCad
+- `GAL_SET_DefaultVisible() -> GAL_SET`
+- `GetBaseVersion() -> wxString`
+- `GetBoard() -> BOARD`
+- `GetBuildDate() -> wxString`
+- `GetBuildVersion() -> wxString`
+- `GetCommitHash() -> wxString`
+- `GetCurrentSelection() -> DRAWINGS`
+- `GetDefaultPlotExtension(PLOT_FORMAT aFormat) -> wxString`
+- `GetFlippedAlignment(GR_TEXT_H_ALIGN_T aAlign) -> GR_TEXT_H_ALIGN_T`
+- `GetFootprintLibraries() -> wxArrayString`
+- `GetFootprints(wxString aNickName) -> wxArrayString`
+- `GetGeneratedFieldDisplayName(wxString aSource) -> wxString`
+- `GetLabel(EDA_UNITS aUnits, EDA_DATA_TYPE aType=DISTANCE) -> wxString`
+- `GetLanguage() -> wxString`
+- `GetMajorMinorPatchTuple() -> std::tuple< int,int,int > const &`
+- `GetMajorMinorPatchVersion() -> wxString`
+- `GetMajorMinorVersion() -> wxString`
+- `GetNetnameLayer(int aLayer) -> int`
+- `GetPlatformGetBitnessName() -> wxString`
+- `GetPluginForPath(…)`
+- `GetSemanticVersion() -> wxString`
+- `GetSettingsManager() -> SETTINGS_MANAGER`
+- `GetText(EDA_UNITS aUnits, EDA_DATA_TYPE aType=DISTANCE) -> wxString`
+- `GetUnLoadableWizards(…)`
+- `GetUserUnits() -> int`
+- `GetVersionInfoData(wxString aTitle, bool aHtml=False, bool aBrief=False) -> wxString`
+- `GetWizardsBackTrace(…)`
+- `GetWizardsSearchPaths(…)`
+- `ImportSpecctraSES(wxString aFullFilename) -> bool`
+- `InvokeCopperZonesEditor(PCB_BASE_FRAME * aCaller, ZONE_SETTINGS aSettings, CONVERT_SETTINGS * aConvertSettings=None) -> int`
+- `InvokeNonCopperZonesEditor(PCB_BASE_FRAME * aParent, ZONE_SETTINGS aSettings, CONVERT_SETTINGS * aConvertSettings=None) -> int`
+- `InvokeRuleAreaEditor(PCB_BASE_FRAME * aCaller, ZONE_SETTINGS aSettings, BOARD aBoard=None, CONVERT_SETTINGS * aConvertSettings=None) -> int`
+- `IsActionRunning() -> bool`
+- `IsBackLayer(PCB_LAYER_ID aLayerId) -> bool`
+- `IsClearanceLayer(int aLayer) -> bool`
+- `IsCopperLayer(int aLayerId) -> bool`
+- `IsCopperLayerLowerThan(PCB_LAYER_ID aLayerA, PCB_LAYER_ID aLayerB) -> bool`
+- `IsDCodeLayer(int aLayer) -> bool`
+- `IsEeschemaType(KICAD_T const aType) -> bool`
+- `IsExternalCopperLayer(int aLayerId) -> bool`
+- `IsFrontLayer(PCB_LAYER_ID aLayerId) -> bool`
+- `IsGeneratedField(wxString aSource) -> bool`
+- `IsGerbviewType(KICAD_T const aType) -> bool`
+- `IsHoleLayer(int aLayer) -> bool`
+- `IsImperialUnit(EDA_UNITS aUnit) -> bool`
+- `IsInnerCopperLayer(int aLayerId) -> bool`
+- `IsInstantiableType(KICAD_T const aType) -> bool`
+- `IsMetricUnit(EDA_UNITS aUnit) -> bool`
+- `IsMiscType(KICAD_T const aType) -> bool`
+- `IsNetnameLayer(int aLayer) -> bool`
+- `IsNightlyVersion() -> bool`
+- `IsNonCopperLayer(int aLayerId) -> bool`
+- `IsNullType(KICAD_T const aType) -> bool`
+- `IsPadCopperLayer(int aLayer) -> bool`
+- `IsPageLayoutEditorType(KICAD_T const aType) -> bool`
+- `IsPcbLayer(int aLayer) -> bool`
+- `IsPcbnewType(KICAD_T const aType) -> bool`
+- `IsSolderMaskLayer(int aLayer) -> bool`
+- `IsTypeCorrect(KICAD_T aType) -> bool`
+- `IsUTF8(char const * aString) -> bool`
+- `IsUserLayer(PCB_LAYER_ID aLayerId) -> bool`
+- `IsValidLayer(int aLayerId) -> bool`
+- `IsViaCopperLayer(int aLayer) -> bool`
+- `IsViaPadLayer(int aLayer) -> bool`
+- `IsZoneFillLayer(int aLayer) -> bool`
+- `KIID_Combine(KIID aFirst, KIID aSecond) -> KIID`
+- `KIID_CreateNilUuids(bool aNil=True)`
+- `KIID_SeedGenerator(unsigned int aSeed)`
+- `KIID_SniffTest(wxString aCandidate) -> bool`
+- `KiROUND(VECTOR2D const & vec) -> VECTOR2I`
+- `LAYER_ParseType(char const * aType) -> LAYER_T`
+- `LAYER_ShowType(LAYER_T aType) -> char const *`
+- `LIB_ID_FindIllegalLibraryNameChar(UTF8 aLibraryName) -> unsigned int`
+- `LIB_ID_FixIllegalChars(UTF8 aLibItemName, bool aLib) -> UTF8`
+- `LIB_ID_Format() -> UTF8`
+- `LIB_ID_HasIllegalChars(UTF8 aLibItemName) -> int`
+- `LSET_AllBoardTechMask() -> LSET`
+- `LSET_AllCuMask(int aCuLayerCount) -> LSET`
+- `LSET_AllLayersMask() -> LSET`
+- `LSET_AllNonCuMask() -> LSET`
+- `LSET_AllTechMask() -> LSET`
+- `LSET_BackAssembly() -> LSET`
+- `LSET_BackBoardTechMask() -> LSET`
+- `LSET_BackMask() -> LSET`
+- `LSET_BackTechMask() -> LSET`
+- `LSET_ExternalCuMask() -> LSET`
+- `LSET_ForbiddenFootprintLayers() -> LSET`
+- `LSET_FrontAssembly() -> LSET`
+- `LSET_FrontBoardTechMask() -> LSET`
+- `LSET_FrontMask() -> LSET`
+- `LSET_FrontTechMask() -> LSET`
+- `LSET_InternalCuMask() -> LSET`
+- `LSET_IsBetween(PCB_LAYER_ID aStart, PCB_LAYER_ID aEnd, PCB_LAYER_ID aLayer) -> bool`
+- `LSET_LayerCount(PCB_LAYER_ID aStart, PCB_LAYER_ID aEnd, int aCopperLayerCount) -> int`
+- `LSET_Name(PCB_LAYER_ID aLayerId) -> wxString`
+- `LSET_NameToLayer(wxString aName) -> int`
+- `LSET_PhysicalLayersMask() -> LSET`
+- `LSET_SideSpecificMask() -> LSET`
+- `LSET_UserDefinedLayersMask(int aUserDefinedLayerCount=45) -> LSET`
+- `LSET_UserMask() -> LSET`
+- `LayerName(int aLayer) -> wxString`
+- `LoadBoard(wxString aFileName, PCB_IO_MGR::PCB_FILE_T aFormat) -> BOARD`
+- `LoadPluginModule(…)`  — Load the plugin module named ModuleName located in the folder Dirname.
+- `LoadPlugins(…)`  — Initialise Scripting/Plugin python environment and load plugins.
+- `Map3DLayerToPCBLayer(int aLayer) -> PCB_LAYER_ID`
+- `MapPCBLayerTo3DLayer(PCB_LAYER_ID aLayer) -> int`
+- `MessageTextFromMinOptMax(EDA_IU_SCALE aIuScale, EDA_UNITS aUnits, MINOPTMAX< int > const & aValue) -> wxString`
+- `MessageTextFromValue(EDA_IU_SCALE aIuScale, EDA_UNITS aUnits, double aValue, bool aAddUnitsText=True, EDA_DATA_TYPE aType=DISTANCE) -> wxString`
+- `Mils2IU(EDA_IU_SCALE aIuScale, int mils) -> int`
+- `Mils2mm(double aVal) -> int`
+- `Mm2mils(double aVal) -> int`
+- `NETINFO_ITEM_ClassOf(EDA_ITEM aItem) -> bool`
+- `NETINFO_LIST_OrphanedItem() -> NETINFO_ITEM`
+- `NET_SETTINGS_ForEachBusMember(wxString aBusPattern, std::function< void (wxString const &) > const & aFunction)`
+- `NET_SETTINGS_ParseBusGroup(wxString aGroup, wxString name, std::vector< wxString,std::allocator< wxString > > * aMemberList) -> bool`
+- `NET_SETTINGS_ParseBusVector(wxString aBus, wxString aName, std::vector< wxString,std::allocator< wxString > > * aMemberList) -> bool`
+- `NewBoard(wxString aFileName) -> BOARD`
+- `NilUuid() -> KIID`
+- `PADSTACK_Compare(PADSTACK aPadstackRef, PADSTACK aPadstackCmp) -> int`
+- `PAD_ApertureMask() -> LSET`
+- `PAD_ClassOf(EDA_ITEM aItem) -> bool`
+- `PAD_Compare(PAD aPadRef, PAD aPadCmp) -> int`
+- `PAD_ConnSMDMask() -> LSET`
+- `PAD_PTHMask() -> LSET`
+- `PAD_SMDMask() -> LSET`
+- `PAD_UnplatedHoleMask() -> LSET`
+- `PCB_ARC_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_DIM_ALIGNED_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_DIM_CENTER_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_DIM_LEADER_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_DIM_ORTHOGONAL_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_DIM_RADIAL_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_FIELD_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_GROUP_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_GROUP_IsGroupableType(KICAD_T aType) -> bool`
+- `PCB_GROUP_TopLevelGroup(BOARD_ITEM aItem, PCB_GROUP aScope, bool isFootprintEditor) -> PCB_GROUP`
+- `PCB_GROUP_WithinScope(BOARD_ITEM aItem, PCB_GROUP aScope, bool isFootprintEditor) -> bool`
+- `PCB_IO_MGR_ConvertLibrary(str_utf8_Map aOldFileProps, wxString aOldFilePath, wxString aNewFilePath, REPORTER * aReporter) -> bool`
+- `PCB_IO_MGR_EnumFromStr(wxString aFileType) -> PCB_IO_MGR::PCB_FILE_T`
+- `PCB_IO_MGR_FindPluginTypeFromBoardPath(wxString aFileName, int aCtl=0) -> PCB_IO_MGR::PCB_FILE_T`
+- `PCB_IO_MGR_GuessPluginTypeFromLibPath(wxString aLibPath, int aCtl=0) -> PCB_IO_MGR::PCB_FILE_T`
+- `PCB_IO_MGR_Load(PCB_IO_MGR::PCB_FILE_T aFileType, wxString aFileName, BOARD aAppendToMe=None, str_utf8_Map aProperties=None, PROJECT * aProject=None, PROGRESS_REPORTER * aProgressReporter=None) -> BOARD`
+- `PCB_IO_MGR_PluginFind(PCB_IO_MGR::PCB_FILE_T aFileType) -> PCB_IO`
+- `PCB_IO_MGR_Save(PCB_IO_MGR::PCB_FILE_T aFileType, wxString aFileName, BOARD aBoard, str_utf8_Map aProperties=None)`
+- `PCB_IO_MGR_ShowType(PCB_IO_MGR::PCB_FILE_T aFileType) -> wxString`
+- `PCB_MARKER_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_MARKER_DeserializeFromString(wxString data) -> PCB_MARKER`
+- `PCB_REFERENCE_IMAGE_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_SHAPE_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_TABLE_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_TABLE_Compare(PCB_TABLE aTable, PCB_TABLE aOther) -> int`
+- `PCB_TARGET_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_TEXTBOX_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_TEXT_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_TRACK_ClassOf(EDA_ITEM aItem) -> bool`
+- `PCB_VIA_ClassOf(EDA_ITEM aItem) -> bool`
+- `PLACE_FILE_EXPORTER_DecorateFilename(wxString aBaseName, bool aFront, bool aBack) -> wxString`
+- `PLACE_FILE_EXPORTER_GetBackSideName() -> string`
+- `PLACE_FILE_EXPORTER_GetFrontSideName() -> string`
+- `PYTHON_ACTION_PLUGINS_deregister_action(PyObject * wizard)`
+- `PYTHON_ACTION_PLUGINS_register_action(PyObject * wizard)`
+- `PYTHON_FOOTPRINT_WIZARD_LIST_deregister_wizard(PyObject * wizard)`
+- `PYTHON_FOOTPRINT_WIZARD_LIST_register_wizard(PyObject * wizard)`
+- `PlotDrawingSheet(PLOTTER plotter, PROJECT const * aProject, TITLE_BLOCK aTitleBlock, PAGE_INFO const & aPageInfo, MAP_STRING_STRING aProperties, wxString aSheetNumber, int aSheetCount, wxString aSheetName, wxString aSheetPath, wxString aFilename, COLOR4D aColor=COLOR4D::UNSPECIFIED, bool aIsFirstPage=True)`
+- `PrintZoneConnection(ZONE_CONNECTION aConnection) -> wxString`
+- `PutOnGridMM(…)`
+- `PutOnGridMils(…)`
+- `Refresh()`
+- `ResolveUriByEnvVars(wxString aUri, PROJECT const * aProject) -> wxString`
+- `SEG_Square(int a) -> SEG::ecoord`
+- `SETTINGS_MANAGER_GetColorSettingsPath() -> wxString`
+- `SETTINGS_MANAGER_GetSettingsVersion() -> string`
+- `SETTINGS_MANAGER_GetUserSettingsPath() -> wxString`
+- `SETTINGS_MANAGER_IsSettingsPathValid(wxString aPath) -> bool`
+- `SHAPE_ARC_DefaultAccuracyForPCB() -> int`
+- `SHAPE_LINE_CHAIN_ClosestPoints(SHAPE_LINE_CHAIN aOther, VECTOR2I aPt0, VECTOR2I aPt1) -> bool`
+- `SHAPE_LINE_CHAIN_ClosestSegments(VECTOR2I aMyPrevPt, SHAPE_LINE_CHAIN::point_citer const & aMyStart, SHAPE_LINE_CHAIN::point_citer const & aMyEnd, VECTOR2I aOtherPrevPt, SHAPE_LINE_CHAIN::point_citer const & aOtherStart, SHAPE_LINE_CHAIN::point_citer const & aOtherEnd, VECTOR2I aPt0, VECTOR2I aPt1, int64_t & aDistSq) -> bool`
+- `SHAPE_TYPE_asString(SHAPE_TYPE a) -> wxString`
+- `SafeReadFile(wxString aFilePath, wxString aReadType) -> wxString`
+- `SaveBoard(wxString aFileName, BOARD aBoard, bool aSkipSettings=False) -> bool`
+- `SearchHelpFileFullPath(wxString aBaseName) -> wxString`
+- `SetOpenGLInfo(char const * aRenderer, char const * aVendor, char const * aVersion)`
+- `StrPrintf(string aResult, char const * aFormat) -> int`
+- `StringFromValue(EDA_IU_SCALE aIuScale, EDA_UNITS aUnits, double aValue, bool aAddUnitsText=False, EDA_DATA_TYPE aType=DISTANCE) -> wxString`
+- `TITLE_BLOCK_GetContextualTextVars(wxArrayString * aVars)`
+- `TITLE_BLOCK_GetCurrentDate() -> wxString`
+- `TimestampDir(wxString aDirPath, wxString aFilespec) -> long long`
+- `ToGalLayer(int aInteger) -> GAL_LAYER_ID`
+- `ToHAlignment(int x) -> GR_TEXT_H_ALIGN_T`
+- `ToLAYER_ID(int aLayer) -> PCB_LAYER_ID`
+- `ToMM(…)`
+- `ToMils(…)`
+- `ToUserUnit(EDA_IU_SCALE aIuScale, EDA_UNITS aUnit, double aValue) -> double`
+- `UTILS_STEP_MODEL_LoadSTEP(wxString aFileName) -> UTILS_STEP_MODEL`
+- `UpdateUserInterface()`
+- `VECTOR2I_MM(…)`
+- `VECTOR2I_Mils(…)`
+- `ValueFromString(EDA_IU_SCALE aIuScale, EDA_UNITS aUnits, wxString aTextValue, EDA_DATA_TYPE aType=DISTANCE) -> long long`
+- `Version(…)`  — Return the semantic version of KiCad
+- `WarnUserIfOperatingSystemUnsupported() -> bool`
+- `WriteDRCReport(BOARD aBoard, wxString aFileName, EDA_UNITS aUnits, bool aReportAllTrackErrors) -> bool`
+- `ZONE_ClassOf(EDA_ITEM aItem) -> bool`
+- `ZONE_GetDefaultHatchPitch() -> int`
+- `ZONE_SETTINGS_GetDefaultSettings() -> ZONE_SETTINGS`
+- `_swig_add_metaclass(…)`  — Class decorator for adding a metaclass to a SWIG wrapped class - a slimmed down version of six.add_metaclass
+- `_swig_repr(…)`
+- `_swig_setattr_nondynamic_class_variable(…)`
+- `_swig_setattr_nondynamic_instance_variable(…)`
+- `ceil(…)`  — Return the ceiling of x as an Integral.
+- `colorRefs() -> StructColors`
+- `floor(…)`  — Return the floor of x as an Integral.
+- `new_clone(EDA_ITEM aItem) -> EDA_ITEM`
+- `sqrt(…)`  — Return the square root of x.
+- `wxGetDefaultPyEncoding() -> char const *`
+- `wxPointMM(…)`
+- `wxPointMils(…)`
+- `wxRectMM(…)`
+- `wxRectMils(…)`
+- `wxSetDefaultPyEncoding(char const * encoding)`
+- `wxSizeMM(…)`
+- `wxSizeMils(…)`
+
+### 2.4 常量/枚举取值域 (按前缀分组)
+
+- **ADD**: `ADD_MODE_APPEND=1`, `ADD_MODE_BULK_APPEND=2`, `ADD_MODE_BULK_INSERT=3`, `ADD_MODE_INSERT=0`
+- **ARC**: `ARC_HIGH_DEF_MM=0.005`, `ARC_LOW_DEF_MM=0.02`
+- **B**: `B_Adhes=11`, `B_CrtYd=29`, `B_Cu=2`, `B_Fab=33`, `B_Mask=3`, `B_Paste=15`, `B_SilkS=7`
+- **BOARD**: `BOARD_FILE_HOST_VERSION=20200825`, `BOARD_USE_FPHOLDER=1`, `BOARD_USE_NORMAL=0`
+- **CORNER**: `CORNER_STRATEGY_ALLOW_ACUTE_CORNERS=0`, `CORNER_STRATEGY_CHAMFER_ACUTE_CORNERS=1`, `CORNER_STRATEGY_CHAMFER_ALL_CORNERS=3`, `CORNER_STRATEGY_ROUND_ACUTE_CORNERS=2`, `CORNER_STRATEGY_ROUND_ALL_CORNERS=4`
+- **DEFAULT**: `DEFAULT_BOARD_THICKNESS_MM=1.6`, `DEFAULT_CHAINING_EPSILON_MM=0.01`, `DEFAULT_COPPEREDGECLEARANCE=0.5`, `DEFAULT_COPPER_LINE_WIDTH=0.2`, `DEFAULT_COPPER_TEXT_SIZE=1.5`, `DEFAULT_COPPER_TEXT_WIDTH=0.3`, `DEFAULT_COURTYARD_WIDTH=0.05`, `DEFAULT_CUSTOMDPAIRGAP=0.18`, `DEFAULT_CUSTOMDPAIRVIAGAP=0.18`, `DEFAULT_CUSTOMDPAIRWIDTH=0.125`, `DEFAULT_CUSTOMTRACKWIDTH=0.2`, `DEFAULT_DIMENSION_ARROW_LENGTH=50`, `DEFAULT_DIMENSION_EXTENSION_OFFSET=0.5`, `DEFAULT_DP_MEANDER_SPACING=1.0`, `DEFAULT_EDGE_WIDTH=0.05`, `DEFAULT_FILE_HISTORY_SIZE=9`, `DEFAULT_HOLECLEARANCE=0.25`, `DEFAULT_HOLETOHOLEMIN=0.25`, `DEFAULT_LINE_WIDTH=0.1`, `DEFAULT_MEANDER_SPACING=0.6`, `DEFAULT_MICROVIASMINDRILL=0.1`, `DEFAULT_MICROVIASMINSIZE=0.2`, `DEFAULT_MINCLEARANCE=0.0`, `DEFAULT_MINCONNECTION=0.0` … (共 46)
+- **DIM**: `DIM_ARROW_DIRECTION_INWARD=0`, `DIM_ARROW_DIRECTION_OUTWARD=1`, `DIM_PRECISION_V_VV=6`, `DIM_PRECISION_V_VVV=7`, `DIM_PRECISION_V_VVVV=8`, `DIM_PRECISION_V_VVVVV=9`, `DIM_PRECISION_X=0`, `DIM_PRECISION_X_X=1`, `DIM_PRECISION_X_XX=2`, `DIM_PRECISION_X_XXX=3`, `DIM_PRECISION_X_XXXX=4`, `DIM_PRECISION_X_XXXXX=5`, `DIM_TEXT_BORDER_CIRCLE=2`, `DIM_TEXT_BORDER_NONE=0`, `DIM_TEXT_BORDER_RECTANGLE=1`, `DIM_TEXT_BORDER_ROUNDRECT=3`, `DIM_TEXT_POSITION_INLINE=1`, `DIM_TEXT_POSITION_MANUAL=2`, `DIM_TEXT_POSITION_OUTSIDE=0`, `DIM_UNITS_FORMAT_BARE_SUFFIX=1`, `DIM_UNITS_FORMAT_NO_SUFFIX=0`, `DIM_UNITS_FORMAT_PAREN_SUFFIX=2`, `DIM_UNITS_MODE_AUTOMATIC=3`, `DIM_UNITS_MODE_INCH=0` … (共 26)
+- **DRILL**: `DRILL_MARKS_FULL_DRILL_SHAPE=2`, `DRILL_MARKS_NO_DRILL_SHAPE=0`, `DRILL_MARKS_SMALL_DRILL_SHAPE=1`
+- **DXF**: `DXF_UNITS_INCH=0`, `DXF_UNITS_MM=1`
+- **EDA**: `EDA_DATA_TYPE_AREA=1`, `EDA_DATA_TYPE_DISTANCE=0`, `EDA_DATA_TYPE_UNITLESS=3`, `EDA_DATA_TYPE_VOLUME=2`, `EDA_UNITS_CM=7`, `EDA_UNITS_DEGREES=3`, `EDA_UNITS_INCH=0`, `EDA_UNITS_MILS=5`, `EDA_UNITS_MM=1`, `EDA_UNITS_PERCENT=4`, `EDA_UNITS_UM=6`, `EDA_UNITS_UNSCALED=2`
+- **ENDPOINT**: `ENDPOINT_END=1`, `ENDPOINT_START=0`
+- **ERROR**: `ERROR_INSIDE=1`, `ERROR_OUTSIDE=0`
+- **F**: `F_Adhes=9`, `F_CrtYd=31`, `F_Cu=0`, `F_Fab=35`, `F_Mask=1`, `F_Paste=13`, `F_SilkS=5`
+- **FILL**: `FILL_T_FILLED_SHAPE=2`, `FILL_T_FILLED_WITH_BG_BODYCOLOR=3`, `FILL_T_FILLED_WITH_COLOR=4`, `FILL_T_NO_FILL=1`
+- **FLASHING**: `FLASHING_ALWAYS_FLASHED=1`, `FLASHING_DEFAULT=0`, `FLASHING_NEVER_FLASHED=2`
+- **FLIP**: `FLIP_DIRECTION_LEFT_RIGHT=0`, `FLIP_DIRECTION_TOP_BOTTOM=1`
+- **FP**: `FP_ALLOW_MISSING_COURTYARD=128`, `FP_ALLOW_SOLDERMASK_BRIDGES=64`, `FP_BOARD_ONLY=16`, `FP_DNP=256`, `FP_EXCLUDE_FROM_BOM=8`, `FP_EXCLUDE_FROM_POS_FILES=4`, `FP_JUST_ADDED=32`, `FP_LIB_TABLE_T=95`, `FP_PADS_are_LOCKED=8`, `FP_SMD=2`, `FP_THROUGH_HOLE=1`, `FP_is_LOCKED=1`, `FP_is_PLACED=2`, `FP_to_PLACE=4`
+- **GAL**: `GAL_LAYER_ID_BITMASK_END=292`, `GAL_LAYER_ID_COUNT=703`, `GAL_LAYER_ID_END=964`, `GAL_LAYER_ID_START=261`, `GAL_UI_LAYER_COUNT=10`
+- **GERBER**: `GERBER_DRAW_ITEM_T=84`, `GERBER_IMAGE_T=85`, `GERBER_LAYOUT_T=83`
+- **GERBVIEW**: `GERBVIEW_LAYER_ID_END=1278`, `GERBVIEW_LAYER_ID_RESERVED=1270`, `GERBVIEW_LAYER_ID_START=1014`
+- **GR**: `GR_TEXT_H_ALIGN_CENTER=0`, `GR_TEXT_H_ALIGN_INDETERMINATE=2`, `GR_TEXT_H_ALIGN_LEFT=-1`, `GR_TEXT_H_ALIGN_RIGHT=1`, `GR_TEXT_V_ALIGN_BOTTOM=1`, `GR_TEXT_V_ALIGN_CENTER=0`, `GR_TEXT_V_ALIGN_INDETERMINATE=2`, `GR_TEXT_V_ALIGN_TOP=-1`
+- **HOLE**: `HOLE_ATTRIBUTE_HOLE_MECHANICAL=4`, `HOLE_ATTRIBUTE_HOLE_PAD=3`, `HOLE_ATTRIBUTE_HOLE_UNKNOWN=0`, `HOLE_ATTRIBUTE_HOLE_VIA_BURIED=2`, `HOLE_ATTRIBUTE_HOLE_VIA_THROUGH=1`, `HOLE_PROXY=16777216`
+- **ID**: `ID_AUTO_SAVE_TIMER=6003`, `ID_AUX_TOOLBAR=6117`, `ID_EDA_SOCKET_EVENT=6259`, `ID_EDA_SOCKET_EVENT_SERV=6258`, `ID_END_LIST=8512`, `ID_FILE=6004`, `ID_FILE1=6005`, `ID_FILEMAX=6103`, `ID_FILE_LIST_CLEAR=6105`, `ID_FILE_LIST_EMPTY=6104`, `ID_GEN_PLOT=6107`, `ID_GEN_PLOT_DXF=6112`, `ID_GEN_PLOT_GERBER=6110`, `ID_GEN_PLOT_HPGL=6109`, `ID_GEN_PLOT_PDF=6113`, `ID_GEN_PLOT_PS=6108`, `ID_GEN_PLOT_SVG=6111`, `ID_H_TOOLBAR=6114`, `ID_KICAD_3D_VIEWER_END=6411`, `ID_KICAD_3D_VIEWER_START=6311`, `ID_KICAD_MANAGER_END=6310`, `ID_KICAD_MANAGER_START=6260`, `ID_KICAD_PANEL_PREV_MODEL_END=6462`, `ID_KICAD_PANEL_PREV_MODEL_START=6412` … (共 77)
+- **INSPECT**: `INSPECT_RESULT_CONTINUE=1`, `INSPECT_RESULT_QUIT=0`
+- **IS**: `IS_BROKEN=32`, `IS_CHANGED=1`, `IS_DANGLING=536870912`, `IS_DELETED=128`, `IS_LINKED=2`, `IS_MOVING=8`, `IS_NEW=16`, `IS_PASTED=131072`, `IS_SHOWN_AS_BITMAP=262144`
+- **ISLAND**: `ISLAND_REMOVAL_MODE_ALWAYS=0`, `ISLAND_REMOVAL_MODE_AREA=2`, `ISLAND_REMOVAL_MODE_NEVER=1`
+- **LAYER**: `LAYER_3D_ADHESIVE=1289`, `LAYER_3D_AXES=1344`, `LAYER_3D_BACKGROUND_BOTTOM=1279`, `LAYER_3D_BACKGROUND_TOP=1280`, `LAYER_3D_BOARD=1281`, `LAYER_3D_BOUNDING_BOXES=1345`, `LAYER_3D_COPPER_BOTTOM=1283`, `LAYER_3D_COPPER_TOP=1282`, `LAYER_3D_END=1347`, `LAYER_3D_MODELS_MARKED_DNP=1343`, `LAYER_3D_MODELS_NOT_IN_POS=1342`, `LAYER_3D_OFF_BOARD_SILK=1346`, `LAYER_3D_SILKSCREEN_BOTTOM=1284`, `LAYER_3D_SILKSCREEN_TOP=1285`, `LAYER_3D_SMD_MODELS=1340`, `LAYER_3D_SOLDERMASK_BOTTOM=1286`, `LAYER_3D_SOLDERMASK_TOP=1287`, `LAYER_3D_SOLDERPASTE=1288`, `LAYER_3D_START=1278`, `LAYER_3D_TH_MODELS=1339`, `LAYER_3D_USER_1=1294`, `LAYER_3D_USER_10=1303`, `LAYER_3D_USER_11=1304`, `LAYER_3D_USER_12=1305` … (共 190)
+- **LEGACY**: `LEGACY_ARC_FORMATTING=20210925`, `LEGACY_COPPEREDGECLEARANCE=-0.01`, `LEGACY_NET_TIES=20220815`
+- **LINE**: `LINE_READER_LINE_DEFAULT_MAX=1000000`, `LINE_READER_LINE_INITIAL_SIZE=5000`
+- **LT**: `LT_AUX=4`, `LT_BACK=6`, `LT_FRONT=5`, `LT_JUMPER=3`, `LT_MIXED=2`, `LT_POWER=1`, `LT_SIGNAL=0`, `LT_UNDEFINED=-1`
+- **MALFORMED**: `MALFORMED_B_COURTYARD=2097152`, `MALFORMED_COURTYARDS=3145728`, `MALFORMED_F_COURTYARD=1048576`
+- **MAX**: `MAX_CU_LAYERS=32`, `MAX_FILE_HISTORY_SIZE=99`, `MAX_STRUCT_TYPE_ID=100`, `MAX_USER_DEFINED_LAYERS=45`
+- **MAXIMUM**: `MAXIMUM_ERROR_SIZE_MM=0.1`, `MAXIMUM_LINE_WIDTH_MM=100.0`
+- **MINIMUM**: `MINIMUM_ERROR_SIZE_MM=0.001`, `MINIMUM_LINE_WIDTH_MM=0.005`
+- **NETNAMES**: `NETNAMES_LAYER_ID_END=261`, `NETNAMES_LAYER_ID_RESERVED=256`, `NETNAMES_LAYER_ID_START=128`
+- **NOT**: `NOT_LOADED_WIZARDS=`, `NOT_USED=-1`
+- **PAD**: `PAD_ATTRIB_CONN=2`, `PAD_ATTRIB_NPTH=3`, `PAD_ATTRIB_PTH=0`, `PAD_ATTRIB_SMD=1`, `PAD_DRILL_SHAPE_CIRCLE=1`, `PAD_DRILL_SHAPE_OBLONG=2`, `PAD_DRILL_SHAPE_UNDEFINED=0`, `PAD_PROP_BGA=1`, `PAD_PROP_CASTELLATED=6`, `PAD_PROP_FIDUCIAL_GLBL=2`, `PAD_PROP_FIDUCIAL_LOCAL=3`, `PAD_PROP_HEATSINK=5`, `PAD_PROP_MECHANICAL=7`, `PAD_PROP_NONE=0`, `PAD_PROP_TESTPOINT=4`, `PAD_SHAPE_CHAMFERED_RECT=5`, `PAD_SHAPE_CIRCLE=0`, `PAD_SHAPE_CUSTOM=6`, `PAD_SHAPE_OVAL=2`, `PAD_SHAPE_RECT=1`, `PAD_SHAPE_RECTANGLE=1`, `PAD_SHAPE_ROUNDRECT=4`, `PAD_SHAPE_TRAPEZOID=3`
+- **PCB**: `PCB_ARC_T=15`, `PCB_DIMENSION_T=17`, `PCB_DIM_ALIGNED_T=18`, `PCB_DIM_CENTER_T=20`, `PCB_DIM_LEADER_T=19`, `PCB_DIM_ORTHOGONAL_T=22`, `PCB_DIM_RADIAL_T=21`, `PCB_FIELD_LOCATE_DATASHEET_T=31`, `PCB_FIELD_LOCATE_FOOTPRINT_T=30`, `PCB_FIELD_LOCATE_REFERENCE_T=28`, `PCB_FIELD_LOCATE_VALUE_T=29`, `PCB_FIELD_T=7`, `PCB_FOOTPRINT_T=3`, `PCB_GENERATOR_T=8`, `PCB_GROUP_T=27`, `PCB_ITEM_LIST_T=25`, `PCB_IU_PER_MM=1000000.0`, `PCB_LAYER_ID_COUNT=128`, `PCB_LOCATE_BBVIA_T=34`, `PCB_LOCATE_BOARD_EDGE_T=39`, `PCB_LOCATE_HOLE_T=36`, `PCB_LOCATE_NPTH_T=38`, `PCB_LOCATE_PTH_T=37`, `PCB_LOCATE_STDVIA_T=32` … (共 46)
+- **PLOT**: `PLOT_FORMAT_DXF=3`, `PLOT_FORMAT_FIRST_FORMAT=0`, `PLOT_FORMAT_GERBER=1`, `PLOT_FORMAT_HPGL=0`, `PLOT_FORMAT_LAST_FORMAT=5`, `PLOT_FORMAT_PDF=4`, `PLOT_FORMAT_POST=2`, `PLOT_FORMAT_SVG=5`, `PLOT_FORMAT_UNDEFINED=-1`, `PLOT_TEXT_MODE_DEFAULT=3`, `PLOT_TEXT_MODE_NATIVE=1`, `PLOT_TEXT_MODE_PHANTOM=2`, `PLOT_TEXT_MODE_STROKE=0`
+- **PROPAGATE**: `PROPAGATE_MODE_RESOLVE_CONFLICTS=1`, `PROPAGATE_MODE_SKIP_CONFLICTS=0`
+- **REMOVE**: `REMOVE_MODE_BULK=1`, `REMOVE_MODE_NORMAL=0`
+- **ROOM**: `ROOM_FOR_3D_VIEWER=100`, `ROOM_FOR_KICADMANAGER=50`, `ROOM_FOR_PANEL_PREV_MODEL=50`
+- **RULE**: `RULE_AREA_PLACEMENT_SOURCE_TYPE_COMPONENT_CLASS=1`, `RULE_AREA_PLACEMENT_SOURCE_TYPE_SHEETNAME=0`
+- **S**: `S_ARC=2`, `S_CIRCLE=3`, `S_CURVE=5`, `S_POLYGON=4`, `S_RECT=1`, `S_SEGMENT=0`
+- **SCH**: `SCH_BITMAP_T=58`, `SCH_BUS_BUS_ENTRY_T=56`, `SCH_BUS_WIRE_ENTRY_T=55`, `SCH_DIRECTIVE_LABEL_T=65`, `SCH_FIELD_LOCATE_DATASHEET_T=72`, `SCH_FIELD_LOCATE_FOOTPRINT_T=71`, `SCH_FIELD_LOCATE_REFERENCE_T=69`, `SCH_FIELD_LOCATE_VALUE_T=70`, `SCH_FIELD_T=48`, `SCH_GLOBAL_LABEL_T=62`, `SCH_HIER_LABEL_T=63`, `SCH_ITEM_LOCATE_BUS_T=74`, `SCH_ITEM_LOCATE_GRAPHIC_LINE_T=75`, `SCH_ITEM_LOCATE_WIRE_T=73`, `SCH_IU_PER_MM=10000.0`, `SCH_JUNCTION_T=53`, `SCH_LABEL_LOCATE_ANY_T=76`, `SCH_LABEL_LOCATE_BUS_T=78`, `SCH_LABEL_LOCATE_WIRE_T=77`, `SCH_LABEL_T=61`, `SCH_LAYER_ID_END=1014`, `SCH_LAYER_ID_START=964`, `SCH_LINE_T=57`, `SCH_LOCATE_ANY_T=80` … (共 38)
+- **SH**: `SH_ARC=7`, `SH_CIRCLE=3`, `SH_COMPOUND=6`, `SH_LINE_CHAIN=2`, `SH_NULL=8`, `SH_POLY_SET=5`, `SH_POLY_SET_TRIANGLE=9`, `SH_RECT=0`, `SH_SEGMENT=1`, `SH_SIMPLE=4`
+- **SHAPE**: `SHAPE_T_ARC=2`, `SHAPE_T_BEZIER=5`, `SHAPE_T_CIRCLE=3`, `SHAPE_T_POLY=4`, `SHAPE_T_RECT=1`, `SHAPE_T_RECTANGLE=1`, `SHAPE_T_SEGMENT=0`, `SHAPE_T_UNDEFINED=-1`
+- **SIDE**: `SIDE_BOTH=3`, `SIDE_BOTTOM=2`, `SIDE_NONE=0`, `SIDE_TOP=1`
+- **SYMBOL**: `SYMBOL_LIBS_T=97`, `SYMBOL_LIB_TABLE_T=94`
+- **TENTING**: `TENTING_MODE_FROM_RULES=0`, `TENTING_MODE_NOT_TENTED=2`, `TENTING_MODE_TENTED=1`
+- **TEXT**: `TEXT_MAX_SIZE_MM=250.0`, `TEXT_MIN_SIZE_MM=0.001`
+- **UNDEFINED**: `UNDEFINED_DRILL_DIAMETER=-1`, `UNDEFINED_LAYER=-1`
+- **User**: `User_1=39`, `User_10=57`, `User_11=59`, `User_12=61`, `User_13=63`, `User_14=65`, `User_15=67`, `User_16=69`, `User_17=71`, `User_18=73`, `User_19=75`, `User_2=41`, `User_20=77`, `User_21=79`, `User_22=81`, `User_23=83`, `User_24=85`, `User_25=87`, `User_26=89`, `User_27=91`, `User_28=93`, `User_29=95`, `User_3=43`, `User_30=97` … (共 45)
+- **VIATYPE**: `VIATYPE_BLIND_BURIED=2`, `VIATYPE_MICROVIA=1`, `VIATYPE_NOT_DEFINED=0`, `VIATYPE_THROUGH=3`
+- **WS**: `WS_PROXY_UNDO_ITEM_PLUS_T=93`, `WS_PROXY_UNDO_ITEM_T=92`
+- **WSG**: `WSG_BITMAP_T=90`, `WSG_LINE_T=86`, `WSG_PAGE_T=91`, `WSG_POLY_T=88`, `WSG_RECT_T=87`, `WSG_TEXT_T=89`
+- **ZLO**: `ZLO_FORCE_FLASHED=1`, `ZLO_FORCE_NO_ZONE_CONNECTION=2`, `ZLO_NONE=0`
+- **ZONE**: `ZONE_BORDER_DISPLAY_STYLE_DIAGONAL_EDGE=2`, `ZONE_BORDER_DISPLAY_STYLE_DIAGONAL_FULL=1`, `ZONE_BORDER_DISPLAY_STYLE_INVISIBLE_BORDER=3`, `ZONE_BORDER_DISPLAY_STYLE_NO_HATCH=0`, `ZONE_BORDER_HATCH_DIST_MM=0.5`, `ZONE_BORDER_HATCH_MAXDIST_MM=2.0`, `ZONE_BORDER_HATCH_MINDIST_MM=0.1`, `ZONE_CLEARANCE_MAX_VALUE_MM=100`, `ZONE_CLEARANCE_MM=0.5`, `ZONE_CONNECTION_FULL=2`, `ZONE_CONNECTION_INHERITED=-1`, `ZONE_CONNECTION_NONE=0`, `ZONE_CONNECTION_THERMAL=1`, `ZONE_CONNECTION_THT_THERMAL=3`, `ZONE_FILL_MODE_HATCH_PATTERN=1`, `ZONE_FILL_MODE_POLYGONS=0`, `ZONE_MANAGER_REPOUR=1005`, `ZONE_THERMAL_RELIEF_COPPER_WIDTH_MM=0.5`, `ZONE_THERMAL_RELIEF_GAP_MM=0.5`, `ZONE_THICKNESS_MIN_VALUE_MM=0.025`, `ZONE_THICKNESS_MM=0.25`
+- **misc**: `BLACK=0`, `BLUE=12`, `BRIGHTENED=67108864`, `BROWN=17`, `CANDIDATE=16384`, `CYAN=14`, `DARKBLUE=6`, `DARKBROWN=11`, `DARKCYAN=8`, `DARKDARKGRAY=1`, `DARKGRAY=2`, `DARKGREEN=7`, `DARKMAGENTA=10`, `DARKORANGE=31`, `DARKRED=9`, `ENDPOINT=1024`, `ENTERED=1073741824`, `FILLED=1`, `GREEN=13`, `LIGHTBLUE=18`, `LIGHTCYAN=20`, `LIGHTERORANGE=30`, `LIGHTGRAY=3`, `LIGHTGREEN=19` … (共 57)
+
+## 三、IPC API (kipy, KiCad 9+ 进程间)
+
+_不可达: kipy not importable (no IPC API in this build)_ (此 KiCad 构建未带 kipy; 走 pcbnew SWIG 与 kicad-cli 即足)
+
+---
+> 反者道之动 · 不与成熟引擎争巧, 善用其本源之巧, 专注其上之全流程闭环。

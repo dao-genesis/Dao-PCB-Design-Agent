@@ -3,6 +3,35 @@
 > 道理 (用户锚定): 像高斯深用 VS Code 底层、Cursor 立于 VS Code 之上, 我们**深用 KiCAD 一切本源**,
 > 在其上做 PCB 全流程闭环 —— 而**不从零重造它已有的轮子**。为学者日益, 为道者日损。
 
+## 〇、本源全量逆流 · 唯一事实源 (一劳永逸)
+
+> 承嘉立创EDA Pro 之 EXTAPI 同法 (`lceda_bridge/cdp_studio/extapi_full_catalog.json`),
+> 把 **KiCAD 9 本源整张声明面** 一次性逆流到位, 作后续一切深度融合的唯一事实源,
+> 杜绝零敲碎打、臆造接口名。**反者道之动** — 接口名一律取自运行期真实 SWIG 符号。
+
+```bash
+python -m kicad_origin.origin.native_catalog            # 生成目录+参考
+python -m kicad_origin.origin.native_catalog --verify   # live 交叉核对+端到端烟测
+```
+
+产物 (`kicad_origin/_native/`):
+
+| 文件 | 内容 |
+|------|------|
+| `KICAD_NATIVE_CATALOG.json` | 机器/Agent 唯一事实源: 三层能力面 (pcbnew/cli/ipc) 全量结构化 |
+| `KICAD_NATIVE_REFERENCE.md` | 按域分组的人类可读全表 |
+
+三层能力面 (KiCad 9.0.9 实测规模):
+
+| tier | 入口 | 规模 (9.0.9) | 取法 |
+|------|------|------|------|
+| ① pcbnew SWIG | `kicad_origin/origin/_pcbnew_probe.py` | **164 类 / 7913 方法 / 302 自由函数 / 852 常量** | KiCad python 子进程内 introspection, 每方法带真实 C++ 签名 |
+| ② kicad-cli | `native_catalog.cli_surface` | **34 叶子命令** (含描述+全选项) | 递归 `--help` 子命令树 |
+| ③ IPC (kipy) | `native_catalog.ipc_surface` | 视构建而定 (deb 9.0.9 未带) | 探测 `import kipy` |
+
+> live 交叉核对: 目录采样的类/方法/函数/常量回到运行期逐一核对存在性 (0 missing),
+> 并跑端到端烟测 (建板→加件→落盘→重载) — 证明目录非臆造、本源真可操作。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
