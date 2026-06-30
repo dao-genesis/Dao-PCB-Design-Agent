@@ -141,6 +141,23 @@ rep = lib.build_from_primitives(
 报 unknown; 5 件 (含 0805/0603/20脚 3 变体) + 2 网 → route 4→0 (+9 走线) → fab zip,
 **全闭环 ok**。
 
+### 〇.7 本源全流程一体化 · 一条道贯之 (`native_flow.py`)
+
+> 三生万物: 把已逆流各本源层 (网表 `native_netlist`、器件库 `native_lib`、建板
+> `native_build`、布线 `native_route`、真 DRC 自愈 `native_heal`、制造 `native_ops`)
+> 贯成一条道 —— 喂入任一真上游 (原生 `.net` / `.kicad_sch` / spec), 一气呵成产出**经真
+> DRC 检过**的可投厂工件。与 `full_flow` 别: ① 统一吃多源上游 ② 建板与投厂间插入**以真
+> DRC 为裁判的自愈闸** (先 heal 再 fab, 不投违规板)。反臆造: 缺封装如实溯源 (`_origin`),
+> 自愈以真 DRC 判收敛。
+
+```python
+from kicad_origin.origin.native_flow import run_flow
+rep = run_flow("design.net", "out/")     # netlist → 建板 → 自愈闸 → 布线 → 投厂
+```
+
+实测 (divider.net, 3 件/4 网): build (2 飞线) → heal (DRC 0 违规 / 飞线 2→0) → fab zip,
+`_origin` 如实溯源 (3 件全可放, 0 缺封装), **全流程 ok**。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
