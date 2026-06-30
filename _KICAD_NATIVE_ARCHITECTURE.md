@@ -70,6 +70,20 @@ rep = NativeRouter().route("in.kicad_pcb", "out.kicad_pcb")
 freerouting/java 缺失时降级为 `router_unavailable` (DSN 已就绪可手工布线), 不崩。
 启用自动布线: 设 `FREEROUTING_JAR` 或置 jar 于 `~/freerouting.jar` + 装 java。
 
+### 〇.3 网表驱动建板 + 全闭环 (`native_build.py`)
+
+> 补上游: 用真封装库取件、放置、按网连 pad、画板框, 产出**有连通待布线**的板; 再接
+> 布线 + 制造, 合成一条 `spec → 建板 → 布线 → 出 fab` 的全闭环 —— 把 KiCad 整条本源
+> 真跑起来、火起来。取件找不到即报错 (反臆造, 不静默替换)。
+
+```python
+from kicad_origin.origin.native_build import full_flow
+rep = full_flow(spec, "out/")   # spec: {components:[{ref,lib,fp,x,y}], nets:{N:[[ref,pad]]}}
+```
+
+实测 (3 件 0805/0805C + 2 网 spec): build 3 器件 3 网 unrouted 3 → route 0 (+5 走线)
+→ fab 出可投厂 zip, **全闭环 ok**。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
