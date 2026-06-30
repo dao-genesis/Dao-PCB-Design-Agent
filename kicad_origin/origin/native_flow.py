@@ -81,6 +81,53 @@ def _spec_from_source(source: Source, out_dir: str, *,
     return spec
 
 
+def _ground_plane(board: str, out: Path, ground: Dict[str, Any],
+                  spec: Dict[str, Any]) -> tuple:
+    """双面 GND 接地铺铜 + 缝合过孔, 把地网连成一体后真 DRC 复检前的最后一步。
+
+    ground 配置 (皆可选, 给默认):
+      {"net":"GND","layers":["F.Cu","B.Cu"],"inset_mm":0.5,
+       "stitch":{"pitch_mm":6.0,"region_margin_mm":2.0}}
+    铺铜轮廓由 spec.size_mm 内缩 inset_mm 得 (避板框 copper_edge_clearance);
+    无 size_mm 则跳过并如实记原因 (反臆造, 不瞎猜板框)。缝合过孔把 F.Cu/B.Cu 两面
+    GND 平面 + 各 GND 焊盘缝成一体, 化解 isolated_copper。
+    """
+    from kicad_origin.origin.native_stitch import NativeStitch
+    from kicad_origin.origin.native_zonefill import NativeZoneFill
+
+    net = ground.get("net", "GND")
+    layers = ground.get("layers", ["F.Cu", "B.Cu"])
+    inset = float(ground.get("inset_mm", 0.5))
+    size = spec.get("size_mm")
+    if not size:
+        return {"ok": False, "skipped": "no size_mm to derive outline"}, board
+    w, h = float(size[0]), float(size[1])
+    o = [[inset, inset], [w - inset, inset],
+         [w - inset, h - inset], [inset, h - inset]]
+    poured = str(out / "board_ground.kicad_pcb")
+    zr = NativeZoneFill().apply(
+        board, poured,
+        zones=[{"outline": o, "layer": ly, "net": net} for ly in layers])
+    stage: Dict[str, Any] = {"pour": zr.as_dict()}
+    if not zr.ok:
+        return {"ok": False, **stage}, board
+    cur = poured
+    st_cfg = ground.get("stitch")
+    if st_cfg is not False:
+        st_cfg = st_cfg if isinstance(st_cfg, dict) else {}
+        m = float(st_cfg.get("region_margin_mm", 2.0))
+        stitched = str(out / "board_ground_stitched.kicad_pcb")
+        sr = NativeStitch().stitch(
+            poured, stitched, net=net,
+            pitch_mm=float(st_cfg.get("pitch_mm", 6.0)),
+            region=[m, m, w - m, h - m])
+        stage["stitch"] = sr.as_dict()
+        if sr.ok and Path(stitched).exists():
+            cur = stitched
+    stage["ok"] = True
+    return stage, cur
+
+
 def run_flow(source: Source, out_dir: str, *,
              heal: bool = True, route: bool = True, fab: bool = True,
              max_heal_passes: int = 4, gap_mm: float = 2.0,
@@ -134,6 +181,12 @@ def run_flow(source: Source, out_dir: str, *,
         rep.stages["route"] = rrep.as_dict()
         if rrep.ok:
             board = routed
+
+    # 2.5) 接地铺铜 + 缝合 (可选, 仅当 spec 带 ground 配置时): 双面 GND 平面经缝合过孔连成一体
+    ground = spec.get("ground")
+    if ground:
+        grep_, board = _ground_plane(board, out, ground, spec)
+        rep.stages["ground"] = grep_
 
     # 3) 投厂
     if fab:

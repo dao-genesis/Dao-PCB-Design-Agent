@@ -56,6 +56,45 @@ class TestStitch:
         assert fine.added > coarse.added
 
     @pcbnew_only
+    def test_vias_avoid_foreign_track_no_short(self, tmp_path):
+        """缝合过孔须避开异网走线 (防短路): 横贯区域的 VCC 走线附近不得落 GND 过孔。"""
+        import pcbnew
+        board = _build(tmp_path)
+        b = pcbnew.LoadBoard(board)
+        vcc = b.GetNetInfo().GetNetItem("VCC")
+        # 横贯缝合区域的一条 VCC 粗走线 (y=25, x 从 5 到 45)。
+        tr = pcbnew.PCB_TRACK(b)
+        tr.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(5), pcbnew.FromMM(25)))
+        tr.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(45), pcbnew.FromMM(25)))
+        tr.SetWidth(pcbnew.FromMM(0.5))
+        tr.SetLayer(pcbnew.F_Cu)
+        tr.SetNetCode(vcc.GetNetCode())
+        b.Add(tr)
+        withtrk = str(tmp_path / "withtrk.kicad_pcb")
+        pcbnew.SaveBoard(withtrk, b)
+
+        out = str(tmp_path / "stitched.kicad_pcb")
+        clr = 0.5
+        rep = NativeStitch().stitch(withtrk, out, net="GND", pitch_mm=3,
+                                    region=[5, 20, 45, 30], margin_mm=1,
+                                    clearance_mm=clr, via_dia_mm=0.8)
+        assert rep.ok is True and rep.added > 0
+        # 反臆造: 重载实测每颗 GND 过孔到 VCC 走线的距离 >= clearance+半径 (无短路)。
+        b2 = pcbnew.LoadBoard(out)
+        gnd_code = b2.GetNetInfo().GetNetItem("GND").GetNetCode()
+        ay, by = pcbnew.FromMM(25), pcbnew.FromMM(25)
+        ax, bx = pcbnew.FromMM(5), pcbnew.FromMM(45)
+        lim = pcbnew.FromMM(clr + 0.4 + 0.25)   # clearance + via_r + half_width
+        for t in b2.GetTracks():
+            if isinstance(t, pcbnew.PCB_VIA) and t.GetNetCode() == gnd_code:
+                p = t.GetPosition()
+                # 点到水平线段 y=25 的距离 (x 在段内, 取垂直距离)。
+                dist = abs(p.y - ay) if ax <= p.x <= bx else min(
+                    ((p.x - ax) ** 2 + (p.y - ay) ** 2) ** 0.5,
+                    ((p.x - bx) ** 2 + (p.y - by) ** 2) ** 0.5)
+                assert dist >= lim, f"via at ({p.x},{p.y}) too close to VCC track"
+
+    @pcbnew_only
     def test_unknown_net_refused(self, tmp_path):
         board = _build(tmp_path)
         rep = NativeStitch().stitch(board, str(tmp_path / "x.kicad_pcb"),
