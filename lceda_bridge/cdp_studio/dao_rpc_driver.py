@@ -111,10 +111,23 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         raise DaoRpcError("create_project failed: %s" % o)
 
     def open_pcb(self, project_uuid, settle=4):
-        """打开工程并切到 PCB 文档；返回 pcb_uuid。"""
+        """打开工程并切到 PCB 文档；返回 pcb_uuid。
+
+        桌面半离线版关键：`/api/client/createProject` 只把 `.eprj2` 落盘，
+        工程**尚未注册进内存工作区索引**，此时直接 `openProject(uuid)` 会
+        "open=True 但 getAllBoardsInfo 为空"。先以工程目录调一次
+        `getAllProjectsUuid(path)` 触发扫描注册，`openProject` 即可正常加载板。
+        （Web 在线版由 REST 建工程即注册，无需此步——这是桌面层独有的本源差异。）
+        """
+        self._call("dmt_Project.getAllProjectsUuid", self.projects_dir, timeout=20)
         self._call("dmt_Project.openProject", project_uuid, timeout=30)
         time.sleep(settle)
         boards = self._call("dmt_Board.getAllBoardsInfo")
+        if not boards:
+            # 注册可能有延迟；再扫描一次并稍等后重试一回。
+            self._call("dmt_Project.getAllProjectsUuid", self.projects_dir, timeout=20)
+            time.sleep(settle)
+            boards = self._call("dmt_Board.getAllBoardsInfo")
         if not boards:
             raise DaoRpcError("no boards after openProject")
         pcb_uuid = boards[0]["pcb"]["uuid"]
@@ -123,13 +136,28 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         return pcb_uuid
 
     # ---------- 器件检索 ----------
-    def search_device(self, query, index=0):
-        res = self._call("lib_Device.search", query, timeout=30)
-        if not res:
-            raise DaoRpcError("device not found: %s" % query)
-        d = res[index]
-        return {"uuid": d["uuid"], "libraryUuid": d["libraryUuid"],
-                "name": d.get("name")}
+    def search_device(self, query, index=0, retries=3):
+        """按关键字检索器件，返回 {uuid, libraryUuid, name}。
+
+        桌面半离线版的 `lib_Device.search` 走在线系统库，偶发瞬态失败
+        （`lib_Device.search -> [object Object]`）；此处带退避重试，
+        让大板（如 STM32，单板数十次检索）的整链路稳定可重跑。
+        """
+        last = None
+        for attempt in range(retries):
+            try:
+                res = self._call("lib_Device.search", query, timeout=30)
+            except Exception as e:  # 瞬态在线库错误 → 退避重试
+                last = e
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            if res:
+                d = res[index]
+                return {"uuid": d["uuid"], "libraryUuid": d["libraryUuid"],
+                        "name": d.get("name")}
+            last = DaoRpcError("device not found: %s" % query)
+            time.sleep(1.0)
+        raise DaoRpcError("search_device failed for %r: %s" % (query, last))
 
     # ---------- 钥匙 2 + 3：放封装并绑网（单段 eval，活对象不出渲染层） ----------
     def place_and_net(self, components):
