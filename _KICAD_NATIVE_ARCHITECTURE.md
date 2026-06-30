@@ -335,6 +335,24 @@ rep.overlaps                            # 收尾分离后剩余重叠对数 (期
 实测: 4 连杆链路打散在四角 (HPWL≈385mm) → 布局后 ≈44mm (降 ~89%), `improved=True`、
 `overlaps=0`; `fixed=["R1"]` 时 R1 坐标重载后逐位不变; 缺板文件如实报错。
 
+### 〇.17 板图可视化证明 (`native_render.py`)
+
+> 不断实践验证: 每做一步 (建板/布局/布线/打孔…) 都该能"亲眼"核对, 而非只信数字。本层用 KiCad
+> 本源 `kicad-cli pcb render` (3D PNG, 顶/底) 与 `pcb export svg` (2D 叠层图) 真引擎出图,
+> 全程 catalog 背书 (命令不在本源目录即拒跑), 出图后**逐一实测文件存在且非空** (反臆造, 不臆称
+> "渲染成功")——给我和用户一份每步皆可视的证据链。
+
+```python
+from kicad_origin.origin.native_render import NativeRender
+rep = NativeRender().render("board.kicad_pcb", "out/")
+rep.images   # {"top": ".../top.png", "bottom": ..., "svg": ".../board.svg"}
+rep.sizes    # 各产物字节数 (实测 > 0)
+rep.ok       # 至少一张图成功落盘且非空
+```
+
+实测: 示例板 → top/bottom PNG + 2D SVG 全部落盘非空 (`ok=True`); `sides=[]` 仅出 SVG;
+缺板文件如实报错 `ok=False`、`images={}`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
