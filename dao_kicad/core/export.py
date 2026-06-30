@@ -360,8 +360,16 @@ class ExportEngine:
             return output_path
         return None
 
-    def full_manufacturing(self, output_dir: Path) -> dict[str, list[Path]]:
-        """Complete manufacturing package — everything a fab house needs."""
+    def full_manufacturing(self, output_dir: Path,
+                           extras: bool = False) -> dict[str, list[Path]]:
+        """Complete manufacturing package — everything a fab house needs.
+
+        With ``extras=True`` also emits the modern single-file interchange
+        formats (ODB++, IPC-2581, IPC-D-356) and a top-side 3D render preview.
+        Defaults to off so the core bundle stays fast; one-click/GUI callers
+        opt in. Each extra is omitted (not failed) when kicad-cli can't
+        produce it.
+        """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -385,5 +393,15 @@ class ExportEngine:
         # only when kicad-cli is unavailable, so the rest still succeeds.
         step = self.step_3d(output_dir / "board.step")
         result["step"] = [step] if step else []
+
+        if extras:
+            odb = self.odb(output_dir / "board_odb.zip")
+            result["odb"] = [odb] if odb else []
+            ipc = self.ipc2581(output_dir / "board_ipc2581.xml")
+            result["ipc2581"] = [ipc] if ipc else []
+            d356 = self.ipc_d356(output_dir / "board.d356")
+            result["ipc_d356"] = [d356] if d356 else []
+            preview = self.render_3d(output_dir / "preview_top.png")
+            result["preview"] = [preview] if preview else []
 
         return result

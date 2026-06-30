@@ -125,6 +125,18 @@ class TestExportEngine:
         assert "placement" in result
         assert len(result["gerbers"]) > 0
         assert len(result["drill"]) > 0
+        # Default package stays lean — no interchange/preview keys.
+        assert "odb" not in result and "preview" not in result
+
+    def test_full_manufacturing_extras(self, sample_board, tmp_path):
+        """extras=True adds the modern interchange formats + 3D preview so the
+        one-click/GUI export reaches every fab surface."""
+        self._require_cli()
+        engine = ExportEngine(sample_board)
+        result = engine.full_manufacturing(tmp_path / "mfg", extras=True)
+        for key in ("odb", "ipc2581", "ipc_d356", "preview"):
+            assert key in result, f"missing extras key {key}"
+            assert len(result[key]) == 1 and result[key][0].exists()
 
     def _require_cli(self):
         from daokicad import env
