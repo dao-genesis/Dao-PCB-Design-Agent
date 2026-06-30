@@ -115,6 +115,30 @@ Layers Board)"[Spacing/Physics/Plane/Expansion], drc:0}`。**能力面盘点 = 9
   ——板已 4 层，`design_rules().name` 仍是「JLCPCB Capability(Two Layers Board)」。
   层数与规则档是两件正交的事；要严格按多层工艺核 DRC，还需另切规则档（后续纳入）。
 
+## 高速 / 总线约束能力纳入（阴向·扩面 + 阳向·高速板）
+
+锚定「人能点的这里都在册」：从客户端自带的 `pro-api/api-types.d.ts`（API 本源类型，
+**非臆测**）反推出 `pcb_Drc` 的高速约束三件套签名并 live 验证落库：
+
+| 能力 | EXTAPI 签名（取自 .d.ts） | 用途 |
+| --- | --- | --- |
+| 网络类 | `createNetClass(name, nets[], color\|null)` / `addNetToNetClass(name, net)` | 总线归组、差异化线宽/间距 |
+| 差分对 | `createDifferentialPair(name, positiveNet, negativeNet)` | USB/HDMI/以太网/差分时钟 |
+| 等长组 | `createEqualLengthNetGroup(name, nets[], color\|null)` | DDR/并行总线时序匹配 |
+
+- **本源教训**：上一轮 `createNetClass('HS_CLK')` 单参「静默返回 None、不落库」，
+  正因漏传 `nets[]` 与 `color`。**与其猜签名，不如读软件自带的 `.d.ts`**——
+  客户端 `resources/app/assets/pro-api/api-types.d.ts` 即 702 方法的权威签名册。
+- 已封 `net_class()/differential_pair()/equal_length_group()`（均**读回校验**，
+  未落库即显式报错），`apply_constraints(constraints)` 批量落，`constraints_summary()`
+  只读快照并入 `board_report`（闭环自审多一维：高速约束态）。
+- `build_board` 新增 `spec["constraints"]`：网络绑定后、布线前落约束。
+- **实测**：medium 板（8 网）挂 1 网络类(L1–L6) + 2 差分对 + 1 等长组 → 全链路
+  **DRC=0 CLEAN（1 试）**，约束全部读回确认，Gerber/BOM/PnP 正常导出。
+
+> 心法：**软件本体的 `.d.ts` 是「人能操作的一切」最权威的册**；读它即把 GUI 里
+> 每个可点选项映射成确定可调的 RPC——这是「比人更稳更准」的本源，胜过反复试错。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`

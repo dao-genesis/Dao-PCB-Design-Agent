@@ -370,6 +370,64 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             raise DaoRpcError("set_copper_layers(%s) 未生效（读回 %s）" % (n, got))
         return {"requested": int(n), "copper_layers": got, "ok": bool(ok)}
 
+    # ---------- 高速 / 总线约束（net-class / diff-pair / 等长组） ----------
+    # 签名取自客户端 pro-api/api-types.d.ts（本源·非臆测）：
+    #   createNetClass(name, nets[], color|null)
+    #   addNetToNetClass(name, net|nets[])
+    #   createDifferentialPair(name, positiveNet, negativeNet)
+    #   createEqualLengthNetGroup(name, nets[], color|null)
+    def net_class(self, name, nets):
+        """建/补网络类（高速总线归组，喂布线/DRC 的差异化规则）。读回校验。"""
+        self._call("pcb_Drc.createNetClass", name, list(nets), None, timeout=20)
+        cur = {c["name"]: c for c in
+               (self._call("pcb_Drc.getAllNetClasses", timeout=15) or [])}
+        if name not in cur:
+            raise DaoRpcError("net_class(%s) 未落库" % name)
+        return cur[name]
+
+    def differential_pair(self, name, positive, negative):
+        """建差分对（USB/HDMI/以太网等）。读回校验。"""
+        self._call("pcb_Drc.createDifferentialPair", name, positive, negative,
+                   timeout=20)
+        cur = {p["name"]: p for p in
+               (self._call("pcb_Drc.getAllDifferentialPairs", timeout=15) or [])}
+        if name not in cur:
+            raise DaoRpcError("differential_pair(%s) 未落库" % name)
+        return cur[name]
+
+    def equal_length_group(self, name, nets):
+        """建等长网络组（DDR/并行总线时序匹配）。读回校验。"""
+        self._call("pcb_Drc.createEqualLengthNetGroup", name, list(nets), None,
+                   timeout=20)
+        cur = {g["name"]: g for g in
+               (self._call("pcb_Drc.getAllEqualLengthNetGroups", timeout=15) or [])}
+        if name not in cur:
+            raise DaoRpcError("equal_length_group(%s) 未落库" % name)
+        return cur[name]
+
+    def apply_constraints(self, constraints):
+        """按 spec 批量落高速约束。constraints = {
+            "net_classes": {名: [网络…]},
+            "diff_pairs":  {名: [正网, 负网]},
+            "equal_length":{名: [网络…]}}。返回落库回执。"""
+        out = {"net_classes": {}, "diff_pairs": {}, "equal_length": {}}
+        for nm, nets in (constraints.get("net_classes") or {}).items():
+            out["net_classes"][nm] = self.net_class(nm, nets)
+        for nm, pair in (constraints.get("diff_pairs") or {}).items():
+            out["diff_pairs"][nm] = self.differential_pair(nm, pair[0], pair[1])
+        for nm, nets in (constraints.get("equal_length") or {}).items():
+            out["equal_length"][nm] = self.equal_length_group(nm, nets)
+        return out
+
+    def constraints_summary(self):
+        """高速约束快照：{net_classes, diff_pairs, equal_length}（只读，喂自审）。"""
+        return {
+            "net_classes": self._call("pcb_Drc.getAllNetClasses", timeout=15) or [],
+            "diff_pairs": self._call("pcb_Drc.getAllDifferentialPairs",
+                                     timeout=15) or [],
+            "equal_length": self._call("pcb_Drc.getAllEqualLengthNetGroups",
+                                       timeout=15) or []}
+
     # ---------- 自审 / 感知（只读，喂闭环自我审视） ----------
     def layer_info(self):
         """板层快照：{copper_layers, stackup}。多层板实践的前置感知。"""
@@ -409,9 +467,13 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         return out
 
     def board_report(self):
-        """一次性自审快照：层 + 网络 + 规则 + DRC，供闭环「自我审视」。"""
+        """一次性自审快照：层 + 网络 + 规则 + 高速约束 + DRC，供闭环「自我审视」。"""
         rep = {"layers": self.layer_info(), "nets": self.net_summary(),
                "rules": self.design_rules()}
+        try:
+            rep["constraints"] = self.constraints_summary()
+        except Exception as e:
+            rep["constraints"] = {"error": str(e)}
         try:
             rep["drc"] = self.drc()
         except Exception as e:
@@ -593,6 +655,11 @@ return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return 
         ids = self.place_and_net(comps)
         audit["steps"]["place_and_net"] = {"placed": len(ids),
                                            "nets": self._call("pcb_Net.getAllNetsName")}
+
+        # 高速/总线约束：网络已绑定后、布线之前落（net-class/diff-pair/等长组）
+        if spec.get("constraints"):
+            audit["steps"]["constraints"] = self.apply_constraints(
+                spec["constraints"])
 
         gnd = spec.get("gnd_net")
         # 板框需在布线/DSN 之前存在（DSN boundary 取自板框）
