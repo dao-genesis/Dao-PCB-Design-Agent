@@ -140,8 +140,24 @@ def build_from_spec(spec: DesignSpec, output_dir: Path) -> DesignResult:
     for layer_id in spec.ground_pour_layers:
         builder.add_zone(corners, net_name="GND", layer=layer_id)
 
-    # 7. Save
+    # 7. Save, then reload and fill the pours. ZONE_FILLER computes zero area
+    #    on a freshly-built in-memory board (its connectivity graph isn't live,
+    #    so every plane reads as an unconnected island and is discarded), and
+    #    can segfault there — so round-trip through disk first. Without this the
+    #    requested ground plane exists as an empty outline carrying no copper.
+    import pcbnew
+
     board_path = builder.save(output_dir / f"{spec.name}.kicad_pcb")
+    export_board = builder.board
+    if spec.ground_pour_layers:
+        filled = pcbnew.LoadBoard(str(board_path))
+        filled.BuildConnectivity()
+        try:
+            pcbnew.ZONE_FILLER(filled).Fill(filled.Zones())
+            pcbnew.SaveBoard(str(board_path), filled)
+            export_board = filled
+        except Exception:
+            pass
     result.board_path = board_path
 
     # 8. DRC
@@ -149,8 +165,8 @@ def build_from_spec(spec: DesignSpec, output_dir: Path) -> DesignResult:
     result.drc_errors = drc_result.error_count
     result.drc_warnings = drc_result.warning_count
 
-    # 9. Manufacturing export
-    mfg = ExportEngine(builder.board).full_manufacturing(output_dir / "mfg")
+    # 9. Manufacturing export (from the poured board)
+    mfg = ExportEngine(export_board).full_manufacturing(output_dir / "mfg")
     result.mfg_files = sum(len(v) for v in mfg.values())
 
     return result
