@@ -215,17 +215,30 @@ Expansion:[Paste Mask Expansion, Solder Mask Expansion]
 `xZt` 对单个子规则（如新增的 `hs_wide`）的合法结构校验细则——届时按其要求构造子规则
 即可一次过，无需再试错。这正印证「读软件本体源码 = 把 False 的因果看穿」胜过盲试。
 
-**`xZt` 校验细则已读穿（关键：读写形态不一致）**：续读 `ui.js` 中 `xZt(attr, subrules)`
-发现——它要求每个子规则是**存储态** `{editName:str, unit:str, isSetDefault:bool,
-column:str[], row:str[], status:number, tables:object}`（再对 `tables` 逐项 `Tcr(...)`
-递归校验）。**而 `getCurrentRuleConfiguration` 读回的子规则是 `form`态**（`{editName,
-unit, isSetDefault, form:{status, data:{层: {min/default/max}}}}`）。**二者形态不同**：
-故不能把读到的子规则原样克隆去写——须先把 `form`态转成 `column/row/tables`态。
+**更正前述「读写形态不一致」之说（实测纠偏·勿信半解）**：续读 `ui.js` 的 `xZt` 各
+`case` 并**实测 round-trip** 后发现：子规则形态是**按属性分**的，且读回的形态**就是**
+可写回的形态——
 
-> 本源结论：自定义数值子规则的**整条路已完全看穿**，只剩一个确定的工程动作——把
-> `form` 态映射成 `column/row/tables/status` 存储态（`tables` 满足 `Tcr`）。这是纯结构
-> 转换、无未知 API，留作下轮一次成型。**「读—改—写回」的前提是读到的就是能写回的形态；
-> 当软件读写形态不一致时，先吃透其存储态再回写**——这是比反复试错更稳的本源。
+- `Safe Spacing`/`Other Spacing` 等：`{editName,unit,isSetDefault,column[],row[],
+  status,tables}`（`tables` 受 `Tcr` 校验：13 行、各行定长数值阵）。
+- `Track`/`Differential Pair`/`Net Length` 等：**`form` 态**（`Track` 走
+  `ez(unit, form.data[层], min/max/default)`，只校验 min≤default≤max）。
+- `getCurrentRuleConfiguration` 对每个属性各按其**存储态**返回，故**原样回写即可**。
+
+> 真正卡 false 的不是「形态不一致」，而是**传了 `{name,config}` 包装**（须传**裸
+> config**）。实测：裸 config round-trip → `true`；包装 → `false`。上一条把「Track 的
+> form 态」错当成「读≠写」的普遍结论，是只读了 `Safe Spacing` 一个 case 的以偏概全——
+> **半解比无解更危险；结论须以 round-trip 实测收口**。
+
+**自定义数值子规则已落地（capstone）**：据上封 `add_track_rule(name, default_mm,
+min_mm, max_mm)`——克隆既有 Track 子规则为模板、改各层 min/default/max（`ez` 即过）、
+`overwriteCurrentRuleConfiguration`（读全量 config→加这一项→整体写回，余者不动）落到
+当前板、读回确认。`apply_constraints` 新增 `track_rules`，与 `class_rules` 配合即可给
+高速类挂**精确自定义线宽**。
+
+- **实测**：medium 板建 `hs_wide`(0.35mm 线宽) → `BUS6` 类 `Track→hs_wide` → 全链路
+  **DRC=0 CLEAN（1 试）**。自此「网络类差异化」从「指向既有档」升级到「自定义具体数值」，
+  人在 GUI 里能调的线宽，RPC 已能一次精确落库。
 
 ## 一句话沉淀
 

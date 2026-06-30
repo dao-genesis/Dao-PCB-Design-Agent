@@ -410,15 +410,20 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             "net_classes": {名: [网络…]},
             "diff_pairs":  {名: [正网, 负网]},
             "equal_length":{名: [网络…]},
+            "track_rules":{名: {"default_mm":, "min_mm":, "max_mm":}},
             "class_rules": {类名: {属性: 具名子规则}}}。返回落库回执。"""
         out = {"net_classes": {}, "diff_pairs": {}, "equal_length": {},
-               "class_rules": {}}
+               "track_rules": {}, "class_rules": {}}
         for nm, nets in (constraints.get("net_classes") or {}).items():
             out["net_classes"][nm] = self.net_class(nm, nets)
         for nm, pair in (constraints.get("diff_pairs") or {}).items():
             out["diff_pairs"][nm] = self.differential_pair(nm, pair[0], pair[1])
         for nm, nets in (constraints.get("equal_length") or {}).items():
             out["equal_length"][nm] = self.equal_length_group(nm, nets)
+        # 自定义线宽子规则须先建（供 class_rules 引用）
+        for nm, p in (constraints.get("track_rules") or {}).items():
+            out["track_rules"][nm] = self.add_track_rule(
+                nm, p["default_mm"], p.get("min_mm"), p.get("max_mm"))
         # 差异化规则须在网络类已建之后落（指向具名子规则）
         for cls, rules in (constraints.get("class_rules") or {}).items():
             out["class_rules"][cls] = {
@@ -444,6 +449,36 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
                 cats[cat] = {k: (list(v.keys()) if isinstance(v, dict) else None)
                              for k, v in attrs.items()}
         return {"configs": configs, "current": cur, "categories": cats}
+
+    def add_track_rule(self, name, default_mm, min_mm=None, max_mm=None):
+        """新增一条**自定义线宽子规则**（Physics/Track，form 态数值）并应用到当前 PCB。
+
+        本源（读 `ui.js` 实证）：`Track` 子规则是 `form` 态——克隆既有子规则当模板、
+        把各层 min/default/max 改成目标值即可（`ez` 只校验 min≤default≤max）。经
+        `overwriteCurrentRuleConfiguration`（读全量 config→加这一项→整体写回，余者不动）
+        落到当前板，读回确认。建好后即可 `set_net_class_rule(类, "Track", name)` 引用。
+        参数单位 mm；min/max 缺省则取 default 的 0.5×/10×（且不超模板上限）。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        track = cfg.get("Physics", {}).get("Track", {})
+        if not track:
+            raise DaoRpcError("当前配置无 Physics/Track，无法加线宽子规则")
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(track.values())))
+        tmpl["editName"] = name
+        lo = min_mm if min_mm is not None else round(default_mm * 0.5, 4)
+        hi = max_mm if max_mm is not None else round(default_mm * 10, 4)
+        for layer in tmpl.get("form", {}).get("data", {}):
+            tmpl["form"]["data"][layer] = {"minValue": lo,
+                                           "defaultValue": default_mm,
+                                           "maxValue": hi}
+        track[name] = tmpl
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Physics", {}).get("Track", {}))
+        if name not in back:
+            raise DaoRpcError("add_track_rule(%s) 未落库" % name)
+        return {"name": name, "min": lo, "default": default_mm, "max": hi}
 
     def net_rules(self):
         """网络/网络类的规则树（只读）。每个 netClass/net 节点带 Track、Safe Spacing、
