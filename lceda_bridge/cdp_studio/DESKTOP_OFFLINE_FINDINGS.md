@@ -240,6 +240,16 @@ min_mm, max_mm)`——克隆既有 Track 子规则为模板、改各层 min/defa
   **DRC=0 CLEAN（1 试）**。自此「网络类差异化」从「指向既有档」升级到「自定义具体数值」，
   人在 GUI 里能调的线宽，RPC 已能一次精确落库。
 
+**自定义过孔尺寸子规则同源落地**：`Via Size` 经实证亦是 `form` 态（扁平：`ez` 校验
+`viaOuterdiameter{Min,Max,Default}` 与 `viaInnerdiameter{Min,Max,Default}`），故同
+`add_track_rule` 套路封 `add_via_rule(name, outer_mm, inner_mm, …)`，`apply_constraints`
+新增 `via_rules`。**实测**：medium 板 `hs_via`(0.7/0.35mm) → `BUS6` 类 `Via Size→hs_via`
+（与 `Track→hs_wide` 同时）→ 全链路 **DRC=0 CLEAN（1 试）**。
+
+> 心法：凡 `form` 态数值属性（Track / Via Size / Net Length / Differential Pair 的线宽段）
+> 皆「克隆模板→改数→`overwriteCurrentRuleConfiguration` 整体写回→读回」一招通吃；唯
+> `Safe Spacing` 类的 `column/row/tables`(Tcr：13 行定长数值阵) 形态较重，留作下一前沿。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`

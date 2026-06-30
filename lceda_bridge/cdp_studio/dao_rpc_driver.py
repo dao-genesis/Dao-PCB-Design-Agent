@@ -411,9 +411,10 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             "diff_pairs":  {名: [正网, 负网]},
             "equal_length":{名: [网络…]},
             "track_rules":{名: {"default_mm":, "min_mm":, "max_mm":}},
+            "via_rules":  {名: {"outer_mm":, "inner_mm":}},
             "class_rules": {类名: {属性: 具名子规则}}}。返回落库回执。"""
         out = {"net_classes": {}, "diff_pairs": {}, "equal_length": {},
-               "track_rules": {}, "class_rules": {}}
+               "track_rules": {}, "via_rules": {}, "class_rules": {}}
         for nm, nets in (constraints.get("net_classes") or {}).items():
             out["net_classes"][nm] = self.net_class(nm, nets)
         for nm, pair in (constraints.get("diff_pairs") or {}).items():
@@ -424,6 +425,9 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         for nm, p in (constraints.get("track_rules") or {}).items():
             out["track_rules"][nm] = self.add_track_rule(
                 nm, p["default_mm"], p.get("min_mm"), p.get("max_mm"))
+        for nm, p in (constraints.get("via_rules") or {}).items():
+            out["via_rules"][nm] = self.add_via_rule(
+                nm, p["outer_mm"], p["inner_mm"])
         # 差异化规则须在网络类已建之后落（指向具名子规则）
         for cls, rules in (constraints.get("class_rules") or {}).items():
             out["class_rules"][cls] = {
@@ -479,6 +483,44 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         if name not in back:
             raise DaoRpcError("add_track_rule(%s) 未落库" % name)
         return {"name": name, "min": lo, "default": default_mm, "max": hi}
+
+    def add_via_rule(self, name, outer_mm, inner_mm,
+                     outer_min=None, outer_max=None,
+                     inner_min=None, inner_max=None):
+        """新增一条**自定义过孔尺寸子规则**（Physics/Via Size，form 态）并应用到当前 PCB。
+
+        本源（读 `ui.js` 实证）：`Via Size` 子规则是扁平 `form` 态——`ez` 校验
+        `viaOuterdiameter{Min,Max,Default}` 与 `viaInnerdiameter{Min,Max,Default}`
+        各自 min≤default≤max。克隆模板改这 6 个数即可，经
+        `overwriteCurrentRuleConfiguration` 整体写回当前板并读回确认。建好后即可
+        `set_net_class_rule(类, "Via Size", name)` 引用。单位 mm；min/max 缺省取
+        default 的 0.5×/10×。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        vias = cfg.get("Physics", {}).get("Via Size", {})
+        if not vias:
+            raise DaoRpcError("当前配置无 Physics/Via Size，无法加过孔子规则")
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(vias.values())))
+        tmpl["editName"] = name
+        f = tmpl.setdefault("form", {})
+        f["viaOuterdiameterDefault"] = outer_mm
+        f["viaOuterdiameterMin"] = (outer_min if outer_min is not None
+                                    else round(outer_mm * 0.5, 4))
+        f["viaOuterdiameterMax"] = (outer_max if outer_max is not None
+                                    else round(outer_mm * 10, 4))
+        f["viaInnerdiameterDefault"] = inner_mm
+        f["viaInnerdiameterMin"] = (inner_min if inner_min is not None
+                                    else round(inner_mm * 0.5, 4))
+        f["viaInnerdiameterMax"] = (inner_max if inner_max is not None
+                                    else round(inner_mm * 10, 4))
+        vias[name] = tmpl
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Physics", {}).get("Via Size", {}))
+        if name not in back:
+            raise DaoRpcError("add_via_rule(%s) 未落库" % name)
+        return {"name": name, "outer": outer_mm, "inner": inner_mm}
 
     def net_rules(self):
         """网络/网络类的规则树（只读）。每个 netClass/net 节点带 Track、Safe Spacing、
