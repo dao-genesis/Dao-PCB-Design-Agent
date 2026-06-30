@@ -245,6 +245,39 @@ class TestDiffPairValidation:
         assert rep.routed
         assert rep.length_skew_pct < 1.0
 
+    def test_diff_pair_declines_rather_than_shorting_over_pads(self, tmp_path):
+        """When the pair's two pads lie along the route axis, the constant-gap
+        coupled body would sweep straight over the opposite net's pad. The
+        router must decline (leave the pair to the generic router) rather than
+        emit that guaranteed short — verified by an actual DRC run, since the
+        old code shipped shorting_items here while still reporting routed==1."""
+        from dao_kicad.core.drc import DrcEngine
+
+        b = _make_board(layers=2, w=60, h=30)
+        b.add_nets("CLK_P", "CLK_N")
+        # 1x02 header laid out along the route axis: CLK_P then CLK_N sit on the
+        # same line as the J1->J2 run, so a constant-gap body crosses pads.
+        b.place("Connector_PinHeader_2.54mm",
+                "PinHeader_2x05_P2.54mm_Vertical", "J1", 10, 15, value="A")
+        b.place("Connector_PinHeader_2.54mm",
+                "PinHeader_2x05_P2.54mm_Vertical", "J2", 50, 15, value="B")
+        for j in ("J1", "J2"):
+            b.assign_net(j, "1", "CLK_P")
+            b.assign_net(j, "2", "CLK_N")
+        b.board.BuildListOfNets()
+
+        r = Router(b.board, min_clearance_mm=0.15)
+        result = r.route_diff_pairs(width_mm=0.2, gap_mm=0.2)
+        # The pair is declined, not emitted as a short.
+        assert result.routed == 0
+        assert result.failed == 1
+
+        # Authoritative check: the board the router produced ships no copper
+        # short / clearance violation (the bug was 3 shorting_items here).
+        path = b.save(tmp_path / "collinear_dp.kicad_pcb")
+        drc = DrcEngine().check(path)
+        assert drc.error_count == 0
+
 
 class TestSquareMeander:
     def test_added_length_is_exact(self):

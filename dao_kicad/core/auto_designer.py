@@ -449,8 +449,12 @@ def auto_design(spec: DesignSpec, output_dir: str | Path) -> DesignResult:
         result.diff_pairs = len(reports)
         result.diff_pair_max_skew_pct = max(
             (rep.length_skew_pct for rep in reports), default=0.0)
-        for d in diff_pairs:
-            skip.update((d.p_net, d.n_net))
+        # Only the pairs that actually got coupled-routed are done; a pair the
+        # diff-pair router declined (its geometry would short) must stay
+        # unskipped so the collision-aware generic router still closes it.
+        for rep in reports:
+            if rep.routed:
+                skip.update((rep.p_net, rep.n_net))
 
     if use_fr:
         # Signal routing is delegated to freerouting after the board is poured
