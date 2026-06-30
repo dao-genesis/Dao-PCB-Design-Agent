@@ -83,7 +83,7 @@ class DaoExportPlugin(pcbnew.ActionPlugin):
     def defaults(self):
         self.name = "DAO Export Manufacturing"
         self.category = "DAO"
-        self.description = "Export complete manufacturing package (Gerber + Drill + BOM + CPL)"
+        self.description = "Export complete manufacturing package (Gerber + Drill + BOM + CPL + ODB++/IPC + 3D preview)"
         self.show_toolbar_button = True
 
     def Run(self):
@@ -108,7 +108,7 @@ class DaoExportPlugin(pcbnew.ActionPlugin):
             output_dir = Path.home() / "dao_manufacturing_output"
 
         engine = ExportEngine(board)
-        result = engine.full_manufacturing(output_dir)
+        result = engine.full_manufacturing(output_dir, extras=True)
 
         total = sum(len(v) for v in result.values())
         print(f"\n✓ Manufacturing package exported to: {output_dir}")
