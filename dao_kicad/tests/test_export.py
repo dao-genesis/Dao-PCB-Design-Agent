@@ -85,6 +85,18 @@ class TestExportEngine:
         assert "U1" in content
         assert "R1" in content
 
+    def test_bom_groups_refs_in_natural_order(self, tmp_path):
+        """Grouped references read in human/KiCad order (R1 R2 R10), not
+        lexicographic (R1 R10 R2). A real BOM never lists R10 before R2."""
+        builder = BoardBuilder.new(copper_layers=2, width_mm=80, height_mm=40)
+        for i in (1, 2, 3, 10, 11, 12):
+            builder.place("Resistor_SMD", "R_0402_1005Metric",
+                          f"R{i}", 5 + i * 3, 10, value="10k")
+        content = ExportEngine(builder.board).bom(tmp_path / "bom.csv").read_text()
+        refs = [ln for ln in content.splitlines() if ln.startswith('"R')][0]
+        refs = refs.split('"')[1]
+        assert refs == "R1 R2 R3 R10 R11 R12"
+
     def test_bom_honours_exclude_from_bom(self, sample_board, tmp_path):
         """A footprint flagged 'exclude from BOM' (mounting hole, fiducial,
         logo, test point) must not appear in the BOM."""

@@ -8,12 +8,22 @@ No abstractions — direct control over every export parameter.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
+
+
+def _natural_ref_key(ref: str) -> list:
+    """Sort key giving human/KiCad reference order: R1, R2, R10 (not R1, R10,
+    R2). Splits a designator into alternating text/number runs so the numeric
+    runs compare as integers."""
+    return [int(t) if t.isdigit() else t
+            for t in re.findall(r"\d+|\D+", ref)]
+
 
 try:
     import pcbnew
@@ -136,7 +146,7 @@ class ExportEngine:
             seen[key]["refs"].append(ref)
 
         for key, data in sorted(seen.items()):
-            refs = " ".join(sorted(data["refs"]))
+            refs = " ".join(sorted(data["refs"], key=_natural_ref_key))
             lines.append(f'"{refs}","{data["value"]}","{data["footprint"]}",{len(data["refs"])}')
 
         output_path.write_text("\n".join(lines))
