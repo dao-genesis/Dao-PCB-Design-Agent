@@ -672,6 +672,27 @@ rep.removed_total, rep.removed, rep.remaining   # 重载实测 {track,arc,via,zo
 单 `types=[via]` 只拆过孔; 单 `layers=[B.Cu]` 只拆该层; 未知类型 / 板上无此网名如实报错 `ok=False`;
 空命中 (如 `nets=[VCC]` 无铜) `removed_total=0` 但 `ok=True` 不崩。
 
+### 〇.35 显式封装变换 (`native_move.py`)
+
+> 反者道之动: native_place 是"盯着飞线自收敛"的**自动**布局; 但很多时候人**明确知道**某件该怎么摆 ——
+> "连接器贴板边定到 (x,y)、这排电容整体右移 2mm、这颗芯片转 90°、这件翻到背面"。这类确定性意图本是人在
+> GUI 里精确拖拽/输入坐标的, 落到本源它只是 `FOOTPRINT.SetPosition / SetOrientationDegrees / Flip`。
+> 本层经子进程 (`_move_worker.py`) 按 ref 逐件施变换 (x,y 绝对定位 / dx,dy 相对平移 / rotate_deg 设角 /
+> flip 翻面), 落盘后**重载实测**各件真实坐标/角度/所在面 (反臆造)。与 〇.x `native_place` 互补 ——
+> 一个"自动找好", 一个"我说了算"。
+
+```python
+from kicad_origin.origin.native_move import NativeMove
+rep = NativeMove().apply("in.kicad_pcb", "out.kicad_pcb", moves=[
+    {"ref": "J1", "x": 5, "y": 20},              # 绝对定位
+    {"ref": "C1", "dx": 2, "rotate_deg": 90},    # 相对平移 + 转 90°
+    {"ref": "U2", "flip": True}])                # 翻到背面
+rep.moved, rep.footprints   # 重载实测
+```
+
+实测: R1 绝对定位 (25,35)+转 90° → 重载读回 `x=25,y=35,orientation=90,flipped=False`; C1 相对 (+5,-3)
+自 (40,10) → `(45,7)` 且 `flip=True` 落 `B.Cu`; 空 moves / 板上无此 ref / 缺板文件如实报错 `ok=False`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
