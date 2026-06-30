@@ -201,6 +201,26 @@ NativeStackup().set_copper_layers("b.kicad_pcb", "o.kicad_pcb", 4)
 未知网络 `NOPE`/未知层 `In9.Cu`/奇数层 3 均如实拒做; 2→4 层后启用铜层
 `['F.Cu','In1.Cu','In2.Cu','B.Cu']`。
 
+### 〇.10 本源器件库批量逆流 (`native_libscan.py`)
+
+> `native_lib` 手工预置三两枚原语是"点"; 真库里躺着 **155 个 `.pretty` 封装库**(数千封装)
+> 与 **223 个 `.kicad_sym` 符号库**。本层把这整面真库逆流为可检索索引, 并据真焊盘把成族
+> 封装 (同名不同尺寸的 R/C/L/LED…) **批量萃取**为多变体 `ComponentPrimitive`。
+> 全程读真文件: 封装名来自真 `.kicad_mod`、焊盘名直读真 S-expr、符号名来自真 `.kicad_sym`;
+> 萃取后**逐变体对真焊盘校验**, 焊盘对不上的变体剔除, 绝不臆造不存在的器件。
+
+```python
+from kicad_origin.origin.native_libscan import NativeLibScan
+s = NativeLibScan()
+s.find_footprints(r"^R_0805_\d+Metric$", lib_pattern=r"^Resistor_SMD$")
+lib, report = s.augment_standard_library()   # standard_library 之上真库扩充
+# report = {'R_SMD':17, 'C_SMD':13, 'L_SMD':11, 'LED_SMD':9} —— 皆真库校验通过
+```
+
+实测: 索引 155 封装库 / 223 符号库; 从真库萃取 R/C/L/LED 四族共 **50 个校验通过的变体**
+(R_SMD 17 / C_SMD 13 / L_SMD 11 / LED_SMD 9), 每枚 `validate().ok` 真焊盘核对通过;
+不命中模式 / 焊盘对不上均如实拒收。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
