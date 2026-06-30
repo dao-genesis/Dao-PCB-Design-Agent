@@ -570,6 +570,24 @@ rep.added_segments, rep.total_len_mm, rep.tracks   # 重载实测
 > 本源脾性(实测记录, 不臆造): 线段端点若**物理叠合到某焊盘**, KiCad 载入期连通性会按该焊盘的网改写线
 > 段网(故文件里写 `(net 1 GND)` 也可能重载成相邻焊盘的 VCC) —— 精确布线时应让线走在目标焊盘上或空旷处。
 
+### 〇.30 显式过孔下放 (`native_via.py`)
+
+> 反者道之动: 层间换层、缝合地(stitching)、散热过孔阵列这些"我就要在这点钻个孔连通两层"的诉求, 本是人
+> 在 GUI 里一个个点的, 落到本源它只是若干 `PCB_VIA` 各持 position/drill/diameter/net/层对。本层经子进程
+> (`_via_worker.py`) 按坐标批量落通孔, 落盘后**重载实测**新增过孔数与各孔钻径/外径/网 (反臆造) —— 这是
+> "层间互连"的本源原子, 与 〇.29 `native_track` 的"同层走线"互补, 合成完整的精确布线面。
+
+```python
+from kicad_origin.origin.native_via import NativeVia
+rep = NativeVia().apply("in.kicad_pcb", "out.kicad_pcb", vias=[
+    {"at": [40, 40], "drill_mm": 0.4, "diameter_mm": 0.8, "net": "GND"},
+    {"at": [45, 40], "drill_mm": 0.3, "diameter_mm": 0.6}])
+rep.added_vias, rep.vias   # 重载实测
+```
+
+实测: 两通孔(GND 0.4/0.8mm + 裸孔 0.3/0.6mm) → 重载 `added_vias=2`、各孔钻径/外径/网回读一致; 空 vias /
+板上无此网名 / 尺寸非法(钻径≥外径) / 缺板文件如实报错 `ok=False`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
