@@ -353,6 +353,25 @@ rep.ok       # 至少一张图成功落盘且非空
 实测: 示例板 → top/bottom PNG + 2D SVG 全部落盘非空 (`ok=True`); `sides=[]` 仅出 SVG;
 缺板文件如实报错 `ok=False`、`images={}`。
 
+### 〇.18 参数化丝印文字/标记 (`native_silk.py`)
+
+> 反者道之动: 板号/版本/Logo/批次/极性记号本是人在 GUI 里逐个敲的丝印, 但落到本源它们只是
+> F.SilkS/B.SilkS 上的 `PCB_TEXT`。本层经子进程 (`_silk_worker.py`) 用本源 `PCB_TEXT` 批量盖字
+> (位置/字号/线宽/角度/镜像可控, 底层 B.SilkS 默认自动镜像), 落盘后**重载实测**各丝印层文字计数
+> (反臆造, 不臆称"已盖")。
+
+```python
+from kicad_origin.origin.native_silk import NativeSilk
+rep = NativeSilk().stamp("in.kicad_pcb", "out.kicad_pcb", texts=[
+    {"text": "DAO-PCB v1", "x": 5, "y": 5, "size_mm": 1.5},
+    {"text": "REV A", "x": 5, "y": 40, "layer": "B.SilkS"},
+])
+rep.added, rep.silk_texts_f, rep.silk_texts_b   # 重载实测各层文字数
+```
+
+实测: 顶层 2 条 + 底层 1 条 → `added=3, silk_texts_f=2, silk_texts_b=1`; 空白文字自动跳过;
+texts 为空 / 缺板文件如实报错 `ok=False`。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
