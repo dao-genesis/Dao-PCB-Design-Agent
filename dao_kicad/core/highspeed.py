@@ -345,12 +345,12 @@ def measure_net_length(board: pcbnew.BOARD, net_name: str) -> float:
     net_code = net.GetNetCode()
     for track in board.GetTracks():
         if hasattr(track, 'GetNetCode') and track.GetNetCode() == net_code:
-            if track.GetClass() != "PCB_VIA":
-                start = track.GetStart()
-                end = track.GetEnd()
-                dx = pcbnew.ToMM(end.x - start.x)
-                dy = pcbnew.ToMM(end.y - start.y)
-                total += math.hypot(dx, dy)
+            # Skipping vias is right, but chord-measuring (end-start) the rest
+            # undercounts every PCB_ARC — freerouting emits arcs and a single
+            # quarter-arc reads ~10% short, corrupting length matching.
+            # GetLength() is the true routed length of straight and arc alike.
+            if track.GetClass() in ("PCB_TRACK", "PCB_ARC"):
+                total += pcbnew.ToMM(track.GetLength())
 
     return total
 

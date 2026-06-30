@@ -15,7 +15,6 @@ Groups:
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 
 import pcbnew
@@ -66,13 +65,18 @@ class LengthMatcher:
 
         total = 0.0
         for track in self.board.GetTracks():
-            if track.GetNet() and track.GetNet().GetNetname() == net_name:
-                if isinstance(track, pcbnew.PCB_TRACK):
-                    start = track.GetStart()
-                    end = track.GetEnd()
-                    dx = pcbnew.ToMM(end.x - start.x)
-                    dy = pcbnew.ToMM(end.y - start.y)
-                    total += math.hypot(dx, dy)
+            # PCB_ARC and PCB_VIA both subclass PCB_TRACK. Measuring the
+            # straight chord (end-start) undercounts every arc — freerouting
+            # emits arcs, and a single quarter-arc already reads ~10% short —
+            # which silently corrupts the very length match this module exists
+            # to verify. GetLength() is the true routed length of straight and
+            # arc segments alike; vias (GetClass "PCB_VIA") contribute no
+            # in-plane length and are excluded.
+            if track.GetClass() not in ("PCB_TRACK", "PCB_ARC"):
+                continue
+            n = track.GetNet()
+            if n and n.GetNetname() == net_name:
+                total += pcbnew.ToMM(track.GetLength())
         return total
 
     def measure_all(self) -> list[LengthGroup]:
