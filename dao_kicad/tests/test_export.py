@@ -25,6 +25,30 @@ class TestExportEngine:
         # Should generate multiple gerber files (F.Cu, B.Cu, masks, silk, edge)
         assert len(files) > 5
 
+    def test_output_files_never_start_with_dash(self, sample_board, tmp_path):
+        """An in-memory board has no filename, so Gerber/Excellon writers used
+        to emit '-B_Cu.gbl' / '-PTH.drl' — a leading dash (parsed as a flag by
+        many tools) and no project name. Names must carry a real stem."""
+        engine = ExportEngine(sample_board)
+        names = [f.name for f in engine.gerbers(tmp_path / "g")]
+        names += [f.name for f in engine.drill(tmp_path / "d")]
+        assert names
+        for n in names:
+            assert not n.startswith("-"), n
+            assert n.startswith("board"), n
+
+    def test_saved_board_names_outputs_after_its_project(self, tmp_path):
+        """After save(), exports key their names off the project file, like
+        KiCad's Save-As — not the generic fallback stem."""
+        builder = BoardBuilder.new(copper_layers=2, width_mm=40, height_mm=30)
+        builder.add_nets("N")
+        builder.place("Resistor_SMD", "R_0402_1005Metric", "R1", 10, 10)
+        builder.save(tmp_path / "myproj.kicad_pcb")
+        drl = [f.name for f in ExportEngine(builder.board).drill(tmp_path / "d")]
+        assert drl
+        for n in drl:
+            assert n.startswith("myproj"), n
+
     def test_gerber_protel_extensions_match_layers(self, sample_board, tmp_path):
         """Each Gerber must carry the Protel extension of its OWN layer.
 

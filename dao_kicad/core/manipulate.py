@@ -482,6 +482,11 @@ class BoardBuilder:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self.board.Save(str(path))
+        # Save() writes the file but leaves the in-memory board's filename
+        # unset; mirror KiCad's Save-As so later Gerber/Excellon exports key
+        # their output names off this project instead of falling back to a
+        # generic stem.
+        self.board.SetFileName(str(path))
         return path
 
     def export_gerbers(self, output_dir: str | Path) -> list[Path]:

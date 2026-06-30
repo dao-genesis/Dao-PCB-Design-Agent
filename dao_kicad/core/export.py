@@ -7,6 +7,7 @@ No abstractions — direct control over every export parameter.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shutil
@@ -39,11 +40,36 @@ class ExportEngine:
             raise RuntimeError("pcbnew not available")
         self.board = board
 
+    @contextlib.contextmanager
+    def _basename_fallback(self, default: str = "board"):
+        """Give the board a sensible filename stem while emitting files.
+
+        Both the Gerber plotter and the Excellon writer derive each output
+        file's name from ``board.GetFileName()``. An in-memory board (exactly
+        what ``auto_design`` produces) has an empty filename, so the whole
+        package came out as ``-B_Cu.gbl`` / ``-PTH.drl`` — a leading dash that
+        many tools parse as a flag, and no project name. Temporarily set a stem
+        when one is missing, then restore it so we never mutate caller state.
+        """
+        src = self.board.GetFileName()
+        if src and Path(src).stem:
+            yield
+            return
+        self.board.SetFileName(f"{default}.kicad_pcb")
+        try:
+            yield
+        finally:
+            self.board.SetFileName(src)
+
     def gerbers(self, output_dir: Path, **opts) -> list[Path]:
         """Export complete Gerber set."""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        with self._basename_fallback():
+            return self._plot_gerbers(output_dir, **opts)
+
+    def _plot_gerbers(self, output_dir: Path, **opts) -> list[Path]:
         plot_ctrl = pcbnew.PLOT_CONTROLLER(self.board)
         plot_opts = plot_ctrl.GetPlotOptions()
         plot_opts.SetOutputDirectory(str(output_dir))
@@ -112,10 +138,11 @@ class ExportEngine:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        writer = pcbnew.EXCELLON_WRITER(self.board)
-        writer.SetOptions(False, False, pcbnew.VECTOR2I(0, 0), False)
-        writer.SetFormat(metric)
-        writer.CreateDrillandMapFilesSet(str(output_dir), True, False)
+        with self._basename_fallback():
+            writer = pcbnew.EXCELLON_WRITER(self.board)
+            writer.SetOptions(False, False, pcbnew.VECTOR2I(0, 0), False)
+            writer.SetFormat(metric)
+            writer.CreateDrillandMapFilesSet(str(output_dir), True, False)
 
         return sorted(output_dir.glob("*.drl"))
 
