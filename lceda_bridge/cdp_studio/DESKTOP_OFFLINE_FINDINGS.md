@@ -306,6 +306,22 @@ Safe Spacing:hs_spc` 三属性绑定确认，**DRC=0 CLEAN（1 试）**。
   已固化此序：track/via/spacing 等先落，`class_rules` 最后）。
 - 这是「单点能力」到「成套差异化设计规则」的闭环验证——高速类可一次性获得专属线宽+过孔+间距。
 
+### 已精确测绘但暂缓落地的前沿（知止不殆·留作下轮）
+
+按"先测绘、后落地、不臆测"的本源，以下边界已探明结构、但因**模板缺样本或需深挖校验器/换布线器**，本轮**只测绘不写**：
+
+1. **Blind/Buried Via（盲埋孔）**：`Physics/Blind/Buried Via` 子规则节点形态为 `{editName,
+   isSetDefault, table}`——**非 form 态**，而是 `table`（层对条目表）。默认子规则 `blindVia`
+   的 `table` 为**空**（`isSetDefault:True`），故**无样本可克隆**；其行 schema 在 `ui.js` 当前
+   bundle 未直接命中（疑在别的 bundle 或键名异化）。落地须先从校验器测得层对条目行结构，**不可臆测**。
+   价值定位：HDI 多层盲埋孔为高阶需求，ROI 暂低，故precisely-map 后延后。
+2. **差分对对象层绑定**：DP 子规则可落库（见上），但绑定在差分对对象层而非网络类层——
+   `getNetRules` 只暴露 net/netClass 两类节点，差分对节点的绑定 API 待测。
+3. **等长/长度范围的真正满足**：规则可下达且 DRC 执行，但 freerouting 不做 length tuning——
+   须引入会做长度匹配的布线器（阳向大工程）。
+4. **真机深度融合（DAO Bridge）**：经内网穿透/归一 MCP 直操用户本机 JLCEDA 整机（pc/browser/
+   plugin/vscode 四模块）。隧道随 IDE 插件存活；插件离线时两道皆不可达，须用户重启 IDE 重建隧道。
+
 ## 一句话沉淀
 
 > 桌面离线版 = Web 编辑器层（`_EXTAPI_ROOT_` 同构）+ **本地化的账号层**（`/api/client/*`
