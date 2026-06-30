@@ -652,6 +652,26 @@ rep.added_shapes, rep.shapes   # 重载实测(仅本次新增)
 `filled=True` 且 `points=3`、各层名回读一致; 空 shapes / 线宽≤0 / 未知层 / 未知类型 / 圆缺半径 /
 多边形<3角点 / 缺板文件如实报错 `ok=False`。
 
+### 〇.34 受控拆铜 (`native_ripup.py`)
+
+> 反者道之动: 落铜有 〇.29~〇.33 一族, 那"拆"呢? 重布线、改网络归属、清空某层重来这些诉求, 本是人在
+> GUI 里框选删除的, 但落到本源它只是按筛选条件对 `board` 上的 `PCB_TRACK`/`PCB_ARC`/`PCB_VIA`/`ZONE`
+> 调 `board.Remove()`。本层经子进程 (`_ripup_worker.py`) 按 nets/layers/types 三维筛选受控拆除, 落盘后
+> **重载实测**各类删除数与剩余数 (反臆造, 不臆称已删)。这是布线迭代的**逆原子** —— 让"改"成为可程序化
+> 驱动的闭环 (落→拆→再落)。
+
+```python
+from kicad_origin.origin.native_ripup import NativeRipup
+rep = NativeRipup().apply("in.kicad_pcb", "out.kicad_pcb",
+                          nets=["GND"], types=["track", "arc"])
+rep.removed_total, rep.removed, rep.remaining   # 重载实测 {track,arc,via,zone}
+```
+
+实测: 板上播 2 条 GND F.Cu 走线 + 1 段 GND F.Cu 弧 + 1 个 GND 过孔 + 1 条 B.Cu 走线后, 按
+`nets=[GND] types=[track,arc]` 拆 → 重载 `removed={track:2,arc:1,via:0}`、过孔与 B.Cu 走线尚存;
+单 `types=[via]` 只拆过孔; 单 `layers=[B.Cu]` 只拆该层; 未知类型 / 板上无此网名如实报错 `ok=False`;
+空命中 (如 `nets=[VCC]` 无铜) `removed_total=0` 但 `ok=True` 不崩。
+
 ## 一、摸清本源: KiCAD 9.0.9 原生能力面 (VM 实测)
 
 | 能力 | KiCAD 原生本源 | 取代我此前的"从零造" |
