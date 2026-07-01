@@ -231,7 +231,21 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
         pcb_uuid = boards[0]["pcb"]["uuid"]
         self._call("dmt_EditorControl.openDocument", pcb_uuid, timeout=20)
         time.sleep(settle)
+        self.pcb_uuid = pcb_uuid
         return pcb_uuid
+
+    def reopen_pcb(self, settle=3):
+        """重开当前 PCB 文档,把图元从**已存盘的板**重新加载为**同步态**。
+
+        本源用途:freerouting `importAutoRouteSes` 之后,布线段在**本会话**里短暂处于
+        未落定的异步态,`modify` 会抛 `t.isAsync is not a function`(时窗不定)。因
+        build_board 在布线后已 `save()` 落盘,重开文档即从盘上**干净重载**为同步图元,
+        使随后的逐段 `modify`(布线后逐类线宽)**确定可写**——比静候/触发更稳的收敛。"""
+        if not getattr(self, "pcb_uuid", None):
+            return False
+        self._call("dmt_EditorControl.openDocument", self.pcb_uuid, timeout=20)
+        time.sleep(settle)
+        return True
 
     # ---------- 器件检索 ----------
     def search_device(self, query, index=0, retries=3):
@@ -816,6 +830,42 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
             raise DaoRpcError("add_spacing_rule(%s) 未落库" % name)
         return {"name": name, "clearance": clearance_mm}
 
+    def set_default_clearance_mm(self, clearance_mm):
+        """把**全局默认** Safe Spacing 间距矩阵整体置为 clearance_mm——直接改板级默认间距。
+
+        与 `add_spacing_rule`(建具名子规则供类引用)不同,本法找到 `isSetDefault=True`
+        的那条默认子规则、把其 `tables[*].content` 全格置为同值,`overwriteCurrentRule
+        Configuration` 整体写回、读回确认。用途:布线后逐类改宽的**留白控制**——把默认间距
+        调小即给加宽让出裕度,使适度类宽落地不新增 Clearance Error。单位 mm。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        spc = cfg.get("Spacing", {}).get("Safe Spacing", {})
+        if not spc:
+            raise DaoRpcError("当前配置无 Spacing/Safe Spacing")
+        target = None
+        for k, v in spc.items():
+            if v.get("isSetDefault"):
+                target = k
+                break
+        if target is None:
+            target = next(iter(spc))
+        for tbl in spc[target].get("tables", {}).values():
+            tbl["content"] = [[clearance_mm for _ in row]
+                              for row in tbl.get("content", [])]
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Spacing", {})
+                .get("Safe Spacing", {}).get(target, {}))
+        got = None
+        for tbl in back.get("tables", {}).values():
+            for row in tbl.get("content", []):
+                if row:
+                    got = row[0]
+                    break
+            if got is not None:
+                break
+        return {"rule": target, "clearance": got}
+
     def _add_form_rule(self, category, attr, name, form_updates):
         """form 态数值子规则的通用落地：克隆该属性既有子规则当模板、改其 form 字段、
         经 `overwriteCurrentRuleConfiguration` 整体写回当前板、读回确认。内部复用。"""
@@ -1015,6 +1065,179 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
                 "nets": grp,
                 "spread_mil": (max(vals) - min(vals)) if len(vals) >= 2 else None}
         return out
+
+    def _settle_routed_primitives(self):
+        """把**全板**布线图元(直线+圆弧)`get` 读一遍,触发其从 SES 导入后的**未落定
+        异步态**落定为同步态。实证要点:紧随 freerouting 导入,`modify` 抛
+        `t.isAsync is not a function`;而**仅读目标网并不足以落定**——须**通读全板**
+        所有段方稳(实测:只读 PWR→仍失败;读齐全网后→稳过)。故逐类改宽前先全板通读一发。
+        `getAllPrimitiveId()`(不带网参)返回该类全部 id。返回触达段数。"""
+        js = ("(async()=>{try{var R=%s;var c=0;"
+              "for(var kind of ['pcb_PrimitiveLine','pcb_PrimitiveArc']){"
+              "var ids=await R[kind].getAllPrimitiveId()||[];"
+              "for(var id of ids){await R[kind].get(id);c++;}}"
+              "return JSON.stringify({touched:c});}"
+              "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+              % EXT)
+        o = self._eval(js, timeout=60) or {}
+        return o.get("touched", 0)
+
+    def _read_net_line_widths(self, net):
+        """读某网**已布线段**(直线+圆弧)的 [[kind, id, lineWidth_mil], …]。
+
+        用 `getAllPrimitiveId(net)` 取 id、再 `get(id)` 取带 `lineWidth` 的**普通对象**
+        (实证:get 回的是纯数据对象、非异步图元句柄)——**只读、不 modify**。实证教训:
+        `getAll(net)` 会**物化异步图元**、其残留句柄致**紧随其后另一发** eval 的
+        `modify` 抛 `t.isAsync is not a function`;而 `getAllPrimitiveId`+`get` 不物化,
+        写侧(`_apply_line_widths`)据 id 批量 `modify` 稳过。故读/写分两发、读侧避开 getAll。"""
+        js = ("(async()=>{try{var R=%s;var out=[];"
+              "for(var kind of ['pcb_PrimitiveLine','pcb_PrimitiveArc']){"
+              "var ids=await R[kind].getAllPrimitiveId(%s)||[];"
+              "for(var id of ids){var o=await R[kind].get(id);"
+              "if(o)out.push([kind,id,o.lineWidth]);}}"
+              "return JSON.stringify(out);}"
+              "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+              % (EXT, json.dumps(net)))
+        o = self._eval(js, timeout=40)
+        if isinstance(o, dict) and o.get("err"):
+            raise DaoRpcError("read_net_line_widths(%s): %s" % (net, o["err"]))
+        return o or []
+
+    def _modify_one(self, kind, pid, width_mil, tries=3):
+        """**一段一发 eval** 只 `modify(id,{lineWidth})`——写侧最小单元。成功返回 True。
+
+        实证:一发 eval 里**批量** `await modify` 必败(首刀把同批余下图元打回异步态,
+        次段即抛 `t.isAsync is not a function`);故写必须**一段一发**。遇 isAsync 属瞬态
+        (常见于 reopen 后首刀),通读全板 `_settle_routed_primitives` 后重试即过。"""
+        js = ("(async()=>{try{var R=%s;var r=await R['%s'].modify(%s,{lineWidth:%s});"
+              "return JSON.stringify({ok:!!r});}"
+              "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+              % (EXT, kind, json.dumps(pid), json.dumps(round(width_mil, 3))))
+        for attempt in range(tries):
+            o = self._eval(js, timeout=40) or {}
+            if o.get("ok"):
+                return True
+            err = o.get("err")
+            if err and "isAsync" in err and attempt < tries - 1:
+                self._settle_routed_primitives()
+                time.sleep(0.3)
+                continue
+            break
+        return False
+
+    def _converge_net_width(self, net, target_mil, per_round=5, max_rounds=60):
+        """把某网**已布线段**(直线+圆弧)线宽**收敛**到 target_mil——布线后改宽/回退共用。
+
+        实证根因(彻底定位·四条铁律):freerouting SES 导入后布线段处未落定异步态,
+          ① **批量 modify 必败**——须一段一发(见 `_modify_one`);
+          ② **写有额度会蔓延**——连续 modify 约 8~13 段后余段整体滑回异步,`get` 通读已
+             救不回,唯 **`save()`+`reopen_pcb()` 从盘干净重载**能复位写额度;
+          ③ **reopen 会合并共线同宽段**——段数/ id 随之变(实测 16→10),故**不能**靠固定
+             id 表逐段写;
+          ④ 综上采**收敛循环**:每轮 `_read_net_line_widths` 读**当前**段、挑出未达标者、
+             一段一发改至多 `per_round`(< 额度上限留裕度)段、`save+reopen+settle` 复位,
+             **重读再来**;直到全网段宽 == target 为止(自然吸收合并/瞬态)。
+        `_converge` 亦是回退原语:回退即「收敛回原宽」(布线网通常单一宽,故精确)。
+        返回 {changed, rounds, final:{widths,segments}}。"""
+        target = round(target_mil, 3)
+        self._settle_routed_primitives()
+        changed = 0
+        rounds = 0
+        while True:
+            trip = self._read_net_line_widths(net)
+            off = [(k, i) for k, i, w in trip if round(w, 3) != target]
+            if not off:
+                break
+            rounds += 1
+            if rounds > max_rounds:
+                raise DaoRpcError("converge_net_width(%s→%.3f): 未收敛, 余 %d 段"
+                                  % (net, target, len(off)))
+            did = 0
+            for kind, pid in off[:per_round]:
+                if self._modify_one(kind, pid, target):
+                    did += 1
+                    changed += 1
+            self.save()
+            self.reopen_pcb(settle=4)        # 复位写额度(会合并共线同宽段)
+            self._settle_routed_primitives()
+            if did == 0:                      # 一轮零进展 → 防死循环
+                raise DaoRpcError("converge_net_width(%s→%.3f): 一轮零进展, 余 %d 段"
+                                  % (net, target, len(off)))
+        return {"changed": changed, "rounds": rounds,
+                "final": self.net_track_widths_mil([net])[net]}
+
+    def net_track_widths_mil(self, nets=None):
+        """量测每网**实测布线段**的线宽集合(mil),把「线到底布多宽」变成可读数字。
+
+        返回 {net: {"widths": [去重宽…], "segments": 段数}}。无布线段的网(如
+        相邻脚直连、或被覆铜接管的 GND)返回 segments=0。用于逐类线宽的前/后核验。"""
+        names = (nets if nets is not None
+                 else (self._call("pcb_Net.getAllNetsName", timeout=20) or []))
+        out = {}
+        for nm in names:
+            trip = self._read_net_line_widths(nm)
+            ws = sorted({round(w, 3) for _, _, w in trip})
+            out[nm] = {"widths": ws, "segments": len(trip)}
+        return out
+
+    def apply_track_widths_postroute(self, constraints, revert_on_worse=True,
+                                     drc_timeout=90):
+        """**布线后逐网改宽**(真·逐类线宽) —— 安全的「不劣化即改进」原语。
+
+        本源背景(见 DESKTOP_OFFLINE_FINDINGS「下轮前沿」):现行 DSN 注入把全局默认宽
+        **抬到最严类宽**让 freerouting 按最宽布线——细线类也被一并加宽。本法反其道:让
+        布线器按**默认(细)宽**布线保住间距,**布线后**只把宽线类(电源/大电流)逐网加到
+        其类宽,细线类保持细→密板省间距。
+
+        权衡(诚实定界):布线后加宽会让线变粗、与邻线间距缩小,密板可能**反引入
+        Clearance Error**。故本法**先量 DRC、改宽、再量 DRC**;若 `revert_on_worse`
+        且 DRC 变差则**逐段精确回退**(还原到改宽前),净效果「要么改进/持平、要么原样」——
+        **永不劣化板子**(与残余补布同一心法)。
+
+        从 `constraints` 经 `_net_track_widths`(net_classes × class_rules[Track] ×
+        track_rules.default_mm)推出 {网: 类宽mm};无逐类 Track 规则则空操作。
+        返回审计:{applied, reverted, drc_before, drc_after, targets_mm, per_net,
+        widths_before, widths_after}。"""
+        targets = self._net_track_widths(constraints) or {}
+        audit = {"applied": False, "reverted": False, "targets_mm": targets,
+                 "per_net": {}, "drc_before": None, "drc_after": None,
+                 "widths_before": {}, "widths_after": {}}
+        if not targets:
+            audit["reason"] = "no per-class track widths in constraints"
+            return audit
+        nets = list(targets.keys())
+        audit["widths_before"] = self.net_track_widths_mil(nets)
+        audit["drc_before"] = self.drc(timeout=drc_timeout)["total"]
+        # 写侧实证(彻底定位·见 `_converge_net_width`):布线段导入后处未落定异步态,批量
+        # modify 必败、写有额度会蔓延、reopen 会合并共线同宽段——故改宽用**收敛循环**逐网
+        # 把线宽推到类宽(自然吸收异步/合并);回退亦是「收敛回原宽」。base_mil 记各网原宽
+        # (布线网通常单一宽)用于精确回退。
+        base_mil = {}
+        for net in nets:
+            ws = audit["widths_before"][net]["widths"]
+            base_mil[net] = ws[0] if len(ws) == 1 else None
+        for net, mm in targets.items():
+            w_mil = round(mm / self._MM_PER_MIL, 3)
+            r = self._converge_net_width(net, w_mil)
+            audit["per_net"][net] = {"target_mm": mm, "target_mil": w_mil,
+                                     "segments": r["changed"], "rounds": r["rounds"]}
+        audit["widths_after"] = self.net_track_widths_mil(nets)
+        audit["drc_after"] = self.drc(timeout=drc_timeout)["total"]
+        if revert_on_worse and audit["drc_after"] > audit["drc_before"]:
+            reverted = 0
+            for net in targets:
+                b = base_mil.get(net)
+                if b is None:                  # 原宽非单一 → 无法精确收敛回,跳过并标注
+                    audit.setdefault("revert_skipped", []).append(net)
+                    continue
+                reverted += self._converge_net_width(net, b)["changed"]
+            audit["reverted"] = True
+            audit["reverted_segments"] = reverted
+            audit["widths_after"] = self.net_track_widths_mil(nets)
+            audit["drc_after"] = self.drc(timeout=drc_timeout)["total"]
+        else:
+            audit["applied"] = True
+        return audit
 
     def design_rules(self, raw=False):
         """当前 DRC 规则配置：{name, categories[, config]}。
