@@ -25,7 +25,6 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import eda_flow
-import eda_rest
 
 
 def _group_by_width(net_widths):
@@ -85,12 +84,25 @@ class BoardBuilder:
                   ensure_ascii=False, indent=2)
 
     # ---- 阶段 1:建工程 + 原理图/PCB 文档 ----
-    def scaffold(self, spec):
-        rest = eda_rest.EdaRest()
-        pj = rest.create_project(spec.name + "_" + time.strftime("%H%M%S"),
-                                 introduction=spec.introduction)
-        puuid = pj.get("uuid") or pj.get("projectUuid") or (pj.get("result") or {}).get("uuid")
+    def scaffold(self, spec, tries=3):
+        """经 **CDP**(dmt_Project.createProject)建工程,再补建 SCH/PCB。
+
+        道:REST 建的工程虽在服务端落库,但**当前编辑器会话不会自动加载它**,
+        随后 open_project 等不到 _current_uuid → 报"未就绪"(本会话实证)。
+        改走 CDP dmt_Project.createProject:同一会话内建即被编辑器认知,open_project
+        稳定成功(与 build_chain_det._scaffold 同源)。createProject 偶发返回 None
+        (编辑器忙/告警框)→ 重试。"""
         f = eda_flow.Flow()
+        puuid = None
+        for _ in range(tries):
+            puuid = f.eda.call("dmt_Project.createProject",
+                               spec.name + "_" + time.strftime("%H%M%S"), timeout=40)
+            if puuid:
+                break
+            time.sleep(4)
+        if not puuid:
+            raise eda_flow.FlowError("createProject 连续返回 None(编辑器忙?)")
+        time.sleep(3)
         f.open_project(puuid)
         f.eda.call("dmt_Schematic.createSchematic", "SCH1", timeout=20)
         f.eda.call("dmt_Pcb.createPcb", "PCB1", timeout=20)
