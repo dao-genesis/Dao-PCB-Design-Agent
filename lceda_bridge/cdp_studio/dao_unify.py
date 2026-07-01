@@ -29,9 +29,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 DESKTOP_PORT = 29230
 WEB_PORT = 29229
 
-# 12 格式为两通道共同真字节谱(桌面另有 autoroute_json/ipc_2581c,web 侧受限——见 HANDOFF)
+# 13 格式为两通道共同真字节谱(桌面另有 session-bound 的 autoroute_json;
+# ipc_2581c/idx 两通道皆 NO_RESULT,getManufactureData 仅私有化版——见 HANDOFF)
 COMMON_FMT = {"gerber", "bom", "pnp", "pdf", "dxf", "3d_step", "ipc_d356a",
-              "odb", "ibom", "altium", "testpoint", "netlist"}
+              "odb", "ibom", "altium", "testpoint", "netlist", "pads"}
 
 
 def _cdp_editor_alive(port):

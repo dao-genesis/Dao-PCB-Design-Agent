@@ -1197,6 +1197,7 @@ class Flow:
         ("altium", "getAltiumDesignerFile", ""),
         ("testpoint", "getTestPointFile", ""),
         ("netlist", "getNetlistFile", ""),
+        ("pads", "getPadsFile", ""),
     )
 
     def export_all(self, out_dir, base="Dao", suite=None):
