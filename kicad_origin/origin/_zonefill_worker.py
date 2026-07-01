@@ -27,15 +27,51 @@ def _layer_id_by_name(pcbnew, b, name):
     return None
 
 
+def _refill(pcbnew, req):
+    """重灌模式: 不新增区, 只对板上已有 ZONE 重新浇灌 (清理布线后新增的异网走线/
+    过孔穿越平面处的间距), 是"布线后平面复灌"这一投产前必做步的本源原子。"""
+    import os
+    if not os.path.exists(req["board"]):
+        _err(f"板文件不存在: {req['board']}")
+    board = pcbnew.LoadBoard(req["board"])
+    existing = list(board.Zones())
+    if not existing:
+        _err("板上无覆铜区可重灌")
+    ok = pcbnew.ZONE_FILLER(board).Fill(existing)
+    pcbnew.SaveBoard(req["out"], board)
+    rb = pcbnew.LoadBoard(req["out"])
+    rzones = list(rb.Zones())
+    out_zones = []
+    for z in rzones:
+        area_mm2 = pcbnew.ToMM(pcbnew.ToMM(z.GetFilledArea())) \
+            if hasattr(z, "GetFilledArea") else 0.0
+        out_zones.append({
+            "layer": rb.GetLayerName(z.GetLayer()),
+            "net": str(z.GetNetname()),
+            "filled_area_mm2": round(area_mm2, 3),
+            "is_filled": bool(z.IsFilled()),
+        })
+    print(json.dumps({
+        "ok": bool(ok), "zones_added": 0, "reload_zones": len(rzones),
+        "added_zones": 0, "zones": out_zones,
+    }, ensure_ascii=False))
+    sys.exit(0)
+
+
 def main():
     req = json.loads(sys.stdin.read())
-    zones = req.get("zones") or []
-    if not zones:
-        _err("zones 为空 (拒空做)")
     try:
         import pcbnew
     except Exception as e:  # noqa: BLE001
         _err(f"import pcbnew 失败: {e}")
+
+    if req.get("refill"):
+        _refill(pcbnew, req)
+        return
+
+    zones = req.get("zones") or []
+    if not zones:
+        _err("zones 为空 (拒空做)")
 
     import os
     if not os.path.exists(req["board"]):

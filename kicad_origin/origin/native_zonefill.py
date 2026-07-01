@@ -90,6 +90,37 @@ class NativeZoneFill:
         rep.zones = data.get("zones", [])
         return rep
 
+    def refill(self, board: str, out: str,
+               timeout: int = 300) -> ZoneFillReport:
+        """对板上已有覆铜区重新浇灌 (不新增), 布线/加过孔后复灌以清间距。"""
+        rep = ZoneFillReport(board=str(board), out=str(out))
+        if not self.python:
+            rep.error = "未找到可 import pcbnew 的 python"
+            return rep
+        req = {"board": str(board), "out": str(out), "refill": True}
+        try:
+            r = subprocess.run([self.python, str(ZONEFILL_WORKER)],
+                               input=json.dumps(req), capture_output=True,
+                               text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            rep.error = "覆铜复灌子进程超时"
+            return rep
+        data = None
+        for ln in reversed((r.stdout or "").strip().splitlines()):
+            if ln.startswith("{"):
+                data = json.loads(ln)
+                break
+        if data is None:
+            rep.error = f"worker 无输出: {(r.stderr or '')[:200]}"
+            return rep
+        rep.ok = bool(data.get("ok"))
+        if not rep.ok:
+            rep.error = data.get("error", "")
+            return rep
+        rep.reload_zones = data.get("reload_zones", 0)
+        rep.zones = data.get("zones", [])
+        return rep
+
 
 if __name__ == "__main__":
     import sys

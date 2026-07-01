@@ -94,6 +94,13 @@ def build(spec: dict) -> dict:
     import pcbnew  # noqa: PLC0415
 
     b = pcbnew.BOARD()
+    # 铜层数: 2/4/6 层叠。>2 层给密集 QFP/BGA 电源分配与布线留内层空间
+    # (信号/GND/电源/信号), 是双层布不通的密板的本源解 (反臆造: 重载实测层数)。
+    layer_count = int(spec.get("layer_count", 2))
+    if layer_count not in (2, 4, 6):
+        raise ValueError(f"layer_count must be 2/4/6, got {layer_count}")
+    if layer_count > 2:
+        b.SetCopperLayerCount(layer_count)
     roots = _fp_lib_roots(spec)
     placed = {}
     for comp in spec.get("components", []):
@@ -163,6 +170,7 @@ def build(spec: dict) -> dict:
             "nets": b.GetNetInfo().GetNetCount(),
             "unrouted": unrouted,
             "netclasses": netclasses,
+            "copper_layers": b.GetCopperLayerCount(),
             "size_mm": [round(w, 3), round(h, 3)]}
 
 

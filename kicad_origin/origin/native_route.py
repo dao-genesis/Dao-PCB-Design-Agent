@@ -65,6 +65,24 @@ def _strip_nets_from_dsn(text: str, skip: List[str]) -> tuple:
     return text, dropped
 
 
+def _mark_plane_layers(text: str, plane_layers: List[str]) -> tuple:
+    """把指定铜层在 DSN 里标为 (type power) 平面层, freerouting 便不在其上布信号线。
+
+    多层板的内层地/电源平面须留给整片铜面 (由 zonefill 浇 + 扇出过孔并网), 若布线器
+    误在其上走信号线, 浇铜后必与之短路。Specctra 约定 power 层不布信号, 只作平面。
+    返回 (新文本, 实际改标的层名列表)。反臆造: 只记真改到的。
+    """
+    import re
+    marked: List[str] = []
+    for ly in plane_layers:
+        pat = r"(\(layer\s+" + re.escape(ly) + r"\s*\(type\s+)signal(\))"
+        new, n = re.subn(pat, r"\1power\2", text)
+        if n:
+            text = new
+            marked.append(ly)
+    return text, marked
+
+
 @dataclass
 class RouteReport:
     board: str
@@ -151,7 +169,8 @@ class NativeRouter:
     # ── 一步编排: 板 → 已布线板 ──
     def route(self, board: str, out: str, *, passes: int = 10,
               workdir: Optional[str] = None,
-              skip_nets: Optional[List[str]] = None) -> RouteReport:
+              skip_nets: Optional[List[str]] = None,
+              plane_layers: Optional[List[str]] = None) -> RouteReport:
         board = str(board)
         rep = RouteReport(board=board, out=str(out),
                           router_available=self.router_available)
@@ -181,6 +200,18 @@ class NativeRouter:
                                           "dropped": dropped}
             except OSError as e:
                 rep.error = "skip_nets rewrite failed: " + str(e)
+                return rep
+
+        # 把内层平面层标为 power, freerouting 只在信号层 (F/B) 布线, 不占平面层。
+        if plane_layers:
+            try:
+                txt = Path(rep.dsn).read_text(encoding="utf-8")
+                txt, marked = _mark_plane_layers(txt, list(plane_layers))
+                Path(rep.dsn).write_text(txt, encoding="utf-8")
+                rep.steps["plane_layers"] = {"requested": list(plane_layers),
+                                             "marked": marked}
+            except OSError as e:
+                rep.error = "plane_layers rewrite failed: " + str(e)
                 return rep
 
         if not self.router_available:
