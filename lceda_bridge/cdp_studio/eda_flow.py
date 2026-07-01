@@ -1182,15 +1182,42 @@ class Flow:
                 pass
         return n
 
-    def export_all(self, out_dir, base="Dao"):
+    # web 在线端全谱制造/交换数据(实测真字节的格式;与桌面 dao_rpc_driver.export_all 对齐)。
+    # (key, pcb_ManufactureData 方法名, 额外实参 js)
+    _WEB_EXPORT_SUITE = (
+        ("gerber", "getGerberFile", ""),
+        ("bom", "getBomFile", ""),
+        ("pnp", "getPickAndPlaceFile", ""),
+        ("pdf", "getPdfFile", ""),
+        ("dxf", "getDxfFile", ""),
+        ("3d_step", "get3DFile", ',"step"'),
+        ("ipc_d356a", "getIpcD356AFile", ""),
+        ("odb", "getOpenDatabaseDoublePlusFile", ""),
+        ("ibom", "getInteractiveBomFile", ""),
+        ("altium", "getAltiumDesignerFile", ""),
+        ("testpoint", "getTestPointFile", ""),
+        ("netlist", "getNetlistFile", ""),
+    )
+
+    def export_all(self, out_dir, base="Dao", suite=None):
+        """一次导出 web 在线端**全谱**制造/交换数据(纯 RPC、零 GUI)。
+
+        活体实测(pro.lceda.cn·登录态)12 格式真字节:gerber/bom/pnp/pdf/dxf/
+        3d_step/ipc_d356a/odb/ibom(≈5.4MB 单页)/altium/testpoint/netlist。
+        诚实定界(未纳入默认谱):`getIpc2581CFile` 返回 NO_RESULT(疑待 GUI 配置对话框);
+        `getAutoRouteJsonFile` 返回 NOT_BLOB(其为 JSON 对象而非 File,需另走
+        `pcb_import_autoroute_json` 通道)。逐格式**如实**记录 {size,name,path} 或
+        {err};单格式失败不阻断其余(无为而无不为:能导的全导,不能导的据实标注)。"""
         os.makedirs(out_dir, exist_ok=True)
         res = {}
-        for kind, fn in (("gerber", self.export_gerber), ("bom", self.export_bom),
-                         ("pnp", self.export_pick_and_place)):
+        for key, meth, extra in (suite or self._WEB_EXPORT_SUITE):
+            getter = ("window._EXTAPI_ROOT_.pcb_ManufactureData.%s(%s%s)"
+                      % (meth, json.dumps("%s_%s" % (base, key)), extra))
             try:
-                res[kind] = fn(os.path.join(out_dir, ""), name="%s_%s" % (base, kind))
+                r = self._export(getter, os.path.join(out_dir, ""), timeout=150)
+                res[key] = {"size": r["size"], "name": r.get("name"), "path": r["path"]}
             except Exception as ex:
-                res[kind] = {"err": str(ex)}
+                res[key] = {"err": str(ex)[:160]}
         return res
 
     # --- 反馈面:整页截图(getCurrentRenderedAreaImage 需特定参数, 这里用 CDP 截图兜底) ---
