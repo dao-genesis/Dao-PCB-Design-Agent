@@ -68,6 +68,15 @@ def main():
             z.SetMinThickness(mm(float(spec["min_thickness_mm"])))
         if spec.get("clearance_mm"):
             z.SetLocalClearance(mm(float(spec["clearance_mm"])))
+        # 焊盘-铺铜连接方式: 地/电源平面常取 solid (实心满连) 免热焊盘辐条不足
+        # (starved_thermal), 并把同网焊盘牢固并入平面 (反臆造: 由真 DRC 复核)。
+        pc = str(spec.get("pad_connection", "")).lower()
+        if pc in ("solid", "full"):
+            z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+        elif pc in ("thermal", "thermal_relief"):
+            z.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
+        elif pc in ("none", "no"):
+            z.SetPadConnection(pcbnew.ZONE_CONNECTION_NONE)
         for pt in outline:
             if len(pt) != 2:
                 _err(f"轮廓角点须为 [x, y]: {pt}")

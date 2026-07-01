@@ -29,6 +29,42 @@ HERE = Path(__file__).resolve().parent
 ROUTE_WORKER = HERE / "_route_worker.py"
 
 
+def _match_paren_end(text: str, open_idx: int) -> int:
+    """从 open_idx 处的 '(' 起, 返回配对 ')' 之后一位 (paren 平衡扫描)。"""
+    depth = 0
+    for i in range(open_idx, len(text)):
+        c = text[i]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(text)
+
+
+def _strip_nets_from_dsn(text: str, skip: List[str]) -> tuple:
+    """从 Specctra DSN 摘除指定网: 删 (net NAME ...) 块 + 从 (class ...) 头去网名。
+
+    freerouting 只布 DSN network 里列出的网; 摘除后该网留给铺铜平面/缝合过孔处理。
+    返回 (新文本, 实际删除的网名列表)。反臆造: 只记真删掉的。
+    """
+    import re
+    dropped: List[str] = []
+    for net in skip:
+        m = re.search(r"\(net\s+" + re.escape(net) + r"[\s)]", text)
+        if not m:
+            continue
+        end = _match_paren_end(text, m.start())
+        text = text[:m.start()].rstrip(" ") + text[end:]
+        # class 头 (从 "(class" 到其首个 "(") 内的该网名 token 一并去除。
+        text = re.sub(
+            r"(\(class\b[^(]*?)(?<=\s)" + re.escape(net) + r"(?=[\s])",
+            r"\1", text)
+        dropped.append(net)
+    return text, dropped
+
+
 @dataclass
 class RouteReport:
     board: str
@@ -114,7 +150,8 @@ class NativeRouter:
 
     # ── 一步编排: 板 → 已布线板 ──
     def route(self, board: str, out: str, *, passes: int = 10,
-              workdir: Optional[str] = None) -> RouteReport:
+              workdir: Optional[str] = None,
+              skip_nets: Optional[List[str]] = None) -> RouteReport:
         board = str(board)
         rep = RouteReport(board=board, out=str(out),
                           router_available=self.router_available)
@@ -131,6 +168,20 @@ class NativeRouter:
         if not d.get("ok"):
             rep.error = "export DSN failed: " + str(d.get("error", ""))
             return rep
+
+        # 让 freerouting 略过指定网 (典型: GND —— 由双面铺铜平面 + 缝合过孔独立
+        # 承担, 不必以细窄走线硬布)。宽电源/地网在细间距 QFP 上难以逃逸, 交平面
+        # 处理是产业标准做法; 这里从 DSN 摘除其 (net ...) 与 class 中的网名。
+        if skip_nets:
+            try:
+                txt = Path(rep.dsn).read_text(encoding="utf-8")
+                txt, dropped = _strip_nets_from_dsn(txt, list(skip_nets))
+                Path(rep.dsn).write_text(txt, encoding="utf-8")
+                rep.steps["skip_nets"] = {"requested": list(skip_nets),
+                                          "dropped": dropped}
+            except OSError as e:
+                rep.error = "skip_nets rewrite failed: " + str(e)
+                return rep
 
         if not self.router_available:
             rep.error = ("router_unavailable: 设 FREEROUTING_JAR 或装 java/"

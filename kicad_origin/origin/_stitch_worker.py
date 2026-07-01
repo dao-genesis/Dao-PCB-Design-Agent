@@ -46,6 +46,9 @@ def main():
     via_dia = mm(float(req.get("via_dia_mm", 0.8)))
     drill = mm(float(req.get("drill_mm", 0.4)))
     margin = mm(float(req.get("margin_mm", 1.0)))
+    # 孔-孔间距: 缝合过孔的钻孔须离任何已有钻孔 (含同网 THT 焊盘/过孔) 足够远,
+    # 否则 hole_to_hole 违规 —— 这是同网也会犯的真错 (反臆造: 由真 DRC 复核)。
+    hole_clr = mm(float(req.get("hole_clearance_mm", 0.5)))
 
     region = req.get("region")
     if region and len(region) == 4:
@@ -78,7 +81,18 @@ def main():
     # 收集其他网走线段 + 过孔 (防过孔落在异网铜上短路 —— 焊盘之外的真短路源头)
     other_segs = []   # (ax, ay, bx, by, half_width)
     other_vias = []   # (x, y, radius)
+    # 所有钻孔 (任意网, 含同网): 孔-孔间距用, 半径取钻孔半径。
+    holes = []        # (x, y, hole_radius)
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            ds = pad.GetDrillSize()
+            if ds.x > 0:
+                p = pad.GetPosition()
+                holes.append((p.x, p.y, ds.x // 2))
     for t in board.GetTracks():
+        if isinstance(t, pcbnew.PCB_VIA):
+            p = t.GetPosition()
+            holes.append((p.x, p.y, t.GetDrill() // 2))
         if t.GetNetCode() == netcode:
             continue
         if isinstance(t, pcbnew.PCB_VIA):
@@ -88,6 +102,7 @@ def main():
             a, b = t.GetStart(), t.GetEnd()
             other_segs.append((a.x, a.y, b.x, b.y, t.GetWidth() // 2))
     via_r = via_dia // 2
+    drill_r = drill // 2
 
     def _pt_seg_d2(px, py, ax, ay, bx, by):
         """点到线段距离的平方 (整数 nm 坐标, Python 大整数无溢出)。"""
@@ -121,6 +136,12 @@ def main():
                 for ax, ay, bx, by, hw in other_segs:
                     lim = clearance + via_r + hw
                     if _pt_seg_d2(x, y, ax, ay, bx, by) < lim * lim:
+                        too_close = True
+                        break
+            if not too_close:
+                for hx, hy, hr in holes:
+                    lim = hole_clr + drill_r + hr
+                    if (hx - x) ** 2 + (hy - y) ** 2 < lim * lim:
                         too_close = True
                         break
             if not too_close:

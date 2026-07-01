@@ -116,11 +116,13 @@ def build(spec: dict) -> dict:
             fp = placed.get(ref)
             if fp is None:
                 raise KeyError(f"net {netname} refs unknown component {ref}")
-            pad = next((p for p in fp.Pads() if p.GetName() == str(pad_name)),
-                       None)
-            if pad is None:
+            # 同名 pad 在 KiCad 里电气同点 (如 USB 屏蔽壳的多个 "6"、散热 EP),
+            # 须整组同网, 只连首个会留下无网兄弟 pad → DRC 短路 (反臆造)。
+            matched = [p for p in fp.Pads() if p.GetName() == str(pad_name)]
+            if not matched:
                 raise KeyError(f"{ref} has no pad {pad_name}")
-            pad.SetNet(net)
+            for pad in matched:
+                pad.SetNet(net)
 
     # 净类 (差异化布线规则): 落进 NET_SETTINGS → .kicad_pro, 全链 honor
     netclasses = _apply_netclasses(pcbnew, b, spec.get("netclasses", []),

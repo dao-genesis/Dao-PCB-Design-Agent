@@ -98,6 +98,8 @@ def _ground_plane(board: str, out: Path, ground: Dict[str, Any],
     net = ground.get("net", "GND")
     layers = ground.get("layers", ["F.Cu", "B.Cu"])
     inset = float(ground.get("inset_mm", 0.5))
+    # 平面-焊盘连接: 默认 solid 满连 (地/电源平面标配), 免热焊盘辐条不足且牢固并网。
+    pad_conn = ground.get("pad_connection", "solid")
     size = spec.get("size_mm")
     if not size:
         return {"ok": False, "skipped": "no size_mm to derive outline"}, board
@@ -107,7 +109,8 @@ def _ground_plane(board: str, out: Path, ground: Dict[str, Any],
     poured = str(out / "board_ground.kicad_pcb")
     zr = NativeZoneFill().apply(
         board, poured,
-        zones=[{"outline": o, "layer": ly, "net": net} for ly in layers])
+        zones=[{"outline": o, "layer": ly, "net": net,
+                "pad_connection": pad_conn} for ly in layers])
     stage: Dict[str, Any] = {"pour": zr.as_dict()}
     if not zr.ok:
         return {"ok": False, **stage}, board
@@ -131,6 +134,8 @@ def _ground_plane(board: str, out: Path, ground: Dict[str, Any],
 def run_flow(source: Source, out_dir: str, *,
              heal: bool = True, route: bool = True, fab: bool = True,
              max_heal_passes: int = 4, gap_mm: float = 2.0,
+             route_passes: int = 10,
+             route_skip_nets: Optional[List[str]] = None,
              fp_map: Optional[Dict[str, str]] = None,
              pitch_mm: float = 12.0,
              spec_kw: Optional[Dict[str, Any]] = None) -> FlowReport:
@@ -170,14 +175,18 @@ def run_flow(source: Source, out_dir: str, *,
         from kicad_origin.origin.native_heal import NativeHealer
         healed = str(out / "board_healed.kicad_pcb")
         hrep = NativeHealer().heal(board, healed, max_passes=max_heal_passes,
-                                   do_route=route, gap_mm=gap_mm)
+                                   do_route=route, gap_mm=gap_mm,
+                                   route_passes=route_passes,
+                                   route_skip_nets=route_skip_nets)
         rep.stages["heal"] = hrep.as_dict()
         if hrep.ok and Path(healed).exists():
             board = healed
     elif route:
         routed = str(out / "board_routed.kicad_pcb")
         rrep = NativeRouter().route(board, routed,
-                                    workdir=str(out / "_route"))
+                                    workdir=str(out / "_route"),
+                                    passes=route_passes,
+                                    skip_nets=route_skip_nets)
         rep.stages["route"] = rrep.as_dict()
         if rrep.ok:
             board = routed

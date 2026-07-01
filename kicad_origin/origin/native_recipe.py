@@ -17,6 +17,12 @@ native_build 可直接吃的 spec。于是"画一块板"从手抄字典升维为
     voltage_divider(recipe, ...)      分压电阻子电路
     led_indicator(recipe, ...)        限流电阻 + LED 指示子电路
     pin_header(recipe, ...)           排针引出子电路
+    ic(recipe, ...)                   通用多脚 IC (pad→net 映射)
+    decoupling_bank(recipe, ...)      一排去耦电容 (每电源脚一颗)
+    crystal_hse(recipe, ...)          晶振 + 两颗负载电容
+    ldo_ams1117(recipe, ...)          SOT-223 线性稳压 + 输入/输出电容
+    usb_micro_b(recipe, ...)          USB Micro-B 连接器 (VBUS/D-/D+/GND/屏蔽)
+    push_button(recipe, ...)          贴片按键 (复位/BOOT 等)
 """
 from __future__ import annotations
 
@@ -134,4 +140,95 @@ def pin_header(recipe: Recipe, ref: str, pins: Dict[str, str], *,
     recipe.add(ref, "Connector_PinHeader_2.54mm", fp, x, y, "HDR")
     for pad, net in pins.items():
         recipe.connect(net, (ref, str(pad)))
+    return recipe
+
+
+# ── 大型系统积木 (large-system blocks): 把一颗主控级子系统一次落齐 ──────────
+
+def ic(recipe: Recipe, ref: str, lib: str, fp: str, *,
+       at: Tuple[float, float], pins: Dict[Any, str],
+       value: Optional[str] = None, rot: float = 0.0) -> Recipe:
+    """通用多脚 IC: 放一个器件, pins 把 pad 号映射到网 (未列的脚留空, 不臆造连接)。"""
+    recipe.add(ref, lib, fp, at[0], at[1], value, rot)
+    for pad, net in pins.items():
+        recipe.connect(net, (ref, str(pad)))
+    return recipe
+
+
+def decoupling_bank(recipe: Recipe, prefix: str, vcc: str, gnd: str, *,
+                    at: Tuple[float, float], count: int, pitch_mm: float = 2.5,
+                    value: str = "100n", start: int = 1) -> Recipe:
+    """一排去耦电容: 沿 x 排 count 颗 0603, 逐颗跨 vcc/gnd (每电源脚就近一颗)。"""
+    x, y = at
+    for i in range(count):
+        ref = f"{prefix}{start + i}"
+        recipe.add(ref, "Capacitor_SMD", "C_0603_1608Metric",
+                   x + i * pitch_mm, y, value)
+        recipe.connect(vcc, (ref, "1"))
+        recipe.connect(gnd, (ref, "2"))
+    return recipe
+
+
+def crystal_hse(recipe: Recipe, x_ref: str, c1_ref: str, c2_ref: str, *,
+                osc_in: str, osc_out: str, gnd: str,
+                at: Tuple[float, float], value: str = "8MHz",
+                load: str = "20p") -> Recipe:
+    """高速晶振: 4 脚晶体 (脚1/3 为端子, 脚2/4 接地外壳) + 两颗负载电容到地。"""
+    x, y = at
+    recipe.add(x_ref, "Crystal", "Crystal_SMD_3225-4Pin_3.2x2.5mm", x, y, value)
+    recipe.connect(osc_in, (x_ref, "1"))
+    recipe.connect(osc_out, (x_ref, "3"))
+    recipe.connect(gnd, (x_ref, "2"), (x_ref, "4"))
+    recipe.add(c1_ref, "Capacitor_SMD", "C_0603_1608Metric", x - 3, y + 3, load)
+    recipe.connect(osc_in, (c1_ref, "1"))
+    recipe.connect(gnd, (c1_ref, "2"))
+    recipe.add(c2_ref, "Capacitor_SMD", "C_0603_1608Metric", x + 3, y + 3, load)
+    recipe.connect(osc_out, (c2_ref, "1"))
+    recipe.connect(gnd, (c2_ref, "2"))
+    return recipe
+
+
+def ldo_ams1117(recipe: Recipe, ref: str, cin_ref: str, cout_ref: str, *,
+                vin: str, vout: str, gnd: str, at: Tuple[float, float],
+                cin: str = "10u", cout: str = "22u",
+                value: str = "AMS1117-3.3") -> Recipe:
+    """SOT-223 线性稳压 (AMS1117 脚序: 1=GND, 2=VOUT(=散热片), 3=VIN) + 输入/输出电容。"""
+    x, y = at
+    recipe.add(ref, "Package_TO_SOT_SMD", "SOT-223-3_TabPin2", x, y, value)
+    recipe.connect(gnd, (ref, "1"))
+    recipe.connect(vout, (ref, "2"))
+    recipe.connect(vin, (ref, "3"))
+    recipe.add(cin_ref, "Capacitor_SMD", "C_0805_2012Metric", x - 5, y + 5, cin)
+    recipe.connect(vin, (cin_ref, "1"))
+    recipe.connect(gnd, (cin_ref, "2"))
+    recipe.add(cout_ref, "Capacitor_SMD", "C_0805_2012Metric", x + 5, y + 5, cout)
+    recipe.connect(vout, (cout_ref, "1"))
+    recipe.connect(gnd, (cout_ref, "2"))
+    return recipe
+
+
+def usb_micro_b(recipe: Recipe, ref: str, *, vbus: str, dm: str, dp: str,
+                gnd: str, at: Tuple[float, float],
+                id_net: Optional[str] = None) -> Recipe:
+    """USB Micro-B 连接器 (脚 1=VBUS 2=D- 3=D+ 4=ID 5=GND 6=屏蔽壳→GND)。"""
+    x, y = at
+    recipe.add(ref, "Connector_USB", "USB_Micro-B_Molex-105017-0001",
+               x, y, "USB")
+    recipe.connect(vbus, (ref, "1"))
+    recipe.connect(dm, (ref, "2"))
+    recipe.connect(dp, (ref, "3"))
+    if id_net is not None:
+        recipe.connect(id_net, (ref, "4"))
+    recipe.connect(gnd, (ref, "5"), (ref, "6"))
+    return recipe
+
+
+def push_button(recipe: Recipe, ref: str, *, net_a: str, net_b: str,
+                at: Tuple[float, float]) -> Recipe:
+    """贴片按键 (PTS645, 两组各内部短接: 脚1 一端, 脚2 另一端)。"""
+    x, y = at
+    recipe.add(ref, "Button_Switch_SMD", "SW_SPST_PTS645Sx43SMTR92",
+               x, y, "SW")
+    recipe.connect(net_a, (ref, "1"))
+    recipe.connect(net_b, (ref, "2"))
     return recipe
