@@ -71,11 +71,65 @@
      `window.__DAO_CORE__=...`,重启即生效;改动小且可 git 追踪/回滚。
 - 属"进程级融合"终态,收益最大,须谨慎不劣化。
 
-## 3. 下一步(推进序)
-1. 活体枚举 `sys_MessageBus` 可达 RPC(路径甲):挑几个高价值主题实调坐实
-   (如 `/engine/capture/png`、`/model/export/pcb/step2`、`/PrjDB/*/getData`)。
-2. 判定 `innerSign` 完整性校验的强制性与作用点(决定路径乙可行性)。
-3. 建 `dao_core.py`:在 `dao_rpc_driver` 之下再沉一层"总线直取 + 命令直调"原语,
-   把"本体一切工具"收敛为可编程调用,替代盲探试错。
+## 2.5 两法活体对比坐实(本轮完成 · 两条都实现)
+
+> 用户裁定「两条都实现,对比坐实」。二者均已在运行态桌面客户端上**活体验证通过**。
+
+### 决定性运行时事实(先修正一处认知)
+- 编辑器**不在顶层 window**,而跑在**同源 iframe** `https://client/editor?entry=pcb`。
+  故 `_EXTAPI_ROOT_` 由 iframe 内 api.js 挂到 `window.top`,而 pcb.js 的模块级
+  单例(`je`/`A`)只活在**该 iframe 的模块闭包**里。任何注入/抓取都须**先定位这个
+  iframe**(遍历 `window.frames` 匹配 `entry=pcb`),这是之前"顶层查不到"的根因。
+- `je`(class `nde`)= **编辑事务 / 撤销管理器**:`executeCommand(命令对象)` /
+  `undo` / `redo` / `singleUndo` / `clear` / `getCommandType` / `stack`——
+  **所有编辑落库与撤销栈的真实入口**。`executeCommand(t)` 收**命令对象**
+  (`t instanceof` 基类 `xe`),非字符串 id;`getCommandType` 按实例判
+  `Dimension/Pad/PolygonPad/PcbCircle…`。
+- `A`(=`ie`,即 `pub`)= 发布总线,持 `extensionApiMessageBus2`(facade 背后同一总线)。
+
+### 技法乙 · 源码钩子(`dao_core_hook.py`)—— 已坐实 ✅
+- 锚点唯一:pcb.js 内 `var A=ie,je=new nde,`(全库仅 1 处)。在该 var 链原地追加
+  `daoCoreHook=(window.__DAO_CORE__={je:je,pub:A}),`——留在同一合法声明,改动 1 处。
+- 先自动备份 `pcb.js.dao.bak`,`patch/unpatch/status` 三态,**可逆**。
+- 重启客户端 + 清 HTTP 缓存后:`window.frames[1].__DAO_CORE__.je.executeCommand`
+  = `function`,`je.constructor.name === "nde"`。**内部命令/事务管理器直调达成**。
+- 代价:改本体安装文件(不入 git)、需重启;收益:持久、稳定、零运行时开销。
+
+### 技法甲 · CDP 闭包作用域抓取(`dao_core_scopegrab.py`)—— 已坐实 ✅
+- 非破坏:`Runtime.getProperties` 读任一 pcb.js 模块函数的 `internalProperties.[[Scopes]]`,
+  遍历 Closure 作用域对象再 `getProperties`。
+- **实测一次抓到 6702 个模块级闭包绑定**(Closure scope),外加 1205 个 Global——
+  等于把整个 L2 模块内部 realm 一览无余,**远超 facade 的 752 法**。
+- 需要哪个内部对象,`Runtime.callFunctionOn` 挂到 window 即可编程直调。
+- 代价:纯运行时、会话级(重启即失)、需一个模块函数作锚(hook 在时以其为锚;
+  无 hook 会话可由 Debugger 在 pcb.js 函数内暂停后取 call frame 作锚);收益:零改盘。
+
+### 对比结论
+| 维度 | 技法乙 源码钩子 | 技法甲 闭包抓取 |
+|---|---|---|
+| 是否改本体 | 是(1 处·可逆·不入 git) | 否(纯运行时) |
+| 持久性 | 持久(随安装) | 会话级(重启失效) |
+| 需重启 | 是 | 否 |
+| 暴露面 | 主动挑选(je/pub) | 全量 6702 模块级绑定 |
+| 稳定性 | 高(启动即在) | 中(依赖锚函数可达) |
+| 契合"无为" | 次之(动了本体) | 最佳(不碰本体) |
+- **取用策略**:常驻能力走**乙**(启动即有 `__DAO_CORE__`,dao_core 直接用);
+  临时深挖/取 facade 外任意内部对象走**甲**(闭包全量枚举,即取即用不留痕)。
+  `dao_core.py` 已把两者统一:探测到 hook 用乙,缺失则回退甲。
+
+## 3. dao_core.py 原语层(已建)
+- `DaoCore(port).status()`:定位 PCB iframe + 探测 hook。
+- `.ensure_core()`:hook 在→用乙;缺→回退甲抓取注入。
+- `.core_eval(body)`:在编辑器 iframe 语境执行,自动绑定 `DAO/je/pub`。
+- `.je_info()/.undo()/.redo()/.stack_depth()`:事务管理器原语直调。
+- `.publish(topic,args)`:内部发布总线直发。
+- 定位:坐落 `dao_rpc_driver` 之下的"本体直通"层,替代盲探 `_EXTAPI_ROOT_` 试错。
+
+## 4. 下一步(推进序)
+1. 用 `dao_core` 落一个**facade 外**的活体动作作硬证(如经 `je` 事务做一次可逆编辑
+   + `undo` 复原,证"用户能做的我更快"、且不劣化)。
+2. 定位私有总线频道(路径甲总线侧):把 1140 RPC 主题按 `createPrivateMessageBus`
+   频道归位,开放 3D/导出/DB worker 直调。
+3. 将 `dao_rpc_driver` 的高频写侧原语改挂 `dao_core`(内部事务直调),消解异步态四铁律。
 
 *道法自然 · 无为而无不为:得其母以知其子,复守其母。*
