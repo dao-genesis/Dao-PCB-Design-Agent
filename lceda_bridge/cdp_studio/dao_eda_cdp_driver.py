@@ -90,25 +90,44 @@ class CDPSession:
         h += mask
         self.s.sendall(bytes(h) + bytes(b ^ mask[i % 4] for i, b in enumerate(p)))
 
+    def _recv_exact(self, n):
+        """读满 n 字节再返回(TCP recv(n) 可能短读——不满则续读);连接关闭返回 None。
+
+        道:旧版直接 struct.unpack(">H", self.s.recv(2)) 默认 recv 恰好回 n 字节,
+        但 TCP 可只回 1 字节 → unpack "requires a buffer of 2 bytes" 崩溃(本会话
+        NE555 板实证)。补一个读满循环,桌面/web 两通道帧读取一并变稳。"""
+        out = b""
+        while len(out) < n:
+            try:
+                c = self.s.recv(n - len(out))
+            except Exception:
+                return None
+            if not c:
+                return None
+            out += c
+        return out
+
     def _recv(self):
-        try:
-            b1 = self.s.recv(1)
-        except Exception:
-            return None
+        b1 = self._recv_exact(1)
         if not b1:
             return None
-        b2 = self.s.recv(1)[0]
-        ln = b2 & 0x7F
+        b2 = self._recv_exact(1)
+        if not b2:
+            return None
+        ln = b2[0] & 0x7F
         if ln == 126:
-            ln = struct.unpack(">H", self.s.recv(2))[0]
+            ext = self._recv_exact(2)
+            if not ext:
+                return None
+            ln = struct.unpack(">H", ext)[0]
         elif ln == 127:
-            ln = struct.unpack(">Q", self.s.recv(8))[0]
-        out = b""
-        while len(out) < ln:
-            c = self.s.recv(ln - len(out))
-            if not c:
-                break
-            out += c
+            ext = self._recv_exact(8)
+            if not ext:
+                return None
+            ln = struct.unpack(">Q", ext)[0]
+        out = self._recv_exact(ln) if ln else b""
+        if out is None:
+            return None
         try:
             return json.loads(out.decode("utf-8", "replace"))
         except Exception:
