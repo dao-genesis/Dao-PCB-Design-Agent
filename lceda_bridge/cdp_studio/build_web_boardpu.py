@@ -4,7 +4,7 @@
 道:桌面端有 examples/specs.py + run.py 的 13 板谱(经 dao_rpc_driver 建板);web 在线端
 此前只有单板大合龙。本谱是其 web 对偶——用 dao_board.BoardSpec/BoardBuilder(纯 CDP,
 零 GUI)在**递进复杂度**的一组电路单上,一键跑 scaffold→放件→布线→同步→程序化板框→
-原生自动布线→敷铜→DRC→export_all(13 格式),逐板断言 **DRC=0 且 13 格式全真字节**。
+原生自动布线→敷铜→DRC→export_all(14 格式),逐板断言 **DRC=0 且 14 格式全真字节**。
 
 覆盖谱(由简入繁,验证拓扑多样性而非器件型号):
   - s1_rc      RC 分压 + 去耦          3 件 / 3 网 / 双层
@@ -12,7 +12,7 @@
   - ic_ne555   NE555 无稳态闪烁器        7 件 / 6 网 / 双层 + IC(SOIC)
 
 用法:DAO_CDP_PORT=29229 python3 build_web_boardpu.py [spec_key|all]
-     期望每板 [BOARD ...] DRC=0 exports=13  →  末尾 [RESULT] PASS
+     期望每板 [BOARD ...] DRC=0 exports=14  →  末尾 [RESULT] PASS
 """
 import json
 import os
@@ -26,7 +26,7 @@ R = "0603WAF1002T5E"   # 10k 0603(2 焊盘,search_device 命中)
 C = "CC0603KRX7R9BB104"  # 100nF 0603(2 焊盘)
 
 EXPECT_FMT = {"gerber", "bom", "pnp", "pdf", "dxf", "3d_step", "ipc_d356a",
-              "odb", "ibom", "altium", "testpoint", "netlist", "pads"}
+              "odb", "ibom", "altium", "testpoint", "netlist", "pads", "flyprobe"}
 
 
 def spec_s1_rc():
@@ -123,7 +123,7 @@ def main():
         time.sleep(2)
     allok = all(v["ok"] for v in results.values())
     print("[SUMMARY]", json.dumps(results, ensure_ascii=False))
-    print("[ASSERT] 每板 DRC=0 且 13 格式制造/交换文件全真字节")
+    print("[ASSERT] 每板 DRC=0 且 14 格式制造/交换文件全真字节")
     print("[RESULT]", "PASS" if allok else "FAIL")
     return 0 if allok else 1
 

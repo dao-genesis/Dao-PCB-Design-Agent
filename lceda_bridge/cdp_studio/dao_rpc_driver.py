@@ -1165,6 +1165,7 @@ return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return 
         ("testpoint", "getTestPointFile", ""),
         ("netlist", "getNetlistFile", ""),
         ("pads", "getPadsFile", ""),
+        ("flyprobe", "getFlyingProbeTestFile", ""),
         ("autoroute_json", "getAutoRouteJsonFile", ""),
     )
 

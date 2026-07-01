@@ -1198,6 +1198,7 @@ class Flow:
         ("testpoint", "getTestPointFile", ""),
         ("netlist", "getNetlistFile", ""),
         ("pads", "getPadsFile", ""),
+        ("flyprobe", "getFlyingProbeTestFile", ""),
     )
 
     def export_all(self, out_dir, base="Dao", suite=None):
