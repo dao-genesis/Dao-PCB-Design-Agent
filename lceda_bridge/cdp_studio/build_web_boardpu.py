@@ -188,6 +188,27 @@ def spec_af1_autofan():
                      auto_fanout=af, fanout_query=R, fanout_offset=420, fanout_depth_step=180)
 
 
+def spec_v4_4layer():
+    """四层板真能力**正向验证**(与 b1_bga 的定界互补):复用 af1_autofan 的可布拓扑
+    (LQFP48 十六信号脚 auto_fanout + 8 电源脚 + 4 去耦),但置 **copper_layers=4**。
+    可布板 + 多层应稳得 DRC=0——证 `copper_layers` 新能力端到端成立(非仅在前沿失败板上被调起)。
+    断言 DRC=0 + 14 格式。入默认 all。"""
+    VCC_PADS = (6, 18, 30, 42)
+    GND_PADS = (12, 24, 36, 48)
+    SIG_PADS = [2, 4, 8, 10, 14, 16, 20, 22, 26, 28, 32, 34, 38, 40, 44, 46]
+    parts = [("U1", "LQFP48", (0, 0))]
+    nets = {"VCC": [("U1", str(p)) for p in VCC_PADS],
+            "GND": [("U1", str(p)) for p in GND_PADS]}
+    for i in range(1, 5):
+        parts.append(("C%d" % i, C, (600 + (i - 1) * 300, 1400)))
+        nets["VCC"].append(("C%d" % i, "1"))
+        nets["GND"].append(("C%d" % i, "2"))
+    af = {"U1": {pad: "S%d" % k for k, pad in enumerate(SIG_PADS)}}
+    return BoardSpec(name="DaoWeb_V4_4Layer", parts=parts, nets=nets, ground_pour=True,
+                     auto_fanout=af, fanout_query=R, fanout_offset=420, fanout_depth_step=180,
+                     copper_layers=4)
+
+
 def spec_b1_bga():
     """【前沿·非默认谱】栅格球阵周边逃逸(桌面 build_bga 的 web 对偶):BGA64(实测 8×8·
     A1..H8)外圈 28 球各串一阻向外扇出,内 36 球留 NC。全由 auto_fanout 同一原语驱动——
@@ -219,7 +240,7 @@ def spec_b1_bga():
 
 SPECS = {"s1_rc": spec_s1_rc, "m1_rcnet": spec_m1_rcnet, "ic_ne555": spec_ic_ne555,
          "h1_diff": spec_h1_diff, "q1_qfp": spec_q1_qfp, "af1_autofan": spec_af1_autofan,
-         "b1_bga": spec_b1_bga}
+         "v4_4layer": spec_v4_4layer, "b1_bga": spec_b1_bga}
 
 # 前沿谱:达可达前沿但未 DRC=0(诚实定界),不入默认 all(须单独 key 调起复现)。
 FRONTIER = {"b1_bga"}
