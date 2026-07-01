@@ -126,6 +126,23 @@ class BoardBuilder:
                 pass
         return out
 
+    @staticmethod
+    def _search_retry(f, query, tries=4):
+        """检索器件,容忍瞬时 NO_RESULT/异常并重试。
+
+        道:createProject 后库索引偶尔尚未就绪,lib_Device.search 瞬时返回 NO_RESULT
+        (eda_api 抛错)或空——直接放弃会误判"无此器件"而中断整板(本会话统一门面 selftest
+        实证:同一 '0603 10k' 直连命中 10 项,建板途中却瞬时 NO_RESULT)。重试几次即稳。"""
+        for _ in range(tries):
+            try:
+                hits = f.search_device(query)
+                if hits:
+                    return hits
+            except Exception:
+                pass
+            time.sleep(2)
+        return []
+
     def place(self, spec):
         f = eda_flow.Flow()
         f.open_document(self.state["sch_page"])
@@ -134,7 +151,7 @@ class BoardBuilder:
         before = self._valid_ids(f)
         hint = spec.pin_count_hint()
         for ref, query, (gx, gy) in spec.parts:
-            hits = f.search_device(query) or []
+            hits = self._search_retry(f, query)
             if not hits:
                 warns.append("no hit: %s (%s)" % (ref, query)); continue
             placed = None
