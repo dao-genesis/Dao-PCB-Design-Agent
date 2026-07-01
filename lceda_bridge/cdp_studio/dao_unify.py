@@ -161,6 +161,57 @@ class Orchestrator:
         out["elapsed_s"] = round(time.time() - t0, 1)
         return out
 
+    def _channel_order(self, order=None):
+        """归一化建板尝试顺序:显式 order > prefer > 默认 web→desktop,仅保活通道。"""
+        if order:
+            seq = list(order)
+        else:
+            seq = ([self.prefer] if self.prefer in ("web", "desktop") else []) + ["web", "desktop"]
+        seen, out = set(), []
+        for ch in seq:
+            if ch in ("web", "desktop") and ch not in seen and self.channels.get(ch):
+                seen.add(ch); out.append(ch)
+        return out
+
+    def build_resilient(self, uspec, order=None, require_clean=True, **kw):
+        """**主通道失败自动回落备通道**(方向#3 调度哲学:大制无割、无死地)。
+
+        依次在活通道上建板:任一通道 (a) 抛异常 或 (b) require_clean 下 DRC≠0/缺格式,
+        即判该通道**未达标**并自动切下一条;首个达标通道即采信。全程记录逐通道审计。
+
+        返回 {ok, chosen, attempts:[{channel,ok,drc_total,exports,missing,elapsed_s,err}...],
+              result, why}。ok=是否有任一通道达标。"""
+        seq = self._channel_order(order)
+        audit = {"order": seq, "attempts": []}
+        if not seq:
+            audit.update(ok=False, chosen=None, result=None,
+                         why="无活通道(detect=%s)" % self.channels)
+            return audit
+        for ch in seq:
+            rec = {"channel": ch}
+            try:
+                r = self.build(uspec, channel=ch, **kw)
+                good = {k for k, v in r["exports"].items()
+                        if isinstance(v, (int, float)) and v > 0}
+                missing = sorted(COMMON_FMT - good)
+                clean = (r["drc_total"] == 0) and not missing
+                rec.update(ok=(clean if require_clean else True),
+                           drc_total=r["drc_total"], exports=len(good),
+                           missing=missing, elapsed_s=r["elapsed_s"])
+                audit["attempts"].append(rec)
+                if rec["ok"]:
+                    audit.update(ok=True, chosen=ch, result=r,
+                                 why="通道 %s 达标(DRC=%s exports=%d)"
+                                     % (ch, r["drc_total"], len(good)))
+                    return audit
+            except Exception as ex:
+                rec.update(ok=False, err=str(ex)[:180])
+                audit["attempts"].append(rec)
+        audit.update(ok=False, chosen=None, result=None,
+                     why="所有活通道均未达标: %s"
+                         % [a["channel"] for a in audit["attempts"]])
+        return audit
+
 
 _DEMO = UnifiedSpec(
     name="DaoUnify_Demo",
@@ -210,7 +261,14 @@ def main():
         return 0
     if cmd == "selftest":
         return _selftest()
-    print("用法: python3 dao_unify.py [detect|selftest]")
+    if cmd == "resilient":
+        # 主通道失败自动回落演示:同一 spec,按 order(默认 web→desktop)择首个达标通道
+        order = sys.argv[2].split(",") if len(sys.argv) > 2 else None
+        audit = Orchestrator().build_resilient(_DEMO, order=order)
+        print("[RESILIENT]", json.dumps(audit, ensure_ascii=False))
+        print("[RESULT]", "PASS" if audit.get("ok") else "FAIL")
+        return 0 if audit.get("ok") else 1
+    print("用法: python3 dao_unify.py [detect|selftest|resilient [web,desktop]]")
     return 2
 
 

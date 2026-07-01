@@ -76,7 +76,99 @@ def spec_ic_ne555():
     )
 
 
-SPECS = {"s1_rc": spec_s1_rc, "m1_rcnet": spec_m1_rcnet, "ic_ne555": spec_ic_ne555}
+def spec_h1_diff():
+    """差分高速板(桌面 build_hs 的 web 对偶):双差分对 USB(P/N)+ETH(P/N)。
+
+    每条差分网挂 2 个串阻(pin1=信号网、pin2=唯一端接点)保证可布;配对两网的串阻
+    **相邻并排放置**→ P/N 真实并走跨段(本会话 qdiff 结论:差分对须有可并走的真实
+    跨段,退化短桩会触发 Differential Pair Error)。diff_pairs 落库喂原生布线差分规则,
+    net_widths 给 HS 网 8mil 类宽。加 4 颗 VCC/GND 去耦。断言 DRC=0 + 14 格式。"""
+    parts, nets = [], {"VCC": [], "GND": []}
+    pairs = [("USB", "USB_P", "USB_N"), ("ETH", "ETH_P", "ETH_N")]
+    widths = {}
+    for pi, (pname, npos, nneg) in enumerate(pairs):
+        for si, s in enumerate((npos, nneg)):
+            # 配对两网串阻左右紧贴(x 相差 80mil,留够 0603 courtyard),各自两串阻上下排
+            # (y 相差 500)→ P/N 两条竖向跨段近距并走,给原生布线器可"收颈到 10mil"的耦合走廊
+            # (本会话实证:间距 260mil 时原生布线器随机收敛,USB 对残留 >10mil 触发 Diff Pair Error;
+            #  贴近放置后两对稳定收颈达标)。
+            bx = 300 + pi * 900 + si * 80
+            for t in (1, 2):
+                ref = "R_%s_%d" % (s, t)
+                parts.append((ref, R, (bx, 250 + (t - 1) * 500)))
+                if t == 1:
+                    nets[s] = [(ref, "1")]
+                    nets["%s_T1" % s] = [(ref, "2"), ("R_%s_2" % s, "1")]
+                else:
+                    nets[s].append((ref, "1"))  # pin1 挂信号网(与 T1 pin1 同网 → 并走)
+                    nets["%s_T2" % s] = [(ref, "2")]
+            widths[s] = 8
+    for i in range(1, 5):
+        cx = 300 + ((i - 1) % 2) * 500
+        cy = 1500 + ((i - 1) // 2) * 400
+        parts.append(("C%d" % i, C, (cx, cy)))
+        nets["VCC"].append(("C%d" % i, "1"))
+        nets["GND"].append(("C%d" % i, "2"))
+    return BoardSpec(name="DaoWeb_H1_Diff", parts=parts, nets=nets,
+                     ground_pour=True, net_widths=widths,
+                     diff_pairs=[("USB", "USB_P", "USB_N"), ("ETH", "ETH_P", "ETH_N")])
+
+
+def spec_q1_qfp():
+    """高脚数周边扇出(桌面 build_qfp 的 web 对偶):LQFP48 四边逃逸。
+
+    U1(LQFP48)居中:8 电源脚(4×VCC/4×GND 周边均布)配 4 去耦电容;16 信号脚四边
+    均布各串一阻扇出。串阻按所属焊盘那一边朝外排(上/右/下/左 同侧逃逸、互不抢道)——
+    「几何先对,布线器才好收敛」。断言 DRC=0 + 14 格式。"""
+    VCC_PADS = {6, 18, 30, 42}
+    GND_PADS = {12, 24, 36, 48}
+    SIG_PADS = [2, 4, 8, 10, 14, 16, 20, 22, 26, 28, 32, 34, 38, 40, 44, 46]
+    parts = [("U1", "LQFP48", (0, 0))]
+    pins_map = {}  # pad -> net
+    for p in VCC_PADS:
+        pins_map[p] = "VCC"
+    for p in GND_PADS:
+        pins_map[p] = "GND"
+    side_pos = {"L": [], "B": [], "R": [], "T": []}
+    for pad in SIG_PADS:
+        side = ("L" if pad <= 12 else "B" if pad <= 24 else "R" if pad <= 36 else "T")
+        side_pos[side].append(pad)
+    LANE, BASE = 320, 700
+    nets = {"VCC": [], "GND": []}
+    sig_i = 0
+    for side, pads in side_pos.items():
+        for j, pad in enumerate(pads):
+            net = "S%d" % sig_i
+            pins_map[pad] = net
+            off = int((j - (len(pads) - 1) / 2.0) * LANE)
+            depth = BASE + j * 180
+            if side == "L":
+                x, y = -depth, off
+            elif side == "R":
+                x, y = depth, off
+            elif side == "B":
+                x, y = off, -depth
+            else:
+                x, y = off, depth
+            ref = "R%d" % sig_i
+            parts.append((ref, R, (x, y)))
+            nets[net] = [("U1", str(pad)), (ref, "1")]
+            nets["%s_T" % net] = [(ref, "2")]
+            sig_i += 1
+    # U1 电源脚并进 VCC/GND;配 4 去耦电容
+    for pad in sorted(VCC_PADS):
+        nets["VCC"].append(("U1", str(pad)))
+    for pad in sorted(GND_PADS):
+        nets["GND"].append(("U1", str(pad)))
+    for i in range(1, 5):
+        parts.append(("C%d" % i, C, (600 + (i - 1) * 300, 1400)))
+        nets["VCC"].append(("C%d" % i, "1"))
+        nets["GND"].append(("C%d" % i, "2"))
+    return BoardSpec(name="DaoWeb_Q1_QFP48", parts=parts, nets=nets, ground_pour=True)
+
+
+SPECS = {"s1_rc": spec_s1_rc, "m1_rcnet": spec_m1_rcnet, "ic_ne555": spec_ic_ne555,
+         "h1_diff": spec_h1_diff, "q1_qfp": spec_q1_qfp}
 
 
 def _drc_total(drc):
