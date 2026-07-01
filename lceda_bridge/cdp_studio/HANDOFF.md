@@ -37,7 +37,8 @@
 
 ### DRC / 导出
 - `drc_check(verbose)` / `drc_violations()` / `drc_summary()` — **API 直读**结构化违规树(更正旧论"明细唯 GUI 面板可得";v3.2.148 `pcb_Drc.check(strict,ui,includeVerboseError=true)` 直接返回)。(#27)
-- `export_gerber/export_bom/export_pick_and_place/export_pdf/export_dsn` / `export_all(out_dir)` — 真字节落地(走通用 blob 通道)。
+- `export_gerber/export_bom/export_pick_and_place/export_pdf/export_dsn` 及扩展格式 `export_3d/export_dxf/export_ipc_d356a/export_odb/export_ibom/export_altium/export_test_point/export_netlist` — 真字节落地(走通用 blob 通道)。
+- `export_all(out_dir)` 已全谱化(与桌面 `dao_rpc_driver.export_all` 对齐):web 登录态活体实测 **12 格式**真字节 gerber/bom/pnp/pdf/dxf/3d_step/ipc_d356a/odb/ibom(≈5.4MB)/altium/testpoint/netlist,逐格式如实记录 size/err、单格式失败不阻断其余。诚实定界:`getIpc2581CFile`→NO_RESULT、`getAutoRouteJsonFile`→NOT_BLOB(JSON 对象非 File,走 `pcb_import_autoroute_json`)。
 - `export_dsn` 须从**未布线**板导出(Freerouting 输入);SES 回灌见 `import_ses`。
 
 ## 2. 活体验证脚本(全部 RESULT PASS)
@@ -55,6 +56,7 @@
 | `build_pour_det.py` | GND 覆铜 DRC 3→0、实铜算出 |
 | `build_capstone.py` / `build_capstone_full.py` | 端到端 / **全能力大合龙** |
 | `build_export_det.py` | **桌面纯 RPC 全谱导出**:DRC=0 板一次导齐 13 制造/交换格式真字节 |
+| `build_web_export_det.py` | **web 在线端全谱导出**:DRC=0 板一次导齐 12 制造/交换格式真字节(与桌面对偶,双通道对齐) |
 
 `build_capstone_full.py` 实测:nets [GND,NET_A,NET_B];信号 2 层各长 6000;poured=1;**DRC total=0**;export gerber=8496/bom=6739/pnp=6961 真字节。
 
