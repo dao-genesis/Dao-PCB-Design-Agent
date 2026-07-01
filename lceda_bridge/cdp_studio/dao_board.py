@@ -44,7 +44,8 @@ class BoardSpec:
     nets:  {网络名: [(designator, pinNumber), ...], ...}
     """
 
-    def __init__(self, name, parts, nets, introduction="", ground_pour=False, net_widths=None, diff_pairs=None):
+    def __init__(self, name, parts, nets, introduction="", ground_pour=False, net_widths=None, diff_pairs=None,
+                 auto_fanout=None, fanout_query="0603WAF1002T5E", fanout_offset=420, fanout_depth_step=180):
         self.name = name
         self.parts = parts
         self.nets = nets
@@ -52,6 +53,12 @@ class BoardSpec:
         self.ground_pour = ground_pour  # True 则布线后自动双面铺 GND 地平面
         self.net_widths = net_widths or {}  # {网络名: 线宽mil} 布线后逐条加粗目标网
         self.diff_pairs = diff_pairs or []  # [(name, pos_net, neg_net), ...] 差分对约束(落库,见 create_diff_pair)
+        # {ic_ref: {pad: net}} — 读器件**真实焊盘几何**后就近向外落一颗串阻(pad→R.1, R.2→net_T),
+        # 免手填每颗扇出电阻坐标(桌面 auto_fanout 原语的 web 对偶)。
+        self.auto_fanout = auto_fanout or {}
+        self.fanout_query = fanout_query
+        self.fanout_offset = fanout_offset      # 焊盘沿逃逸方向向外的基础距离(栅格单位)
+        self.fanout_depth_step = fanout_depth_step  # 同边多脚逐脚加深,错开避免抢道
 
     def pin_count_hint(self):
         """每个器件在 nets 里被引用到的最大引脚号(用于放件后粗校验引脚数是否够)。"""
@@ -175,6 +182,55 @@ class BoardBuilder:
                 warns.append("PIN MISMATCH %s: got %d pins, net needs >=%d (换料号?)"
                              % (ref, npins, hint[ref]))
             ids[ref] = placed
+        # ---- auto_fanout:读 IC 真实焊盘几何,就近向外落串阻(pad→R.1, R.2→net_T) ----
+        af_made = 0
+        for ic_ref, padmap in (getattr(spec, "auto_fanout", {}) or {}).items():
+            cid = ids.get(ic_ref)
+            if not cid:
+                warns.append("auto_fanout: 未放置 IC %s" % ic_ref); continue
+            c = f.eda.call("sch_PrimitiveComponent.get", cid)
+            cx, cy = c["x"], c["y"]
+            pinmap = {str(p["pinNumber"]): p for p in (f.component_pins(cid) or [])}
+            hits = self._search_retry(f, spec.fanout_query)
+            if not hits:
+                warns.append("auto_fanout: 扇出料 %s 无命中" % spec.fanout_query); continue
+            side_seq = {}  # 每边已用脚数 → 逐脚加深错开
+            for pad, net in padmap.items():
+                p = pinmap.get(str(pad))
+                if not p:
+                    warns.append("auto_fanout: %s 无焊盘 %s" % (ic_ref, pad)); continue
+                dx, dy = p["x"] - cx, p["y"] - cy
+                horiz = abs(dx) >= abs(dy)          # True=左右边(向 x 逃),False=上下边(向 y 逃)
+                sk = ("H+" if dx >= 0 else "H-") if horiz else ("V+" if dy >= 0 else "V-")
+                depth = spec.fanout_offset + side_seq.get(sk, 0) * spec.fanout_depth_step
+                side_seq[sk] = side_seq.get(sk, 0) + 1
+                if horiz:
+                    rx, ry = p["x"] + (depth if dx >= 0 else -depth), p["y"]
+                else:
+                    rx, ry = p["x"], p["y"] + (depth if dy >= 0 else -depth)
+                placed = None
+                for _ in range(3):
+                    f.place_device(hits[0], 640, 360)
+                    after = self._valid_ids(f)
+                    new = list(after - before)
+                    if new:
+                        placed = new[0]; before = after; break
+                    time.sleep(1)
+                if not placed:
+                    warns.append("auto_fanout: 落阻失败 %s.%s" % (ic_ref, pad)); continue
+                rref = "Rf_%s" % net
+                try:
+                    f.eda.call("sch_PrimitiveComponent.modify", placed,
+                               {"x": rx, "y": ry, "designator": rref}, timeout=15)
+                except Exception as e:
+                    warns.append("auto_fanout modify %s: %s" % (rref, str(e)[:40]))
+                ids[rref] = placed
+                spec.nets.setdefault(net, []).append((ic_ref, str(pad)))
+                spec.nets[net].append((rref, "1"))
+                spec.nets["%s_T" % net] = [(rref, "2")]
+                af_made += 1
+        if af_made:
+            warns.append("auto_fanout: 落 %d 颗扇出阻" % af_made)
         f.save_schematic()
         self.state["ids"] = ids
         self._save_state()

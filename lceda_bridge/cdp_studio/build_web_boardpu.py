@@ -167,8 +167,29 @@ def spec_q1_qfp():
     return BoardSpec(name="DaoWeb_Q1_QFP48", parts=parts, nets=nets, ground_pour=True)
 
 
+def spec_af1_autofan():
+    """几何驱动通用扇出(桌面 build_autofan 的 web 对偶):LQFP48 十六信号脚**不手填**串阻
+    坐标,改声明 auto_fanout={脚:网},由 BoardBuilder 读真实焊盘几何自动就近向外落阻。
+
+    对照 q1_qfp(手调四边坐标)应同得 DRC=0——印证「扇出」已成 web 端可复用本源原语,
+    自动化无损于手工几何。电源脚仍手填进 VCC/GND + 4 去耦。断言 DRC=0 + 14 格式。"""
+    VCC_PADS = (6, 18, 30, 42)
+    GND_PADS = (12, 24, 36, 48)
+    SIG_PADS = [2, 4, 8, 10, 14, 16, 20, 22, 26, 28, 32, 34, 38, 40, 44, 46]
+    parts = [("U1", "LQFP48", (0, 0))]
+    nets = {"VCC": [("U1", str(p)) for p in VCC_PADS],
+            "GND": [("U1", str(p)) for p in GND_PADS]}
+    for i in range(1, 5):
+        parts.append(("C%d" % i, C, (600 + (i - 1) * 300, 1400)))
+        nets["VCC"].append(("C%d" % i, "1"))
+        nets["GND"].append(("C%d" % i, "2"))
+    af = {"U1": {pad: "S%d" % k for k, pad in enumerate(SIG_PADS)}}
+    return BoardSpec(name="DaoWeb_AF1_AutoFan", parts=parts, nets=nets, ground_pour=True,
+                     auto_fanout=af, fanout_query=R, fanout_offset=420, fanout_depth_step=180)
+
+
 SPECS = {"s1_rc": spec_s1_rc, "m1_rcnet": spec_m1_rcnet, "ic_ne555": spec_ic_ne555,
-         "h1_diff": spec_h1_diff, "q1_qfp": spec_q1_qfp}
+         "h1_diff": spec_h1_diff, "q1_qfp": spec_q1_qfp, "af1_autofan": spec_af1_autofan}
 
 
 def _drc_total(drc):
