@@ -721,7 +721,7 @@ class Flow:
         return ids
 
     # --- 原生自动布线(GUI:Route → Auto Routing → Run) ---
-    def autoroute_gui(self, wait=12):
+    def autoroute_gui(self, wait=12, settle=8, max_extra=150):
         """用编辑器**原生自动布线**把飞线全部变实铜(2层:顶红/底蓝 + 过孔)。
 
         实战发现(本会话攻克的边界,已硬验证):
@@ -757,8 +757,24 @@ class Flow:
             self.ws.cmd("Input.dispatchMouseEvent",
                         {"type": ev, "x": o["x"], "y": o["y"], "button": "left",
                          "clickCount": 0 if ev == "mouseMoved" else 1}, timeout=5)
+        # 先等初始 wait,再**轮询到布线稳定**(轨数连续 settle 秒不再增长即视为收敛),
+        # 密板(如 BGA 周边逃逸)原生布线器耗时随网数增长,固定 sleep 会在最后一条网前截断
+        # (本会话实证:28 网 BGA 定 wait=18 时角球 S27 未布通 → DRC Connection Error)。
         time.sleep(wait)
-        tracks = len(self.eda.call("pcb_PrimitiveLine.getAllPrimitiveId", timeout=15) or [])
+
+        def _ntracks():
+            return len(self.eda.call("pcb_PrimitiveLine.getAllPrimitiveId", timeout=15) or [])
+        tracks = _ntracks()
+        waited, stable = 0.0, 0.0
+        while waited < max_extra:
+            time.sleep(3); waited += 3
+            n = _ntracks()
+            if n > tracks:
+                tracks = n; stable = 0.0
+            else:
+                stable += 3
+                if stable >= settle:
+                    break
         vias = len(self.eda.call("pcb_PrimitiveVia.getAllPrimitiveId", timeout=15) or [])
         return {"tracks": tracks, "vias": vias}
 

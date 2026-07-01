@@ -188,8 +188,36 @@ def spec_af1_autofan():
                      auto_fanout=af, fanout_query=R, fanout_offset=420, fanout_depth_step=180)
 
 
+def spec_b1_bga():
+    """【前沿·非默认谱】栅格球阵周边逃逸(桌面 build_bga 的 web 对偶):BGA64(实测 8×8·
+    A1..H8)外圈 28 球各串一阻向外扇出,内 36 球留 NC。全由 auto_fanout 同一原语驱动——
+    读真实球坐标按边就近逃逸,零手填坐标(auto_fanout 原语本身已由 af1_autofan DRC=0 证成)。
+
+    **诚实边界(本会话三度硬实测·确定性结论)**:web dao_board 建的是**双层**板,原生自动
+    布线在 2 层上把 28 球逃逸到 27/28——角球 H8(S27)始终无法逃逸(DRC=1 Connection Error,
+    tracks 恒收敛于 226/vias 44,加大 settle 等待与扇出间距均不改变结果 → 几何/层数边界,非超时)。
+    桌面 DAO_BGA1 达 DRC=0 是因其用 **4 层铜**(copper_layers=4)+ freerouting 更强布线器。
+    故本谱定为前沿:auto_fanout 可达 27/28;补齐需给 web dao_board **多层板**能力(下一前沿)。
+    因未达 DRC=0,**不入默认 all 谱**(见 FRONTIER),仅可单独调起复现该边界。"""
+    rows = "ABCDEFGH"
+    af = {}
+    k = 0
+    for r in range(8):
+        for c in range(8):
+            if r in (0, 7) or c in (0, 7):        # 仅外圈 28 球
+                af["%s%d" % (rows[r], c + 1)] = "S%d" % k
+                k += 1
+    return BoardSpec(name="DaoWeb_B1_BGA64", parts=[("U1", "BGA64", (0, 0))], nets={},
+                     auto_fanout={"U1": af}, fanout_query=R,
+                     fanout_offset=680, fanout_depth_step=220)
+
+
 SPECS = {"s1_rc": spec_s1_rc, "m1_rcnet": spec_m1_rcnet, "ic_ne555": spec_ic_ne555,
-         "h1_diff": spec_h1_diff, "q1_qfp": spec_q1_qfp, "af1_autofan": spec_af1_autofan}
+         "h1_diff": spec_h1_diff, "q1_qfp": spec_q1_qfp, "af1_autofan": spec_af1_autofan,
+         "b1_bga": spec_b1_bga}
+
+# 前沿谱:达可达前沿但未 DRC=0(诚实定界),不入默认 all(须单独 key 调起复现)。
+FRONTIER = {"b1_bga"}
 
 
 def _drc_total(drc):
@@ -224,7 +252,7 @@ def run_one(key, margin=120):
 
 def main():
     arg = sys.argv[1] if len(sys.argv) > 1 else "all"
-    keys = list(SPECS) if arg == "all" else [arg]
+    keys = [k for k in SPECS if k not in FRONTIER] if arg == "all" else [arg]
     results = {}
     for k in keys:
         try:
