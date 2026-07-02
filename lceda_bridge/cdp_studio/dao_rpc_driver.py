@@ -189,6 +189,37 @@ class DaoRpc:
                     raise DaoRpcError("%s | %s" % (e, hint))
             raise
 
+    # ---------- 高频写侧·内部事务直调(改挂 dao_core) ----------
+    def _core(self):
+        """惰性接通 dao_core(L2 内部事务/总线直通);首次调用才连,失败如实抛。"""
+        c = getattr(self, "_dao_core", None)
+        if c is None:
+            import dao_core as _DC
+            c = _DC.DaoCore(port=self.port)
+            self._dao_core = c
+        return c
+
+    def batch_write_core(self, calls, settle_ms=0):
+        """把一批 facade 写**压进一次 CDP 往返**经 dao_core 落到 je 共享事务栈。
+
+        对比现有「每写一发 `_call`」(N 次 Python↔CDP 往返):本径 1 次往返即成,且
+        栈增量==写数(共栈落库,dao_core_writeproof 硬证 delta==N、快于逐发、可整体
+        je-undo 回退)。calls 形如
+          [{"ns":"pcb_PrimitiveVia","fn":"create","args":["",x,y,hole,dia]}, ...]
+        返回 dao_core.batch_write 的 {elapsed_ms,stack_before,stack_after,delta,results}。"""
+        return self._core().batch_write(calls, settle_ms=settle_ms)
+
+    def place_vias_core(self, vias):
+        """高频建 via 的内部事务批写径:vias=[(net,x,y,hole,dia),...] → 一次往返共栈落库。
+        与逐个 `self._call('pcb_PrimitiveVia.create',...)` 等效但省 N-1 次往返。"""
+        calls = [{"ns": "pcb_PrimitiveVia", "fn": "create",
+                  "args": [n, x, y, h, d]} for (n, x, y, h, d) in vias]
+        return self.batch_write_core(calls)
+
+    def undo_core(self, n=1):
+        """经 dao_core 内部事务管理器整体回退 n 步(高频写侧的「不劣化」闸)。"""
+        return self._core().undo_n(n)
+
     # ---------- 钥匙 1：工程 ----------
     def create_project(self, name):
         """renderer 内 REST 建工程（嘉立创桌面的规范本源入口），返回工程 uuid。"""

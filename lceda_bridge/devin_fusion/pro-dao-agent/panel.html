@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Devin · 嘉立创内</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1e1f22; color: #e6e6e6;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #bar { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+    background: #2b2d31; font-size: 13px; }
+  #bar b { font-weight: 600; }
+  #bar .sub { opacity: .6; font-size: 11px; }
+  #frame { position: absolute; top: 34px; left: 0; right: 0; bottom: 0; width: 100%;
+    height: calc(100% - 34px); border: 0; background: #fff; }
+  #err { position: absolute; top: 34px; left: 0; right: 0; padding: 16px; font-size: 13px;
+    line-height: 1.6; display: none; }
+  code { background: #2b2d31; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <div id="bar"><b>☯ Devin</b><span class="sub">Cloud · 归一网页 /shell</span></div>
+  <iframe id="frame" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+  <div id="err">
+    未连上 Devin 宿主（<code id="u"></code>）。请确保 dao-vsix 宿主在运行，或经
+    <code>window.__DAO_DEVIN_URL__</code> / <code>localStorage['dao.devin.url']</code> 指向可达的
+    DAO Bridge 隧道 <code>/shell</code> 地址。
+  </div>
+<script>
+  (function () {
+    function url() {
+      try { if (window.__DAO_DEVIN_URL__) return String(window.__DAO_DEVIN_URL__);
+        var ls = localStorage.getItem("dao.devin.url"); if (ls) return ls; } catch (e) {}
+      return "http://127.0.0.1:9920/shell";
+    }
+    var u = url(), f = document.getElementById("frame");
+    document.getElementById("u").textContent = u;
+    f.src = u;
+    // 简易可达性提示（iframe 载入失败不冒泡，故用超时兜底）
+    var ok = false;
+    f.addEventListener("load", function () { ok = true; });
+    setTimeout(function () { if (!ok) document.getElementById("err").style.display = "block"; }, 6000);
+  })();
+</script>
+</body>
+</html>
