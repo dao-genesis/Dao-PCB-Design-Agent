@@ -184,7 +184,7 @@ def evaluate(ws, expression, await_promise=False, timeout=20):
 # 命名空间是对象实例(方法挂原型上), 故支持两种寻址:
 #   "dmt_Project.getCurrentProjectInfo"  → R['dmt_Project'].getCurrentProjectInfo(...)  (推荐)
 #   "dmt_Project_getCurrentProjectInfo"  → 先按平铺 R[key] 试, 不行再按最后一个下划线拆 ns/method
-_CALL_TPL = """(async function(){
+_CALL_TPL = r"""(async function(){
   try{
     var R = window._EXTAPI_ROOT_;
     if(!R) return JSON.stringify({ok:false, err:'NO_EXTAPI_ROOT'});
@@ -195,7 +195,32 @@ _CALL_TPL = """(async function(){
     else { var i=key.lastIndexOf('_'); ns=key.slice(0,i); method=key.slice(i+1); ctx=R[ns]; fn=ctx?ctx[method]:null; }
     if(typeof fn!=='function') return JSON.stringify({ok:false, err:'NO_API '+key});
     var r = await fn.apply(ctx, %(args)s);
+    r = await __daoMaterialize(r);
     return JSON.stringify({ok:true, ret:(r===undefined?null:r)});
+    // File/Blob 等宿主对象 JSON 化即空壳; 就地物化为 {__file__,name,size,text|base64}
+    async function __daoMaterialize(v){
+      if (v == null) return v;
+      if ((typeof File!=='undefined' && v instanceof File) ||
+          (typeof Blob!=='undefined' && v instanceof Blob)) {
+        var name = v.name || null, size = v.size, type = v.type || '';
+        var textLike = /^(text\/|application\/(json|xml|x-ndjson))/.test(type) ||
+                       /\.(net|json|txt|csv|xml|rep|log|bom)$/i.test(name||'');
+        if (textLike || size <= 4*1024*1024) {
+          try {
+            if (textLike) return {__file__:true, name:name, size:size, type:type, text: await v.text()};
+            var buf = await v.arrayBuffer(); var b = new Uint8Array(buf), s='';
+            for (var i=0;i<b.length;i++) s += String.fromCharCode(b[i]);
+            return {__file__:true, name:name, size:size, type:type, base64: btoa(s)};
+          } catch(e) {}
+        }
+        return {__file__:true, name:name, size:size, type:type, unread:true};
+      }
+      if (Array.isArray(v)) {
+        for (var j=0;j<v.length;j++) v[j] = await __daoMaterialize(v[j]);
+        return v;
+      }
+      return v;
+    }
   }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e)}); }
 })()"""
 

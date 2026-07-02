@@ -23,7 +23,7 @@ window.DAO_VERBS_MANIFEST = {
         "fields": {
           "editor_version": [
             {
-              "call": "sys_Environment.getEditorVersion",
+              "call": "sys_Environment.getEditorCurrentVersion",
               "args": []
             }
           ],
@@ -79,11 +79,41 @@ window.DAO_VERBS_MANIFEST = {
       }
     },
     {
-      "name": "eda.project.list",
-      "description": "列出当前用户所有工程 (返回 uuid+name 数组). 注: 实际 API 名因版本可能不同, 内部尝试多个候选.",
+      "name": "eda.team.list",
+      "description": "列出所有团队/工程目录 (本地模式下即工程根目录, 其 uuid 可作 eda.project.list 的 team 参数).",
       "input_schema": {
         "type": "object",
         "properties": {},
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "silent",
+      "tags": [
+        "team",
+        "project"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "dmt_Team.getAllTeamsInfo",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.project.list",
+      "description": "列出工程 UUID 列表. 半离线/本地模式下需传 team (取自 eda.team.list 的 uuid), 不传则查当前默认域.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "team": {
+            "type": "string",
+            "description": "团队/工程目录 uuid (可选)"
+          }
+        },
         "additionalProperties": false
       },
       "side_effect": "read",
@@ -96,20 +126,69 @@ window.DAO_VERBS_MANIFEST = {
         "kind": "try_paths",
         "candidates": [
           {
-            "call": "dmt_Project.getProjectList",
-            "args": []
+            "call": "dmt_Project.getAllProjectsUuid",
+            "args": [
+              {
+                "$": "team",
+                "def": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.project.create",
+      "description": "新建工程. 返回新工程 uuid. 实测半离线模式下可能静默失败返 null — 此时应回退 GUI 新建向导.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "工程名称"
           },
-          {
-            "call": "dmt_Project.getProjects",
-            "args": []
+          "team": {
+            "type": "string",
+            "description": "团队/工程目录 uuid (可选)"
           },
+          "description": {
+            "type": "string",
+            "description": "工程简介 (可选)"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "write",
+      "visibility": "toast",
+      "tags": [
+        "project"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
           {
-            "call": "dmt_Project.listProjects",
-            "args": []
-          },
-          {
-            "call": "dmt_Project.getAllProjects",
-            "args": []
+            "call": "dmt_Project.createProject",
+            "args": [
+              {
+                "$": "name"
+              },
+              {
+                "$": "name"
+              },
+              {
+                "$": "team",
+                "def": null
+              },
+              null,
+              {
+                "$": "description",
+                "def": ""
+              }
+            ]
           }
         ]
       }
@@ -146,17 +225,37 @@ window.DAO_VERBS_MANIFEST = {
                 "$": "uuid"
               }
             ]
-          },
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.document.open",
+      "description": "按 UUID 在编辑器中打开文档 (原理图页/PCB/面板). uuid 取自 eda.document.list.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "description": "文档 UUID (如原理图页 uuid)"
+          }
+        },
+        "required": [
+          "uuid"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "interactive",
+      "visibility": "toast",
+      "tags": [
+        "document"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
           {
-            "call": "dmt_Project.openProjectById",
-            "args": [
-              {
-                "$": "uuid"
-              }
-            ]
-          },
-          {
-            "call": "dmt_Project.open",
+            "call": "dmt_EditorControl.openDocument",
             "args": [
               {
                 "$": "uuid"
@@ -168,7 +267,7 @@ window.DAO_VERBS_MANIFEST = {
     },
     {
       "name": "eda.document.list",
-      "description": "列出当前工程内所有文档 (原理图页 / PCB / 符号 / 封装).",
+      "description": "列出当前工程内所有文档 (原理图 / PCB / 板子), 分字段聚合.",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -181,30 +280,32 @@ window.DAO_VERBS_MANIFEST = {
       ],
       "backend_only": false,
       "recipe": {
-        "kind": "try_paths",
-        "candidates": [
-          {
-            "call": "dmt_Document.getDocumentList",
-            "args": []
-          },
-          {
-            "call": "dmt_Document.getDocuments",
-            "args": []
-          },
-          {
-            "call": "dmt_Project.getDocuments",
-            "args": []
-          },
-          {
-            "call": "dmt_Document.list",
-            "args": []
-          }
-        ]
+        "kind": "fields",
+        "fields": {
+          "schematics": [
+            {
+              "call": "dmt_Schematic.getAllSchematicsInfo",
+              "args": []
+            }
+          ],
+          "pcbs": [
+            {
+              "call": "dmt_Pcb.getAllPcbsInfo",
+              "args": []
+            }
+          ],
+          "boards": [
+            {
+              "call": "dmt_Board.getAllBoardsInfo",
+              "args": []
+            }
+          ]
+        }
       }
     },
     {
       "name": "eda.document.active",
-      "description": "获取当前激活文档信息 (类型/uuid/标题/编辑器实例).",
+      "description": "获取当前激活的原理图/原理图页/PCB/板子信息, 分字段聚合.",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -217,21 +318,33 @@ window.DAO_VERBS_MANIFEST = {
       ],
       "backend_only": false,
       "recipe": {
-        "kind": "try_paths",
-        "candidates": [
-          {
-            "call": "dmt_Document.getActiveDocument",
-            "args": []
-          },
-          {
-            "call": "dmt_Document.getCurrentDocument",
-            "args": []
-          },
-          {
-            "call": "dmt_Document.current",
-            "args": []
-          }
-        ]
+        "kind": "fields",
+        "fields": {
+          "schematic": [
+            {
+              "call": "dmt_Schematic.getCurrentSchematicInfo",
+              "args": []
+            }
+          ],
+          "schematic_page": [
+            {
+              "call": "dmt_Schematic.getCurrentSchematicPageInfo",
+              "args": []
+            }
+          ],
+          "pcb": [
+            {
+              "call": "dmt_Pcb.getCurrentPcbInfo",
+              "args": []
+            }
+          ],
+          "board": [
+            {
+              "call": "dmt_Board.getCurrentBoardInfo",
+              "args": []
+            }
+          ]
+        }
       }
     },
     {
@@ -243,12 +356,6 @@ window.DAO_VERBS_MANIFEST = {
           "keyword": {
             "type": "string",
             "description": "搜索关键字, e.g. STM32 / 0805 / LM358"
-          },
-          "limit": {
-            "type": "integer",
-            "default": 20,
-            "minimum": 1,
-            "maximum": 200
           }
         },
         "required": [
@@ -267,38 +374,135 @@ window.DAO_VERBS_MANIFEST = {
         "kind": "try_paths",
         "candidates": [
           {
-            "call": "dmt_Component.searchComponent",
+            "call": "lib_Device.search",
             "args": [
               {
                 "$": "keyword"
-              },
-              {
-                "$": "limit",
-                "def": 20
               }
             ]
           },
           {
-            "call": "dmt_Component.search",
+            "call": "lib_Symbol.search",
             "args": [
               {
                 "$": "keyword"
-              },
-              {
-                "$": "limit",
-                "def": 20
               }
             ]
           },
           {
-            "call": "dmt_Component.searchByKeyword",
+            "call": "lib_Footprint.search",
             "args": [
               {
                 "$": "keyword"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.sch.place_component",
+      "description": "在当前原理图页指定坐标放置器件. 参数取自 eda.component.search 结果项的 libraryUuid/uuid.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "library_uuid": {
+            "type": "string",
+            "description": "器件库 uuid"
+          },
+          "uuid": {
+            "type": "string",
+            "description": "器件 uuid"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "library_uuid",
+          "uuid",
+          "x",
+          "y"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "write",
+      "visibility": "toast",
+      "tags": [
+        "schematic",
+        "draw"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "sch_PrimitiveComponent.create",
+            "args": [
+              {
+                "libraryUuid": {
+                  "$": "library_uuid"
+                },
+                "uuid": {
+                  "$": "uuid"
+                }
               },
               {
-                "$": "limit",
-                "def": 20
+                "$": "x"
+              },
+              {
+                "$": "y"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.sch.wire",
+      "description": "在当前原理图页画导线. line 为坐标序列 [x1,y1,x2,y2,...], 可选指定网络名.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "坐标序列 [x1,y1,x2,y2,...]"
+          },
+          "net": {
+            "type": "string",
+            "description": "网络名 (可选)"
+          }
+        },
+        "required": [
+          "line"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "write",
+      "visibility": "toast",
+      "tags": [
+        "schematic",
+        "draw"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "sch_PrimitiveWire.create",
+            "args": [
+              {
+                "$": "line"
+              },
+              {
+                "$": "net",
+                "def": null
               }
             ]
           }
@@ -324,14 +528,6 @@ window.DAO_VERBS_MANIFEST = {
         "kind": "try_paths",
         "candidates": [
           {
-            "call": "pcb_DesignRule.runCheckAll",
-            "args": []
-          },
-          {
-            "call": "pcb_Drc.runCheck",
-            "args": []
-          },
-          {
             "call": "pcb_Drc.check",
             "args": []
           }
@@ -340,15 +536,10 @@ window.DAO_VERBS_MANIFEST = {
     },
     {
       "name": "eda.pcb.export_gerber",
-      "description": "导出当前 PCB 为 Gerber 制造文件 (压缩包). 高级操作 — 触发文件保存对话.",
+      "description": "获取当前 PCB 的 Gerber 制造文件 (返回文件数据/下载入口).",
       "input_schema": {
         "type": "object",
-        "properties": {
-          "output_dir": {
-            "type": "string",
-            "description": "输出目录 (可选, 不填弹对话框)"
-          }
-        },
+        "properties": {},
         "additionalProperties": false
       },
       "side_effect": "destructive",
@@ -363,48 +554,18 @@ window.DAO_VERBS_MANIFEST = {
         "kind": "try_paths",
         "candidates": [
           {
-            "call": "pcb_Manufacture.exportGerber",
-            "args": [
-              {
-                "$": "output_dir"
-              }
-            ]
-          },
-          {
-            "call": "pcb_Manufacture.gerber",
-            "args": [
-              {
-                "$": "output_dir"
-              }
-            ]
-          },
-          {
-            "call": "dmt_Document.exportGerber",
-            "args": [
-              {
-                "$": "output_dir"
-              }
-            ]
+            "call": "pcb_ManufactureData.getGerberFile",
+            "args": []
           }
         ]
       }
     },
     {
       "name": "eda.sch.netlist",
-      "description": "导出当前原理图的网表 (字符串 NDJSON 或 SPICE).",
+      "description": "导出当前原理图的网表 (制造网表文件, 退而求其次取内存网表).",
       "input_schema": {
         "type": "object",
-        "properties": {
-          "format": {
-            "type": "string",
-            "enum": [
-              "spice",
-              "json",
-              "ndjson"
-            ],
-            "default": "json"
-          }
-        },
+        "properties": {},
         "additionalProperties": false
       },
       "side_effect": "read",
@@ -418,42 +579,22 @@ window.DAO_VERBS_MANIFEST = {
         "kind": "try_paths",
         "candidates": [
           {
-            "call": "sch_Netlist.export",
-            "args": [
-              {
-                "$": "format",
-                "def": "json"
-              }
-            ]
+            "call": "sch_ManufactureData.getNetlistFile",
+            "args": []
           },
           {
-            "call": "sch_Document.exportNetlist",
-            "args": [
-              {
-                "$": "format",
-                "def": "json"
-              }
-            ]
+            "call": "sch_Netlist.getNetlist",
+            "args": []
           }
         ]
       }
     },
     {
       "name": "eda.bom.export",
-      "description": "导出当前工程 BOM (物料清单). 返回 BOM 数据数组或文件路径.",
+      "description": "导出当前工程 BOM (物料清单文件, 原理图优先, PCB 兜底).",
       "input_schema": {
         "type": "object",
-        "properties": {
-          "format": {
-            "type": "string",
-            "enum": [
-              "json",
-              "csv",
-              "xlsx"
-            ],
-            "default": "json"
-          }
-        },
+        "properties": {},
         "additionalProperties": false
       },
       "side_effect": "read",
@@ -467,31 +608,12 @@ window.DAO_VERBS_MANIFEST = {
         "kind": "try_paths",
         "candidates": [
           {
-            "call": "dmt_Bom.export",
-            "args": [
-              {
-                "$": "format",
-                "def": "json"
-              }
-            ]
+            "call": "sch_ManufactureData.getBomFile",
+            "args": []
           },
           {
-            "call": "dmt_Bom.getBom",
-            "args": [
-              {
-                "$": "format",
-                "def": "json"
-              }
-            ]
-          },
-          {
-            "call": "dmt_Project.exportBom",
-            "args": [
-              {
-                "$": "format",
-                "def": "json"
-              }
-            ]
+            "call": "pcb_ManufactureData.getBomFile",
+            "args": []
           }
         ]
       }
@@ -538,6 +660,22 @@ window.DAO_VERBS_MANIFEST = {
         "kind": "try_paths",
         "candidates": [
           {
+            "call": "sys_Message.showToastMessage",
+            "args": [
+              {
+                "$": "message"
+              }
+            ]
+          },
+          {
+            "call": "sys_ToastMessage.showMessage",
+            "args": [
+              {
+                "$": "message"
+              }
+            ]
+          },
+          {
             "call": "sys_MessageBox.showInformationMessage",
             "args": [
               {
@@ -548,34 +686,6 @@ window.DAO_VERBS_MANIFEST = {
                 "def": "Agent"
               },
               "OK"
-            ]
-          },
-          {
-            "call": "sys_Notification.show",
-            "args": [
-              {
-                "$": "title",
-                "def": "Agent"
-              },
-              {
-                "$": "message"
-              },
-              {
-                "$": "level",
-                "def": "info"
-              }
-            ]
-          },
-          {
-            "call": "sys_MessageBox.show",
-            "args": [
-              {
-                "$": "message"
-              },
-              {
-                "$": "title",
-                "def": "Agent"
-              }
             ]
           }
         ]

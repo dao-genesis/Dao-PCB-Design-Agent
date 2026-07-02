@@ -62,23 +62,23 @@ def t2_registry_parity():
 
 # ── 共享 mock 引擎 (Python 与 JS 各实现一份, 行为逐字相同) ──
 def mock_transport(path, args):
-    if path == "dmt_Project.getProjects":
+    if path == "dmt_Project.getAllProjectsUuid":
         return ["P1"]
-    if path == "sys_Environment.getEditorVersion":
+    if path == "sys_Environment.getEditorCurrentVersion":
         return "2.2.32"
-    if path == "dmt_Component.search":
+    if path == "lib_Symbol.search":
         return {"echo_args": args}
-    if path == "sys_MessageBox.showInformationMessage":
+    if path == "sys_Message.showToastMessage":
         return {"echo_args": args}
     raise RuntimeError("no such: " + path)
 
 
 SCENARIOS = [
-    ("eda.project.list", {}),                              # 首个失败→第二个成功
+    ("eda.project.list", {}),                              # 单候选成功
     ("eda.environment.info", {}),                          # fields: 仅 version 可用
-    ("eda.component.search", {"keyword": "stm32"}),        # 默认 limit=20 注入
-    ("eda.system.notify", {"message": "hello"}),           # 字面量 "OK" + 默认 title
-    ("eda.system.call", {"path": "sys_Environment.getEditorVersion"}),  # raw_call
+    ("eda.component.search", {"keyword": "stm32"}),        # 首候选失败→第二候选成功
+    ("eda.system.notify", {"message": "hello"}),           # 单参透传
+    ("eda.system.call", {"path": "sys_Environment.getEditorCurrentVersion"}),  # raw_call
 ]
 
 
@@ -89,15 +89,15 @@ def t3_python_semantics() -> dict:
         r = tools_registry.execute(mock_transport, name, dict(params))
         check(f"执行不抛: {name}", r.ok, str(r.error))
         results[name] = r.result
-    check("首个成功即返 (project.list)",
-          results["eda.project.list"] == {"ok": True, "path": "dmt_Project.getProjects", "result": ["P1"]})
+    check("单候选成功 (project.list)",
+          results["eda.project.list"] == {"ok": True, "path": "dmt_Project.getAllProjectsUuid", "result": ["P1"]})
     env = results["eda.environment.info"]
     check("fields 聚合 (environment.info)",
           env["editor_version"]["ok"] is True and env["is_online"]["ok"] is False)
-    check("默认参数注入 (component.search limit=20)",
-          results["eda.component.search"]["result"] == {"echo_args": ["stm32", 20]})
-    check("字面量+默认值 (notify → [message,'Agent','OK'])",
-          results["eda.system.notify"]["result"] == {"echo_args": ["hello", "Agent", "OK"]})
+    check("首候选失败→回落 (component.search → lib_Symbol)",
+          results["eda.component.search"] == {"ok": True, "path": "lib_Symbol.search", "result": {"echo_args": ["stm32"]}})
+    check("单参透传 (notify → [message])",
+          results["eda.system.notify"]["result"] == {"echo_args": ["hello"]})
     check("raw_call (system.call)", results["eda.system.call"] == "2.2.32")
     r = tools_registry.execute(mock_transport, "eda.project.open", {})
     check("必填缺失 → 参数错误", (not r.ok) and "uuid" in (r.error or ""))
@@ -113,10 +113,10 @@ const DV = window.DaoVerbs;
 
 async function edaCall(ns, method, args) {
   const path = ns + "." + method;
-  if (path === "dmt_Project.getProjects") return ["P1"];
-  if (path === "sys_Environment.getEditorVersion") return "2.2.32";
-  if (path === "dmt_Component.search") return { echo_args: args };
-  if (path === "sys_MessageBox.showInformationMessage") return { echo_args: args };
+  if (path === "dmt_Project.getAllProjectsUuid") return ["P1"];
+  if (path === "sys_Environment.getEditorCurrentVersion") return "2.2.32";
+  if (path === "lib_Symbol.search") return { echo_args: args };
+  if (path === "sys_Message.showToastMessage") return { echo_args: args };
   throw new Error("no such: " + path);
 }
 
