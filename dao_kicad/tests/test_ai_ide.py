@@ -212,10 +212,9 @@ def test_kicad_drc_tool_schema_aliases_and_bridge(tmp_path, monkeypatch):
     pcb.write_text("(kicad_pcb)")
 
     class _Live:
-        def summary(self):
-            return {"board": {"file": str(pcb)}}
-
         def eval(self, code):
+            if "GetFileName()" in code and "SaveBoard" not in code:
+                return str(pcb)
             return True  # save
 
     class _FakeOps:

@@ -237,10 +237,10 @@ class DevinKiCadBridge:
     def live_drc(self, out_dir: str = "") -> Dict[str, Any]:
         """对活板跑真 kicad-cli DRC: 先落盘, 再裁决, 报告写进项目 out/
         (project_state 的 drc_metrics 自动拾取, 全貌感知闭环)。"""
-        s = self.live_summary()
-        if not s.get("ok"):
-            return s
-        f = ((s.get("summary") or {}).get("board") or {}).get("file", "")
+        got = self.live_eval("board.GetFileName()")
+        if not got.get("ok"):
+            return got
+        f = got.get("result") or ""
         if not f:
             return {"ok": False, "error": "活板无文件路径 (先保存为 .kicad_pcb)"}
         saved = self.live_save()
