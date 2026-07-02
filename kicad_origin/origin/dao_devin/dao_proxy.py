@@ -184,6 +184,23 @@ def resolve_route(name: Optional[str] = None) -> Dict[str, Any]:
             "api_key": ch.api_key, "model": ch.model, "has_key": bool(ch.api_key)}
 
 
+def chat(messages: List[Dict[str, Any]], name: Optional[str] = None,
+         model: str = "", **opts: Any) -> Dict[str, Any]:
+    """经活动(或指定)渠道发一次多协议 completion (L2 行动面)。
+
+    选路 (resolve_route) → proxy_adapters 按协议构造/发送/归一。回统一形态
+    {ok, content, thinking, tool_calls, finish_reason, usage, protocol, model}。"""
+    from . import proxy_adapters as pa
+    route = resolve_route(name)
+    if not route.get("ok"):
+        return route
+    prov_cfg = {"baseUrl": route["base_url"], "protocol": route["protocol"],
+                "apiKey": route["api_key"], "model": model or route["model"]}
+    if not prov_cfg["model"]:
+        return {"ok": False, "error": "渠道未选定模型 (先 probe_models 或指定 model)"}
+    return pa.chat(prov_cfg, messages, model=prov_cfg["model"], **opts)
+
+
 def probe_models(name: str) -> Dict[str, Any]:
     """填 Key 后自动 /v1/models 全量识别该渠道模型 (对应 dao-proxy-pro v9.9.311)。
     仅 openai 协议; anthropic 无标准 models 列举端点则跳过。"""
