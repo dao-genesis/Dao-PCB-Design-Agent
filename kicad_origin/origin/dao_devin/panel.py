@@ -37,6 +37,18 @@ PANEL_PKG_FILES = (
 )
 
 
+def _tool_brief(r: Any) -> Any:
+    """工具回值 → 轨迹行一句话摘要 (按常见键位智能取要点)。"""
+    if not isinstance(r, dict):
+        return r
+    for key in ("result", "summary", "content", "board", "path", "url"):
+        v = r.get(key)
+        if v is not None:
+            return v
+    keys = [k for k in r if k not in ("ok", "ts")]
+    return "{" + ", ".join(keys) + "}" if keys else "ok"
+
+
 def install_panel(plugin_dir: Optional[Path] = None) -> Path:
     """把本 dao_devin 包 + 一个 register 引导脚本落到 KiCad 插件目录 (幂等)。"""
     from kicad_origin.origin.native_live import _user_plugin_dir  # 复用同一目录解析
@@ -279,8 +291,8 @@ if _HAS_GUI:
             r = step.get("result") or {}
             ok = bool(r.get("ok")) if isinstance(r, dict) else True
             mark = "✔" if ok else "✘"
-            brief = str(r.get("result") if isinstance(r, dict) and ok
-                        else r.get("error") if isinstance(r, dict) else r)[:160]
+            brief = str(_tool_brief(r) if ok else
+                        r.get("error") if isinstance(r, dict) else r)[:160]
             self._say(f"  🔧 {step.get('tool')} {mark} {brief}",
                       C_TOOL if ok else C_ERR)
 
