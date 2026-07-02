@@ -301,6 +301,62 @@ VERBS: list[dict] = [
             {"call": "pcb_ManufactureData.getGerberFile", "args": []},
         ]},
     },
+    {
+        "name": "eda.pcb.import_changes",
+        "description": "把原理图变更同步到当前 PCB (增删元件/网络). 实测会弹确认对话框 (增加元件清单), 需 GUI 点「应用修改」— interactive 副作用.",
+        "input_schema": EMPTY_SCHEMA,
+        "side_effect": "interactive", "visibility": "toast", "tags": ["pcb", "sync"],
+        "recipe": {"kind": "try_paths", "candidates": [
+            {"call": "pcb_Document.importChanges", "args": []},
+        ]},
+    },
+    {
+        "name": "eda.pcb.save",
+        "description": "保存当前 PCB 文档.",
+        "input_schema": EMPTY_SCHEMA,
+        "side_effect": "write", "visibility": "toast", "tags": ["pcb"],
+        "recipe": {"kind": "try_paths", "candidates": [
+            {"call": "pcb_Document.save", "args": []},
+        ]},
+    },
+    {
+        "name": "eda.pcb.route",
+        "description": "在当前 PCB 指定层画一段走线. layer: 1=顶层铜, 2=底层铜, 11=板框.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "net": {"type": "string", "description": "网络名 (板框等无网络传空串)"},
+                "layer": {"type": "number", "description": "层号: 1 顶层 / 2 底层 / 11 板框"},
+                "x1": {"type": "number"}, "y1": {"type": "number"},
+                "x2": {"type": "number"}, "y2": {"type": "number"},
+                "width": {"type": "number", "description": "线宽 (mil, 可选)"},
+            },
+            "required": ["net", "layer", "x1", "y1", "x2", "y2"], "additionalProperties": False,
+        },
+        "side_effect": "write", "visibility": "toast", "tags": ["pcb", "route"],
+        "recipe": {"kind": "try_paths", "candidates": [
+            {"call": "pcb_PrimitiveLine.create",
+             "args": [{"$": "net"}, {"$": "layer"}, {"$": "x1"}, {"$": "y1"},
+                      {"$": "x2"}, {"$": "y2"}, {"$": "width", "def": None}]},
+        ]},
+    },
+    {
+        "name": "eda.pcb.move_component",
+        "description": "移动当前 PCB 上的元件到指定坐标. primitive_id 取自 pcb_PrimitiveComponent.getAll.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "primitive_id": {"type": "string"},
+                "x": {"type": "number"}, "y": {"type": "number"},
+            },
+            "required": ["primitive_id", "x", "y"], "additionalProperties": False,
+        },
+        "side_effect": "write", "visibility": "toast", "tags": ["pcb", "layout"],
+        "recipe": {"kind": "try_paths", "candidates": [
+            {"call": "pcb_PrimitiveComponent.modify",
+             "args": [{"$": "primitive_id"}, {"x": {"$": "x"}, "y": {"$": "y"}}]},
+        ]},
+    },
     # ── 6. 原理图操作 ──────────────────────────────────
     {
         "name": "eda.sch.netlist",
