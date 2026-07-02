@@ -283,7 +283,10 @@
   });
 
   // ─── 工具定义(供 LLM function calling) ────────────────────────────────
-  var TOOLS = [
+  // 统一动词层: 与后端 MCP/CLI/SDK 共用同一份 verbs.manifest (core/verbs.py 生成),
+  // 同一套动词、同一执行语义. 面板本地便捷工具 (eda_call/get_context/toast) 保留为逃生口.
+  var VERB_TOOLS = (window.DaoVerbs && window.DaoVerbs.buildTools()) || [];
+  var TOOLS = VERB_TOOLS.concat([
     { type: "function", function: {
       name: "eda_call",
       description: "调用嘉立创EDA官方 EXTAPI 的任意方法直接驱动引擎。namespace 如 dmt_Project/dmt_Pcb/pcb_PrimitiveVia/pcb_Drc/sch_Netlist/sys_Message 等;method 为该命名空间下方法名;args 为参数数组。返回该方法结果。",
@@ -300,12 +303,18 @@
       name: "toast",
       description: "在嘉立创EDA界面弹出一条提示消息给用户。",
       parameters: { type: "object", properties: { message: { type: "string" } }, required: ["message"] } } },
-  ];
+  ]);
 
   async function runTool(name, argStr) {
     var args = {};
     try { args = argStr ? JSON.parse(argStr) : {}; } catch (e) { return { error: true, out: "参数解析失败: " + e.message }; }
     try {
+      // 统一动词 (eda.* / eda_*): 走与后端一致的 recipe 执行器
+      var verb = window.DaoVerbs && window.DaoVerbs.verbByToolName(name);
+      if (verb && !verb.backend_only) {
+        var vr = await window.DaoVerbs.execVerb(edaCall, verb, args);
+        return { error: false, out: JSON.stringify(vr) };
+      }
       if (name === "eda_call") {
         var r = await edaCall(args.namespace, args.method, args.args || []);
         return { error: false, out: JSON.stringify(r) };
