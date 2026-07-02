@@ -33,6 +33,47 @@ def _agent_auth_dict(a: "agent_core.AgentAuth") -> Dict[str, Any]:
             "quota": a.quota}
 
 
+def _find_kicad_cli() -> Optional[str]:
+    """跨平台定位 kicad-cli (面板装入 GUI 插件目录后无 kicad_origin 包, 需自持)。"""
+    import glob
+    import shutil as _sh
+    for name in ("kicad-cli", "kicad-cli.exe"):
+        p = _sh.which(name)
+        if p:
+            return p
+    candidates = sorted(glob.glob(r"C:\Program Files\KiCad\*\bin\kicad-cli.exe"),
+                        reverse=True)
+    candidates += ["/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"]
+    for c in candidates:
+        if Path(c).exists():
+            return c
+    return None
+
+
+def _run_drc_cli(board: str, report: str) -> Dict[str, Any]:
+    """直驱 `kicad-cli pcb drc` 并解析 JSON 报告 (零包依赖, GUI 插件内也可用)。"""
+    import json
+    import subprocess
+    cli = _find_kicad_cli()
+    if not cli:
+        return {"ok": False, "error": "kicad-cli 未找到"}
+    try:
+        r = subprocess.run([cli, "pcb", "drc", "--severity-all",
+                            "--format", "json", "-o", report, board],
+                           capture_output=True, text=True, timeout=180)
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": str(e)}
+    if r.returncode != 0 or not Path(report).exists():
+        return {"ok": False, "error": (r.stderr or r.stdout)[-400:]}
+    try:
+        rep = json.loads(Path(report).read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"DRC 报告解析失败: {e}"}
+    return {"ok": True,
+            "violations": len(rep.get("violations", [])),
+            "unconnected": len(rep.get("unconnected_items", []))}
+
+
 @dataclass
 class BridgeState:
     auth: Optional[dc.Auth] = None
@@ -246,18 +287,17 @@ class DevinKiCadBridge:
         saved = self.live_save()
         if not saved.get("ok"):
             return saved
-        from kicad_origin.origin.native_ops import NativeOps  # 延迟导入 (kicad-cli 依赖)
         pd = self._resolve_project_dir()
         out = Path(out_dir) if out_dir else ((pd / "out") if pd else Path(f).parent)
         out.mkdir(parents=True, exist_ok=True)
         report = out / "drc-live.json"
-        res = NativeOps().drc(str(f), str(report))
-        if not res.ok:
-            return {"ok": False, "error": res.error or "DRC 失败"}
+        res = _run_drc_cli(str(f), str(report))
+        if not res.get("ok"):
+            return {"ok": False, "error": res.get("error") or "DRC 失败"}
         return {"ok": True, "result": {
             "report": str(report),
-            "violations": res.detail.get("violations"),
-            "unconnected": res.detail.get("unconnected"),
+            "violations": res.get("violations"),
+            "unconnected": res.get("unconnected"),
         }}
 
     # ── 项目全貌感知面 (Agent 的眼睛) ──────────────────────────────────

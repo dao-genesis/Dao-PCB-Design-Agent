@@ -206,7 +206,6 @@ def test_kicad_drc_tool_schema_aliases_and_bridge(tmp_path, monkeypatch):
     for a in ("drc", "check", "run_drc"):
         assert tools.normalize_name(a) == "kicad_drc"
     import kicad_origin.origin.dao_devin.bridge as br
-    from kicad_origin.origin import native_ops as no
 
     pcb = tmp_path / "board.kicad_pcb"
     pcb.write_text("(kicad_pcb)")
@@ -217,14 +216,12 @@ def test_kicad_drc_tool_schema_aliases_and_bridge(tmp_path, monkeypatch):
                 return str(pcb)
             return True  # save
 
-    class _FakeOps:
-        def drc(self, board, out, fmt="json", severity_all=True):
-            from pathlib import Path as _P
-            _P(out).write_text('{"violations": [], "unconnected_items": []}')
-            return no.OpResult("drc", True,
-                               detail={"violations": 0, "unconnected": 0})
+    def _fake_drc(board, report):
+        from pathlib import Path as _P
+        _P(report).write_text('{"violations": [], "unconnected_items": []}')
+        return {"ok": True, "violations": 0, "unconnected": 0}
 
-    monkeypatch.setattr(no, "NativeOps", lambda *a, **k: _FakeOps())
+    monkeypatch.setattr(br, "_run_drc_cli", _fake_drc)
     b = br.DevinKiCadBridge(live_factory=lambda: _Live())
     r = b.live_drc(out_dir=str(tmp_path / "out"))
     assert r["ok"] and r["result"]["violations"] == 0
