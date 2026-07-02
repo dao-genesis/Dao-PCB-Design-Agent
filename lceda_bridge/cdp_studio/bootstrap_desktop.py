@@ -45,16 +45,23 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import dao_platform as _plat  # noqa: E402
+
+# ---- 平台矩阵(Linux/Windows/macOS 归一,详见 dao_platform) ------------------
+PLATFORM = _plat.current()
+
 # ---- 版本与落地路径(本源默认,可经 CLI 覆盖) -------------------------------
 DEFAULT_VERSION = "3.2.149"
-DL_TMPL = "https://image.lceda.cn/files/lceda-pro-linux-x64-%s.zip"
+# 便携客户端下载地址模板由平台矩阵给出(Windows/macOS 走安装器 → None)。
+DL_TMPL = PLATFORM.client_archive_url("%s") if PLATFORM.has_portable_archive else None
 HOME = Path.home()
 LCEDA_ROOT = HOME / "lceda"
 CLIENT_DIR = LCEDA_ROOT / "client"
 ZIP_PATH = LCEDA_ROOT / "lceda-pro.zip"
-ACTIVATION_DST = HOME / "Documents" / "LCEDA-Pro" / "lceda-pro-activation.txt"
-DEFAULT_PORT = 29230
-HERE = Path(__file__).resolve().parent
+ACTIVATION_DST = PLATFORM.activation_dst()
+DEFAULT_PORT = _plat.DEFAULT_CDP_PORT
 
 
 def _log(msg: str) -> None:
@@ -137,7 +144,7 @@ def download(url: str, out: Path, segments: int = 8) -> None:
 
 # ---- 2. 解压 + 定位主程序 ---------------------------------------------------
 def extract(zip_path: Path, dest: Path) -> Path:
-    binary = dest / "lceda-pro" / "lceda-pro"
+    binary = dest / PLATFORM.exe_rel_in_archive
     if binary.exists():
         _log(f"已解压,跳过 ({binary})")
         return binary
@@ -145,13 +152,14 @@ def extract(zip_path: Path, dest: Path) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path) as z:
         z.extractall(dest)
-    # zip 内不保留可执行位,补回。
-    for name in ("lceda-pro", "chrome-sandbox"):
-        p = dest / "lceda-pro" / name
-        if p.exists():
-            p.chmod(0o755)
+    # zip 内不保留可执行位,补回(仅 POSIX)。
+    if PLATFORM.os != "windows":
+        for name in ("lceda-pro", "chrome-sandbox"):
+            p = dest / "lceda-pro" / name
+            if p.exists():
+                p.chmod(0o755)
     if not binary.exists():
-        found = list(dest.rglob("lceda-pro"))
+        found = list(dest.rglob(PLATFORM.exe_name))
         found = [f for f in found if f.is_file() and os.access(f, os.X_OK)]
         if not found:
             raise RuntimeError("解压后未找到 lceda-pro 主程序")
@@ -223,15 +231,20 @@ def launch(binary: Path, port: int, display: str = ":0",
         _log(f"客户端已在 CDP :{port} 运行且编辑器页就绪,跳过启动")
         return
     if not cdp_alive(port):
-        log_path = Path("/tmp/lceda.log")
-        env = dict(os.environ, DISPLAY=display)
-        cmd = [str(binary), "--no-sandbox", "--gtk-version=3",
-               f"--remote-debugging-port={port}", "--remote-allow-origins=*"]
-        _log(f"启动: DISPLAY={display} {' '.join(cmd)}")
+        log_path = LCEDA_ROOT / "lceda.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ, **PLATFORM.launch_env(display))
+        cmd = PLATFORM.launch_argv(binary, port=port)
+        _log(f"启动: {PLATFORM.os} {' '.join(cmd)}")
+        popen_kw = dict(stdout=None, stderr=subprocess.STDOUT,
+                        cwd=str(binary.parent), env=env)
+        if PLATFORM.os == "windows":
+            popen_kw["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0)
+        else:
+            popen_kw["start_new_session"] = True
         with open(log_path, "wb") as logf:
-            subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
-                             cwd=str(binary.parent), env=env,
-                             start_new_session=True)
+            popen_kw["stdout"] = logf
+            subprocess.Popen(cmd, **popen_kw)
     # 浏览器 CDP 活 ≠ 编辑器页已加载;必须等到编辑器 target 出现,
     # 否则紧随其后的 connect_editor / 首次建板会扑空(本源教训)。
     for _ in range(wait_s):
@@ -273,6 +286,10 @@ def main(argv=None) -> int:
     lic = a.license or os.environ.get("LCEDA_ACTIVATION")
 
     if not a.launch_only:
+        if not PLATFORM.has_portable_archive:
+            _log(f"⚠ {PLATFORM.os} 无便携下载包(走安装器);请先安装 EDA 后用 "
+                 f"--launch-only,或 env LCEDA_HOME 指向安装目录。")
+            return 2
         download(DL_TMPL % a.version, ZIP_PATH, segments=a.segments)
         binary = extract(ZIP_PATH, CLIENT_DIR)
         if lic:
@@ -280,10 +297,10 @@ def main(argv=None) -> int:
         elif not ACTIVATION_DST.exists():
             _log("⚠ 未提供 --license 且目标无激活文件;半离线版将无法激活。")
     else:
-        binary = CLIENT_DIR / "lceda-pro" / "lceda-pro"
+        binary = CLIENT_DIR / PLATFORM.exe_rel_in_archive
         if not binary.exists():
-            found = [f for f in CLIENT_DIR.rglob("lceda-pro")
-                     if f.is_file() and os.access(f, os.X_OK)]
+            found = [f for f in CLIENT_DIR.rglob(PLATFORM.exe_name)
+                     if f.is_file() and (PLATFORM.os == "windows" or os.access(f, os.X_OK))]
             if not found:
                 _log("未找到已解压客户端;请去掉 --launch-only 先完整部署。")
                 return 2
