@@ -181,6 +181,22 @@ class DevinKiCadBridge:
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "error": str(e)}
 
+    def live_focus(self, refs: Any) -> Dict[str, Any]:
+        """在 KiCad 画布上选中 + 缩放定位到给定元件 (Agent 的「光标」)。
+
+        仅 GUI 内活体 (GuiLive) 支持画布聚焦; 无头活体则明确报不支持, 不静默。"""
+        try:
+            live = self.live()
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+        fn = getattr(live, "focus", None)
+        if fn is None:
+            return {"ok": False, "error": "当前活体不支持画布聚焦 (仅 KiCad GUI 内可用)"}
+        try:
+            return {"ok": True, "result": fn(refs)}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+
     # ── 项目全貌感知面 (Agent 的眼睛) ──────────────────────────────────
     def _resolve_project_dir(self, project_dir: Optional[str] = None) -> Optional[Path]:
         if project_dir:

@@ -111,6 +111,11 @@ if _HAS_GUI:
                 except Exception as e:  # noqa: BLE001
                     box["error"] = str(e)
                 finally:
+                    # 每次直驱后立刻重绘画布 → 改动对用户即时可见 (原生体感之本)
+                    try:
+                        pcbnew.Refresh()
+                    except Exception:  # noqa: BLE001
+                        pass
                     done.set()
 
             if wx.IsMainThread():
@@ -121,6 +126,56 @@ if _HAS_GUI:
                     raise TimeoutError(f"GUI eval 超时 {timeout}s")
             if "error" in box:
                 raise RuntimeError(f"live eval failed: {box['error']}")
+            return box.get("result")
+
+        def focus(self, refs: Any) -> dict:
+            """在画布上选中 + 缩放定位到给定元件 (参考号)。让用户实时看到 Agent
+            正指着哪个件——AI IDE 的「光标」落到真实 PCB 上。经主线程执行。"""
+            import threading
+            if isinstance(refs, str):
+                refs = [refs]
+            want = {str(r).strip() for r in (refs or []) if str(r).strip()}
+            done = threading.Event()
+            box: dict = {}
+
+            def _run() -> None:
+                try:
+                    b = pcbnew.GetBoard()
+                    if b is None:
+                        box["error"] = "GUI 内无活板"
+                        return
+                    hit: list = []
+                    first = None
+                    for f in b.GetFootprints():
+                        sel = f.GetReference() in want
+                        try:
+                            f.SetSelected() if sel else f.ClearSelected()
+                        except Exception:  # noqa: BLE001
+                            pass
+                        if sel:
+                            hit.append(f.GetReference())
+                            if first is None:
+                                first = f
+                    if first is not None:
+                        try:
+                            pcbnew.FocusOnItem(first)  # 缩放居中到该件
+                        except Exception:  # noqa: BLE001
+                            pass
+                    pcbnew.Refresh()
+                    box["result"] = {"focused": hit, "missing": sorted(want - set(hit))}
+                except Exception as e:  # noqa: BLE001
+                    box["error"] = str(e)
+                finally:
+                    done.set()
+
+            if wx.IsMainThread():
+                _run()
+            else:
+                wx.CallAfter(_run)
+                if not done.wait(30):
+                    raise TimeoutError("focus 超时")
+            if "error" in box:
+                raise RuntimeError(box["error"])
             return box.get("result")
 
         def close(self) -> None:
@@ -135,8 +190,11 @@ if _HAS_GUI:
     C_ERR = wx.Colour(0xf2, 0x8b, 0x82)       # 失败 (红)
     C_META = wx.Colour(0x6a, 0x6a, 0x78)      # 元信息 (暗灰)
 
-    class DevinPanelFrame(wx.Frame):  # type: ignore
+    class DevinPanel(wx.Panel):  # type: ignore
         """KiCad AI IDE 面板 (仿主流 AI IDE 对话 UX):
+
+        本体是 **wx.Panel** → 经 pcbnew 的 AuiManager 停靠进主窗口 (与「属性」
+        「图层」并列), 与 KiCad 融为一体, 不再是割裂的独立浮窗。
 
         主区 = 对话流 (消息气泡式分色 · 工具轨迹实时流式 · 多轮上下文) +
         输入栏 (Ctrl+Enter 发送 · 停止钮 · 新对话) + 状态栏 (项目全貌一键看) +
@@ -145,11 +203,12 @@ if _HAS_GUI:
         """
 
         def __init__(self, parent: Any) -> None:
-            super().__init__(parent, title=PLUGIN_TITLE, size=(640, 780))
+            super().__init__(parent)
             from .bridge import DevinKiCadBridge
             self.bridge = DevinKiCadBridge(live_factory=GuiLive)
             self._ai_cid = ""       # 当前 AI IDE 对话 id (惰性建)
             self._stop_flag = None  # threading.Event 当回合进行中
+            self.SetBackgroundColour(C_BG)
             self._build_ui()
 
         # ── UI 骨架 ──
@@ -157,6 +216,9 @@ if _HAS_GUI:
             nb = wx.Notebook(self)
             nb.AddPage(self._build_chat_page(nb), "✳ AI IDE")
             nb.AddPage(self._build_cloud_page(nb), "☁ Devin Cloud")
+            s = wx.BoxSizer(wx.VERTICAL)
+            s.Add(nb, 1, wx.EXPAND)
+            self.SetSizer(s)
 
         def _build_chat_page(self, parent: Any) -> Any:
             p = wx.Panel(parent)
@@ -452,6 +514,59 @@ if _HAS_GUI:
 
             threading.Thread(target=_work, daemon=True).start()
 
+    _PANE_NAME = "DaoDevinAI"
+
+    def _find_pcb_frame() -> Any:
+        """定位 pcbnew 主窗口 (wxFrame · name=PcbFrame)。"""
+        try:
+            for w in wx.GetTopLevelWindows():
+                if w.GetName() == "PcbFrame":
+                    return w
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
+    def _float_fallback(parent: Any = None) -> Any:
+        """无 AUI 可挂时的兜底: 独立浮窗 (仍可用, 只是非停靠)。"""
+        fr = wx.Frame(parent, title=PLUGIN_TITLE, size=(560, 820))
+        panel = DevinPanel(fr)
+        sz = wx.BoxSizer(wx.VERTICAL)
+        sz.Add(panel, 1, wx.EXPAND)
+        fr.SetSizer(sz)
+        fr.Show()
+        return fr
+
+    def show_dock_panel() -> Any:
+        """把面板作为停靠面板挂进 pcbnew 主窗口 (原生融合); 再点即开合切换。
+
+        道法自然: 复用 KiCad 自己的 wx.aui.AuiManager —— 与「属性」「图层」
+        「网络检查器」同一套停靠体系, 故看起来/用起来就是 KiCad 的一部分。
+        """
+        frame = _find_pcb_frame()
+        if frame is None:
+            return _float_fallback()
+        try:
+            import wx.aui as aui
+            mgr = aui.AuiManager.GetManager(frame)
+        except Exception:  # noqa: BLE001
+            mgr = None
+        if mgr is None:
+            return _float_fallback(frame)
+        pane = mgr.GetPane(_PANE_NAME)
+        if pane.IsOk():  # 已挂 → 开合切换 (第二次点击=收起/唤出)
+            pane.Show(not pane.IsShown())
+            mgr.Update()
+            return frame
+        panel = DevinPanel(frame)
+        info = (aui.AuiPaneInfo().Name(_PANE_NAME)
+                .Caption("Devin · KiCad AI IDE").Right().Layer(1).Position(0)
+                .BestSize(wx.Size(480, 900)).MinSize(wx.Size(340, 420))
+                .CloseButton(True).MaximizeButton(True)
+                .Floatable(True).Dockable(True).DestroyOnClose(False))
+        mgr.AddPane(panel, info)
+        mgr.Update()
+        return frame
+
     class DevinActionPlugin(pcbnew.ActionPlugin):  # type: ignore
         def defaults(self) -> None:
             self.name = PLUGIN_TITLE
@@ -460,8 +575,7 @@ if _HAS_GUI:
             self.show_toolbar_button = True
 
         def Run(self) -> None:
-            frame = DevinPanelFrame(None)
-            frame.Show()
+            show_dock_panel()
 
 
 def register() -> Any:

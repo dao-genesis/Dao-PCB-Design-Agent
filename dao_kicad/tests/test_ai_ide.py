@@ -115,6 +115,45 @@ def test_registry_unregistered_tool_errors():
     assert r["ok"] is False and "未注册" in r["error"]
 
 
+def test_kicad_focus_tool_dispatch_alias_and_schema():
+    # schema 已声明 kicad_focus 且带 refs 参数
+    schema = tools._SCHEMA_BY_NAME.get("kicad_focus")
+    assert schema and "refs" in schema["function"]["parameters"]["properties"]
+    # 别名归一
+    for a in ("focus", "highlight", "select", "goto"):
+        assert tools.normalize_name(a) == "kicad_focus"
+    # dispatch 直达处理器 (画布聚焦), 回传命中列表
+    reg = tools.ToolRegistry()
+    reg.register("kicad_focus", lambda refs: {"ok": True, "result": {"focused": list(refs)}})
+    r = reg.dispatch("focus", {"refs": ["R2", "C11"]})
+    assert r["ok"] and r["result"]["focused"] == ["R2", "C11"]
+
+
+def test_bridge_live_focus_reports_when_unsupported():
+    # 无头活体 (无 focus 方法) → 明确报不支持, 不静默
+    import kicad_origin.origin.dao_devin.bridge as br
+
+    class _HeadlessLive:  # 无 focus
+        def summary(self):
+            return {}
+
+    b = br.DevinKiCadBridge(live_factory=lambda: _HeadlessLive())
+    r = b.live_focus(["R2"])
+    assert r["ok"] is False and "不支持" in r["error"]
+
+
+def test_bridge_live_focus_delegates_to_gui_live():
+    import kicad_origin.origin.dao_devin.bridge as br
+
+    class _GuiLive:
+        def focus(self, refs):
+            return {"focused": list(refs), "missing": []}
+
+    b = br.DevinKiCadBridge(live_factory=lambda: _GuiLive())
+    r = b.live_focus(["U1"])
+    assert r["ok"] and r["result"]["focused"] == ["U1"]
+
+
 def test_registry_bad_args_errors_gracefully():
     reg = tools.ToolRegistry()
     reg.register("kicad_eval", lambda code: {"ok": True, "result": code})
