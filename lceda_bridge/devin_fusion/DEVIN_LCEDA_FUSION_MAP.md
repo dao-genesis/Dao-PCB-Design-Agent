@@ -131,3 +131,24 @@ HTTP 接入面（`core/rt-flow/extension.js`）：`GET /shell`（外壳）、`/a
 - 活体验证录屏：LCEDA 冷态 → CDP 注入 → `/shell` 归一网页在 EDA 内渲染 → ☰ 六大板块菜单 → 切板块。
 
 **P1 未竟（留 P2）**：板块子网页（如「公网穿透·DAO Bridge」）点开后是 browser-in-browser 的**嵌套子网页**，其活体内容需连活的 dao 宿主 + 账号会话链路，隧道慢时子页加载偏慢——归属 P2「会话/账号链路」。
+
+## 七、P2 协议地图（活体从 `/shell` 实测，非猜）
+
+`/shell` 与宿主不走 REST，而是**消息总线**三端点（均 CORS:* 放行，故同源 document.write 后跨源直通）：
+
+| 端点 | 方向 | 作用 |
+|---|---|---|
+| `GET /api/shell/poll` | 宿主→页 | 长轮询领取宿主推送（账号态/对话/下载/备份变更） |
+| `GET /api/shell/events` | 宿主→页 | SSE 事件流（等价 poll，实时） |
+| `POST /api/shell/msg` | 页→宿主 | 页面动作上行（下述 action 词表） |
+
+**实测 action 词表**（`/api/shell/msg` 的 `type`）——P2 即按此驱动:
+- 账号/切号：`acc` `usSave` `usImport` `usToggle` `usDelete` `copyCred` `copyCredEmail`（多号池·钉号·凭据）
+- Devin Cloud：`cloudInit` `cloudReady` `cloudRelay` `newDevinTab` `openCloudPage`（云端会话起停/中继）
+- 对话：`conv` `histPush` `histDel` `histClear`（对话/浏览历史）
+- 备份/迁移：`shellBackups` `shellDownloads` `shellSaveTabs` `dlZip` `dlExportMd` `migExport` `migImport`
+- 板块/页：`board` `web` `openWebTab` `openExternal` `reopen` `ready` `file` `filesDropped` `clip`
+
+**六大板块**（emoji 标签活体确认）：🏠主页 · 🔀切号 · 🌐公网穿透 · 💬对话备份 · 💉反向注入 · 🧩MCP。
+
+**P2 落地**：pro-dao-agent 面板在 document.write 承载 `/shell` 后，账号钉号经 `usToggle`/`acc` + `/sessions/<id>?dao_acct=<email>`；云端会话经 `cloudInit`→`cloudReady`→`cloudRelay`。同机连 `127.0.0.1:9920`，跨机连 DAO Bridge 隧道（遇死重读知识条目自愈）。
