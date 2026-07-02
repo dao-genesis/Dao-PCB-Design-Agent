@@ -16,7 +16,7 @@ pygetwindow>=0.0.9
 pywinauto>=0.6.8
 
 # 数据处理
-numpy>=1.26.4
+numpy>=2.2.6
 
 # Web服务 (pcb_server.py — 两面一体HTTP服务)
 flask>=3.0.0
