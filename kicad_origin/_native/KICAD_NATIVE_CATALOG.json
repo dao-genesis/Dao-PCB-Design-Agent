@@ -1,7 +1,7 @@
 {
  "source": "KiCad native API — pcbnew SWIG (in-process) + kicad-cli + IPC",
  "kicad_version": "9.0.9-9.0.9~ubuntu22.04.1",
- "generated": "2026-06-30",
+ "generated": "2026-07-01",
  "install": {
   "root": "/usr",
   "bin": "/usr/bin",
@@ -16,7 +16,8 @@
   "pcbnew_functions": 302,
   "pcbnew_constants": 852,
   "cli_leaf_commands": 34,
-  "ipc_available": false
+  "ipc_available": false,
+  "cpp_symbol_classes": 345
  },
  "tiers": {
   "pcbnew": {
@@ -63555,6 +63556,38 @@
   "ipc": {
    "available": false,
    "reason": "kipy not importable (no IPC API in this build)"
+  },
+  "cpp_symbols": {
+   "available": true,
+   "kiface": "/usr/bin/_pcbnew.kiface",
+   "class_count": 345,
+   "engine_buckets": {
+    "tool_framework": [
+     "ACTIONS::CURSOR_EVENT_TYPE",
+     "ACTIONS::REMOVE_FLAGS"
+    ],
+    "pns_router": [
+     "PNS::MEANDER_SIDE",
+     "PNS::PNS_MODE",
+     "PNS::ROUTER_MODE"
+    ],
+    "drc_engine": [
+     "DRC_RULES_LEXER"
+    ],
+    "geometry": [
+     "MICROWAVE_FOOTPRINT_SHAPE",
+     "PAD_DRILL_SHAPE",
+     "PAD_SHAPE",
+     "SHAPE_T",
+     "std::__future_base::_State_baseV2::_Setter<std::vector<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int>, std::allocator<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int> > >, std::__future_base::_State_baseV2::__exception_ptr_tag>",
+     "std::__future_base::_State_baseV2::_Setter<std::vector<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int>, std::allocator<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int> > >, std::vector<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int>, std::allocator<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int> > >"
+    ],
+    "io_plot": [
+     "JOB_EXPORT_PCB_GERBER",
+     "JOB_EXPORT_PCB_GERBERS"
+    ]
+   },
+   "note": "SWIG 未暴露之底面; 仅作 B2 掘进的知底, 不参与运行期"
   }
  }
 }
