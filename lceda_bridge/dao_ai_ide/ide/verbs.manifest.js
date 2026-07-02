@@ -1,0 +1,705 @@
+/* 自动生成 — 请勿手改. 源: lceda_bridge/core/verbs.py
+ * 重新生成: python3 -m lceda_bridge.core.verbs js > lceda_bridge/dao_ai_ide/ide/verbs.manifest.js */
+window.DAO_VERBS_MANIFEST = {
+  "version": "1.0.0",
+  "verbs": [
+    {
+      "name": "eda.environment.info",
+      "description": "★ 查看嘉立创EDA当前环境: 编辑器版本/在线模式/客户端类型/Pro版本判定. 应优先调用以确认环境.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "silent",
+      "tags": [
+        "environment",
+        "info"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "fields",
+        "fields": {
+          "editor_version": [
+            {
+              "call": "sys_Environment.getEditorVersion",
+              "args": []
+            }
+          ],
+          "is_online": [
+            {
+              "call": "sys_Environment.isOnlineMode",
+              "args": []
+            }
+          ],
+          "is_client": [
+            {
+              "call": "sys_Environment.isClient",
+              "args": []
+            }
+          ],
+          "is_pro": [
+            {
+              "call": "sys_Environment.isJLCEDAProEdition",
+              "args": []
+            }
+          ],
+          "is_offline": [
+            {
+              "call": "sys_Environment.isOfflineMode",
+              "args": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "eda.project.current",
+      "description": "★ 获取当前打开工程的详细信息 (含 uuid/name/路径/包含的文档列表).",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "silent",
+      "tags": [
+        "project"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "dmt_Project.getCurrentProjectInfo",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.project.list",
+      "description": "列出当前用户所有工程 (返回 uuid+name 数组). 注: 实际 API 名因版本可能不同, 内部尝试多个候选.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "silent",
+      "tags": [
+        "project"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "dmt_Project.getProjectList",
+            "args": []
+          },
+          {
+            "call": "dmt_Project.getProjects",
+            "args": []
+          },
+          {
+            "call": "dmt_Project.listProjects",
+            "args": []
+          },
+          {
+            "call": "dmt_Project.getAllProjects",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.project.open",
+      "description": "按 UUID 打开指定工程. 触发 EDA 切换工程 (interactive 副作用).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "description": "工程 UUID"
+          }
+        },
+        "required": [
+          "uuid"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "interactive",
+      "visibility": "toast",
+      "tags": [
+        "project"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "dmt_Project.openProject",
+            "args": [
+              {
+                "$": "uuid"
+              }
+            ]
+          },
+          {
+            "call": "dmt_Project.openProjectById",
+            "args": [
+              {
+                "$": "uuid"
+              }
+            ]
+          },
+          {
+            "call": "dmt_Project.open",
+            "args": [
+              {
+                "$": "uuid"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.document.list",
+      "description": "列出当前工程内所有文档 (原理图页 / PCB / 符号 / 封装).",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "silent",
+      "tags": [
+        "document"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "dmt_Document.getDocumentList",
+            "args": []
+          },
+          {
+            "call": "dmt_Document.getDocuments",
+            "args": []
+          },
+          {
+            "call": "dmt_Project.getDocuments",
+            "args": []
+          },
+          {
+            "call": "dmt_Document.list",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.document.active",
+      "description": "获取当前激活文档信息 (类型/uuid/标题/编辑器实例).",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "silent",
+      "tags": [
+        "document"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "dmt_Document.getActiveDocument",
+            "args": []
+          },
+          {
+            "call": "dmt_Document.getCurrentDocument",
+            "args": []
+          },
+          {
+            "call": "dmt_Document.current",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.component.search",
+      "description": "按关键字搜索元件 (符号/封装/器件). 返回匹配列表, 含 uuid+title+desc.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "搜索关键字, e.g. STM32 / 0805 / LM358"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "keyword"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "silent",
+      "tags": [
+        "component",
+        "search"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "dmt_Component.searchComponent",
+            "args": [
+              {
+                "$": "keyword"
+              },
+              {
+                "$": "limit",
+                "def": 20
+              }
+            ]
+          },
+          {
+            "call": "dmt_Component.search",
+            "args": [
+              {
+                "$": "keyword"
+              },
+              {
+                "$": "limit",
+                "def": 20
+              }
+            ]
+          },
+          {
+            "call": "dmt_Component.searchByKeyword",
+            "args": [
+              {
+                "$": "keyword"
+              },
+              {
+                "$": "limit",
+                "def": 20
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.pcb.drc",
+      "description": "对当前 PCB 文档运行 DRC (设计规则检查). 返回违规报告.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "side_effect": "write",
+      "visibility": "toast",
+      "tags": [
+        "pcb",
+        "drc"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "pcb_DesignRule.runCheckAll",
+            "args": []
+          },
+          {
+            "call": "pcb_Drc.runCheck",
+            "args": []
+          },
+          {
+            "call": "pcb_Drc.check",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.pcb.export_gerber",
+      "description": "导出当前 PCB 为 Gerber 制造文件 (压缩包). 高级操作 — 触发文件保存对话.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "output_dir": {
+            "type": "string",
+            "description": "输出目录 (可选, 不填弹对话框)"
+          }
+        },
+        "additionalProperties": false
+      },
+      "side_effect": "destructive",
+      "visibility": "toast",
+      "tags": [
+        "pcb",
+        "gerber",
+        "export"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "pcb_Manufacture.exportGerber",
+            "args": [
+              {
+                "$": "output_dir"
+              }
+            ]
+          },
+          {
+            "call": "pcb_Manufacture.gerber",
+            "args": [
+              {
+                "$": "output_dir"
+              }
+            ]
+          },
+          {
+            "call": "dmt_Document.exportGerber",
+            "args": [
+              {
+                "$": "output_dir"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.sch.netlist",
+      "description": "导出当前原理图的网表 (字符串 NDJSON 或 SPICE).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "spice",
+              "json",
+              "ndjson"
+            ],
+            "default": "json"
+          }
+        },
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "log",
+      "tags": [
+        "sch",
+        "netlist"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "sch_Netlist.export",
+            "args": [
+              {
+                "$": "format",
+                "def": "json"
+              }
+            ]
+          },
+          {
+            "call": "sch_Document.exportNetlist",
+            "args": [
+              {
+                "$": "format",
+                "def": "json"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.bom.export",
+      "description": "导出当前工程 BOM (物料清单). 返回 BOM 数据数组或文件路径.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "csv",
+              "xlsx"
+            ],
+            "default": "json"
+          }
+        },
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "log",
+      "tags": [
+        "bom",
+        "export"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "dmt_Bom.export",
+            "args": [
+              {
+                "$": "format",
+                "def": "json"
+              }
+            ]
+          },
+          {
+            "call": "dmt_Bom.getBom",
+            "args": [
+              {
+                "$": "format",
+                "def": "json"
+              }
+            ]
+          },
+          {
+            "call": "dmt_Project.exportBom",
+            "args": [
+              {
+                "$": "format",
+                "def": "json"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.system.notify",
+      "description": "在 EDA 内弹出消息提示 (用户能看见). 用于 agent 同步状态给用户.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "消息正文"
+          },
+          "title": {
+            "type": "string",
+            "description": "标题 (可选)",
+            "default": "Agent"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warn",
+              "error",
+              "success"
+            ],
+            "default": "info"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "interactive",
+      "visibility": "silent",
+      "tags": [
+        "system",
+        "ui"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "try_paths",
+        "candidates": [
+          {
+            "call": "sys_MessageBox.showInformationMessage",
+            "args": [
+              {
+                "$": "message"
+              },
+              {
+                "$": "title",
+                "def": "Agent"
+              },
+              "OK"
+            ]
+          },
+          {
+            "call": "sys_Notification.show",
+            "args": [
+              {
+                "$": "title",
+                "def": "Agent"
+              },
+              {
+                "$": "message"
+              },
+              {
+                "$": "level",
+                "def": "info"
+              }
+            ]
+          },
+          {
+            "call": "sys_MessageBox.show",
+            "args": [
+              {
+                "$": "message"
+              },
+              {
+                "$": "title",
+                "def": "Agent"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "eda.system.console_log",
+      "description": "在 EDA 渲染进程的 DevTools console 输出一条消息 (开发者可见).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "log",
+              "info",
+              "warn",
+              "error"
+            ],
+            "default": "log"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "write",
+      "visibility": "silent",
+      "tags": [
+        "system",
+        "log"
+      ],
+      "backend_only": true,
+      "recipe": {
+        "kind": "eval"
+      }
+    },
+    {
+      "name": "eda.system.call",
+      "description": "(高级) 直接调任意 eda.<class>.<method>(args). 用于 agent 探索未注册的 API.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "如 'sys_Environment.getEditorVersion' 或 'dmt_Project.getCurrentProjectInfo'"
+          },
+          "args": {
+            "type": "array",
+            "description": "参数数组",
+            "default": []
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "write",
+      "visibility": "log",
+      "tags": [
+        "system",
+        "raw"
+      ],
+      "backend_only": false,
+      "recipe": {
+        "kind": "raw_call"
+      }
+    },
+    {
+      "name": "eda.system.eval",
+      "description": "(高级) 在嘉立创沙箱内执行任意 JS 表达式, 返回结果. 仅 BusTransport 可用. 禁止用户在 prod 环境随意暴露.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "expr": {
+            "type": "string",
+            "description": "JS 代码 (return ... 取值; 或 await Promise)"
+          }
+        },
+        "required": [
+          "expr"
+        ],
+        "additionalProperties": false
+      },
+      "side_effect": "destructive",
+      "visibility": "log",
+      "tags": [
+        "system",
+        "eval",
+        "advanced"
+      ],
+      "backend_only": true,
+      "recipe": {
+        "kind": "eval"
+      }
+    },
+    {
+      "name": "eda.system.introspect",
+      "description": "(自省) 列出 eda 顶层可用对象与各类的方法. 用于 agent 自学习 API. 仅 BusTransport 可用.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "klass": {
+            "type": "string",
+            "description": "类名 (空则列顶层); e.g. 'sys_Environment'"
+          }
+        },
+        "additionalProperties": false
+      },
+      "side_effect": "read",
+      "visibility": "silent",
+      "tags": [
+        "system",
+        "introspect"
+      ],
+      "backend_only": true,
+      "recipe": {
+        "kind": "eval"
+      }
+    }
+  ]
+};
