@@ -617,7 +617,7 @@ if _HAS_GUI:
 
 def register() -> Any:
     """在 KiCad GUI 内注册本 Action Plugin。CI/无 GUI 环境为安全空操作。"""
-    if not _HAS_GUI:
+    if not _HAS_GUI or wx.GetApp() is None:  # 有包≠在 GUI 内: 无 wx.App 时注册会 abort
         return None
     plugin = DevinActionPlugin()
     plugin.register()
