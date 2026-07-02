@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from kicad_origin.origin.dao_platform import current as _platform_current
 from kicad_origin.origin.env import find_kicad_python
 
 HERE = Path(__file__).resolve().parent
@@ -32,16 +33,14 @@ SERVER_SRC = HERE / "_live_server.py"
 
 
 def _user_plugin_dir() -> Path:
-    """KiCad 9 GUI 形态的 Action Plugin 目录 (仅 depth-2 GUI 驻留用)。
+    """KiCad GUI 形态的 Action Plugin 目录 (仅 depth-2 GUI 驻留用)。
 
-    经真 GUI (KiCad 9.0.9 / Ubuntu) 实测, pcbnew 扫描并加载的是
-    <documents>/scripting/plugins 即 ~/.local/share/kicad/9.0/scripting/plugins;
-    <config>/plugins 不被扫描。
+    经真 GUI 实测, pcbnew 扫描并加载的是 <documents>/scripting/plugins
+    (Linux ~/.local/share/kicad/<ver>/…, Windows/mac ~/Documents/KiCad/<ver>/…);
+    <config>/plugins 不被扫描。跨平台/版本解析统一收口 dao_platform 矩阵,
+    环境变量 KICAD_USER_PLUGIN_DIR 最高优先。
     """
-    env = os.environ.get("KICAD_USER_PLUGIN_DIR")
-    if env:
-        return Path(env)
-    return Path.home() / ".local" / "share" / "kicad" / "9.0" / "scripting" / "plugins"
+    return _platform_current().plugin_dir()
 
 
 def install_plugin(plugin_dir: Optional[Path] = None) -> Path:
