@@ -28,6 +28,14 @@ except Exception:  # noqa: BLE001
 
 PLUGIN_TITLE = "Devin 面板 (半原生 Desktop)"
 
+# install_panel 必须覆盖包内**全部** .py —— 漏一辐, GUI 内 import 即炸
+# (test_ai_ide.test_install_panel_pkg_files_cover_bridge_deps 固化此契约)。
+PANEL_PKG_FILES = (
+    "__init__.py", "accounts.py", "agent_core.py", "agent_loop.py",
+    "bridge.py", "dao_proxy.py", "devin_cloud.py", "panel.py",
+    "prompt_core.py", "proxy_adapters.py", "tools.py",
+)
+
 
 def install_panel(plugin_dir: Optional[Path] = None) -> Path:
     """把本 dao_devin 包 + 一个 register 引导脚本落到 KiCad 插件目录 (幂等)。"""
@@ -36,8 +44,7 @@ def install_panel(plugin_dir: Optional[Path] = None) -> Path:
     pkg_dst = dst_dir / "dao_devin"
     pkg_src = Path(__file__).resolve().parent
     pkg_dst.mkdir(parents=True, exist_ok=True)
-    for f in ("__init__.py", "devin_cloud.py", "accounts.py", "dao_proxy.py",
-              "bridge.py", "panel.py"):
+    for f in PANEL_PKG_FILES:
         src = pkg_src / f
         if src.exists():
             shutil.copyfile(src, pkg_dst / f)
@@ -58,13 +65,63 @@ def install_panel(plugin_dir: Optional[Path] = None) -> Path:
 # ── wx 面板 (仅 GUI 在场时定义真身) ─────────────────────────────────────────
 if _HAS_GUI:
 
+    class GuiLive:
+        """进程内活板入口: 直驱 GUI 正在编辑的 pcbnew.GetBoard(), 而非另起无头
+        daemon。eval 一律经 wx.CallAfter 回主线程执行 (SWIG 非线程安全,
+        后台线程直接碰活板会死锁/崩)。"""
+
+        _EVAL_TIMEOUT = 120.0
+
+        def summary(self) -> dict:
+            b = pcbnew.GetBoard()
+            if b is None:
+                return {"ok": False, "error": "GUI 内无活板"}
+            return {"ok": True, "board": {
+                "file": b.GetFileName(),
+                "footprints": len(b.GetFootprints()),
+                "tracks": len(b.GetTracks()),
+                "nets": b.GetNetCount(),
+                "zones": len(b.Zones())}}
+
+        def eval(self, code: str, timeout: float = _EVAL_TIMEOUT) -> Any:
+            import threading
+            done = threading.Event()
+            box: dict = {}
+
+            def _run() -> None:
+                try:
+                    g = {"pcbnew": pcbnew, "board": pcbnew.GetBoard()}
+                    try:
+                        box["result"] = eval(code, g)  # noqa: S307 — 活板直驱即本意
+                    except SyntaxError:
+                        exec(code, g)  # noqa: S102
+                        box["result"] = g.get("result")
+                except Exception as e:  # noqa: BLE001
+                    box["error"] = str(e)
+                finally:
+                    done.set()
+
+            if wx.IsMainThread():
+                _run()
+            else:
+                wx.CallAfter(_run)
+                if not done.wait(timeout):
+                    raise TimeoutError(f"GUI eval 超时 {timeout}s")
+            if "error" in box:
+                raise RuntimeError(f"live eval failed: {box['error']}")
+            return box.get("result")
+
+        def close(self) -> None:
+            pass
+
     class DevinPanelFrame(wx.Frame):  # type: ignore
-        """极简 Devin 面板: 账号栏 + 会话追踪列表 + 对话输入框。"""
+        """极简 Devin 面板: 账号栏 + 会话追踪列表 + 对话输入框 + AI IDE 对话。"""
 
         def __init__(self, parent: Any) -> None:
-            super().__init__(parent, title=PLUGIN_TITLE, size=(560, 640))
+            super().__init__(parent, title=PLUGIN_TITLE, size=(560, 720))
             from .bridge import DevinKiCadBridge
-            self.bridge = DevinKiCadBridge()
+            self.bridge = DevinKiCadBridge(live_factory=GuiLive)
+            self._ai_cid = ""  # 当前 AI IDE 对话 id (惰性建)
             self._build_ui()
 
         def _build_ui(self) -> None:
@@ -102,6 +159,17 @@ if _HAS_GUI:
             mrow.Add(btn_live, 0)
             v.Add(mrow, 0, wx.ALL, 6)
 
+            # AI IDE 对话 (L4: 提示词 + 工具 + 外接 API 直驱活板)
+            v.Add(wx.StaticText(p, label="AI IDE (渠道模型直驱活板):"), 0, wx.LEFT | wx.TOP, 6)
+            airow = wx.BoxSizer(wx.HORIZONTAL)
+            self.chan_choice = wx.Choice(p, choices=self._chan_labels())
+            if self.chan_choice.GetCount():
+                self.chan_choice.SetSelection(0)
+            btn_ai = wx.Button(p, label="AI 对话")
+            airow.Add(self.chan_choice, 1, wx.EXPAND | wx.RIGHT, 4)
+            airow.Add(btn_ai, 0)
+            v.Add(airow, 0, wx.EXPAND | wx.ALL, 6)
+
             self.log = wx.TextCtrl(p, style=wx.TE_MULTILINE | wx.TE_READONLY, size=(-1, 140))
             v.Add(self.log, 0, wx.EXPAND | wx.ALL, 6)
 
@@ -112,6 +180,15 @@ if _HAS_GUI:
             btn_new.Bind(wx.EVT_BUTTON, self._on_new)
             btn_send.Bind(wx.EVT_BUTTON, self._on_send)
             btn_live.Bind(wx.EVT_BUTTON, self._on_live)
+            btn_ai.Bind(wx.EVT_BUTTON, self._on_ai)
+
+        def _chan_labels(self) -> List[str]:
+            try:
+                chans = self.bridge.proxy_channels()
+            except Exception:  # noqa: BLE001
+                chans = []
+            return [f"{c.get('name', '?')} · {c.get('model', '')}" for c in chans] \
+                or ["(无渠道, 先配 ~/.dao 渠道)"]
 
         def _acct_labels(self) -> List[str]:
             return [("● " if a.get("active") else "  ") + a.get("label", a.get("email", ""))
@@ -173,6 +250,44 @@ if _HAS_GUI:
         def _on_live(self, _evt: Any) -> None:
             r = self.bridge.live_summary()
             self._emit(f"活板: {r.get('summary')}" if r.get("ok") else f"活板失败: {r.get('error')}")
+
+        def _on_ai(self, _evt: Any) -> None:
+            text = self.msg_in.GetValue().strip()
+            if not text:
+                self._emit("请输入消息")
+                return
+            chans = []
+            try:
+                chans = self.bridge.proxy_channels()
+            except Exception:  # noqa: BLE001
+                pass
+            i = self.chan_choice.GetSelection()
+            chan = chans[i]["name"] if 0 <= i < len(chans) else ""
+            if not self._ai_cid:
+                c = self.bridge.ai_new_conversation(channel=chan)
+                self._ai_cid = c["conversation"]["id"]
+            self._emit(f"▶ {text}")
+            self._emit("… AI 思考中…")
+            import threading
+            cid = self._ai_cid
+
+            def _work() -> None:
+                try:
+                    r = self.bridge.ai_send(cid, text)
+                except Exception as e:  # noqa: BLE001
+                    r = {"ok": False, "error": str(e)}
+
+                def _show() -> None:
+                    if not r.get("ok"):
+                        self._emit(f"AI 失败: {r.get('error')}")
+                        return
+                    for s in r.get("steps", []):
+                        self._emit(f"  🔧 {s.get('tool')} → {str(s.get('result'))[:120]}")
+                    self._emit(f"🤖 {r.get('content', '')}")
+
+                wx.CallAfter(_show)
+
+            threading.Thread(target=_work, daemon=True).start()
 
     class DevinActionPlugin(pcbnew.ActionPlugin):  # type: ignore
         def defaults(self) -> None:

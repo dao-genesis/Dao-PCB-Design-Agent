@@ -34,12 +34,14 @@ SERVER_SRC = HERE / "_live_server.py"
 def _user_plugin_dir() -> Path:
     """KiCad 9 GUI 形态的 Action Plugin 目录 (仅 depth-2 GUI 驻留用)。
 
-    经复刻加载器实测, GUI 扫的是 <config>/plugins 与 <config>/scripting/plugins。
+    经真 GUI (KiCad 9.0.9 / Ubuntu) 实测, pcbnew 扫描并加载的是
+    <documents>/scripting/plugins 即 ~/.local/share/kicad/9.0/scripting/plugins;
+    <config>/plugins 不被扫描。
     """
     env = os.environ.get("KICAD_USER_PLUGIN_DIR")
     if env:
         return Path(env)
-    return Path.home() / ".config" / "kicad" / "9.0" / "plugins"
+    return Path.home() / ".local" / "share" / "kicad" / "9.0" / "scripting" / "plugins"
 
 
 def install_plugin(plugin_dir: Optional[Path] = None) -> Path:

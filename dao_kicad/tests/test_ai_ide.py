@@ -262,3 +262,17 @@ def test_bridge_ai_conversation_flow(monkeypatch):
                         lambda c, reg, **kw: orig_run(c, reg, chat_fn=chat))
     r = b.ai_send(cid, "这板几层?")
     assert r["ok"] is True and r["steps"][0]["tool"] == "kicad_board_summary"
+
+
+def test_install_panel_pkg_files_cover_bridge_deps(tmp_path):
+    """install_panel 清单必须涵盖 dao_devin 包内全部 .py (漏一辐 GUI 内即炸)。"""
+    from pathlib import Path
+
+    from kicad_origin.origin.dao_devin import panel
+    pkg = Path(panel.__file__).resolve().parent
+    mods = sorted(p.name for p in pkg.glob("*.py"))
+    assert sorted(panel.PANEL_PKG_FILES) == mods
+    boot = panel.install_panel(tmp_path)
+    assert boot.exists()
+    for f in panel.PANEL_PKG_FILES:
+        assert (tmp_path / "dao_devin" / f).exists(), f
