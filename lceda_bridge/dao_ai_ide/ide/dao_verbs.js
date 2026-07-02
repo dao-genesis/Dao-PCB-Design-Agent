@@ -14,18 +14,22 @@
 
   var MANIFEST = window.DAO_VERBS_MANIFEST || { version: "0", verbs: [] };
 
-  // arg 解析 — 与 verbs.resolve_args 严格一致.
-  function resolveArgs(argSpecs, params) {
-    var out = [];
-    (argSpecs || []).forEach(function (a) {
-      if (a && typeof a === "object" && !Array.isArray(a) && "$" in a) {
+  // arg 解析 — 与 verbs.resolve_args 严格一致 (递归解析嵌套对象/数组).
+  function resolveOne(a, params) {
+    if (a && typeof a === "object" && !Array.isArray(a)) {
+      if ("$" in a) {
         var name = a["$"];
-        out.push(Object.prototype.hasOwnProperty.call(params, name) ? params[name] : (("def" in a) ? a.def : undefined));
-      } else {
-        out.push(a);
+        return Object.prototype.hasOwnProperty.call(params, name) ? params[name] : (("def" in a) ? a.def : undefined);
       }
-    });
-    return out;
+      var o = {};
+      Object.keys(a).forEach(function (k) { o[k] = resolveOne(a[k], params); });
+      return o;
+    }
+    if (Array.isArray(a)) return a.map(function (v) { return resolveOne(v, params); });
+    return a;
+  }
+  function resolveArgs(argSpecs, params) {
+    return (argSpecs || []).map(function (a) { return resolveOne(a, params); });
   }
 
   function splitPath(path) {

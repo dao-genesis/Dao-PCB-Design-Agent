@@ -38,12 +38,36 @@
     var fn = mod[method];
     if (typeof fn !== "function") throw new Error(ns + "." + method + " 不是函数");
     var r = await fn.apply(mod, Array.isArray(args) ? args : []);
-    return safe(r);
+    return safe(await materialize(r));
   }
   function safe(v) {
     if (v === undefined) return null;
     try { return JSON.parse(JSON.stringify(v)); }
     catch (e) { try { return String(v); } catch (e2) { return null; } }
+  }
+  // File/Blob 等宿主对象 JSON 化即空壳; 物化为 {__file__,name,size,text|base64}
+  async function materialize(v) {
+    if (v == null) return v;
+    if ((typeof File !== "undefined" && v instanceof File) ||
+        (typeof Blob !== "undefined" && v instanceof Blob)) {
+      var name = v.name || null, size = v.size, type = v.type || "";
+      var textLike = /^(text\/|application\/(json|xml|x-ndjson))/.test(type) ||
+                     /\.(net|json|txt|csv|xml|rep|log|bom)$/i.test(name || "");
+      if (textLike || size <= 4 * 1024 * 1024) {
+        try {
+          if (textLike) return { __file__: true, name: name, size: size, type: type, text: await v.text() };
+          var buf = await v.arrayBuffer(); var b = new Uint8Array(buf), s = "";
+          for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+          return { __file__: true, name: name, size: size, type: type, base64: btoa(s) };
+        } catch (e) {}
+      }
+      return { __file__: true, name: name, size: size, type: type, unread: true };
+    }
+    if (Array.isArray(v)) {
+      for (var j = 0; j < v.length; j++) v[j] = await materialize(v[j]);
+      return v;
+    }
+    return v;
   }
 
   // ─── 存储 ──────────────────────────────────────────────────────────────

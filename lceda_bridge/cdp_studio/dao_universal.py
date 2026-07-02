@@ -91,6 +91,20 @@ class EdaChannel:
         """探 `_EXTAPI_ROOT_` 是否在位,返回 {present, ns:[...], count}。"""
         raise NotImplementedError
 
+    def transport(self, path: str, args: Optional[list] = None):
+        """操作层传输契约: 成功返回裸结果, 失败抛异常。
+
+        core/tools_registry 与 core/verbs 的 try-paths 语义依赖「失败即抛」
+        才能落到下一个候选; 本方法把通道的 {ok, ret}|{ok:false, err} 结构
+        归一成该契约 —— 传输层与操作层在此合缝。
+        """
+        r = self.call_extapi(path, args or [])
+        if isinstance(r, dict) and "ok" in r:
+            if r.get("ok"):
+                return r.get("ret")
+            raise RuntimeError(str(r.get("err") or "extapi failed"))
+        return r
+
     def close(self) -> None:
         pass
 
