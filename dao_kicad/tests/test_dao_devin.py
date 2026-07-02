@@ -249,6 +249,7 @@ def test_panel_imports_without_gui():
 # L2 · proxy_adapters: 多协议适配器 + 弹性 (移植自 devin-remote)
 # ════════════════════════════════════════════════════════════════
 from kicad_origin.origin.dao_devin import proxy_adapters as pa  # noqa: E402
+from kicad_origin.origin.dao_devin import agent_core as ac  # noqa: E402
 
 
 # ── 协议探测 (源 adapters.js:133 detectProtocol) ─────────────────────────────
@@ -413,3 +414,116 @@ def test_proxy_chat_no_model_errors():
     dao_proxy.add_channel(name="c", base_url="https://x/v1", api_key="k")
     r = dao_proxy.chat([{"role": "user", "content": "hi"}], name="c")
     assert not r["ok"] and "模型" in r["error"]
+
+
+# ════════════════════════════════════════════════════════════════
+# L3 · agent_core: Agent 本源认证链 + 额度 (移植自 devin-remote devin-core.js)
+# ════════════════════════════════════════════════════════════════
+def _agent_transport_ok():
+    """五步链全绿的假传输 (按端点子串路由)。"""
+    def t(method, url, headers, body, timeout_s):
+        if "password/login" in url:
+            return 200, {}, json.dumps({"token": "AUTH1", "user_id": "u1"}).encode()
+        if "WindsurfPostAuth" in url:
+            return 200, {}, json.dumps({"sessionToken": "SESS", "accountId": "acc1"}).encode()
+        if "users/post-auth" in url:
+            return 200, {}, json.dumps({"org": {"org_id": "org-xyz", "org_name": "N",
+                                                 "org_slug": "s"}}).encode()
+        if "RegisterUser" in url:
+            return 200, {}, json.dumps({"api_key": "wk-123",
+                                        "api_server_url": "https://srv"}).encode()
+        if "GetUserStatus" in url:
+            return 200, {}, json.dumps({"userStatus": {"planStatus": {
+                "weeklyQuotaRemainingPercent": 80,
+                "planInfo": {"planName": "Pro"}}}}).encode()
+        if "billing/status" in url:
+            return 200, {}, json.dumps({"available_credits": 12.5,
+                                        "overage_credits": 3.0}).encode()
+        return 404, {}, b'{"error":"no route"}'
+    return t
+
+
+def test_agent_login_five_step_chain():
+    ac.clear_quota_cache()
+    dc.set_transport(_agent_transport_ok())
+    a = ac.agent_login("u@x.com", "pw")
+    assert a.ok and a.auth1 == "AUTH1" and a.org_id == "org-xyz"
+    assert a.session_token == "SESS" and a.account_id == "acc1"
+    assert a.api_key == "wk-123" and a.windsurf_key == "wk-123"  # 非 cog_ → 即 windsurfKey
+    assert a.api_server_url == "https://srv"
+    assert a.quota and a.quota["planName"] == "Pro" and a.quota["wPct"] == 80
+    assert a.quota["overageDollars"] == 15.5 and a.quota["overageKnown"] is True
+
+
+def test_agent_login_windsurf_auth_headers():
+    ft = FakeTransport()
+    ft.add("POST", "password/login", 200, {"token": "AUTH1"})
+    ft.add("POST", "WindsurfPostAuth", 200, {"sessionToken": "SESS"})
+    ft.add("POST", "users/post-auth", 200, {"org": {"org_id": "org-z"}})
+    ft.add("POST", "RegisterUser", 200, {"api_key": "wk"})
+    ft.add("POST", "GetUserStatus", 200, {"userStatus": {}})
+    ft.add("GET", "billing/status", 200, {"available_credits": 0})
+    dc.set_transport(ft)
+    ac.clear_quota_cache()
+    ac.agent_login("u@x.com", "pw")
+    postauth = [c for c in ft.calls if "WindsurfPostAuth" in c[1]][0]
+    assert postauth[2]["X-Devin-Auth1-Token"] == "AUTH1"
+    assert postauth[2]["Connect-Protocol-Version"] == "1"
+    login = [c for c in ft.calls if "password/login" in c[1]][0]
+    assert login[2]["Origin"] == ac.WINDSURF
+
+
+def test_agent_login_bad_credentials():
+    assert not ac.agent_login("", "").ok
+    dc.set_transport(FakeTransport().add("POST", "password/login", 401,
+                                         {"detail": "bad"}))
+    r = ac.agent_login("u@x.com", "wrong")
+    assert not r.ok and "登录失败" in r.error
+
+
+def test_billing_dollars_and_plan_status():
+    # 可用余额 = max(0,avail)+max(0,overage), 负 overage 计 0, 封顶 1000
+    assert ac.billing_dollars({"available_credits": 10, "overage_credits": -5}) == 10.0
+    assert ac.billing_dollars({"available_credits": 2000}) == 1000.0
+    assert ac.billing_dollars(None) == 0.0
+    ps = ac.parse_plan_status({"planStatus": {"weekly_quota_remaining_percent": 50,
+                                              "plan_info": {"plan_name": "Team"}}})
+    assert ps["planName"] == "Team" and ps["wPct"] == 50 and ps["dPct"] == 50  # daily 回落 weekly
+
+
+def test_agent_quota_ttl_cache():
+    ac.clear_quota_cache()
+    calls = {"n": 0}
+
+    def t(method, url, headers, body, timeout_s):
+        if "GetUserStatus" in url:
+            calls["n"] += 1
+            return 200, {}, json.dumps({"userStatus": {"planStatus": {
+                "weeklyQuotaRemainingPercent": 10}}}).encode()
+        if "billing/status" in url:
+            return 200, {}, json.dumps({"available_credits": 1}).encode()
+        return 404, {}, b"{}"
+    dc.set_transport(t)
+    q1 = ac.fetch_quota("wk", "wk", "A1", "org-x")
+    q2 = ac.fetch_quota("wk", "wk", "A1", "org-x")  # TTL 内复用
+    assert q1 and q2 and calls["n"] == 1  # 只真取一次
+    q3 = ac.fetch_quota("wk", "wk", "A1", "org-x", force=True)
+    assert q3 and calls["n"] == 2  # force 绕过
+
+
+def test_agent_hydrate_auth1():
+    dc.set_transport(_agent_transport_ok())
+    ac.clear_quota_cache()
+    r = ac.hydrate_auth1("A1")
+    assert r.ok and r.org_id == "org-xyz" and r.quota is not None
+    assert not ac.hydrate_auth1("").ok
+
+
+def test_bridge_agent_login_masks_secrets():
+    dc.set_transport(_agent_transport_ok())
+    ac.clear_quota_cache()
+    b = bridge.DevinKiCadBridge()
+    d = b.agent_login("u@x.com", "pw")
+    assert d["ok"] and d["orgId"] == "org-xyz"
+    assert d["hasApiKey"] is True and "apiKey" not in d  # 不外泄真钥
+    assert d["quota"]["planName"] == "Pro"

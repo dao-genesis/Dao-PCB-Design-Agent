@@ -17,8 +17,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from . import accounts, dao_proxy
+from . import accounts, agent_core, dao_proxy
 from . import devin_cloud as dc
+
+
+def _agent_auth_dict(a: "agent_core.AgentAuth") -> Dict[str, Any]:
+    """AgentAuth → 面板可 JSON 化 (不暴露密码, apiKey 尾截防泄)。"""
+    if not a.ok:
+        return {"ok": False, "error": a.error}
+    return {"ok": True, "userId": a.user_id, "orgId": a.org_id, "orgName": a.org_name,
+            "orgSlug": a.org_slug, "hasApiKey": bool(a.api_key),
+            "hasWindsurfKey": bool(a.windsurf_key), "apiServerUrl": a.api_server_url,
+            "quota": a.quota}
 
 
 @dataclass
@@ -114,6 +124,31 @@ class DevinKiCadBridge:
 
     def proxy_route(self, name: Optional[str] = None) -> Dict[str, Any]:
         return dao_proxy.resolve_route(name)
+
+    def proxy_chat(self, messages: List[Dict[str, Any]], name: Optional[str] = None,
+                   model: str = "", **opts: Any) -> Dict[str, Any]:
+        """经活动渠道打真模型 (三协议归一)。底层 dao_proxy.chat → proxy_adapters。"""
+        return dao_proxy.chat(messages, name=name, model=model, **opts)
+
+    # ── Agent 本源面 (L3 · Windsurf/Visurf 真源认证链) ─────────────────────
+    def agent_login(self, email: str, password: str) -> Dict[str, Any]:
+        """Agent 真源五步链登录 (windsurf→sessionToken→org→apiKey→额度)。
+        较 add_account 的两跳更深: 产出 apiKey/windsurfKey (Agent 推理层认的钥)。"""
+        a = agent_core.agent_login(email, password)
+        return _agent_auth_dict(a)
+
+    def agent_hydrate(self, auth1: str) -> Dict[str, Any]:
+        """用已有 auth1 补全 org+额度 (无需邮密)。源 hydrateAuth1。"""
+        return _agent_auth_dict(agent_core.hydrate_auth1(auth1))
+
+    def agent_quota(self, force: bool = False) -> Dict[str, Any]:
+        """当前活动号的 Agent 额度/计划 (GetUserStatus + billing 美金余额)。"""
+        r = self.ensure_auth(force=force)
+        if not r.get("ok"):
+            return {"ok": False, "error": r.get("error")}
+        au = self.state.auth
+        q = agent_core.fetch_quota("", "", au.auth1, au.org_id, force=force)
+        return {"ok": q is not None, "quota": q}
 
     # ── 活体内核面 (让 Agent 直驱活板) ────────────────────────────────────
     def live(self):

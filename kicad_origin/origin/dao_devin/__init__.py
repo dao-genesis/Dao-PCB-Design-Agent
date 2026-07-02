@@ -18,4 +18,4 @@ _live_server)——一个活着的 pcbnew 进程握 BOARD 长存, 对外开 HTTP
 """
 from __future__ import annotations
 
-__all__ = ["devin_cloud", "accounts", "dao_proxy", "proxy_adapters"]
+__all__ = ["devin_cloud", "accounts", "dao_proxy", "proxy_adapters", "agent_core"]
