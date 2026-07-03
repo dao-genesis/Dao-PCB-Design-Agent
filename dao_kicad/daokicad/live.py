@@ -164,9 +164,22 @@ class LiveKiCad:
                 f"封装名自动修正: {s['ref']} {s['lib']}:{s['from']} → {s['to']}")
         missing = self.missing_footprints(spec["footprints"], lib_dirs)
         if missing:
+            # Reference-board harvest (逆推回本源): when replicating a real
+            # project, the shipped .kicad_pcb embeds the exact footprint a
+            # stale/renamed library reference points at. Harvest those boards
+            # into a local library and re-point only the still-missing parts
+            # whose verbatim ``lib:fp`` is embedded there — never a guess.
+            got = self._harvest_missing(spec, missing, pdir, out_path, lib_dirs)
+            for m in got:
+                warnings.append(f"封装取自项目成品板: {m['ref']} "
+                                f"{m['lib']}:{m['fp']} → harvested")
+            missing = self.missing_footprints(spec["footprints"], lib_dirs)
+        if missing:
             return {"ok": False, "reason": "部分封装在库中找不到(请在原理图里换用库内封装)",
                     "missing": missing, "warnings": warnings,
                     "from_netlist": str(netlist)}
+        if lib_dirs:
+            spec["fp_lib_dirs"] = lib_dirs
         res = self.build_board(spec, out_path)
         sk = res.get("skipped_connections") or []
         if sk:
@@ -481,6 +494,46 @@ class LiveKiCad:
                              "from": f["fp"], "to": repl})
                 f["fp"] = repl
         return subs
+
+    def _harvest_missing(self, spec: dict, missing: list[dict],
+                         project_dir, out_path,
+                         lib_dirs: dict[str, str]) -> list[dict]:
+        """Resolve still-missing footprints from the project's shipped boards.
+
+        Harvests every ``.kicad_pcb`` in ``project_dir`` into
+        ``<out>/harvested.pretty`` and re-points only the missing specs whose
+        verbatim ``lib:fp`` id is embedded there (existence-gated, no guessing).
+        ``spec['fp_lib_dirs']`` gains the harvested library when anything hits.
+        Returns the resolved entries.
+        """
+        pdir = Path(project_dir) if project_dir else None
+        if pdir is None or not pdir.is_dir():
+            return []
+        outp = Path(out_path)
+        boards = [b for b in sorted(pdir.glob("*.kicad_pcb"))
+                  if b.resolve() != outp.resolve()]
+        if not boards:
+            return []
+        pretty = outp.with_suffix("").parent / "harvested.pretty"
+        mapping: dict[str, str] = {}
+        for b in boards:
+            r = self._worker("harvest", str(b), str(pretty), timeout=300)
+            if r.get("ok"):
+                mapping.update(r.get("mapping") or {})
+        if not mapping:
+            return []
+        resolved: list[dict] = []
+        for m in missing:
+            name = mapping.get(f"{m['lib']}:{m['fp']}")
+            if not name:
+                continue
+            for f in spec["footprints"]:
+                if f.get("lib") == m["lib"] and f.get("fp") == m["fp"]:
+                    f["lib"], f["fp"] = "harvested", name
+            resolved.append(m)
+        if resolved:
+            lib_dirs["harvested"] = str(pretty)
+        return resolved
 
     def missing_footprints(self, footprints: list[dict],
                            lib_dirs: Optional[dict] = None) -> list[dict]:
