@@ -34,6 +34,11 @@ ALIAS: Dict[str, str] = {
     "goto": "kicad_focus",
     "move": "kicad_move",
     "move_footprint": "kicad_move",
+    "route": "kicad_route",
+    "add_track": "kicad_route",
+    "zone": "kicad_zone",
+    "pour": "kicad_zone",
+    "copper_pour": "kicad_zone",
     "drc": "kicad_drc",
     "check": "kicad_drc",
     "run_drc": "kicad_drc",
@@ -155,6 +160,48 @@ KICAD_TOOLS: List[Dict[str, Any]] = [
                     "rotate_deg": {"type": "number", "description": "附加旋转角 (度, 逆时针)"},
                 },
                 "required": ["ref"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kicad_route",
+            "description": (
+                "在两个封装焊盘间布线 (须同网络): 自动直连或 L 形两段走线, "
+                "画布即时刷新, 回传段数/长度。比手写 kicad_eval 建 PCB_TRACK 稳。"
+                "布完可用 kicad_drc 裁决、kicad_save 落盘。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_ref": {"type": "string", "description": "起点封装参考号, 如 R1"},
+                    "end_ref": {"type": "string", "description": "终点封装参考号, 如 R2"},
+                    "start_pad": {"type": "string", "description": "起点焊盘号 (缺省第一个)"},
+                    "end_pad": {"type": "string", "description": "终点焊盘号 (缺省第一个)"},
+                    "width_mm": {"type": "number", "description": "线宽 (mm, 默 0.25)"},
+                    "layer": {"type": "string", "description": "铜层名 (默 F.Cu)"},
+                },
+                "required": ["start_ref", "end_ref"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kicad_zone",
+            "description": (
+                "在板框范围对指定网络铺铜并立即填充 (如 GND 地铜), 回传填充面积。"
+                "铺完可用 kicad_drc 裁决、kicad_save 落盘。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "net": {"type": "string", "description": "网络名, 如 GND"},
+                    "layer": {"type": "string", "description": "铜层名 (默 F.Cu)"},
+                    "clearance_mm": {"type": "number", "description": "间距 (mm, 默 0.3)"},
+                },
+                "required": ["net"],
             },
         },
     },
@@ -304,6 +351,14 @@ def default_registry(bridge: Any) -> ToolRegistry:
                  rotate_deg=0.0: bridge.live_move(
                      ref, dx_mm=dx_mm, dy_mm=dy_mm, x_mm=x_mm, y_mm=y_mm,
                      rotate_deg=rotate_deg))
+    reg.register("kicad_route",
+                 lambda start_ref, end_ref, start_pad="", end_pad="",
+                 width_mm=0.25, layer="F.Cu": bridge.live_route(
+                     start_ref, end_ref, start_pad=start_pad, end_pad=end_pad,
+                     width_mm=width_mm, layer=layer))
+    reg.register("kicad_zone",
+                 lambda net, layer="F.Cu", clearance_mm=0.3: bridge.live_zone(
+                     net, layer=layer, clearance_mm=clearance_mm))
     reg.register("kicad_drc", lambda out_dir="": bridge.live_drc(out_dir))
     reg.register("kicad_save", lambda: bridge.live_save())
 

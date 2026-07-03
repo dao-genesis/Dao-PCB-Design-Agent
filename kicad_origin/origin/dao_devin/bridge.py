@@ -275,6 +275,73 @@ class DevinKiCadBridge:
         ]
         return self.live_eval("\n".join(lines))
 
+    def live_route(self, start_ref: str, end_ref: str,
+                   start_pad: str = "", end_pad: str = "",
+                   width_mm: float = 0.25, layer: str = "F.Cu") -> Dict[str, Any]:
+        """在两个封装焊盘间布线 (同网络, L 形两段或直连一段), 回传段数/长度。
+
+        把「找焊盘→取坐标→建 PCB_TRACK→设宽/层/网→挂板→刷新」归为一次原子 eval。"""
+        lines = [
+            "def _pad(ref, name):",
+            "    fp = board.FindFootprintByReference(ref)",
+            "    assert fp is not None, '无此封装: %s' % ref",
+            "    if name:",
+            "        for p in fp.Pads():",
+            "            if p.GetNumber() == str(name):",
+            "                return p",
+            "        raise AssertionError('%s 无焊盘 %s' % (ref, name))",
+            "    return list(fp.Pads())[0]",
+            "_pa = _pad(%r, %r)" % (start_ref, str(start_pad)),
+            "_pb = _pad(%r, %r)" % (end_ref, str(end_pad)),
+            "assert _pa.GetNetCode() == _pb.GetNetCode(), "
+            "'两焊盘不同网络: %s vs %s' % (_pa.GetNetname(), _pb.GetNetname())",
+            "_p1, _p2 = _pa.GetPosition(), _pb.GetPosition()",
+            "_layer = board.GetLayerID(%r)" % layer,
+            "_w = pcbnew.FromMM(%r)" % float(width_mm),
+            "_pts = [_p1] + ([pcbnew.VECTOR2I(_p2.x, _p1.y)]"
+            " if (_p1.x != _p2.x and _p1.y != _p2.y) else []) + [_p2]",
+            "_len = 0",
+            "for _a, _b in zip(_pts, _pts[1:]):",
+            "    _t = pcbnew.PCB_TRACK(board)",
+            "    _t.SetStart(_a); _t.SetEnd(_b)",
+            "    _t.SetWidth(_w); _t.SetLayer(_layer)",
+            "    _t.SetNetCode(_pa.GetNetCode())",
+            "    board.Add(_t)",
+            "    _len += _t.GetLength()",
+            "try:\n    pcbnew.Refresh()\nexcept Exception:\n    pass",
+            "result = {'net': _pa.GetNetname(), 'segments': len(_pts) - 1,"
+            " 'length_mm': pcbnew.ToMM(int(_len)), 'width_mm': %r,"
+            " 'layer': %r}" % (float(width_mm), layer),
+        ]
+        return self.live_eval("\n".join(lines))
+
+    def live_zone(self, net: str, layer: str = "F.Cu",
+                  clearance_mm: float = 0.3) -> Dict[str, Any]:
+        """在板框范围铺铜 (指定网络/层) 并立即填充, 回传填充后面积。"""
+        lines = [
+            "_net = board.FindNet(%r)" % net,
+            "assert _net is not None, '无此网络: ' + %r" % net,
+            "_bb = board.GetBoardEdgesBoundingBox()",
+            "_z = pcbnew.ZONE(board)",
+            "_z.SetLayer(board.GetLayerID(%r))" % layer,
+            "_z.SetNetCode(_net.GetNetCode())",
+            "_z.SetLocalClearance(pcbnew.FromMM(%r))" % float(clearance_mm),
+            "_z.Outline().NewOutline()",
+            "for _x, _y in [(_bb.GetLeft(), _bb.GetTop()),"
+            " (_bb.GetRight(), _bb.GetTop()),"
+            " (_bb.GetRight(), _bb.GetBottom()),"
+            " (_bb.GetLeft(), _bb.GetBottom())]:",
+            "    _z.Outline().Append(int(_x), int(_y))",
+            "board.Add(_z)",
+            "_filler = pcbnew.ZONE_FILLER(board)",
+            "_filler.Fill(board.Zones())",
+            "try:\n    pcbnew.Refresh()\nexcept Exception:\n    pass",
+            "result = {'net': _net.GetNetname(), 'layer': %r,"
+            " 'filled_area_mm2': round(_z.GetFilledArea() / 1e12, 3),"
+            " 'zones_on_board': len(board.Zones())}" % layer,
+        ]
+        return self.live_eval("\n".join(lines))
+
     def live_drc(self, out_dir: str = "") -> Dict[str, Any]:
         """对活板跑真 kicad-cli DRC: 先落盘, 再裁决, 报告写进项目 out/
         (project_state 的 drc_metrics 自动拾取, 全貌感知闭环)。"""

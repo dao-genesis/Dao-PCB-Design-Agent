@@ -200,6 +200,39 @@ def test_kicad_move_tool_schema_aliases_and_codegen():
     assert "SetOrientationDegrees" in seen["code"]
 
 
+def test_kicad_route_zone_tools_schema_aliases_and_codegen():
+    for a in ("route", "add_track"):
+        assert tools.normalize_name(a) == "kicad_route"
+    for a in ("zone", "pour", "copper_pour"):
+        assert tools.normalize_name(a) == "kicad_zone"
+    rs = tools._SCHEMA_BY_NAME["kicad_route"]["function"]["parameters"]
+    assert rs["required"] == ["start_ref", "end_ref"]
+    zs = tools._SCHEMA_BY_NAME["kicad_zone"]["function"]["parameters"]
+    assert zs["required"] == ["net"]
+
+    import kicad_origin.origin.dao_devin.bridge as br
+    seen = {}
+
+    class _Live:
+        def eval(self, code):
+            seen["code"] = code
+            compile(code, "<route>", "exec")  # 生成代码必须语法有效
+            return {"net": "SIG", "segments": 2}
+
+    b = br.DevinKiCadBridge(live_factory=lambda: _Live())
+    r = b.live_route("R1", "R2", start_pad="2", width_mm=0.3, layer="B.Cu")
+    assert r["ok"] and r["result"]["segments"] == 2
+    code = seen["code"]
+    assert "PCB_TRACK" in code and "pcbnew.FromMM(0.3)" in code
+    assert "GetLayerID('B.Cu')" in code and "_pad('R1', '2')" in code
+
+    r = b.live_zone("GND", clearance_mm=0.2)
+    assert r["ok"]
+    code = seen["code"]
+    assert "FindNet('GND')" in code and "ZONE_FILLER" in code
+    assert "pcbnew.FromMM(0.2)" in code
+
+
 def test_kicad_drc_tool_schema_aliases_and_bridge(tmp_path, monkeypatch):
     schema = tools._SCHEMA_BY_NAME.get("kicad_drc")
     assert schema is not None
