@@ -613,3 +613,25 @@ def test_ipc_session_no_gui_is_graceful():
     assert res["ok"] is False and "reason" in res
     assert s.connected is False
     assert s.board_info()["ok"] is False
+
+
+@needs_script
+def test_library_edge_cuts_stripped_from_footprints(tmp_path):
+    """Edge-connector footprints (USB-C…) ship Edge.Cuts fragments meant for
+    flush board-edge mounting; placed mid-board they corrupt the spec-owned
+    outline (invalid_outline + bogus copper_edge_clearance). The builder must
+    drop them so the board carries only the spec outline."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "edgecut",
+        "footprints": [{"ref": "J1", "lib": "Connector_USB",
+                        "fp": "USB_C_Receptacle_Amphenol_12401948E412A"}],
+        "connections": [],
+    }
+    pcb = tmp_path / "edge.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    for fp in board.GetFootprints():
+        assert not any(g.GetLayer() == pcbnew.Edge_Cuts
+                       for g in fp.GraphicalItems()), fp.GetReference()
