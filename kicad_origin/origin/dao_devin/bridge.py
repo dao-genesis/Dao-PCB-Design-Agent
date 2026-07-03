@@ -393,7 +393,9 @@ class DevinKiCadBridge:
             "try:\n    pcbnew.Refresh()\nexcept Exception:\n    pass",
             "result = {'kind': %r, 'net': _net or '*', 'layer': %r or '*',"
             " 'removed': _removed,"
-            " 'total': sum(_removed.values())}" % (kind, layer),
+            " 'total': sum(_removed.values()),"
+            " 'remaining': {'tracks': len(board.GetTracks()),"
+            " 'zones': len(board.Zones())}}" % (kind, layer),
         ]
         return self.live_eval("\n".join(lines))
 

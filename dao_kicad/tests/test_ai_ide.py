@@ -255,7 +255,7 @@ def test_kicad_delete_tool_schema_aliases_and_codegen():
     assert r["ok"] and r["result"]["total"] == 2
     code = seen["code"]
     assert "GetTracks()" in code and "RemoveNative" in code
-    assert "Zones()" not in code  # kind=tracks 不动铺铜
+    assert "for _z in list(board.Zones())" not in code  # kind=tracks 不动铺铜
 
     r = b.live_delete(kind="all", layer="F.Cu")
     code = seen["code"]
@@ -292,6 +292,7 @@ def test_kicad_delete_headless_on_real_board(tmp_path):
     net = r["result"]["net"]
     r = b.live_delete(net=net)
     assert r["ok"] and r["result"]["total"] >= 1
+    assert r["result"]["remaining"] == {"tracks": 0, "zones": 0}
     assert len(list(board.GetTracks())) == 0
 
 
@@ -375,8 +376,10 @@ def test_panel_tool_line_humanizes_trace():
     assert "12 违规" in line and "clearance(error)" in line
     line = panel._tool_line("kicad_delete", {}, {"ok": True, "result": {
         "net": "SIG", "total": 3,
-        "removed": {"tracks": 2, "vias": 1, "zones": 0}}})
+        "removed": {"tracks": 2, "vias": 1, "zones": 0},
+        "remaining": {"tracks": 4, "zones": 1}}})
     assert "SIG 网拆除 3 项" in line and "线 2" in line
+    assert "板余线 4 · 铜 1" in line
     assert panel._tool_line("kicad_save", {}, {"ok": True}) == "已存盘"
     line = panel._tool_line("kicad_eval", {"code": "1+1"},
                             {"ok": True, "result": 2})
