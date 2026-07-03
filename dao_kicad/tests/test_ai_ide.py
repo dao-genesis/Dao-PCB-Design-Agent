@@ -261,6 +261,37 @@ def test_kicad_drc_tool_schema_aliases_and_bridge(tmp_path, monkeypatch):
     assert (tmp_path / "out" / "drc-live.json").exists()
 
 
+def test_run_drc_cli_surfaces_violation_details(tmp_path, monkeypatch):
+    """DRC 结果带违规明细 (类型/严重度/描述/坐标) —— AI IDE 诊断面板同构。"""
+    import subprocess
+
+    import kicad_origin.origin.dao_devin.bridge as br
+
+    report = tmp_path / "drc.json"
+
+    def _fake_run(cmd, **kw):
+        report.write_text(json.dumps({
+            "violations": [{"type": "clearance", "severity": "error",
+                            "description": "Clearance violation (0.1 < 0.2mm)",
+                            "items": [{"description": "Track [SIG]",
+                                       "pos": {"x": 14.0, "y": 10.0}}]}],
+            "unconnected_items": [],
+        }))
+        class _R:
+            returncode = 0
+            stdout = stderr = ""
+        return _R()
+
+    monkeypatch.setattr(br, "_find_kicad_cli", lambda: "kicad-cli")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    r = br._run_drc_cli("b.kicad_pcb", str(report))
+    assert r["ok"] and r["violations"] == 1
+    d = r["details"][0]
+    assert d["type"] == "clearance" and d["severity"] == "error"
+    assert "Clearance" in d["what"] and d["at_mm"] == [14.0, 10.0]
+    assert d["where"] == "Track [SIG]"
+
+
 def test_default_registry_exposes_move_and_drc():
     class _Bridge:
         def live_move(self, ref, **kw):

@@ -69,9 +69,20 @@ def _run_drc_cli(board: str, report: str) -> Dict[str, Any]:
         rep = json.loads(Path(report).read_text(encoding="utf-8"))
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"DRC 报告解析失败: {e}"}
+    def _brief(v: Dict[str, Any]) -> Dict[str, Any]:
+        it = (v.get("items") or [{}])[0]
+        pos = it.get("pos") or {}
+        return {"type": v.get("type"), "severity": v.get("severity"),
+                "what": v.get("description"),
+                "where": it.get("description"),
+                "at_mm": [pos.get("x"), pos.get("y")]}
+
     return {"ok": True,
             "violations": len(rep.get("violations", [])),
-            "unconnected": len(rep.get("unconnected_items", []))}
+            "unconnected": len(rep.get("unconnected_items", [])),
+            "details": [_brief(v) for v in rep.get("violations", [])[:10]],
+            "unconnected_details": [_brief(v) for v in
+                                    rep.get("unconnected_items", [])[:10]]}
 
 
 @dataclass
@@ -365,6 +376,8 @@ class DevinKiCadBridge:
             "report": str(report),
             "violations": res.get("violations"),
             "unconnected": res.get("unconnected"),
+            "details": res.get("details"),
+            "unconnected_details": res.get("unconnected_details"),
         }}
 
     # ── 项目全貌感知面 (Agent 的眼睛) ──────────────────────────────────
