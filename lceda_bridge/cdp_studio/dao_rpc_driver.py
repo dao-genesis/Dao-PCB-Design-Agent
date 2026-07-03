@@ -239,8 +239,10 @@ class DaoRpc:
     # ---------- 钥匙 1：工程 ----------
     def create_project(self, name):
         """renderer 内 REST 建工程（嘉立创桌面的规范本源入口），返回工程 uuid。"""
-        # 同名工程已存在时 REST 返回 success:false → 追加短时戳保证可重跑、确定可达
-        for cand in (name, "%s_%d" % (name, int(time.time()))):
+        # 同名工程已存在时 REST 返回 success:false → 追加短时戳保证可重跑、确定可达;
+        # 再缀端口区分同机双引擎(原生/Wine 共享同一工程目录,同秒同名会双双失败)
+        for cand in (name, "%s_%d" % (name, int(time.time())),
+                     "%s_%d_p%d" % (name, int(time.time()), self.port)):
             js = (r'''(async function(){var b={path:%s,name:%s,content:"",public:false,default_sheet:""};
 var r=await fetch("/api/client/createProject",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});
 var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.result||{})[0]});})()'''
