@@ -316,6 +316,12 @@ def wine_deploy(version: str, license_path: Path | None, port: int,
     else:
         _log(f"已安装,跳过 ({WINE_EXE})")
 
+    # Windows 引擎把无盘符 POSIX 路径解析到当前盘根(如 C:\home\...);建
+    # drive_c/home → /home 软链,使两种拼写恒落同一真实目录(工程可载入)。
+    home_link = WINE_PREFIX / "drive_c" / "home"
+    if not home_link.exists():
+        home_link.symlink_to("/home")
+
     if license_path:
         place_license(license_path)  # Wine 把宿主 Documents 映射进 C 盘, 落点同一处
 
