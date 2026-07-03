@@ -37,8 +37,26 @@
     if (!mod) throw new Error("命名空间不存在: " + ns);
     var fn = mod[method];
     if (typeof fn !== "function") throw new Error(ns + "." + method + " 不是函数");
-    var r = await fn.apply(mod, Array.isArray(args) ? args : []);
+    var r = await fn.apply(mod, dematerialize(Array.isArray(args) ? args : []));
     return safe(await materialize(r));
+  }
+  // 反向: 参数里的 {__file__,name,type,text|base64} 还原为真 File (与后端同契约)
+  function dematerialize(v) {
+    if (v == null) return v;
+    if (Array.isArray(v)) return v.map(dematerialize);
+    if (typeof v === "object") {
+      if (v.__file__ === true && (typeof v.text === "string" || typeof v.base64 === "string")) {
+        var bits;
+        if (typeof v.text === "string") bits = [v.text];
+        else { var s = atob(v.base64), u = new Uint8Array(s.length);
+               for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); bits = [u]; }
+        return new File(bits, v.name || "file", { type: v.type || "application/octet-stream" });
+      }
+      var o = {};
+      Object.keys(v).forEach(function (k) { o[k] = dematerialize(v[k]); });
+      return o;
+    }
+    return v;
   }
   function safe(v) {
     if (v === undefined) return null;

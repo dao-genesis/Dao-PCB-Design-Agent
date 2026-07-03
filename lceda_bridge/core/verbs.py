@@ -357,7 +357,52 @@ VERBS: list[dict] = [
              "args": [{"$": "primitive_id"}, {"x": {"$": "x"}, "y": {"$": "y"}}]},
         ]},
     },
+    {
+        "name": "eda.pcb.drc_rules",
+        "description": "读取当前 PCB 的 DRC 规则配置 (名称 + 完整配置).",
+        "input_schema": EMPTY_SCHEMA,
+        "side_effect": "read", "visibility": "log", "tags": ["pcb", "drc", "rules"],
+        "recipe": {"kind": "fields", "fields": {
+            "name": [{"call": "pcb_Drc.getCurrentRuleConfigurationName", "args": []}],
+            "config": [{"call": "pcb_Drc.getCurrentRuleConfiguration", "args": []}],
+        }},
+    },
+    {
+        "name": "eda.pcb.export_autoroute",
+        "description": "导出当前 PCB 的自动布线交换文件 (JSON, 供外部布线器如 freerouting/JRouter). 返回物化文件 {__file__,name,text|base64}. 实测 v3.2.149: 板上无未布线网络时引擎返回 undefined (即 null).",
+        "input_schema": EMPTY_SCHEMA,
+        "side_effect": "read", "visibility": "log", "tags": ["pcb", "route", "export"],
+        "recipe": {"kind": "try_paths", "candidates": [
+            {"call": "pcb_ManufactureData.getAutoRouteJsonFile", "args": []},
+            {"call": "pcb_ManufactureData.getAutoRouteJsonFileForJRouter", "args": []},
+        ]},
+    },
+    {
+        "name": "eda.pcb.import_autoroute",
+        "description": "把外部布线器结果导回当前 PCB. file 传物化格式 {__file__:true,name,type,text|base64}, 传输层自动还原为真 File; JSON 结果走 importAutoRouteJsonFile, .ses 走 importAutoRouteSesFile.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file": {"type": "object", "description": "物化文件 {__file__:true,name,type,text|base64}"},
+            },
+            "required": ["file"], "additionalProperties": False,
+        },
+        "side_effect": "write", "visibility": "toast", "tags": ["pcb", "route", "import"],
+        "recipe": {"kind": "try_paths", "candidates": [
+            {"call": "pcb_Document.importAutoRouteJsonFile", "args": [{"$": "file"}]},
+            {"call": "pcb_Document.importAutoRouteSesFile", "args": [{"$": "file"}]},
+        ]},
+    },
     # ── 6. 原理图操作 ──────────────────────────────────
+    {
+        "name": "eda.sch.drc",
+        "description": "对当前原理图运行 DRC (电气规则检查).",
+        "input_schema": EMPTY_SCHEMA,
+        "side_effect": "write", "visibility": "toast", "tags": ["sch", "drc"],
+        "recipe": {"kind": "try_paths", "candidates": [
+            {"call": "sch_Drc.check", "args": []},
+        ]},
+    },
     {
         "name": "eda.sch.netlist",
         "description": "导出当前原理图的网表 (制造网表文件, 退而求其次取内存网表).",

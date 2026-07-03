@@ -194,7 +194,7 @@ _CALL_TPL = r"""(async function(){
     else if(typeof R[key]==='function'){ fn=R[key]; ctx=R; }
     else { var i=key.lastIndexOf('_'); ns=key.slice(0,i); method=key.slice(i+1); ctx=R[ns]; fn=ctx?ctx[method]:null; }
     if(typeof fn!=='function') return JSON.stringify({ok:false, err:'NO_API '+key});
-    var r = await fn.apply(ctx, %(args)s);
+    var r = await fn.apply(ctx, __daoDemat(%(args)s));
     r = await __daoMaterialize(r);
     return JSON.stringify({ok:true, ret:(r===undefined?null:r)});
     // File/Blob 等宿主对象 JSON 化即空壳; 就地物化为 {__file__,name,size,text|base64}
@@ -218,6 +218,24 @@ _CALL_TPL = r"""(async function(){
       if (Array.isArray(v)) {
         for (var j=0;j<v.length;j++) v[j] = await __daoMaterialize(v[j]);
         return v;
+      }
+      return v;
+    }
+    // 反向: 参数里的 {__file__,name,type,text|base64} 还原为真 File (双向物化闭环)
+    function __daoDemat(v){
+      if (v == null) return v;
+      if (Array.isArray(v)) return v.map(__daoDemat);
+      if (typeof v === 'object') {
+        if (v.__file__ === true && (typeof v.text === 'string' || typeof v.base64 === 'string')) {
+          var bits;
+          if (typeof v.text === 'string') bits = [v.text];
+          else { var s = atob(v.base64), u = new Uint8Array(s.length);
+                 for (var i=0;i<s.length;i++) u[i]=s.charCodeAt(i); bits=[u]; }
+          return new File(bits, v.name || 'file', {type: v.type || 'application/octet-stream'});
+        }
+        var o = {};
+        Object.keys(v).forEach(function(k){ o[k] = __daoDemat(v[k]); });
+        return o;
       }
       return v;
     }
