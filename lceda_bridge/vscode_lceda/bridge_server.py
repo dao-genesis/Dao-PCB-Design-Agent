@@ -306,9 +306,9 @@ class EdaSession:
             return None, json.dumps(res["exceptionDetails"])[:500]
         return (res.get("result") or {}).get("value"), None
 
-    def verb(self, ns_method, args):
+    def verb(self, ns_method, args, timeout=20):
         expr = _CALL_TPL % {"key": json.dumps(ns_method), "args": json.dumps(args or [])}
-        val, err = self.eval_js(expr)
+        val, err = self.eval_js(expr, timeout=timeout)
         if err:
             return {"ok": False, "err": err}
         try:
@@ -495,7 +495,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(400, {"ok": False, "err": "bad kind"})
         elif path == "/api/verb":
-            self._send(200, SESSION.verb(body.get("ns", ""), body.get("args", [])))
+            self._send(200, SESSION.verb(body.get("ns", ""), body.get("args", []),
+                                         timeout=min(int(body.get("timeout", 20)), 120)))
         elif path == "/api/chat":
             self._send(200, chat_agent(SESSION, body.get("text", "")))
         elif path == "/api/eval":

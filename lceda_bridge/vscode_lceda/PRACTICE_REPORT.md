@@ -30,6 +30,18 @@
   - `pcb_ManufactureData.getManufactureData` → 官方仅私有化部署可用
 - 桥零超时、零断连、平均 <10ms/动词
 
+## 实战四: 覆铜 + 出产数据 (practice_fab.py)
+
+- 双面 GND 覆铜(`pcb_MathPolygon.createComplexPolygon` + `pcb_PrimitivePour.create`),
+  重建覆铜走 GUI 快捷键 Shift+B(经 /api/input 键盘通道) → 实铜生成(见 evidence_pcb_poured.jpg)
+- 覆铜后 DRC 复测: 零违规
+- 出产数据经页内 Blob→base64 带回落盘: `getBomFile`(Export_BOM.xlsx 7.5KB) +
+  `getPickAndPlaceFile`(Pick_Place 7.9KB)
+- 实战暴露并修复的**真桥缺陷**: `/api/verb` 忽略调用方 timeout(固定 20s), 长动词
+  (pcb_Drc.check verbose 等)必超时 NO_RESULT → 已修: /api/verb 透传 timeout(上限 120s)
+- EXTAPI 缺陷记录: `pcb_ManufactureData.getManufactureData` 仅私有化部署可用(官方限制);
+  坐标文件正名 `getPickAndPlaceFile`(无 getComponentsCoordinateFile)
+
 ## 本轮桥增强
 
 - `POST /api/eval`: 本机高阶通道, 原样在 EDA 页求值 JS(实战放件/板框/GUI 兜底所需)
