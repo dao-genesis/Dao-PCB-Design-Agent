@@ -169,6 +169,24 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _read_body(self) -> bytes:
+        """Read a request body sent either with Content-Length or chunked.
+
+        Node/fetch clients stream JSON with ``Transfer-Encoding: chunked``
+        (no Content-Length), which a naive read would see as an empty body.
+        """
+        if "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
+            out = b""
+            while True:
+                size = int(self.rfile.readline().split(b";")[0].strip(), 16)
+                if size == 0:
+                    self.rfile.readline()
+                    return out
+                out += self.rfile.read(size)
+                self.rfile.readline()
+        n = int(self.headers.get("Content-Length") or 0)
+        return self.rfile.read(n)
+
     def do_OPTIONS(self):
         self._send_raw(b"", "text/plain", 204)
 
@@ -177,8 +195,9 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
             if u.path == "/api/health":
-                v = _lk().pcbnew_version()
-                return self._send({"ok": True, "kicad": v.get("version"),
+                e = _lk().env
+                return self._send({"ok": True, "kicad": e.version,
+                                   "cli": str(e.cli) if e.cli else None,
                                    "service": "dao-kicad-ide"})
             if u.path == "/api/tree":
                 return self._send(api_tree(q.get("root", ".")))
@@ -210,8 +229,8 @@ class Handler(BaseHTTPRequestHandler):
         if fn is None:
             return self._send({"ok": False, "error": "not found"}, 404)
         try:
-            n = int(self.headers.get("Content-Length") or 0)
-            body = json.loads(self.rfile.read(n) or b"{}")
+            raw = self._read_body()
+            body = json.loads(raw or b"{}")
         except Exception as e:
             return self._send({"ok": False, "error": f"bad json: {e}"}, 400)
         try:
