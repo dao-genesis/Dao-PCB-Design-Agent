@@ -84,6 +84,15 @@ CIRCUIT = [
     # SWD 调试口
     ("PZ254V-11-04P", "J1", (1300, -600), {"1": "VCC33", "2": "SWDIO",
                                            "3": "SWCLK", "4": "GND"}),
+    # 第二轮扩展: UART 口 + BOOT 跳线 + 电源 LED + 备用滤波
+    ("PZ254V-11-04P", "J2", (1300, -900), {"1": "VCC33", "2": "UART_TX",
+                                           "3": "UART_RX", "4": "GND"}),
+    ("PZ254V-11-02P", "J3", (1300, -1200), {"1": "BOOT0", "2": "VCC33"}),
+    ("PZ254V-11-02P", "J4", (1300, -1400), {"1": "BOOT1", "2": "VCC33"}),
+    ("0805W8F510JT5E", "R9", (1000, -1100), {"1": "VCC33", "2": "LED3_K"}),
+    ("KT-0805R", "LED3", (1000, -1300), {"1": "LED3_K", "2": "GND"}),
+    ("CL21B104KBCNNNC", "C9", (600, 0), {"1": "VCC5", "2": "GND"}),
+    ("CL21A106KOQNNNE", "C10", (750, 0), {"1": "VCC33", "2": "GND"}),
 ]
 
 
@@ -109,7 +118,7 @@ def main():
 
     # 3) 同步到 PCB → 布局 → 板框
     comps = step("syncToPcb", lambda: T.sync_to_pcb(ids["pcb"])) or []
-    step("gridLayout", lambda: T.grid_layout(comps, pitch=600))
+    step("affinityLayout", lambda: T.affinity_layout(comps, pitch=600))
     step("boardOutline", lambda: T.board_outline(150))
     step("savePcb", T.save_pcb)
     step("reloadEngine", lambda: T.reload_engine(ids["project"], ids["pcb"]))

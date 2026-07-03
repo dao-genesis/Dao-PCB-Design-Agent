@@ -191,6 +191,43 @@ def grid_layout(comp_ids, pitch=300, cols=None):
     return len(comp_ids)
 
 
+def affinity_layout(comp_ids, pitch=600):
+    """网络亲和布局(工具进化·第二轮实战): 连通度最高者居中, 其余贪心放到
+    已放邻居质心最近的空格 → 缩短飞线, 降低布线难度。"""
+    nets = {}
+    for cid in comp_ids:
+        s = set()
+        for p in (verb("pcb_PrimitiveComponent.getAllPinsByPrimitiveId", cid) or []):
+            n = p.get("net")
+            if n and n != "GND":  # GND 走覆铜, 不参与亲和
+                s.add(n)
+        nets[cid] = s
+    deg = {c: sum(len(nets[c] & nets[o]) for o in comp_ids if o != c)
+           for c in comp_ids}
+    order = sorted(comp_ids, key=lambda c: -deg[c])
+    cells, taken = {}, set()
+
+    side = int(math.ceil(math.sqrt(len(comp_ids)))) + 2
+    grid = [(gx, gy) for gx in range(-side, side + 1)
+            for gy in range(-side, side + 1)]
+
+    for cid in order:
+        neigh = [cells[o] for o in cells if nets[cid] & nets[o]]
+        if neigh:
+            tx = sum(p[0] for p in neigh) / len(neigh)
+            ty = sum(p[1] for p in neigh) / len(neigh)
+        else:
+            tx = ty = 0.0
+        free = [c for c in grid if c not in taken]
+        cell = min(free, key=lambda c: (c[0] - tx) ** 2 + (c[1] - ty) ** 2)
+        cells[cid] = cell
+        taken.add(cell)
+    for cid, (gx, gy) in cells.items():
+        verb("pcb_PrimitiveComponent.modify", cid,
+             {"x": gx * pitch, "y": gy * pitch}, timeout=20)
+    return len(cells)
+
+
 def pins_bbox(margin=100):
     xs, ys = [], []
     for cid in (verb("pcb_PrimitiveComponent.getAllPrimitiveId") or []):

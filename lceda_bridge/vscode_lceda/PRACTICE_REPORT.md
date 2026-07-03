@@ -42,6 +42,21 @@
 - EXTAPI 缺陷记录: `pcb_ManufactureData.getManufactureData` 仅私有化部署可用(官方限制);
   坐标文件正名 `getPickAndPlaceFile`(无 getComponentsCoordinateFile)
 
+## 正本清源 · 真实项目全链路复刻 (dao_tools.py + project_bluepill.py)
+
+锚定真实开源硬件为参照(STM32F103C8T6 Blue Pill 开发板), 不再做模板式自测:
+上层脚本只描述电路(BOM+网表), 全链路由沉淀的工具库 dao_tools 驱动。
+
+- 第一轮(25件18网): 建工程→检索真件(LCSC 系统库)→放件→连接即命名→同步PCB→
+  布局→板框→自动布线(181线21孔)→双面覆铜→DRC 零违规→出产 **86/86 步通过**
+- 第二轮(32件20网, 加 UART/BOOT跳线/电源LED): 工具进化——新增**网络亲和布局**
+  (连通度中心+贪心邻居质心), 过孔 21→8, **107/107 步通过**, DRC 零违规
+- 出产全集: Gerber(14文件全层含钻孔)+BOM(xlsx)+贴片坐标, 全经页内 Blob→base64 落盘
+- 实战暴露并沉淀的真缺陷:
+  1. `dmt_Project.createProject` 仅返回 uuid 不切换当前工程 → 必须显式 openProject(已入库)
+  2. `lib_Device.search` 返回列表而非分页对象; create 需 {uuid,libraryUuid,name} 全对象
+  3. `sch_PrimitiveWire.create` 斜线/浮点端点必 "create failed" → stub 必须轴对齐整数端点
+
 ## 本轮桥增强
 
 - `POST /api/eval`: 本机高阶通道, 原样在 EDA 页求值 JS(实战放件/板框/GUI 兜底所需)
