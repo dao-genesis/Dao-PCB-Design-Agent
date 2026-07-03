@@ -114,6 +114,123 @@ def available() -> bool:
     return find_java() is not None and find_freerouting() is not None
 
 
+def _balanced_block(text: str, start: int) -> int:
+    """Index one past the matching ')' of the '(' at ``start`` (quote-aware)."""
+    depth = 0
+    i = start
+    in_q = False
+    while i < len(text):
+        ch = text[i]
+        if in_q:
+            if ch == '"':
+                in_q = False
+        elif ch == '"':
+            in_q = True
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return len(text)
+
+
+def _top_level_children(body: str, head: str) -> list[tuple[int, int]]:
+    """(start, end) spans of every top-level ``(head …)`` block inside body."""
+    spans = []
+    i = 0
+    needle = "(" + head
+    while True:
+        j = body.find(needle, i)
+        if j < 0:
+            break
+        nxt = body[j + len(needle): j + len(needle) + 1]
+        if nxt not in (" ", "\t", "\n", "\r"):
+            i = j + 1
+            continue
+        end = _balanced_block(body, j)
+        spans.append((j, end))
+        i = end
+    return spans
+
+
+def _sort_children(section: str, head: str, key_re: str) -> str:
+    """Rewrite ``section`` with its top-level ``(head …)`` children sorted by
+    the first ``key_re`` match inside each child; everything else stays put."""
+    import re
+    spans = _top_level_children(section, head)
+    if len(spans) < 2:
+        return section
+    blocks = [section[a:b] for a, b in spans]
+
+    def k(blk):
+        m = re.search(key_re, blk)
+        return m.group(1) if m else ""
+    ordered = sorted(blocks, key=k)
+    out = []
+    prev = 0
+    for (a, b), blk in zip(spans, ordered):
+        out.append(section[prev:a])
+        out.append(blk)
+        prev = b
+    out.append(section[prev:])
+    return "".join(out)
+
+
+def canonicalize_dsn(dsn: str | Path) -> bool:
+    """Rewrite a DSN into component/net-order canonical form, in place.
+
+    KiCad saves board footprints in random-UUID order, so ExportSpecctraDSN
+    emits ``(component …)``/``(place …)`` in a different order every build and
+    freerouting — whose heuristics are order-sensitive — routes the *same*
+    placement to a different quality run-to-run (interf_u: 1 vs 9 unconnected).
+    Sorting placement components (and each component's places) plus network
+    nets by name makes the DSN a pure function of the placement, so routing a
+    given board is reproducible. Returns True when the file was rewritten.
+    """
+    dsn = Path(dsn)
+    try:
+        text = dsn.read_text(encoding="utf-8")
+    except Exception:
+        return False
+    changed = False
+    for section_head, child_head, key in (
+            ("placement", "component", r'\(component\s+("[^"]*"|\S+)'),
+            ("library", "image", r'\(image\s+("[^"]*"|\S+)'),
+            ("library", "padstack", r'\(padstack\s+("[^"]*"|\S+)'),
+            ("network", "net", r'\(net\s+("[^"]*"|\S+)')):
+        spans = _top_level_children(text, section_head)
+        for a, b in spans:
+            sec = text[a:b]
+            new = _sort_children(sec, child_head, key)
+            if child_head == "component":
+                # also sort each component's (place REF …) rows
+                rebuilt = new
+                for ca, cb in reversed(_top_level_children(new, "component")):
+                    comp = new[ca:cb]
+                    comp2 = _sort_children(comp, "place", r'\(place\s+("[^"]*"|\S+)')
+                    rebuilt = rebuilt[:ca] + comp2 + rebuilt[cb:]
+                new = rebuilt
+            if new != sec:
+                text = text[:a] + new + text[b:]
+                changed = True
+
+    # (pins A-1 B-2 …) token order inside each net also follows footprint
+    # order; sort the tokens so the network section is fully canonical.
+    import re
+
+    def _sort_pins(m):
+        return "(pins " + " ".join(sorted(m.group(1).split())) + ")"
+    new_text = re.sub(r"\(pins\s+([^()]+?)\s*\)", _sort_pins, text)
+    if new_text != text:
+        text = new_text
+        changed = True
+    if changed:
+        dsn.write_text(text, encoding="utf-8")
+    return changed
+
+
 def route_dsn(dsn: str | Path, ses: str | Path, *,
               timeout: int = 600, passes: int = 10) -> RouteResult:
     """Route a Specctra .dsn into a .ses using freerouting (headless).
@@ -130,6 +247,9 @@ def route_dsn(dsn: str | Path, ses: str | Path, *,
     if not jar:
         return RouteResult(False, None, "", "", "freerouting.jar not found")
     dsn, ses = Path(dsn), Path(ses)
+    # KiCad emits DSN sections in random-UUID order; canonicalize so routing a
+    # given placement is reproducible instead of oscillating run-to-run.
+    canonicalize_dsn(dsn)
     ses.parent.mkdir(parents=True, exist_ok=True)
 
     import tempfile
