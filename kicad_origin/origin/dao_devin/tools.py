@@ -39,6 +39,12 @@ ALIAS: Dict[str, str] = {
     "zone": "kicad_zone",
     "pour": "kicad_zone",
     "copper_pour": "kicad_zone",
+    "delete": "kicad_delete",
+    "remove": "kicad_delete",
+    "clear": "kicad_delete",
+    "ripup": "kicad_delete",
+    "rip_up": "kicad_delete",
+    "delete_tracks": "kicad_delete",
     "drc": "kicad_drc",
     "check": "kicad_drc",
     "run_drc": "kicad_drc",
@@ -208,6 +214,30 @@ KICAD_TOOLS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "kicad_delete",
+            "description": (
+                "从活板删除布线图元 (拆线/清铜): kind 选 tracks(走线含过孔)/"
+                "zones(铺铜)/all; 可按 net 和 layer 过滤只删某网/某层。回传各类"
+                "删除数。重布前先拆旧线用它, 比手写 kicad_eval 遍历稳。删完可"
+                "kicad_route 重布、kicad_drc 裁决、kicad_save 落盘。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["tracks", "zones", "all"],
+                        "description": "删什么: tracks=走线+过孔, zones=铺铜, all=两者 (默 tracks)",
+                    },
+                    "net": {"type": "string", "description": "只删此网络名下的图元 (缺省全部网)"},
+                    "layer": {"type": "string", "description": "只删此铜层上的图元, 如 F.Cu (缺省全部层)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "kicad_drc",
             "description": (
                 "对活板跑真 kicad-cli DRC (先自动落盘): 回传违规数/未连接数与报告"
@@ -359,6 +389,9 @@ def default_registry(bridge: Any) -> ToolRegistry:
     reg.register("kicad_zone",
                  lambda net, layer="F.Cu", clearance_mm=0.3: bridge.live_zone(
                      net, layer=layer, clearance_mm=clearance_mm))
+    reg.register("kicad_delete",
+                 lambda kind="tracks", net="", layer="": bridge.live_delete(
+                     kind=kind, net=net, layer=layer))
     reg.register("kicad_drc", lambda out_dir="": bridge.live_drc(out_dir))
     reg.register("kicad_save", lambda: bridge.live_save())
 

@@ -98,6 +98,11 @@ def _tool_line(tool: str, args: Any, r: Any) -> str:
             return "%s 铺铜 %.4g mm\u00b2 @%s" % (
                 res.get("net"), float(res.get("filled_area_mm2") or 0),
                 res.get("layer"))
+        if tool == "kicad_delete" and isinstance(res, dict):
+            rm = res.get("removed") or {}
+            return "%s 网拆除 %s 项 (线 %s · 孔 %s · 铜 %s)" % (
+                res.get("net"), res.get("total"), rm.get("tracks"),
+                rm.get("vias"), rm.get("zones"))
         if tool == "kicad_drc" and isinstance(res, dict):
             line = "%s 违规 · %s 未连接" % (res.get("violations"),
                                           res.get("unconnected"))

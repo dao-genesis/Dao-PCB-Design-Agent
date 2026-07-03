@@ -353,6 +353,50 @@ class DevinKiCadBridge:
         ]
         return self.live_eval("\n".join(lines))
 
+    def live_delete(self, kind: str = "tracks", net: str = "",
+                    layer: str = "") -> Dict[str, Any]:
+        """从活板删除布线图元 (拆线/清铜): tracks(走线+过孔) / zones(铺铜) / all。
+
+        可按 net / layer 过滤。把「收集→匹配→RemoveNative→刷新」归为一次原子
+        eval, 回传各类删除数——实践暴露的空位: 模型此前只能手写 eval 遍历,
+        常踩 ClearAllEdits 之类不存在的 API。"""
+        if kind not in ("tracks", "zones", "all"):
+            return {"ok": False,
+                    "error": "kind 须为 tracks|zones|all, 得到: %r" % kind}
+        lines = [
+            "_net = %r" % net,
+            "_layer_id = board.GetLayerID(%r) if %r else None" % (layer, layer),
+            "def _hit(it):",
+            "    if _net and it.GetNetname() != _net:",
+            "        return False",
+            "    if _layer_id is not None and it.GetLayer() != _layer_id:",
+            "        return False",
+            "    return True",
+            "_removed = {'tracks': 0, 'vias': 0, 'zones': 0}",
+        ]
+        if kind in ("tracks", "all"):
+            lines += [
+                "for _t in list(board.GetTracks()):",
+                "    if _hit(_t):",
+                "        _k = 'vias' if _t.GetClass() == 'PCB_VIA' else 'tracks'",
+                "        board.RemoveNative(_t)",
+                "        _removed[_k] += 1",
+            ]
+        if kind in ("zones", "all"):
+            lines += [
+                "for _z in list(board.Zones()):",
+                "    if _hit(_z):",
+                "        board.RemoveNative(_z)",
+                "        _removed['zones'] += 1",
+            ]
+        lines += [
+            "try:\n    pcbnew.Refresh()\nexcept Exception:\n    pass",
+            "result = {'kind': %r, 'net': _net or '*', 'layer': %r or '*',"
+            " 'removed': _removed,"
+            " 'total': sum(_removed.values())}" % (kind, layer),
+        ]
+        return self.live_eval("\n".join(lines))
+
     def live_drc(self, out_dir: str = "") -> Dict[str, Any]:
         """对活板跑真 kicad-cli DRC: 先落盘, 再裁决, 报告写进项目 out/
         (project_state 的 drc_metrics 自动拾取, 全貌感知闭环)。"""
