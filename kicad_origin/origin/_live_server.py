@@ -142,6 +142,24 @@ def _op_board_summary(_a):
     return _run(work)
 
 
+def _eval_last_expr(code, ns):
+    """执行代码并回传值: 单表达式直 eval; 多语句执前段、回传末尾表达式;
+    末尾非表达式则回 ns['result'] (若有)。"""
+    import ast
+    try:
+        return eval(code, ns)                         # noqa: S307
+    except SyntaxError:
+        pass
+    tree = ast.parse(code)
+    if tree.body and isinstance(tree.body[-1], ast.Expr):
+        head = ast.Module(body=tree.body[:-1], type_ignores=[])
+        exec(compile(head, "<live>", "exec"), ns)     # noqa: S102
+        tail = ast.Expression(tree.body[-1].value)
+        return eval(compile(tail, "<live>", "eval"), ns)  # noqa: S307
+    exec(code, ns)                                    # noqa: S102
+    return ns.get("result")
+
+
 def _op_eval(args):
     """一即一切: 进程内执行表达式/语句, ns 含 pcbnew/wx/board/frame/state。"""
     code = args.get("code", "")
@@ -150,12 +168,7 @@ def _op_eval(args):
         ns = dict(_NS)
         ns.update({"pcbnew": pcbnew, "wx": wx, "board": _live_board(),
                    "frame": _find_frame(), "state": _NS})
-        try:
-            val = eval(code, ns)                      # noqa: S307
-        except SyntaxError:
-            exec(code, ns)                            # noqa: S102
-            val = ns.get("result")
-        return _jsonable(val)
+        return _jsonable(_eval_last_expr(code, ns))
     return _run(work, timeout=float(args.get("timeout", 300.0)))
 
 

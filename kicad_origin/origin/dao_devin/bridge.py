@@ -33,6 +33,58 @@ def _agent_auth_dict(a: "agent_core.AgentAuth") -> Dict[str, Any]:
             "quota": a.quota}
 
 
+def _find_kicad_cli() -> Optional[str]:
+    """跨平台定位 kicad-cli (面板装入 GUI 插件目录后无 kicad_origin 包, 需自持)。"""
+    import glob
+    import shutil as _sh
+    for name in ("kicad-cli", "kicad-cli.exe"):
+        p = _sh.which(name)
+        if p:
+            return p
+    candidates = sorted(glob.glob(r"C:\Program Files\KiCad\*\bin\kicad-cli.exe"),
+                        reverse=True)
+    candidates += ["/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"]
+    for c in candidates:
+        if Path(c).exists():
+            return c
+    return None
+
+
+def _run_drc_cli(board: str, report: str) -> Dict[str, Any]:
+    """直驱 `kicad-cli pcb drc` 并解析 JSON 报告 (零包依赖, GUI 插件内也可用)。"""
+    import json
+    import subprocess
+    cli = _find_kicad_cli()
+    if not cli:
+        return {"ok": False, "error": "kicad-cli 未找到"}
+    try:
+        r = subprocess.run([cli, "pcb", "drc", "--severity-all",
+                            "--format", "json", "-o", report, board],
+                           capture_output=True, text=True, timeout=180)
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": str(e)}
+    if r.returncode != 0 or not Path(report).exists():
+        return {"ok": False, "error": (r.stderr or r.stdout)[-400:]}
+    try:
+        rep = json.loads(Path(report).read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"DRC 报告解析失败: {e}"}
+    def _brief(v: Dict[str, Any]) -> Dict[str, Any]:
+        it = (v.get("items") or [{}])[0]
+        pos = it.get("pos") or {}
+        return {"type": v.get("type"), "severity": v.get("severity"),
+                "what": v.get("description"),
+                "where": it.get("description"),
+                "at_mm": [pos.get("x"), pos.get("y")]}
+
+    return {"ok": True,
+            "violations": len(rep.get("violations", [])),
+            "unconnected": len(rep.get("unconnected_items", [])),
+            "details": [_brief(v) for v in rep.get("violations", [])[:10]],
+            "unconnected_details": [_brief(v) for v in
+                                    rep.get("unconnected_items", [])[:10]]}
+
+
 @dataclass
 class BridgeState:
     auth: Optional[dc.Auth] = None
@@ -181,6 +233,153 @@ class DevinKiCadBridge:
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "error": str(e)}
 
+    def live_focus(self, refs: Any) -> Dict[str, Any]:
+        """在 KiCad 画布上选中 + 缩放定位到给定元件 (Agent 的「光标」)。
+
+        仅 GUI 内活体 (GuiLive) 支持画布聚焦; 无头活体则明确报不支持, 不静默。"""
+        try:
+            live = self.live()
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+        fn = getattr(live, "focus", None)
+        if fn is None:
+            return {"ok": False, "error": "当前活体不支持画布聚焦 (仅 KiCad GUI 内可用)"}
+        try:
+            return {"ok": True, "result": fn(refs)}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+
+    def live_save(self) -> Dict[str, Any]:
+        """保存活板到其自身文件 (把「Ctrl+S」内化为工具, AI 无需触 GUI)。"""
+        return self.live_eval(
+            "pcbnew.SaveBoard(board.GetFileName(), board)")
+
+    def live_move(self, ref: str, dx_mm: float = 0.0, dy_mm: float = 0.0,
+                  x_mm: Optional[float] = None, y_mm: Optional[float] = None,
+                  rotate_deg: float = 0.0) -> Dict[str, Any]:
+        """移动/旋转活板上的封装 (相对 dx/dy 或绝对 x/y, mm), 回传前后坐标。
+
+        把「取位→算新位→SetPosition→回读验证」四步归为一次原子 eval,
+        避免上游模型手写多轮 SWIG 代码。"""
+        if x_mm is not None or y_mm is not None:
+            tx = ("pcbnew.FromMM(%r)" % float(x_mm)) if x_mm is not None else "_pos.x"
+            ty = ("pcbnew.FromMM(%r)" % float(y_mm)) if y_mm is not None else "_pos.y"
+        else:
+            tx = "_pos.x + pcbnew.FromMM(%r)" % float(dx_mm)
+            ty = "_pos.y + pcbnew.FromMM(%r)" % float(dy_mm)
+        lines = [
+            "fp = board.FindFootprintByReference(%r)" % ref,
+            "assert fp is not None, '无此封装: %s'" % ref,
+            "_pos = fp.GetPosition()",
+            "_before = [pcbnew.ToMM(_pos.x), pcbnew.ToMM(_pos.y)]",
+            "fp.SetPosition(pcbnew.VECTOR2I(int(%s), int(%s)))" % (tx, ty),
+        ]
+        if rotate_deg:
+            lines.append("fp.SetOrientationDegrees("
+                         "fp.GetOrientationDegrees() + %r)" % float(rotate_deg))
+        lines += [
+            "try:\n    pcbnew.Refresh()\nexcept Exception:\n    pass",
+            "_np = fp.GetPosition()",
+            "result = {'ref': %r, 'before_mm': _before, "
+            "'after_mm': [pcbnew.ToMM(_np.x), pcbnew.ToMM(_np.y)], "
+            "'rotation_deg': fp.GetOrientationDegrees()}" % ref,
+        ]
+        return self.live_eval("\n".join(lines))
+
+    def live_route(self, start_ref: str, end_ref: str,
+                   start_pad: str = "", end_pad: str = "",
+                   width_mm: float = 0.25, layer: str = "F.Cu") -> Dict[str, Any]:
+        """在两个封装焊盘间布线 (同网络, L 形两段或直连一段), 回传段数/长度。
+
+        把「找焊盘→取坐标→建 PCB_TRACK→设宽/层/网→挂板→刷新」归为一次原子 eval。"""
+        lines = [
+            "def _pad(ref, name):",
+            "    fp = board.FindFootprintByReference(ref)",
+            "    assert fp is not None, '无此封装: %s' % ref",
+            "    if name:",
+            "        for p in fp.Pads():",
+            "            if p.GetNumber() == str(name):",
+            "                return p",
+            "        raise AssertionError('%s 无焊盘 %s' % (ref, name))",
+            "    return list(fp.Pads())[0]",
+            "_pa = _pad(%r, %r)" % (start_ref, str(start_pad)),
+            "_pb = _pad(%r, %r)" % (end_ref, str(end_pad)),
+            "assert _pa.GetNetCode() == _pb.GetNetCode(), "
+            "'两焊盘不同网络: %s vs %s' % (_pa.GetNetname(), _pb.GetNetname())",
+            "_p1, _p2 = _pa.GetPosition(), _pb.GetPosition()",
+            "_layer = board.GetLayerID(%r)" % layer,
+            "_w = pcbnew.FromMM(%r)" % float(width_mm),
+            "_pts = [_p1] + ([pcbnew.VECTOR2I(_p2.x, _p1.y)]"
+            " if (_p1.x != _p2.x and _p1.y != _p2.y) else []) + [_p2]",
+            "_len = 0",
+            "for _a, _b in zip(_pts, _pts[1:]):",
+            "    _t = pcbnew.PCB_TRACK(board)",
+            "    _t.SetStart(_a); _t.SetEnd(_b)",
+            "    _t.SetWidth(_w); _t.SetLayer(_layer)",
+            "    _t.SetNetCode(_pa.GetNetCode())",
+            "    board.Add(_t)",
+            "    _len += _t.GetLength()",
+            "try:\n    pcbnew.Refresh()\nexcept Exception:\n    pass",
+            "result = {'net': _pa.GetNetname(), 'segments': len(_pts) - 1,"
+            " 'length_mm': pcbnew.ToMM(int(_len)), 'width_mm': %r,"
+            " 'layer': %r}" % (float(width_mm), layer),
+        ]
+        return self.live_eval("\n".join(lines))
+
+    def live_zone(self, net: str, layer: str = "F.Cu",
+                  clearance_mm: float = 0.3) -> Dict[str, Any]:
+        """在板框范围铺铜 (指定网络/层) 并立即填充, 回传填充后面积。"""
+        lines = [
+            "_net = board.FindNet(%r)" % net,
+            "assert _net is not None, '无此网络: ' + %r" % net,
+            "_bb = board.GetBoardEdgesBoundingBox()",
+            "_z = pcbnew.ZONE(board)",
+            "_z.SetLayer(board.GetLayerID(%r))" % layer,
+            "_z.SetNetCode(_net.GetNetCode())",
+            "_z.SetLocalClearance(pcbnew.FromMM(%r))" % float(clearance_mm),
+            "_z.Outline().NewOutline()",
+            "for _x, _y in [(_bb.GetLeft(), _bb.GetTop()),"
+            " (_bb.GetRight(), _bb.GetTop()),"
+            " (_bb.GetRight(), _bb.GetBottom()),"
+            " (_bb.GetLeft(), _bb.GetBottom())]:",
+            "    _z.Outline().Append(int(_x), int(_y))",
+            "board.Add(_z)",
+            "_filler = pcbnew.ZONE_FILLER(board)",
+            "_filler.Fill(board.Zones())",
+            "try:\n    pcbnew.Refresh()\nexcept Exception:\n    pass",
+            "result = {'net': _net.GetNetname(), 'layer': %r,"
+            " 'filled_area_mm2': round(_z.GetFilledArea() / 1e12, 3),"
+            " 'zones_on_board': len(board.Zones())}" % layer,
+        ]
+        return self.live_eval("\n".join(lines))
+
+    def live_drc(self, out_dir: str = "") -> Dict[str, Any]:
+        """对活板跑真 kicad-cli DRC: 先落盘, 再裁决, 报告写进项目 out/
+        (project_state 的 drc_metrics 自动拾取, 全貌感知闭环)。"""
+        got = self.live_eval("board.GetFileName()")
+        if not got.get("ok"):
+            return got
+        f = got.get("result") or ""
+        if not f:
+            return {"ok": False, "error": "活板无文件路径 (先保存为 .kicad_pcb)"}
+        saved = self.live_save()
+        if not saved.get("ok"):
+            return saved
+        pd = self._resolve_project_dir()
+        out = Path(out_dir) if out_dir else ((pd / "out") if pd else Path(f).parent)
+        out.mkdir(parents=True, exist_ok=True)
+        report = out / "drc-live.json"
+        res = _run_drc_cli(str(f), str(report))
+        if not res.get("ok"):
+            return {"ok": False, "error": res.get("error") or "DRC 失败"}
+        return {"ok": True, "result": {
+            "report": str(report),
+            "violations": res.get("violations"),
+            "unconnected": res.get("unconnected"),
+            "details": res.get("details"),
+            "unconnected_details": res.get("unconnected_details"),
+        }}
+
     # ── 项目全貌感知面 (Agent 的眼睛) ──────────────────────────────────
     def _resolve_project_dir(self, project_dir: Optional[str] = None) -> Optional[Path]:
         if project_dir:
@@ -234,7 +433,12 @@ class DevinKiCadBridge:
         if self._access is not None:
             return self._access.info()
         self._access = AccessServer(self, host=host, port=port)
-        return self._access.start()
+        info = self._access.start()
+        try:
+            self._access.write_conn_info()
+        except Exception:  # noqa: BLE001
+            pass
+        return info
 
     def access_stop(self) -> Dict[str, Any]:
         if self._access is None:
@@ -272,6 +476,22 @@ class DevinKiCadBridge:
                                 sp_strategy=sp_strategy, custom_sp=custom_sp)
         return {"ok": True, "conversation": c.summary()}
 
+    def ai_context(self) -> str:
+        """瞬态工作区上下文 (与 AI IDE 自动附带当前文件同构): 实时探活板况,
+        成则每回合前置送模型 (不入历史), 模型免去探路; 探不到则回空 (不阻断)。"""
+        r = self.live_eval(
+            "{'file': board.GetFileName(),"
+            " 'footprints': [fp.GetReference() for fp in board.GetFootprints()],"
+            " 'nets': board.GetNetCount(), 'tracks': len(board.GetTracks())}")
+        if not r.get("ok") or not isinstance(r.get("result"), dict):
+            return ""
+        d = r["result"]
+        refs = d.get("footprints") or []
+        return ("(实时板况·自动附带) 文件: %s · 封装 %d 个 [%s] · 网络 %s · 走线 %s。"
+                "如需更多细节再调工具。"
+                % (d.get("file") or "(未存盘)", len(refs),
+                   ", ".join(map(str, refs[:30])), d.get("nets"), d.get("tracks")))
+
     def ai_send(self, conversation_id: str, text: str, max_steps: int = 8,
                 should_stop: Optional[Any] = None,
                 on_step: Optional[Any] = None) -> Dict[str, Any]:
@@ -288,8 +508,20 @@ class DevinKiCadBridge:
             if on_step is not None:
                 on_step(step)
 
+        try:
+            ctx = self.ai_context()
+        except Exception:  # noqa: BLE001
+            ctx = ""
         return store.run(conversation_id, self.registry(), max_steps=max_steps,
-                         should_stop=should_stop, on_step=_journal_step)
+                         should_stop=should_stop, on_step=_journal_step,
+                         context=ctx)
+
+    def ai_conversation(self, conversation_id: str) -> Dict[str, Any]:
+        """取一个会话的完整消息史 (供面板切换会话时回放)。"""
+        c = self.convs().get(conversation_id)
+        if c is None:
+            return {"ok": False, "error": "无此对话: %s" % conversation_id}
+        return {"ok": True, "conversation": c.summary(), "messages": c.messages}
 
     def ai_delete_conversation(self, conversation_id: str) -> Dict[str, Any]:
         return {"ok": self.convs().delete(conversation_id)}

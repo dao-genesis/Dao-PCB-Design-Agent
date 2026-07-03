@@ -13,6 +13,8 @@
   GET  /api/tools          → 工具清单 (OpenAI function-call schema)
   POST /api/tool           → {"name","args"} 调任一注册工具
   POST /api/eval           → {"code"} 活板进程内执行 pcbnew 代码
+  POST /api/focus          → {"refs":[…]} 画布选中+高亮+缩放定位 (AI 的光标)
+  POST /api/save           → 保存活板 (Ctrl+S 内化)
   POST /api/chat           → {"text","conversation"?} 跑一整回合 agent loop
   GET  /api/conversations  → 对话列表
   GET  /api/doc            → 本接入文档 (Markdown, 自足)
@@ -79,6 +81,8 @@ Auth:  Authorization: Bearer {token}   (/api/health 免鉴权)
 | GET | `/api/tools` | KiCad 工具清单 (OpenAI function-call schema) |
 | POST | `/api/tool` | `{{"name":"kicad_board_summary","args":{{}}}}` 调任一工具 |
 | POST | `/api/eval` | `{{"code":"len(board.GetFootprints())"}}` 活板进程内执行 (board 已绑定) |
+| POST | `/api/focus` | `{{"refs":["R2","C11"]}}` 画布选中+高亮+缩放定位 (AI 的光标, 用户实时可见) |
+| POST | `/api/save` | 保存活板到其文件 (Ctrl+S 内化, 无需触 GUI) |
 | POST | `/api/chat` | `{{"text":"把 C11 移到 (79,30)","conversation":"conv-…"?}}` 跑一整回合 agent loop |
 | GET | `/api/conversations` | 对话列表 |
 | GET | `/api/doc` | 本文档 |
@@ -205,6 +209,15 @@ class _Handler(BaseHTTPRequestHandler):
                 self.bridge.journal("kicad_eval", body.get("code", ""),
                                     actor="remote")
                 self._send(200, r)
+            elif path == "/api/focus":
+                r = self.bridge.live_focus(body.get("refs") or [])
+                self.bridge.journal("kicad_focus", body.get("refs", ""),
+                                    actor="remote")
+                self._send(200, r)
+            elif path == "/api/save":
+                r = self.bridge.live_save()
+                self.bridge.journal("kicad_save", "", actor="remote")
+                self._send(200, r)
             elif path == "/api/chat":
                 cid = body.get("conversation", "")
                 if not cid:
@@ -257,6 +270,14 @@ class AccessServer:
         return {"ok": True, "running": self._httpd is not None, "url": url,
                 "port": self.port, "token": self.token,
                 "doc": url + "/api/doc", "health": url + "/api/health"}
+
+    def write_conn_info(self, path: Optional[Path] = None) -> Path:
+        """接入信息落盘 ~/.dao/kicad-access.json (供隧道侧/云端 Agent 零配置读取)。"""
+        p = path or (dc._dao_home() / "kicad-access.json")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(self.info(), ensure_ascii=False, indent=2),
+                     "utf-8")
+        return p
 
     def write_doc(self, path: Path) -> Path:
         """把接入文档落盘 (供分发给云端 Agent / 提交进知识库)。"""
