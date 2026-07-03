@@ -512,28 +512,34 @@ def build(spec, out_path):
     # the chosen footprint) must NOT sink the whole board — skip it and report,
     # so a 100+ part board still builds with every routable net intact.
     skipped_conns = []
-    pad_index: dict[str, dict] = {}    # ref -> {pad name/number -> pad}, built once
+    pad_index: dict[str, dict] = {}    # ref -> {pad name/number -> [pads]}, built once
 
-    def _pad_for(fp, ref, name):
+    # a footprint can expose *several* physical pads under one number (solder
+    # jumpers, thermal tabs, connector shields…); every one of them must join
+    # the net, or the leftover no-net copper trips hole/clearance DRC against
+    # its own siblings.
+    def _pads_for(fp, ref, name):
         idx = pad_index.get(ref)
         if idx is None:
             idx = {}
             for p in fp.Pads():           # index every pad once, not per connection
-                idx.setdefault(p.GetPadName(), p)
-                idx.setdefault(p.GetNumber(), p)
+                idx.setdefault(p.GetPadName(), []).append(p)
+                if p.GetNumber() != p.GetPadName():
+                    idx.setdefault(p.GetNumber(), []).append(p)
             pad_index[ref] = idx
-        return idx.get(str(name))
+        return idx.get(str(name), [])
 
     for c in spec.get("connections", []):
         fp = placed.get(c["ref"])
         if fp is None:
             skipped_conns.append(f"{c['ref']}.{c.get('pad')} (未找到器件)")
             continue
-        pad = _pad_for(fp, c["ref"], c["pad"])
-        if pad is None:
+        pads = _pads_for(fp, c["ref"], c["pad"])
+        if not pads:
             skipped_conns.append(f"{c['ref']}.{c['pad']} (封装无此焊盘)")
             continue
-        pad.SetNet(nets[c["net"]])
+        for pad in pads:
+            pad.SetNet(nets[c["net"]])
 
     def _resolve_point(p):
         # p is [x,y] OR {"ref":..,"pad":..}
