@@ -128,6 +128,64 @@ def build_mcu():
             "track_width": 8, "margin": 200, "components": comps}
 
 
+MCU = "STM32F103C8T6"   # LQFP-48 主控（lib_Device.search 命中；实测焊盘 1..48）
+XTAL = "8MHz crystal"   # 无源晶振
+
+
+def build_stm32():
+    """板⑤·真实主控：STM32F103C8T6（LQFP-48 单片 48 焊盘）最小系统 + 8 路 LED。
+
+    这是首块含**单器件 48 焊盘**、且采用**真实单一地网**的板——逼近工业级「最小系统」
+    （电源去耦 + HSE 晶振 + 复位 + BOOT + GPIO 驱动）。刻意**不拆分 GND**：真实 MCU 板
+    只有一个地，GND 扇出天然 ~20（4 电源地脚 + 8 LED 阴极 + 去耦/晶振/复位电容）。
+
+    目的：在双层无覆铜平面下压测「单一高扇出地网」。实践结论（已验证，纠正早期误判）：
+      · 早期此板「持续残留 34 违规」实为 `getDsnFile()` 大板**瞬态 null / DSN 截断**
+        的伪症——DSN 不完整 → freerouting 只拿到半张网表。export_dsn 改「仅 save 一次、
+        其后只等待不再写」后 DSN 完整，单一 ~20 扇出 GND 在双层上**可被 freerouting 布通**。
+      · 但大板单发 clean-rate 仅 ~50–60%（run 间随机：要么 0、要么 ~60+ 未布通），
+        故靠 build_until_clean「整板重建重试」收敛——大高扇出板需**更大重试预算**
+        （tries≈8），这是真实暴露的工具搭配短板：重试预算应随板复杂度上调（见下 tries 字段）。
+    LQFP-48 标准引脚：VDD=24/36/48 VDDA=9 VBAT=1；VSS=23/35/47 VSSA=8；
+    HSE=PD0(5)/PD1(6)；NRST=7；BOOT0=44；PA0..PA7=10..17。"""
+    comps = []
+    pwr = {"1": "VDD", "9": "VDD", "24": "VDD", "36": "VDD", "48": "VDD",
+           "8": "GND", "23": "GND", "35": "GND", "47": "GND",
+           "5": "XIN", "6": "XOUT", "7": "NRST", "44": "BOOT0"}
+    pa = ["10", "11", "12", "13", "14", "15", "16", "17"]  # PA0..PA7
+    for j, pin in enumerate(pa):
+        pwr[pin] = "PA%d" % j
+    comps.append({"ref": "U1", "query": MCU, "rotation": 0, "pins": pwr})
+    # 4 颗电源去耦电容（VDD-GND）
+    for i in range(1, 5):
+        comps.append({"ref": "C%d" % i, "query": C, "rotation": 90,
+                      "pins": {"1": "VDD", "2": "GND"}})
+    # 8 路 GPIO LED：PAj → 限流电阻 → LED → GND
+    for j in range(8):
+        anode = "LA%d" % j
+        comps.append({"ref": "R%d" % (j + 1), "query": R, "rotation": 0,
+                      "pins": {"1": "PA%d" % j, "2": anode}})
+        comps.append({"ref": "D%d" % (j + 1), "query": LED, "rotation": 0,
+                      "pins": {"1": anode, "2": "GND"}})
+    # HSE 晶振 + 两颗负载电容
+    comps.append({"ref": "Y1", "query": XTAL, "rotation": 0,
+                  "pins": {"1": "XIN", "2": "XOUT"}})
+    comps.append({"ref": "C5", "query": C, "rotation": 90,
+                  "pins": {"1": "XIN", "2": "GND"}})
+    comps.append({"ref": "C6", "query": C, "rotation": 90,
+                  "pins": {"1": "XOUT", "2": "GND"}})
+    # 复位（NRST→GND 去抖 + 上拉到 VDD）与 BOOT0 下拉
+    comps.append({"ref": "C7", "query": C, "rotation": 90,
+                  "pins": {"1": "NRST", "2": "GND"}})
+    comps.append({"ref": "R9", "query": R, "rotation": 0,
+                  "pins": {"1": "NRST", "2": "VDD"}})
+    comps.append({"ref": "R10", "query": R, "rotation": 0,
+                  "pins": {"1": "BOOT0", "2": "GND"}})
+    _grid(comps, cols=6, dx=450, dy=450)
+    return {"name": "DAO_M2_STM32min", "gnd_net": "GND",
+            "track_width": 8, "margin": 250, "tries": 8, "components": comps}
+
+
 def build_hs():
     """板⑤·高速约束:双差分对(USB/ETH)+ 网络类 + 4 层 + 类线宽注入。
 
@@ -451,6 +509,7 @@ BOARDS = {
     "medium": build_medium,
     "complex": build_complex,
     "mcu": build_mcu,
+    "stm32": build_stm32,
     "hs": build_hs,
     "via6": build_via6,
     "qfp": build_qfp,

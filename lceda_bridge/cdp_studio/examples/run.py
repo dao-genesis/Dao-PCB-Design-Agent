@@ -18,7 +18,10 @@ from specs import BOARDS    # noqa: E402
 def run_one(name, port, router, tries):
     spec = BOARDS[name]()
     drv = D.DaoRpc(port=port)
-    audit = drv.build_until_clean(spec, router=router, tries=tries)
+    # 板谱可声明自荐重试预算（大高扇出板单发 clean-rate 低，需更大 tries 收敛）；
+    # 命令行 --tries 仅作下限，spec["tries"] 更大时以 spec 为准。
+    eff_tries = max(tries, spec.get("tries", 0))
+    audit = drv.build_until_clean(spec, router=router, tries=eff_tries)
     drc = audit["steps"]["drc"]
     print("[%s] router=%s placed=%d nets=%d DRC=%d %s tries=%d elapsed=%ss" % (
         name, audit["router"], audit["steps"]["place_and_net"]["placed"],

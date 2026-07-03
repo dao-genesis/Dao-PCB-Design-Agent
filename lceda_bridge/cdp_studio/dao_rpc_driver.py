@@ -1652,13 +1652,18 @@ return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return 
         return self._call("pcb_Document.save", timeout=20)
 
     # ---------- 钥匙 5c：官方 DSN/SES 自动布线闭环（纯 RPC + freerouting） ----------
-    def export_dsn(self, out_path, name="AutoRoute_DSN", retries=4, settle=1.5):
+    def export_dsn(self, out_path, name="AutoRoute_DSN", retries=8, settle=2.0):
         """官方 `getDsnFile()` 导出 Specctra DSN（含器件/焊盘/网/板框/设计规则）。
 
-        硬学习（多 IC 大板暴露）：在刚放置/保存完的**大板**上立即取 DSN，`getDsnFile()`
-        会**瞬态返回 null**（板的异步几何索引尚未就绪）——小板从不触发。故此处带「保存 +
-        短歇 + 重试」：每次重试前再 save() 一次推动索引落定，直到拿到非空 DSN。"""
+        硬学习（大板暴露，两步逼近）：
+          ① 在刚放置完的**大板**（≳27 元件 / 48 脚 IC）上立即取 DSN，`getDsnFile()`
+             会**瞬态返回 null**——板的异步几何索引尚未落定；小板从不触发。
+          ② 关键反直觉：**重试间绝不能再 `save()`**——save 会重新弄脏文档、令刚要建好的
+             几何索引失效，于是每次重试都踩在「又被重置」的窗口上、永远取不到。
+        故本源解法 = 取 DSN 前**仅** save 一次，随后**只等待、不再写**，纯轮询 getDsnFile
+        直到非空（默认 8 次 × 2s）。这与「无为」一致：停止扰动，让索引自然落定。"""
         getter = "%s.pcb_ManufactureData.getDsnFile(%s)" % (EXT, json.dumps(name))
+        self.save()
         last = None
         for k in range(retries):
             try:
@@ -1667,8 +1672,7 @@ return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return 
                 last = e
                 if "no file" not in str(e):
                     raise
-                self.save()
-                time.sleep(settle)
+                time.sleep(settle)   # 只等待、不再 save（save 会重置索引）
         raise DaoRpcError("export_dsn: DSN 始终为空（板索引未就绪）: %s" % last)
 
     def import_ses(self, ses_path):
