@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; connect-src http://127.0.0.1:* http://localhost:*; img-src http://127.0.0.1:* http://localhost:* data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<title>DAO KiCad 归一主页</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; display: flex; height: 100vh; font: 13px/1.5 -apple-system, "Segoe UI", sans-serif;
+         background: #1b1e23; color: #d7dae0; }
+  #side { width: 200px; background: #14161a; padding: 10px 0; flex: none; overflow-y: auto; }
+  #side h1 { font-size: 14px; margin: 4px 14px 12px; color: #7ecfff; }
+  .mod { padding: 8px 14px; cursor: pointer; border-left: 3px solid transparent; }
+  .mod:hover { background: #22262c; }
+  .mod.active { background: #262b33; border-left-color: #7ecfff; color: #fff; }
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #bar { padding: 8px 12px; background: #20242a; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #bar input, #bar select { background: #14161a; color: #d7dae0; border: 1px solid #333a44;
+        border-radius: 4px; padding: 4px 8px; min-width: 280px; }
+  button { background: #2d64a0; color: #fff; border: 0; border-radius: 4px; padding: 5px 12px; cursor: pointer; }
+  button:hover { background: #3a7cc4; }
+  button.warn { background: #7a4a20; }
+  #view { flex: 1; overflow: auto; padding: 12px; }
+  #view img { max-width: 100%; background: #fff; border-radius: 4px; }
+  pre { background: #14161a; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
+  .proj { padding: 8px 10px; border: 1px solid #2a2f37; border-radius: 6px; margin-bottom: 8px; cursor: pointer; }
+  .proj:hover { border-color: #7ecfff; }
+  .proj b { color: #7ecfff; }
+  .ok { color: #7fd77f; } .bad { color: #e88; }
+  #status { margin-left: auto; opacity: .8; }
+  .spin { display: inline-block; animation: r 1s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="side">
+  <h1>☯ DAO KiCad</h1>
+  <div class="mod active" data-m="projects">📁 项目</div>
+  <div class="mod" data-m="sch">📜 原理图</div>
+  <div class="mod" data-m="pcb">🟩 PCB</div>
+  <div class="mod" data-m="build">🛠 构建 (网表→板)</div>
+  <div class="mod" data-m="route">🕸 自动布线</div>
+  <div class="mod" data-m="check">✔ DRC / ERC</div>
+  <div class="mod" data-m="fab">📦 制造输出</div>
+</div>
+<div id="main">
+  <div id="bar">
+    <input id="path" placeholder="文件路径 (.kicad_sch / .kicad_pcb / .net)">
+    <button id="go">执行</button>
+    <span id="status"></span>
+  </div>
+  <div id="view"></div>
+</div>
+<script>
+const SERVER = "__SERVER__";
+const ROOT = "__ROOT__";
+let mode = "projects";
+const $ = (s) => document.querySelector(s);
+const view = $("#view"), pathI = $("#path"), status = $("#status");
+
+function busy(msg) { status.innerHTML = '<span class="spin">☯</span> ' + msg; }
+function idle(msg, ok=true) { status.innerHTML = '<span class="' + (ok?'ok':'bad') + '">' + msg + '</span>'; }
+
+async function api(p, body) {
+  const r = await fetch(SERVER + p, body ? {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body) } : {});
+  return r.json();
+}
+
+async function job(p, body) {
+  const j = await api(p, body);
+  if (!j.job) return j;
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const s = await api("/api/job?id=" + j.job);
+    if (s.done) return s.result;
+  }
+}
+
+async function showProjects() {
+  busy("扫描项目…");
+  const t = await api("/api/tree?root=" + encodeURIComponent(ROOT || "."));
+  if (!t.ok) { view.innerHTML = "<pre>" + t.error + "</pre>"; idle("失败", false); return; }
+  view.innerHTML = t.projects.map((p) =>
+    '<div class="proj" data-d="' + p.dir + '" data-sch="' + (p.sch[0]||"") + '" data-pcb="' + (p.pcb[0]||"") + '">' +
+    "<b>" + p.name + "</b><br><small>" + p.dir + "</small><br>" +
+    "原理图 " + p.sch.length + " · PCB " + p.pcb.length + " · 网表 " + p.net.length + "</div>").join("") ||
+    "<pre>工作区内未发现 .kicad_pro 项目</pre>";
+  idle(t.projects.length + " 个项目");
+  view.querySelectorAll(".proj").forEach((el) => el.onclick = () => {
+    pathI.value = el.dataset.sch || el.dataset.pcb || el.dataset.d;
+  });
+}
+
+async function render(kind) {
+  const p = pathI.value.trim();
+  if (!p) { idle("请输入文件路径", false); return; }
+  busy("渲染中…");
+  const url = SERVER + "/api/render/" + kind + "?path=" + encodeURIComponent(p) + "&t=" + Date.now();
+  const r = await fetch(url);
+  if (!r.ok) { view.innerHTML = "<pre>" + await r.text() + "</pre>"; idle("渲染失败", false); return; }
+  const blob = await r.blob();
+  view.innerHTML = '<img src="' + URL.createObjectURL(blob) + '">';
+  idle("渲染完成");
+}
+
+async function run() {
+  const p = pathI.value.trim();
+  try {
+    if (mode === "projects") return showProjects();
+    if (mode === "sch") return render("sch");
+    if (mode === "pcb") return render("pcb");
+    if (mode === "build") {
+      busy("构建中 (网表→板)…");
+      let net = p, dir = p.replace(/[\\/][^\\/]*$/, "");
+      if (/\.kicad_sch$/.test(p)) {
+        const n = await api("/api/netlist", { sch: p });
+        if (!n.ok) throw n;
+        net = n.net;
+      }
+      const out = net.replace(/\.[^.]+$/, "") + "_dao.kicad_pcb";
+      const r = await job("/api/build", { netlist: net, out, project_dir: dir, layers: 2 });
+      view.innerHTML = "<pre>" + JSON.stringify(r, null, 1) + "</pre>";
+      if (r.ok) { pathI.value = out; idle("构建成功 → " + out); } else idle("构建失败", false);
+      return;
+    }
+    if (mode === "route") {
+      busy("freerouting 布线中 (大板可能需要数分钟)…");
+      const r = await job("/api/route", { pcb: p, passes: 10 });
+      view.innerHTML = "<pre>" + JSON.stringify(r, null, 1) + "</pre>";
+      idle(r.ok ? "布线完成 " + (r.tracks||"") + " tracks" : "布线失败", !!r.ok);
+      return;
+    }
+    if (mode === "check") {
+      busy("检查中…");
+      const r = /\.kicad_sch$/.test(p) ? await api("/api/erc", { sch: p })
+                                       : await api("/api/drc", { pcb: p });
+      view.innerHTML = "<pre>" + JSON.stringify(r, null, 1) + "</pre>";
+      idle(r.clean ? "✔ 干净" : "违规 " + (r.violations ?? "?") + " · 未连 " + (r.unconnected ?? "-"), !!r.clean);
+      return;
+    }
+    if (mode === "fab") {
+      busy("导出制造文件…");
+      const r = await job("/api/fab", { pcb: p, out: p.replace(/\.[^.]+$/, "") + "_fab" });
+      view.innerHTML = "<pre>" + JSON.stringify(r, null, 1) + "</pre>";
+      idle(r.ok ? "Gerber/钻孔/贴片 已导出" : "导出失败", !!r.ok);
+      return;
+    }
+  } catch (e) {
+    view.innerHTML = "<pre>" + JSON.stringify(e, null, 1) + "</pre>";
+    idle("出错", false);
+  }
+}
+
+document.querySelectorAll(".mod").forEach((el) => el.onclick = () => {
+  document.querySelectorAll(".mod").forEach((x) => x.classList.remove("active"));
+  el.classList.add("active");
+  mode = el.dataset.m;
+  if (mode === "projects") showProjects();
+});
+$("#go").onclick = run;
+pathI.onkeydown = (e) => { if (e.key === "Enter") run(); };
+showProjects();
+</script>
+</body>
+</html>
