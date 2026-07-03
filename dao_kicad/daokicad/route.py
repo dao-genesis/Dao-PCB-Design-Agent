@@ -294,7 +294,11 @@ def route_dsn(dsn: str | Path, ses: str | Path, *,
 def _run_freerouting(java, jar, dsn: Path, ses: Path, timeout: int,
                      passes: int):
     """Invoke freerouting headless. Returns (stdout, stderr, reason)."""
-    cmd = [java, "-jar", str(jar),
+    # ``--gui.enabled=false`` alone still lets Swing initialise the X11 toolkit
+    # (UIManager.getSystemLookAndFeelClassName in main), so with a DISPLAY that
+    # is set but unusable (CI, containers, ssh) the JVM dies with AWTError
+    # before routing starts. Force true headless mode at the JVM level.
+    cmd = [java, "-Djava.awt.headless=true", "-jar", str(jar),
            "-de", str(dsn), "-do", str(ses),
            "--gui.enabled=false",
            "-mp", str(passes), "-mt", "1"]
