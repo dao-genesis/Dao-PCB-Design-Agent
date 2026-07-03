@@ -5,7 +5,7 @@ kinet2pcb==1.1.2
 kinparse==1.2.4
 
 # 五感: 截图/视觉
-mss>=9.0.1
+mss>=10.2.0
 pillow>=12.3.0
 pyautogui>=0.9.54
 
