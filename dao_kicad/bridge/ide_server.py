@@ -175,8 +175,12 @@ def api_auto(body: dict, jid: str | None = None) -> dict:
     if not b.get("ok"):
         return {"ok": False, "stage": "build", "steps": steps}
     _set_stage(jid, "route")
+    # Board-scaled routing budget: a fixed default silently abandons big
+    # boards (a 682-net laptop motherboard needs far more than 600s).
+    timeout = (int(body["timeout"]) if body.get("timeout")
+               else _lk().route_timeout_for(b.get("nets")))
     r = api_route({"pcb": pcb, "passes": body.get("passes") or 10,
-                   "timeout": body.get("timeout")})
+                   "timeout": timeout})
     steps["route"] = r
     if not r.get("ok"):
         return {"ok": False, "stage": "route", "steps": steps, "pcb": pcb}
