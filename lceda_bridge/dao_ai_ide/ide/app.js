@@ -180,7 +180,8 @@
     if (m.content) html += '<div class="content"></div>';
     if (m.tool_calls && m.tool_calls.length) {
       m.tool_calls.forEach(function (tc) {
-        html += '<div class="toolcall"><div class="h">⚙ ' + esc(tc.function.name) + '</div><pre>' +
+        html += '<div class="toolcall"><div class="h">⚙ ' + esc(tc.function.name) +
+          (tc._running ? ' <span class="run">运行中…</span>' : '') + '</div><pre>' +
           esc(tc.function.arguments || "") + '</pre>' +
           (tc._result !== undefined ? '<pre class="res' + (tc._error ? ' err' : '') + '">' + esc(tc._result) + '</pre>' : '') +
           '</div>';
@@ -188,11 +189,58 @@
     }
     html += "</div>";
     wrap.innerHTML = html;
-    if (m.content) wrap.querySelector(".content").textContent = m.content;
+    if (m.content) {
+      var c = wrap.querySelector(".content");
+      if (m.role === "assistant") c.innerHTML = md(m.content); else c.textContent = m.content;
+    }
     el.msgs.appendChild(wrap);
     return wrap;
   }
+
+  // 流式过程中的活节点: 思考态 → 逐 token 更新
+  function appendStreamingDom() {
+    var wrap = document.createElement("div");
+    wrap.className = "msg assistant streaming";
+    wrap.innerHTML = '<div class="av">AI</div><div class="body"><div class="who">AI 助手</div>' +
+      '<div class="content"><span class="thinking"><i></i><i></i><i></i></span></div></div>';
+    el.msgs.appendChild(wrap);
+    el.msgs.scrollTop = el.msgs.scrollHeight;
+    return wrap;
+  }
+  function updateStreamingDom(wrap, text) {
+    var c = wrap.querySelector(".content");
+    c.innerHTML = md(text) + '<span class="caret"></span>';
+    el.msgs.scrollTop = el.msgs.scrollHeight;
+  }
   function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  // 极简 Markdown 渲染(先转义后编译, 无外依赖): 代码块/行内码/粗斜体/标题/列表/链接
+  function md(text) {
+    var src = String(text == null ? "" : text);
+    var blocks = [];
+    src = src.replace(/```(\w*)\n?([\s\S]*?)```/g, function (_, lang, code) {
+      blocks.push('<pre class="code">' + esc(code.replace(/\n$/, "")) + "</pre>");
+      return "\u0000B" + (blocks.length - 1) + "\u0000";
+    });
+    var h = esc(src);
+    h = h.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    h = h.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+    h = h.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<i>$2</i>");
+    h = h.replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    var lines = h.split("\n"), out = [], inUl = false, inOl = false;
+    function closeLists() { if (inUl) { out.push("</ul>"); inUl = false; } if (inOl) { out.push("</ol>"); inOl = false; } }
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i], m;
+      if ((m = ln.match(/^(#{1,4})\s+(.*)$/))) { closeLists(); out.push("<h" + (m[1].length + 2) + ">" + m[2] + "</h" + (m[1].length + 2) + ">"); continue; }
+      if ((m = ln.match(/^\s*[-*・]\s+(.*)$/))) { if (!inUl) { closeLists(); out.push("<ul>"); inUl = true; } out.push("<li>" + m[1] + "</li>"); continue; }
+      if ((m = ln.match(/^\s*\d+[.、]\s+(.*)$/))) { if (!inOl) { closeLists(); out.push("<ol>"); inOl = true; } out.push("<li>" + m[1] + "</li>"); continue; }
+      closeLists();
+      out.push(ln.length ? ln + "<br>" : "");
+    }
+    closeLists();
+    var html = out.join("\n").replace(/(<br>\n?)+$/, "");
+    return html.replace(/\u0000B(\d+)\u0000/g, function (_, n) { return blocks[+n]; });
+  }
 
   // ─── 模型管理 ─────────────────────────────────────────────────────────
   function renderModelSelect() {
@@ -384,20 +432,26 @@
       var maxIters = 8;
       for (var iter = 0; iter < maxIters; iter++) {
         if (state.abort) break;
-        var reply = await callLLM(model, s);
+        // 流式: 先挂思考态活节点, 逐 token 更新, 结束后固化进会话
+        var live = appendStreamingDom();
+        var reply;
+        try {
+          reply = await callLLM(model, s, function (partial) { updateStreamingDom(live, partial); });
+        } finally { live.remove(); }
         if (!reply) break;
         var asMsg = { role: "assistant", content: reply.content || "", tool_calls: reply.tool_calls || null };
         s.messages.push(asMsg);
         persistSessions(); renderChat();
         if (!reply.tool_calls || !reply.tool_calls.length) break;
-        // 执行工具并回填
+        // 执行工具并实时回显(运行态 → 结果)
         for (var i = 0; i < reply.tool_calls.length; i++) {
-          var tc = reply.tool_calls[i];
+          var tc = asMsg.tool_calls[i];
+          tc._running = true; renderChat();
           var res = await runTool(tc.function.name, tc.function.arguments);
-          tc._result = res.out; tc._error = res.error;
+          tc._running = false; tc._result = res.out; tc._error = res.error;
           s.messages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: res.out });
+          persistSessions(); renderChat();
         }
-        persistSessions(); renderChat();
       }
     } catch (e) {
       s.messages.push({ role: "assistant", content: "⚠ 出错: " + (e && e.message || e) });
@@ -406,8 +460,9 @@
     setBusy(false);
   }
 
-  // 构造 OpenAI 兼容 messages 并请求
-  async function callLLM(model, s) {
+  // 构造 OpenAI 兼容 messages 并请求 — 首选 SSE 流式(真机验证 sys_ClientUrl 返回
+  // 真 fetch Response, body 可增量读); 服务不支持流式时自动回退整包 JSON.
+  async function callLLM(model, s, onDelta) {
     var msgs = [];
     var prompt = state.prompts.find(function (p) { return p.id === state.activePrompt; });
     if (prompt) msgs.push({ role: "system", content: prompt.body });
@@ -419,13 +474,57 @@
         msgs.push(a);
       } else if (m.role === "tool") msgs.push({ role: "tool", tool_call_id: m.tool_call_id, content: m.content });
     });
-    var body = { model: model.model, messages: msgs, temperature: model.temp, tools: TOOLS, tool_choice: "auto", stream: false };
-    var r = await clientRequest(model.base + "/chat/completions", "POST", JSON.stringify(body),
-      { "Content-Type": "application/json", "Authorization": "Bearer " + model.key });
-    if (r.status < 200 || r.status >= 300) throw new Error("LLM HTTP " + r.status + ": " + r.text.slice(0, 200));
-    var data = JSON.parse(r.text);
+    var body = { model: model.model, messages: msgs, temperature: model.temp, tools: TOOLS, tool_choice: "auto", stream: true };
+    if (!ROOT || !ROOT.sys_ClientUrl) throw new Error("_EXTAPI_ROOT_.sys_ClientUrl 不可用");
+    var resp = await ROOT.sys_ClientUrl.request(model.base + "/chat/completions", "POST", JSON.stringify(body),
+      { headers: { "Content-Type": "application/json", "Authorization": "Bearer " + model.key } });
+    if (resp.status < 200 || resp.status >= 300) {
+      var errTxt = ""; try { errTxt = await resp.text(); } catch (e) {}
+      throw new Error("LLM HTTP " + resp.status + ": " + errTxt.slice(0, 200));
+    }
+    var full = "";
+    var acc = { content: "", tool_calls: [] };
+    var sawSSE = false;
+    if (resp.body && typeof resp.body.getReader === "function") {
+      var reader = resp.body.getReader();
+      var dec = new TextDecoder("utf-8");
+      var buf = "";
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        var piece = dec.decode(chunk.value, { stream: true });
+        full += piece; buf += piece;
+        var nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          var line = buf.slice(0, nl).replace(/\r$/, ""); buf = buf.slice(nl + 1);
+          if (line.indexOf("data:") !== 0) continue;
+          var payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") { sawSSE = sawSSE || payload === "[DONE]"; continue; }
+          var evt; try { evt = JSON.parse(payload); } catch (e) { continue; }
+          sawSSE = true;
+          var delta = evt.choices && evt.choices[0] && evt.choices[0].delta;
+          if (!delta) continue;
+          if (delta.content) { acc.content += delta.content; if (onDelta) onDelta(acc.content); }
+          if (delta.tool_calls) {
+            delta.tool_calls.forEach(function (d) {
+              var i = d.index || 0;
+              var t = acc.tool_calls[i] || (acc.tool_calls[i] = { id: "", type: "function", function: { name: "", arguments: "" } });
+              if (d.id) t.id = d.id;
+              if (d.function && d.function.name) t.function.name += d.function.name;
+              if (d.function && d.function.arguments) t.function.arguments += d.function.arguments;
+            });
+          }
+        }
+      }
+    } else {
+      try { full = await resp.text(); } catch (e) { full = ""; }
+    }
+    if (sawSSE) return { content: acc.content || null, tool_calls: acc.tool_calls.length ? acc.tool_calls : null };
+    // 回退: 服务忽略 stream, 返回了整包 chat.completion JSON
+    var data = JSON.parse(full);
     var m = data.choices && data.choices[0] && data.choices[0].message;
-    if (!m) throw new Error("响应无 choices: " + r.text.slice(0, 200));
+    if (!m) throw new Error("响应无 choices: " + full.slice(0, 200));
+    if (m.content && onDelta) onDelta(m.content);
     return { content: m.content, tool_calls: m.tool_calls };
   }
 
