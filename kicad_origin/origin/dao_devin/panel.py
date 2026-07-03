@@ -100,9 +100,14 @@ def _tool_line(tool: str, args: Any, r: Any) -> str:
                 res.get("layer"))
         if tool == "kicad_delete" and isinstance(res, dict):
             rm = res.get("removed") or {}
-            return "%s 网拆除 %s 项 (线 %s · 孔 %s · 铜 %s)" % (
+            line = "%s 网拆除 %s 项 (线 %s · 孔 %s · 铜 %s)" % (
                 res.get("net"), res.get("total"), rm.get("tracks"),
                 rm.get("vias"), rm.get("zones"))
+            left = res.get("remaining")
+            if isinstance(left, dict):
+                line += " · 板余线 %s · 铜 %s" % (
+                    left.get("tracks"), left.get("zones"))
+            return line
         if tool == "kicad_drc" and isinstance(res, dict):
             line = "%s 违规 · %s 未连接" % (res.get("violations"),
                                           res.get("unconnected"))
