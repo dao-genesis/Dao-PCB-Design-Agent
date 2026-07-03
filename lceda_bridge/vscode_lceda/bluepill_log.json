@@ -1,0 +1,518 @@
+[
+ {
+  "step": "createProject",
+  "ok": true,
+  "ms": 105523,
+  "ret": "{'itemType': 'Project', 'uuid': 'd7571adb39a7415b82c7793d68a225b2', 'friendlyName': 'DaoIDE_BluePill_8355', 'name': 'aiotvr/DaoIDE_BluePill_8355', 'teamUuid': '"
+ },
+ {
+  "step": "openSchematic",
+  "ok": true,
+  "ms": 2895,
+  "ret": "None"
+ },
+ {
+  "step": "find:U1",
+  "ok": true,
+  "ms": 1231,
+  "ret": "{'uuid': 'accfc2f6010745268febab2459577079', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:U1",
+  "ok": true,
+  "ms": 2031,
+  "ret": "c4da2701b376b77e"
+ },
+ {
+  "step": "wire:U1",
+  "ok": true,
+  "ms": 491,
+  "ret": "[('1', 'VBAT'), ('2', 'PC13'), ('3', 'OSC32_IN'), ('4', 'OSC32_OUT'), ('5', 'OSC_IN'), ('6', 'OSC_OUT'), ('7', 'NRST'), ('8', 'GND'), ('9', 'VCC33'), ('20', 'BO"
+ },
+ {
+  "step": "find:U2",
+  "ok": true,
+  "ms": 1266,
+  "ret": "{'uuid': '710e85d0901e4548925bb3e21a646fdd', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:U2",
+  "ok": true,
+  "ms": 1836,
+  "ret": "83c1c01ce2c5e3bc"
+ },
+ {
+  "step": "wire:U2",
+  "ok": true,
+  "ms": 35,
+  "ret": "[('1', 'GND'), ('2', 'VCC33'), ('3', 'VCC5'), ('4', 'VCC33')]"
+ },
+ {
+  "step": "find:USB1",
+  "ok": true,
+  "ms": 1174,
+  "ret": "{'uuid': '74d31c19993b4b9581f3175a7da4b280', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:USB1",
+  "ok": true,
+  "ms": 1949,
+  "ret": "baa414db1147baf7"
+ },
+ {
+  "step": "wire:USB1",
+  "ok": true,
+  "ms": 18,
+  "ret": "[('A6', 'USB_DP_C'), ('A7', 'USB_DM_C')]"
+ },
+ {
+  "step": "find:Y1",
+  "ok": true,
+  "ms": 1165,
+  "ret": "{'uuid': '9666be1c020a4bd38d33fe872a2c69a8', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:Y1",
+  "ok": true,
+  "ms": 1867,
+  "ret": "4ebd2dc061ff2066"
+ },
+ {
+  "step": "wire:Y1",
+  "ok": true,
+  "ms": 38,
+  "ret": "[('1', 'OSC_IN'), ('2', 'OSC_OUT')]"
+ },
+ {
+  "step": "find:R1",
+  "ok": true,
+  "ms": 1095,
+  "ret": "{'uuid': '209453f1b0764552b318805e2b7a5c99', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:R1",
+  "ok": true,
+  "ms": 1909,
+  "ret": "f9f4c6ed568acdf8"
+ },
+ {
+  "step": "wire:R1",
+  "ok": true,
+  "ms": 34,
+  "ret": "[('2', 'GND'), ('1', 'BOOT0')]"
+ },
+ {
+  "step": "find:R2",
+  "ok": true,
+  "ms": 1103,
+  "ret": "{'uuid': '209453f1b0764552b318805e2b7a5c99', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:R2",
+  "ok": true,
+  "ms": 979,
+  "ret": "79c748f3f8e3defc"
+ },
+ {
+  "step": "wire:R2",
+  "ok": true,
+  "ms": 45,
+  "ret": "[('2', 'GND'), ('1', 'BOOT1')]"
+ },
+ {
+  "step": "find:R3",
+  "ok": true,
+  "ms": 1107,
+  "ret": "{'uuid': '209453f1b0764552b318805e2b7a5c99', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:R3",
+  "ok": true,
+  "ms": 990,
+  "ret": "ad03b59f3b17be3e"
+ },
+ {
+  "step": "wire:R3",
+  "ok": true,
+  "ms": 20,
+  "ret": "[('2', 'VCC33'), ('1', 'NRST')]"
+ },
+ {
+  "step": "find:R4",
+  "ok": true,
+  "ms": 1062,
+  "ret": "{'uuid': 'a803bb450a3b4cfabbfaf3276f93c48c', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:R4",
+  "ok": true,
+  "ms": 1596,
+  "ret": "9340da520c613cd5"
+ },
+ {
+  "step": "wire:R4",
+  "ok": true,
+  "ms": 15,
+  "ret": "[('2', 'VCC33'), ('1', 'USB_DP')]"
+ },
+ {
+  "step": "find:R5",
+  "ok": true,
+  "ms": 1112,
+  "ret": "{'uuid': 'b009c079c25f4a6599596de99a11b32e', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:R5",
+  "ok": true,
+  "ms": 1647,
+  "ret": "e98b8f4815fe3702"
+ },
+ {
+  "step": "wire:R5",
+  "ok": true,
+  "ms": 27,
+  "ret": "[('2', 'USB_DM'), ('1', 'USB_DM_C')]"
+ },
+ {
+  "step": "find:R6",
+  "ok": true,
+  "ms": 1136,
+  "ret": "{'uuid': 'b009c079c25f4a6599596de99a11b32e', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:R6",
+  "ok": true,
+  "ms": 1066,
+  "ret": "4068357a07c6912a"
+ },
+ {
+  "step": "wire:R6",
+  "ok": true,
+  "ms": 27,
+  "ret": "[('2', 'USB_DP'), ('1', 'USB_DP_C')]"
+ },
+ {
+  "step": "find:R7",
+  "ok": true,
+  "ms": 1180,
+  "ret": "{'uuid': '03d86aeaa9cb4ef3b6ab644b598674a1', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:R7",
+  "ok": true,
+  "ms": 1728,
+  "ret": "006d9bbecfadeb3c"
+ },
+ {
+  "step": "wire:R7",
+  "ok": true,
+  "ms": 56,
+  "ret": "[('2', 'LED1_K'), ('1', 'PC13')]"
+ },
+ {
+  "step": "find:R8",
+  "ok": true,
+  "ms": 1120,
+  "ret": "{'uuid': '03d86aeaa9cb4ef3b6ab644b598674a1', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:R8",
+  "ok": true,
+  "ms": 1009,
+  "ret": "e82756f24b76c9eb"
+ },
+ {
+  "step": "wire:R8",
+  "ok": true,
+  "ms": 17,
+  "ret": "[('2', 'LED2_K'), ('1', 'VCC33')]"
+ },
+ {
+  "step": "find:C1",
+  "ok": true,
+  "ms": 1071,
+  "ret": "{'uuid': '7b8e0fac6d65402fbf00253738a8a55f', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:C1",
+  "ok": true,
+  "ms": 1876,
+  "ret": "5c359a246189c85c"
+ },
+ {
+  "step": "wire:C1",
+  "ok": true,
+  "ms": 21,
+  "ret": "[('1', 'VCC5'), ('2', 'GND')]"
+ },
+ {
+  "step": "find:C2",
+  "ok": true,
+  "ms": 1116,
+  "ret": "{'uuid': '7b8e0fac6d65402fbf00253738a8a55f', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:C2",
+  "ok": true,
+  "ms": 1077,
+  "ret": "e216ca35aff844cc"
+ },
+ {
+  "step": "wire:C2",
+  "ok": true,
+  "ms": 180,
+  "ret": "[('1', 'VCC33'), ('2', 'GND')]"
+ },
+ {
+  "step": "find:C3",
+  "ok": true,
+  "ms": 1101,
+  "ret": "{'uuid': 'aa6f916383374785be390c4ddc7bf610', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:C3",
+  "ok": true,
+  "ms": 1577,
+  "ret": "17e9549fc155b8ae"
+ },
+ {
+  "step": "wire:C3",
+  "ok": true,
+  "ms": 36,
+  "ret": "[('2', 'GND'), ('1', 'VCC33')]"
+ },
+ {
+  "step": "find:C4",
+  "ok": true,
+  "ms": 1097,
+  "ret": "{'uuid': 'aa6f916383374785be390c4ddc7bf610', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:C4",
+  "ok": true,
+  "ms": 1006,
+  "ret": "dfe8de3a09d7ca11"
+ },
+ {
+  "step": "wire:C4",
+  "ok": true,
+  "ms": 36,
+  "ret": "[('2', 'GND'), ('1', 'VCC33')]"
+ },
+ {
+  "step": "find:C5",
+  "ok": true,
+  "ms": 1089,
+  "ret": "{'uuid': 'aa6f916383374785be390c4ddc7bf610', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:C5",
+  "ok": true,
+  "ms": 1067,
+  "ret": "c07fcd50907cab95"
+ },
+ {
+  "step": "wire:C5",
+  "ok": true,
+  "ms": 31,
+  "ret": "[('2', 'GND'), ('1', 'VCC33')]"
+ },
+ {
+  "step": "find:C6",
+  "ok": true,
+  "ms": 1085,
+  "ret": "{'uuid': 'aa6f916383374785be390c4ddc7bf610', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:C6",
+  "ok": true,
+  "ms": 953,
+  "ret": "bcb1ff79f601f564"
+ },
+ {
+  "step": "wire:C6",
+  "ok": true,
+  "ms": 31,
+  "ret": "[('2', 'GND'), ('1', 'NRST')]"
+ },
+ {
+  "step": "find:C7",
+  "ok": true,
+  "ms": 1133,
+  "ret": "{'uuid': 'ee791768f2b14c91b685c630c8b28f46', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:C7",
+  "ok": true,
+  "ms": 1614,
+  "ret": "318def06845af718"
+ },
+ {
+  "step": "wire:C7",
+  "ok": true,
+  "ms": 32,
+  "ret": "[('1', 'OSC_IN'), ('2', 'GND')]"
+ },
+ {
+  "step": "find:C8",
+  "ok": true,
+  "ms": 1061,
+  "ret": "{'uuid': 'ee791768f2b14c91b685c630c8b28f46', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:C8",
+  "ok": true,
+  "ms": 1195,
+  "ret": "27fa6ed4a5086f6c"
+ },
+ {
+  "step": "wire:C8",
+  "ok": true,
+  "ms": 39,
+  "ret": "[('1', 'OSC_OUT'), ('2', 'GND')]"
+ },
+ {
+  "step": "find:LED1",
+  "ok": true,
+  "ms": 1070,
+  "ret": "{'uuid': '1d7a0591eee2425b90fe439ede815318', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:LED1",
+  "ok": true,
+  "ms": 1856,
+  "ret": "c3e14852168e5e88"
+ },
+ {
+  "step": "wire:LED1",
+  "ok": true,
+  "ms": 38,
+  "ret": "[('2', 'GND'), ('1', 'LED1_K')]"
+ },
+ {
+  "step": "find:LED2",
+  "ok": true,
+  "ms": 1120,
+  "ret": "{'uuid': '1d7a0591eee2425b90fe439ede815318', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:LED2",
+  "ok": true,
+  "ms": 961,
+  "ret": "f89b225488390e08"
+ },
+ {
+  "step": "wire:LED2",
+  "ok": true,
+  "ms": 48,
+  "ret": "[('2', 'GND'), ('1', 'LED2_K')]"
+ },
+ {
+  "step": "find:SW1",
+  "ok": true,
+  "ms": 1043,
+  "ret": "{'uuid': 'cff07d923b95482c818b184e98b80db7', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:SW1",
+  "ok": true,
+  "ms": 1874,
+  "ret": "0c46caa6eb087440"
+ },
+ {
+  "step": "wire:SW1",
+  "ok": true,
+  "ms": 26,
+  "ret": "[('2', 'GND'), ('1', 'NRST')]"
+ },
+ {
+  "step": "find:J1",
+  "ok": true,
+  "ms": 1225,
+  "ret": "{'uuid': '9b540f58c6ad4e26b03d1a299cfb1108', 'libraryUuid': '0819f05c4eef4c71ace90d822a990e87', 'classification': {'libraryUuid': '0819f05c4eef4c71ace90d822a990"
+ },
+ {
+  "step": "place:J1",
+  "ok": true,
+  "ms": 1911,
+  "ret": "afc01367b0edeaf4"
+ },
+ {
+  "step": "wire:J1",
+  "ok": true,
+  "ms": 265,
+  "ret": "[('1', 'VCC33'), ('2', 'SWDIO'), ('3', 'SWCLK'), ('4', 'GND')]"
+ },
+ {
+  "step": "saveSch",
+  "ok": true,
+  "ms": 248,
+  "ret": "True"
+ },
+ {
+  "step": "syncToPcb",
+  "ok": true,
+  "ms": 14139,
+  "ret": "['a4f7f27026353b30', '438f9e3084aca731', '400bf445c953f991', '843c5c10e5d42d52', 'f540538b7cdba31f', 'aa92b23c2cec9db7', '35fe7e5b7ac089e7', '0b38d4f1a158afb4',"
+ },
+ {
+  "step": "gridLayout",
+  "ok": true,
+  "ms": 839,
+  "ret": "24"
+ },
+ {
+  "step": "boardOutline",
+  "ok": true,
+  "ms": 105,
+  "ret": "934111bbb78e147a"
+ },
+ {
+  "step": "savePcb",
+  "ok": true,
+  "ms": 63,
+  "ret": "True"
+ },
+ {
+  "step": "reloadEngine",
+  "ok": true,
+  "ms": 23627,
+  "ret": "None"
+ },
+ {
+  "step": "ratline",
+  "ok": true,
+  "ms": 4,
+  "ret": "True"
+ },
+ {
+  "step": "autoRoute",
+  "ok": true,
+  "ms": 23984,
+  "ret": "{'tracks': 181, 'vias': 21}"
+ },
+ {
+  "step": "pourGND",
+  "ok": true,
+  "ms": 8093,
+  "ret": "['e4631c8fba409118', 'e75acfdf92d59c3d']"
+ },
+ {
+  "step": "savePcb2",
+  "ok": true,
+  "ms": 21,
+  "ret": "True"
+ },
+ {
+  "step": "drc",
+  "ok": true,
+  "ms": 2161,
+  "ret": "[]"
+ },
+ {
+  "step": "fabOutputs",
+  "ok": true,
+  "ms": 1124,
+  "ret": "{'getBomFile()': {'name': 'Export_BOM.xlsx', 'size': 7847, 'path': '/tmp/bluepill_bom.xlsx'}, 'getPickAndPlaceFile()': {'name': 'Pick_Place', 'size': 8693, 'pat"
+ }
+]
