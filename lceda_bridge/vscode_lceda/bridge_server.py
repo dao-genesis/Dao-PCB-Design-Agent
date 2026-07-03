@@ -498,6 +498,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, SESSION.verb(body.get("ns", ""), body.get("args", [])))
         elif path == "/api/chat":
             self._send(200, chat_agent(SESSION, body.get("text", "")))
+        elif path == "/api/eval":
+            # 高阶通道(仅本机): 原样在 EDA 页求值 JS 表达式, 供编排/实战脚本使用。
+            val, err = SESSION.eval_js(body.get("expr", ""),
+                                       timeout=min(int(body.get("timeout", 30)), 120))
+            self._send(200, {"ok": err is None, "ret": val, "err": err})
         else:
             self._send(404, {"ok": False, "err": "not found"})
 
