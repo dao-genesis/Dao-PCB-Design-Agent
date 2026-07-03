@@ -388,9 +388,9 @@ class LiveKiCad:
                         lib_dirs: Optional[dict] = None) -> list[dict]:
         """Repair footprints whose name was renamed in the library, in place.
 
-        Five safe, high-confidence strategies. The first three repair a renamed
-        entry *within the declared lib*; the last two remap across libraries when
-        the declared lib itself is unavailable:
+        Six safe, high-confidence strategies. The first three repair a renamed
+        entry *within the declared lib*; the last three remap across libraries
+        when the declared lib itself is unavailable:
         1. **Gender-rename** (KiCad v6: ``_Female_``→``_Socket_``,
            ``_Male_``→``_Pins_``) — substitute the gender token for its
            specific synonym and accept a name that exists verbatim in the lib.
@@ -408,6 +408,9 @@ class LiveKiCad:
            install library (vendored libs like jetson's ``antmicro-footprints``),
            keep the name and fix only the library. Ambiguous names are left
            untouched so we never guess.
+        6. **Project-lib relibrary** — the cited nickname is unmapped but
+           exactly one *project-local* library owns the verbatim footprint name
+           (renamed/merged local libs); keep the name, fix only the library.
 
         Returns the list of substitutions made (``ref``/``lib``/``from``/``to``)
         so the caller can record them; footprints with their own ``pads`` or an
@@ -460,6 +463,15 @@ class LiveKiCad:
                     stock = self._stock_fp_lib(f["fp"])
                     if stock and stock != f["lib"]:
                         remap = (stock, f["fp"])
+                # 6) verbatim project-lib relibrary — the netlist cites a lib
+                #    nickname the project no longer maps (renamed/merged local
+                #    lib), yet exactly one *project-local* library owns a
+                #    footprint of that verbatim name. Keep the name, fix the lib.
+                if not remap and not in_lib:
+                    owners = sorted({nick for nick, d in (lib_dirs or {}).items()
+                                     if (Path(d) / (f["fp"] + ".kicad_mod")).is_file()})
+                    if len(owners) == 1:
+                        remap = (owners[0], f["fp"])
             if remap:
                 subs.append({"ref": f.get("ref"), "lib": f["lib"],
                              "from": f["fp"], "to": f"{remap[0]}:{remap[1]}"})
