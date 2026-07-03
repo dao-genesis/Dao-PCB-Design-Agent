@@ -37,6 +37,12 @@ _ARCHIVE_TMPL = {
     "macos": None,
 }
 
+# 安装器地址模板(Windows 走 Inno Setup 安装器; /VERYSILENT 静默安装,
+# Linux 上可经 Wine 部署同一安装器 — 双系统同机共存)
+_INSTALLER_TMPL = {
+    "windows": "https://image.lceda.cn/files/lceda-pro-windows-x64-%s.exe",
+}
+
 
 def normalize_os(name: Optional[str] = None) -> str:
     """把 platform.system() 归一为 'linux' | 'windows' | 'macos' | '<lower>'。"""
@@ -70,6 +76,11 @@ class PlatformSpec:
     @property
     def has_portable_archive(self) -> bool:
         return _ARCHIVE_TMPL.get(self.os) is not None
+
+    def installer_url(self, version: str) -> Optional[str]:
+        """安装器下载地址(仅 Windows; Inno Setup, 静默参数 /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART)。"""
+        tmpl = _INSTALLER_TMPL.get(self.os)
+        return (tmpl % version) if tmpl else None
 
     # ── 激活文件落点 ────────────────────────────────────────
     def user_root(self) -> Path:

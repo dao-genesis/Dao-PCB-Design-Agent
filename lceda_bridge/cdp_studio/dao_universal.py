@@ -34,7 +34,8 @@ CLI::
     python3 dao_universal.py selftest               # 全活通道各跑一遍断言
 
 环境变量:
-    DAO_CDP_PORTS     本地 CDP 候选端口(逗号分隔,默认 "29230,29229,9222")
+    DAO_CDP_PORTS     本地 CDP 候选端口(逗号分隔,默认 "29230,29231,29229,9222";
+                      29231 为 Wine 下 Windows 版实例, 见 bootstrap_desktop --wine)
     DAO_BRIDGE_URL    DAO Bridge 公网 URL(启用远程通道;缺省则不探远程)
     DAO_BRIDGE_TOKEN  DAO Bridge 鉴权 token(远程通道 Bearer)
 """
@@ -51,7 +52,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dao_eda_cdp_driver as _cdp  # noqa: E402
 import dao_platform as _plat  # noqa: E402
 
-DEFAULT_LOCAL_PORTS = (29230, 29229, 9222)
+# 29230=Linux 原生桌面实例, 29231=Windows(Wine) 实例, 29229=web 在线实例
+DEFAULT_LOCAL_PORTS = (29230, 29231, 29229, 9222)
 
 
 def _local_port_candidates() -> list:
