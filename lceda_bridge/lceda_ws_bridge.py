@@ -339,8 +339,8 @@ def _now_ms() -> int:
 # ──────────────────────────────────────────────────────────
 # Python 客户端 API (供工作流脚本调用)
 # ──────────────────────────────────────────────────────────
-def _send_command(kind: str, body: dict, timeout: float) -> Any:
-    client = BRIDGE.active_client()
+def _send_command(kind: str, body: dict, timeout: float, client: "_Client | None" = None) -> Any:
+    client = client or BRIDGE.active_client()
     if client is None:
         raise RuntimeError("无活跃 EDA 扩展连接 (请在 EDA 内 启动桥接)")
     cmd_id = uuid.uuid4().hex[:8]
@@ -355,19 +355,25 @@ def _send_command(kind: str, body: dict, timeout: float) -> Any:
     return res.get("result")
 
 
-def call(path: str, *args: Any, timeout: float = CMD_TIMEOUT_S) -> Any:
+def clients() -> list["_Client"]:
+    """当前已完成注册的全部客户端 (多引擎同机共存时逐个寻址)."""
+    with BRIDGE.lock:
+        return [c for c in BRIDGE.clients.values() if c.registered]
+
+
+def call(path: str, *args: Any, timeout: float = CMD_TIMEOUT_S, client: "_Client | None" = None) -> Any:
     """调用 eda.<path>(*args), 通过 WebSocket 同步获得结果.
 
     例:
         info = call('dmt_Project.getCurrentProjectInfo')
         ver  = call('sys_Environment.getEditorVersion')
     """
-    return _send_command("call", {"path": path, "args": list(args)}, timeout)
+    return _send_command("call", {"path": path, "args": list(args)}, timeout, client=client)
 
 
-def run_code(code: str, timeout: float = CMD_TIMEOUT_S) -> Any:
+def run_code(code: str, timeout: float = CMD_TIMEOUT_S, client: "_Client | None" = None) -> Any:
     """在扩展沙箱内执行任意 JS 代码 (可 await, `eda` 在作用域内). 末尾 return 结果."""
-    return _send_command("execute", {"code": code}, timeout)
+    return _send_command("execute", {"code": code}, timeout, client=client)
 
 
 def is_connected() -> bool:

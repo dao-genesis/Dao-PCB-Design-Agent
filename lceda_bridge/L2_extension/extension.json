@@ -5,7 +5,7 @@
     "description": "嘉立创EDA ↔ Python/Windsurf 双向桥接器 — 反者道之动, 让 AI 直接驱动 EDA",
     "version": "1.1.0",
     "publisher": "Dao <pcb_brain@local>",
-    "engines": { "eda": "^2.2.0" },
+    "engines": { "eda": ">=2.2.0" },
     "license": "Apache-2.0",
     "repository": { "type": "extension-store", "url": "" },
     "categories": "Other",

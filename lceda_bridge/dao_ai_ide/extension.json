@@ -5,7 +5,7 @@
     "description": "把嘉立创EDA本体化为 AI IDE — 原生对话面板 + 会话管理 + 外接API多模型(Proxy Pro式) + 提示词库 + 工具调用直驱EDA引擎",
     "version": "1.0.0",
     "publisher": "Dao <pcb_brain@local>",
-    "engines": { "eda": "^2.2.0" },
+    "engines": { "eda": ">=2.2.0" },
     "license": "Apache-2.0",
     "repository": { "type": "extension-store", "url": "" },
     "categories": "Other",
