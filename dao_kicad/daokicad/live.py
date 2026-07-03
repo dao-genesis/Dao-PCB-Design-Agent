@@ -150,6 +150,21 @@ class LiveKiCad:
                 "name": "Power", "track_width": 0.5,
                 "via_size": 0.9, "via_drill": 0.45, "nets": pnets,
             }])
+        # 4+ layer boards get real inner power planes: GND on the last inner
+        # layer and the widest supply net on the first. Point-to-point routing
+        # of plane nets is how real boards end up with unroutable GND ratlines;
+        # the DSN export carries the planes so freerouting drops vias into them.
+        if layers >= 4 and pnets:
+            netnames = spec.get("nets", [])
+            planes = []
+            if "GND" in pnets:
+                planes.append({"layer": f"In{layers - 2}.Cu", "net": "GND"})
+            supply = next((p for p in pnets if p != "GND" and p in netnames),
+                          None)
+            if supply:
+                planes.append({"layer": "In1.Cu", "net": supply})
+            if planes:
+                spec.setdefault("zones", planes)
         if extra_spec:
             spec.update(extra_spec)
         if not spec.get("footprints"):

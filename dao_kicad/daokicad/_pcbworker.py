@@ -661,6 +661,12 @@ def build(spec, out_path):
     for s in spec.get("stitching", []):
         _stitch_vias(board, s, nets, default_via_d, default_via_s)
 
+    # plane escape vias: an SMD pad only reaches an inner plane through a
+    # via, and freerouting treats plane nets as satisfied, so without these
+    # every surface GND/power pad stays an unconnected ratline.
+    for z in spec.get("zones", []):
+        _pad_escape_vias(board, z.get("net"), nets)
+
     # copper zones (e.g. GND pour / power planes). Compute the fallback board
     # rectangle once, before any zone is added, so a full-board plane can't
     # poison GetBoundingBox() for the next zone.
@@ -828,6 +834,88 @@ def _seg_dist2(px, py, ax, ay, bx, by):
     t = max(0.0, min(1.0, t))
     cx, cy = ax + t * dx, ay + t * dy
     return (px - cx) ** 2 + (py - cy) ** 2
+
+
+def _pad_escape_vias(board, net, nets, size_mm=0.8, drill_mm=0.4,
+                     clearance_mm=0.25):
+    """Give every SMD pad of a plane net a via down to the plane.
+
+    Prefers a via-in-pad; on fine-pitch pads (neighbours too close) walks
+    outward in 8 directions and, when a clear spot is found, joins pad and
+    via with a short stub track on the pad's own layer. Through-hole pads
+    already reach every layer. Returns the number of vias placed."""
+    if not net or net not in nets:
+        return 0
+    netcode = nets[net].GetNetCode()
+    size, drill, clr = MM(size_mm), MM(drill_mm), MM(clearance_mm)
+    foreign = [(p.GetPosition().x, p.GetPosition().y,
+                max(p.GetSize().x, p.GetSize().y))
+               for fp in board.GetFootprints() for p in fp.Pads()
+               if p.GetNetCode() != netcode]
+
+    placed: list = []
+    hole_gap = MM(0.5)
+
+    def clear(x, y, lim=None):
+        lim = size / 2 + clr if lim is None else lim
+        return all((fx - x) ** 2 + (fy - y) ** 2 >= (lim + fs / 2) ** 2
+                   for fx, fy, fs in foreign)
+
+    def hole_clear(x, y):
+        gap2 = (drill + hole_gap) ** 2
+        return all((vx - x) ** 2 + (vy - y) ** 2 >= gap2 for vx, vy in placed)
+
+    def path_clear(x0, y0, x1, y1, width):
+        steps = 4
+        return all(clear(x0 + (x1 - x0) * i / steps,
+                         y0 + (y1 - y0) * i / steps, width / 2 + clr)
+                   for i in range(1, steps))
+
+    dirs = [(1, 0), (-1, 0), (0, 1), (0, -1),
+            (1, 1), (1, -1), (-1, 1), (-1, -1)]
+    count = 0
+    for fp in board.GetFootprints():
+        for p in fp.Pads():
+            if p.GetNetCode() != netcode:
+                continue
+            if p.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+                continue
+            x, y = p.GetPosition().x, p.GetPosition().y
+            spot = (x, y) if clear(x, y) and hole_clear(x, y) else None
+            if spot is None:
+                pad_r = max(p.GetSize().x, p.GetSize().y) / 2
+                step = pad_r + size / 2 + clr
+                stub_w = min(MM(0.3), p.GetSize().x, p.GetSize().y)
+                for k in (1.0, 1.5, 2.0):
+                    for dx, dy in dirs:
+                        n = (dx * dx + dy * dy) ** 0.5
+                        cx = x + int(dx / n * step * k)
+                        cy = y + int(dy / n * step * k)
+                        if (clear(cx, cy) and hole_clear(cx, cy)
+                                and path_clear(x, y, cx, cy, stub_w)):
+                            spot = (cx, cy)
+                            break
+                    if spot:
+                        break
+            if spot is None:
+                continue
+            placed.append(spot)
+            via = pcbnew.PCB_VIA(board)
+            via.SetPosition(pcbnew.VECTOR2I(int(spot[0]), int(spot[1])))
+            via.SetDrill(int(drill))
+            via.SetWidth(int(size))
+            via.SetNet(nets[net])
+            board.Add(via)
+            if spot != (x, y):
+                t = pcbnew.PCB_TRACK(board)
+                t.SetStart(pcbnew.VECTOR2I(int(x), int(y)))
+                t.SetEnd(pcbnew.VECTOR2I(int(spot[0]), int(spot[1])))
+                t.SetWidth(int(min(MM(0.3), p.GetSize().x, p.GetSize().y)))
+                t.SetLayer(p.GetLayer())
+                t.SetNet(nets[net])
+                board.Add(t)
+            count += 1
+    return count
 
 
 def _stitch_vias(board, s, nets, default_via_d, default_via_s):

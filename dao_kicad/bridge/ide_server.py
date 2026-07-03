@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import tempfile
 import threading
@@ -151,6 +152,28 @@ def _set_stage(jid: str | None, stage: str) -> None:
                 j["stage"] = stage
 
 
+_CU_RE = re.compile(r'\(\s*\d+\s+"([^"]+\.Cu)"', re.M)
+
+
+def _reference_layers(project_dir: Path) -> int | None:
+    """Copper layer count of the project's shipped board, if any.
+
+    When replicating a real project the original ``.kicad_pcb`` is the truth
+    for stackup: routing a 4-layer design on the default 2 layers just
+    manufactures unconnected ratlines.
+    """
+    best = None
+    for b in sorted(project_dir.glob("*.kicad_pcb")):
+        try:
+            head = b.read_text(encoding="utf-8", errors="ignore")[:20000]
+        except OSError:
+            continue
+        n = len({m.group(1) for m in _CU_RE.finditer(head)})
+        if n >= 2:
+            best = max(best or 0, n)
+    return best
+
+
 def api_auto(body: dict, jid: str | None = None) -> dict:
     """One-shot closed loop: sch|netlist -> build -> route -> DRC [-> fab].
 
@@ -168,15 +191,20 @@ def api_auto(body: dict, jid: str | None = None) -> dict:
     net = Path(body["netlist"])
     pcb = str(body.get("out") or net.with_name(net.stem + "_dao.kicad_pcb"))
     _set_stage(jid, "build")
-    b = api_build({"netlist": str(net), "out": pcb,
-                   "layers": body.get("layers"),
-                   "project_dir": body.get("project_dir") or str(net.parent)})
+    pdir = body.get("project_dir") or str(net.parent)
+    layers = body.get("layers") or _reference_layers(Path(pdir))
+    b = api_build({"netlist": str(net), "out": pcb, "layers": layers,
+                   "project_dir": pdir})
     steps["build"] = b
     if not b.get("ok"):
         return {"ok": False, "stage": "build", "steps": steps}
     _set_stage(jid, "route")
+    # Board-scaled routing budget: a fixed default silently abandons big
+    # boards (a 682-net laptop motherboard needs far more than 600s).
+    timeout = (int(body["timeout"]) if body.get("timeout")
+               else _lk().route_timeout_for(b.get("nets")))
     r = api_route({"pcb": pcb, "passes": body.get("passes") or 10,
-                   "timeout": body.get("timeout")})
+                   "timeout": timeout})
     steps["route"] = r
     if not r.get("ok"):
         return {"ok": False, "stage": "route", "steps": steps, "pcb": pcb}

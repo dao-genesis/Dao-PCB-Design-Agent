@@ -11,6 +11,7 @@ so the agent can route boards with zero human interaction.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -291,6 +292,21 @@ def route_dsn(dsn: str | Path, ses: str | Path, *,
                        "" if ok else (res[2] or "no ses produced"))
 
 
+def _heap_cap_mb() -> int:
+    """JVM heap cap: half of physical RAM, clamped to [1 GiB, 4 GiB].
+
+    An uncapped JVM on a dense board (500+ footprints) grows until the whole
+    machine thrashes/OOMs — the box hangs for the entire routing budget. A
+    bounded heap turns that into an in-JVM OutOfMemoryError we can report.
+    """
+    try:
+        total_mb = (os.sysconf("SC_PAGE_SIZE")
+                    * os.sysconf("SC_PHYS_PAGES")) // (1024 * 1024)
+    except (ValueError, OSError, AttributeError):
+        total_mb = 8192
+    return max(1024, min(4096, total_mb // 2))
+
+
 def _run_freerouting(java, jar, dsn: Path, ses: Path, timeout: int,
                      passes: int):
     """Invoke freerouting headless. Returns (stdout, stderr, reason)."""
@@ -298,7 +314,8 @@ def _run_freerouting(java, jar, dsn: Path, ses: Path, timeout: int,
     # (UIManager.getSystemLookAndFeelClassName in main), so with a DISPLAY that
     # is set but unusable (CI, containers, ssh) the JVM dies with AWTError
     # before routing starts. Force true headless mode at the JVM level.
-    cmd = [java, "-Djava.awt.headless=true", "-jar", str(jar),
+    cmd = [java, "-Djava.awt.headless=true", f"-Xmx{_heap_cap_mb()}m",
+           "-jar", str(jar),
            "-de", str(dsn), "-do", str(ses),
            "--gui.enabled=false",
            "-mp", str(passes), "-mt", "1"]
