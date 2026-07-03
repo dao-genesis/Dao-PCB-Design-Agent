@@ -266,6 +266,83 @@ def verify_editor(port: int, tries: int = 30) -> dict:
     raise RuntimeError("超时:_EXTAPI_ROOT_ 始终未就绪 (ns=0)")
 
 
+# ---- 5. Wine 通道(Linux 上部署 Windows 版 — 双系统同机共存) ------------------
+WINE_PREFIX = HOME / ".wine-lceda"
+WINE_PORT = 29231  # Linux 原生实例惯用 29230, Wine 实例错开
+WINE_EXE = WINE_PREFIX / "drive_c" / "Program Files" / "lceda-pro" / "lceda-pro.exe"
+
+
+def wine_deploy(version: str, license_path: Path | None, port: int,
+                display: str, segments: int, verify: bool,
+                prepare_only: bool = False) -> int:
+    """在 Linux 上经 Wine 部署并拉起 Windows 版 EDA(幂等)。
+
+    实测链路 (Ubuntu 22.04 + WineHQ stable 11.0, EDA 3.2.149):
+      官方 Windows 安装器为 Inno Setup → /VERYSILENT 静默装入 C:\\Program Files\\lceda-pro;
+      Electron 以 --no-sandbox --disable-gpu 拉起, CDP 照常监听, EXTAPI 94 命名空间全部就位。
+      Wine 把宿主 ~/Documents 映射进 C:\\users\\<u>\\Documents — 激活文件/工程库双端共享。
+    """
+    if _plat.normalize_os() != "linux":
+        _log("--wine 仅在 Linux 上有意义(Windows 直接原生跑)。")
+        return 2
+    if not shutil.which("wine"):
+        _log("未找到 wine；请先安装 WineHQ stable (>=9):\n"
+             "  sudo dpkg --add-architecture i386 && sudo mkdir -pm755 /etc/apt/keyrings\n"
+             "  sudo wget -qO /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key\n"
+             "  sudo wget -qNP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/$(lsb_release -cs)/winehq-$(lsb_release -cs).sources\n"
+             "  sudo apt update && sudo apt install -y --install-recommends winehq-stable")
+        return 2
+
+    wspec = _plat.spec_for("windows")
+    env = dict(os.environ, WINEPREFIX=str(WINE_PREFIX), WINEARCH="win64",
+               DISPLAY=display, WINEDEBUG="-all",
+               WINEDLLOVERRIDES="mscoree=d;mshtml=d")
+
+    if not WINE_EXE.exists():
+        # prefix 初始化(幂等; 旧残留锁会卡死 wineboot — 先杀残留 server)
+        if not (WINE_PREFIX / "drive_c" / "windows").exists():
+            subprocess.run(["wineserver", "-k"], env=env, check=False)
+            _log("初始化 Wine prefix ...")
+            subprocess.run(["wineboot", "-i"], env=env, check=False, timeout=300)
+        installer = LCEDA_ROOT / f"lceda-pro-windows-x64-{version}.exe"
+        download(wspec.installer_url(version), installer, segments=segments)
+        _log("静默安装 (Inno Setup /VERYSILENT) ...")
+        subprocess.run(["wine", str(installer), "/VERYSILENT", "/SP-",
+                        "/SUPPRESSMSGBOXES", "/NORESTART"],
+                       env=env, check=False, timeout=600)
+        if not WINE_EXE.exists():
+            raise RuntimeError(f"安装后未找到 {WINE_EXE}")
+        _log(f"安装完成: {WINE_EXE}")
+    else:
+        _log(f"已安装,跳过 ({WINE_EXE})")
+
+    if license_path:
+        place_license(license_path)  # Wine 把宿主 Documents 映射进 C 盘, 落点同一处
+
+    if prepare_only:
+        _log("Wine 预置完成(--prepare-only)。")
+        return 0
+
+    if not editor_ready(port):
+        if not cdp_alive(port):
+            log_path = LCEDA_ROOT / "lceda-wine.log"
+            _log(f"Wine 拉起 Windows 版 EDA (CDP :{port}) ...")
+            with open(log_path, "wb") as logf:
+                subprocess.Popen(
+                    ["wine", str(WINE_EXE), "--no-sandbox", "--disable-gpu",
+                     f"--remote-debugging-port={port}", "--remote-allow-origins=*"],
+                    env=env, stdout=logf, stderr=subprocess.STDOUT,
+                    start_new_session=True)
+        for _ in range(120):
+            if editor_ready(port):
+                break
+            time.sleep(1)
+    if verify:
+        verify_editor(port)
+    _log(f"Windows(Wine) 端就绪: CDP :{port} — 与 Linux 原生端(:{DEFAULT_PORT})同机共存。")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="嘉立创 EDA 桌面端一键复现部署器")
     ap.add_argument("--version", default=DEFAULT_VERSION)
@@ -281,9 +358,17 @@ def main(argv=None) -> int:
                     help="启动后探 _EXTAPI_ROOT_ 命名空间数确认编辑器活")
     ap.add_argument("--prepare-only", action="store_true",
                     help="仅预置(下载/解压/装 freerouting),不启动——供 blueprint 预烘快照")
+    ap.add_argument("--wine", action="store_true",
+                    help="Linux 上经 Wine 部署/拉起 Windows 版(默认 CDP :29231, 与原生端同机共存)")
     a = ap.parse_args(argv)
 
     lic = a.license or os.environ.get("LCEDA_ACTIVATION")
+
+    if a.wine:
+        port = a.port if a.port != DEFAULT_PORT else WINE_PORT
+        return wine_deploy(a.version, Path(lic).expanduser() if lic else None,
+                           port, a.display, a.segments, a.verify,
+                           prepare_only=a.prepare_only)
 
     if not a.launch_only:
         if not PLATFORM.has_portable_archive:
