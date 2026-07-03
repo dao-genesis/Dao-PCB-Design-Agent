@@ -22,6 +22,23 @@ function findEngine() {
   return null;
 }
 
+function findPython() {
+  const cfg = vscode.workspace.getConfiguration("daoKicad");
+  const explicit = cfg.get("python");
+  const candidates = explicit && explicit !== "python3"
+    ? [explicit]
+    : process.platform === "win32"
+      ? ["python", "py", "python3"]
+      : ["python3", "python"];
+  for (const c of candidates) {
+    try {
+      const r = cp.spawnSync(c, ["--version"], { timeout: 5000 });
+      if (r.status === 0) return c;
+    } catch (e) { /* try next */ }
+  }
+  return candidates[0];
+}
+
 function health(port) {
   return new Promise((resolve) => {
     const req = http.get({ host: "127.0.0.1", port, path: "/api/health", timeout: 2000 },
@@ -41,7 +58,7 @@ async function ensureServer(context) {
       "DAO KiCad: 找不到 daokicad 引擎 (bridge/ide_server.py)。请设置 daoKicad.enginePath。");
     return null;
   }
-  const py = cfg.get("python") || "python3";
+  const py = findPython();
   serverProc = cp.spawn(py, ["-m", "bridge.ide_server", "--port", String(port)], {
     cwd: engine,
     env: { ...process.env, PYTHONPATH: engine + path.delimiter + path.dirname(engine) },

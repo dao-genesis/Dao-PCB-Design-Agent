@@ -80,6 +80,25 @@ def test_http_slow_action_returns_job(server, tmp_path):
     assert s["result"]["ok"] is False
 
 
+def test_http_chunked_body(server, tmp_path):
+    # Node/fetch clients send JSON with Transfer-Encoding: chunked (no
+    # Content-Length); the bridge must decode it, not see an empty body.
+    import http.client
+    host, port = server.rsplit("//", 1)[1].split(":")
+    c = http.client.HTTPConnection(host, int(port))
+    c.putrequest("POST", "/api/erc")
+    c.putheader("Transfer-Encoding", "chunked")
+    c.putheader("Content-Type", "application/json")
+    c.endheaders()
+    payload = json.dumps({"sch": str(tmp_path / "missing.kicad_sch")}).encode()
+    c.send(b"%x\r\n" % len(payload) + payload + b"\r\n0\r\n\r\n")
+    r = c.getresponse()
+    j = json.loads(r.read())
+    # the sch doesn't exist so the engine reports failure — but the field
+    # arrived, proving the chunked body was decoded.
+    assert r.status == 200 and "error" not in j
+
+
 def test_http_unknown_routes(server):
     for fn in (lambda: _get(server + "/api/nope"),
                lambda: _post(server + "/api/nope", {})):
