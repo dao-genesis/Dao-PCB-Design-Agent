@@ -366,6 +366,30 @@ def _order_by_connectivity(autos, connections, gap=3.0, allow_floorplan=False):
     return sorted(autos, key=lambda t: pos[t[0]["ref"]]), best_tw, fp_centers
 
 
+def _allow_intrinsic_mask_bridges(board, fp):
+    """Fine-pitch connectors (USB-C…) ship pads whose solder-mask apertures
+    overlap *by design*; no placement or routing can separate them, so the
+    designer's remedy in KiCad is the footprint's "allow bridged solder mask"
+    attribute. Detect the intrinsic overlap between different-numbered pads and
+    set that attribute — real bridges between footprints still get flagged."""
+    max_err = board.GetDesignSettings().m_MaxError
+    for side in (pcbnew.F_Mask, pcbnew.B_Mask):
+        polys = []
+        for p in fp.Pads():
+            if not p.IsOnLayer(side):
+                continue
+            ps = pcbnew.SHAPE_POLY_SET()
+            p.TransformShapeToPolygon(ps, side, int(p.GetSolderMaskExpansion(side)),
+                                      max_err, pcbnew.ERROR_OUTSIDE)
+            polys.append((p.GetNumber(), ps))
+        for i in range(len(polys)):
+            for j in range(i + 1, len(polys)):
+                if polys[i][0] != polys[j][0] and polys[i][1].Collide(polys[j][1]):
+                    fp.SetAttributes(fp.GetAttributes()
+                                     | pcbnew.FP_ALLOW_SOLDERMASK_BRIDGES)
+                    return
+
+
 def build(spec, out_path):
     global _LIB_DIRS
     _LIB_DIRS = spec.get("fp_lib_dirs", {}) or {}
@@ -433,6 +457,7 @@ def build(spec, out_path):
         if "value" in fpspec:
             fp.SetValue(str(fpspec["value"]))
         board.Add(fp)
+        _allow_intrinsic_mask_bridges(board, fp)
         placed[ref] = fp
         # orient/flip only after the footprint belongs to the board — flipping a
         # board-less footprint dereferences board layer state and segfaults
