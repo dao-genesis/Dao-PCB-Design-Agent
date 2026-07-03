@@ -28,6 +28,8 @@ def run_one(name, port, router, tries):
         len(audit["steps"]["place_and_net"]["nets"]), drc["total"],
         drc["by_type"] or "CLEAN", len(audit.get("build_attempts", [])),
         audit["elapsed_s"]))
+    if drc["total"]:
+        print("  DRC by_net:", json.dumps(drc.get("by_net", {}), ensure_ascii=False))
     print("  exports:", {k: v["size"] for k, v in audit["exports"].items()})
     return audit
 

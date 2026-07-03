@@ -223,12 +223,20 @@ class DrcEngine:
                     items=items,
                 ))
 
-        # Parse unresolved items
-        unresolved = data.get("unresolved", [])
-        result.unresolved_count = len(unresolved) if isinstance(unresolved, list) else 0
+        # Parse unconnected items (open nets). kicad-cli emits these under
+        # "unconnected_items" — the old code read "unresolved", a key KiCad
+        # never writes, so unresolved_count was always 0 and open circuits
+        # went unreported.
+        unconnected = data.get("unconnected_items", [])
+        result.unresolved_count = (
+            len(unconnected) if isinstance(unconnected, list) else 0)
 
-        # Check schematic parity
-        result.schematic_parity = data.get("schematic_parity", True)
+        # Schematic parity is a LIST of parity violations (empty = clean), not
+        # a bool. Treating the list itself as the bool was inverted: an empty
+        # (clean) list is falsy → reported as failing parity. Clean iff empty.
+        parity = data.get("schematic_parity", [])
+        result.schematic_parity = (
+            len(parity) == 0 if isinstance(parity, list) else bool(parity))
 
         result.passed = result.error_count == 0
         return result

@@ -7,13 +7,24 @@ No abstractions — direct control over every export parameter.
 
 from __future__ import annotations
 
+import contextlib
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
+
+
+def _natural_ref_key(ref: str) -> list:
+    """Sort key giving human/KiCad reference order: R1, R2, R10 (not R1, R10,
+    R2). Splits a designator into alternating text/number runs so the numeric
+    runs compare as integers."""
+    return [int(t) if t.isdigit() else t
+            for t in re.findall(r"\d+|\D+", ref)]
+
 
 try:
     import pcbnew
@@ -29,11 +40,36 @@ class ExportEngine:
             raise RuntimeError("pcbnew not available")
         self.board = board
 
+    @contextlib.contextmanager
+    def _basename_fallback(self, default: str = "board"):
+        """Give the board a sensible filename stem while emitting files.
+
+        Both the Gerber plotter and the Excellon writer derive each output
+        file's name from ``board.GetFileName()``. An in-memory board (exactly
+        what ``auto_design`` produces) has an empty filename, so the whole
+        package came out as ``-B_Cu.gbl`` / ``-PTH.drl`` — a leading dash that
+        many tools parse as a flag, and no project name. Temporarily set a stem
+        when one is missing, then restore it so we never mutate caller state.
+        """
+        src = self.board.GetFileName()
+        if src and Path(src).stem:
+            yield
+            return
+        self.board.SetFileName(f"{default}.kicad_pcb")
+        try:
+            yield
+        finally:
+            self.board.SetFileName(src)
+
     def gerbers(self, output_dir: Path, **opts) -> list[Path]:
         """Export complete Gerber set."""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        with self._basename_fallback():
+            return self._plot_gerbers(output_dir, **opts)
+
+    def _plot_gerbers(self, output_dir: Path, **opts) -> list[Path]:
         plot_ctrl = pcbnew.PLOT_CONTROLLER(self.board)
         plot_opts = plot_ctrl.GetPlotOptions()
         plot_opts.SetOutputDirectory(str(output_dir))
@@ -102,10 +138,11 @@ class ExportEngine:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        writer = pcbnew.EXCELLON_WRITER(self.board)
-        writer.SetOptions(False, False, pcbnew.VECTOR2I(0, 0), False)
-        writer.SetFormat(metric)
-        writer.CreateDrillandMapFilesSet(str(output_dir), True, False)
+        with self._basename_fallback():
+            writer = pcbnew.EXCELLON_WRITER(self.board)
+            writer.SetOptions(False, False, pcbnew.VECTOR2I(0, 0), False)
+            writer.SetFormat(metric)
+            writer.CreateDrillandMapFilesSet(str(output_dir), True, False)
 
         return sorted(output_dir.glob("*.drl"))
 
@@ -136,7 +173,7 @@ class ExportEngine:
             seen[key]["refs"].append(ref)
 
         for key, data in sorted(seen.items()):
-            refs = " ".join(sorted(data["refs"]))
+            refs = " ".join(sorted(data["refs"], key=_natural_ref_key))
             lines.append(f'"{refs}","{data["value"]}","{data["footprint"]}",{len(data["refs"])}')
 
         output_path.write_text("\n".join(lines))
@@ -156,10 +193,14 @@ class ExportEngine:
                 continue
             pos = fp.GetPosition()
             side = "top" if fp.GetLayer() == pcbnew.F_Cu else "bottom"
+            # pcbnew's Y grows downward, but pick-and-place / CPL files (and
+            # KiCad's own `kicad-cli pcb export pos`) use the fab convention of
+            # Y growing upward. Emitting the raw pcbnew Y mirrors every part
+            # vertically — a silently mis-assembled board. Negate Y to match.
             lines.append(
                 f"{fp.GetReference()},{fp.GetValue()},"
                 f"{fp.GetFPID().GetUniStringLibItemName()},"
-                f"{pcbnew.ToMM(pos.x):.4f},{pcbnew.ToMM(pos.y):.4f},"
+                f"{pcbnew.ToMM(pos.x):.4f},{-pcbnew.ToMM(pos.y):.4f},"
                 f"{fp.GetOrientationDegrees():.1f},{side}"
             )
 
@@ -207,8 +248,169 @@ class ExportEngine:
             if tmp and os.path.exists(tmp):
                 os.unlink(tmp)
 
-    def full_manufacturing(self, output_dir: Path) -> dict[str, list[Path]]:
-        """Complete manufacturing package — everything a fab house needs."""
+    def _cli(self) -> Optional[str]:
+        """Locate kicad-cli, falling back to the env-detected binary."""
+        cli = shutil.which("kicad-cli")
+        if cli:
+            return cli
+        from daokicad import env
+        detected = env.detect().cli
+        return str(detected) if detected else None
+
+    def _run_cli(self, args: list[str]) -> bool:
+        """Run a kicad-cli command against this board, saving to a temp
+        .kicad_pcb when the in-memory board has no backing file. ``args`` is
+        the part after ``kicad-cli`` and must end with the placeholder
+        ``"__SRC__"`` where the input file goes."""
+        cli = self._cli()
+        if not cli:
+            return False
+        src = self.board.GetFileName()
+        tmp = None
+        if not src or not Path(src).is_file():
+            fd, tmp = tempfile.mkstemp(suffix=".kicad_pcb")
+            os.close(fd)
+            self.board.Save(tmp)
+            src = tmp
+        try:
+            cmd = [cli] + [src if a == "__SRC__" else a for a in args]
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=300)
+            return proc.returncode == 0
+        except Exception:
+            return False
+        finally:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
+
+    # KiCad CLI layer names are dotted (F.Cu), but pcbnew's GetLayerName and
+    # most of this codebase use underscores (F_Cu); accept either.
+    _DEFAULT_PLOT_LAYERS = ("F.Cu", "B.Cu", "Edge.Cuts")
+
+    @staticmethod
+    def _norm_layers(layers) -> str:
+        names = [str(l).replace("_", ".") for l in layers]
+        return ",".join(names)
+
+    def render_3d(self, output_path: Path, side: str = "top",
+                  width: int = 1600, height: int = 900,
+                  quality: str = "high", background: str = "",
+                  rotate: str = "", perspective: bool = False) -> Optional[Path]:
+        """Render a photographic 3D view (PNG/JPEG) via ``kicad-cli pcb render``.
+
+        This is the headless equivalent of KiCad's 3D viewer image export — a
+        user-visible surface previously unreachable from the engine. ``side``
+        is top/bottom/left/right/front/back; ``rotate`` like ``-45,0,45`` gives
+        an isometric view. Returns the path on success, ``None`` otherwise.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        args = ["pcb", "render", "--output", str(output_path),
+                "--side", side, "--width", str(width), "--height", str(height),
+                "--quality", quality]
+        if background:
+            args += ["--background", background]
+        if rotate:
+            args += ["--rotate", rotate]
+        if perspective:
+            args += ["--perspective"]
+        args.append("__SRC__")
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def plot_svg(self, output_path: Path, layers=None,
+                 fit_to_board: bool = True,
+                 black_and_white: bool = False) -> Optional[Path]:
+        """Plot layers to a single SVG via ``kicad-cli pcb export svg``.
+
+        Headless equivalent of File → Plot (SVG). ``layers`` defaults to
+        F.Cu/B.Cu/Edge.Cuts and accepts dotted or underscored names.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        layer_str = self._norm_layers(layers or self._DEFAULT_PLOT_LAYERS)
+        args = ["pcb", "export", "svg", "--output", str(output_path),
+                "--layers", layer_str, "--mode-single"]
+        if fit_to_board:
+            args.append("--fit-page-to-board")
+        if black_and_white:
+            args.append("--black-and-white")
+        args.append("__SRC__")
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def plot_pdf(self, output_path: Path, layers=None,
+                 black_and_white: bool = False) -> Optional[Path]:
+        """Plot layers to PDF via ``kicad-cli pcb export pdf``.
+
+        Headless equivalent of File → Plot (PDF), e.g. for fab review docs.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        layer_str = self._norm_layers(layers or self._DEFAULT_PLOT_LAYERS)
+        args = ["pcb", "export", "pdf", "--output", str(output_path),
+                "--layers", layer_str]
+        if black_and_white:
+            args.append("--black-and-white")
+        args.append("__SRC__")
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def odb(self, output_path: Path) -> Optional[Path]:
+        """Export an ODB++ package via ``kicad-cli pcb export odb``.
+
+        ODB++ is a single-archive fab handoff (copper, drills, netlist, stackup
+        in one file) that modern fabs accept in place of a Gerber+drill bundle.
+        Output is a ``.zip`` by default. Returns the path or ``None``.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        args = ["pcb", "export", "odb", "--output", str(output_path), "__SRC__"]
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def ipc2581(self, output_path: Path) -> Optional[Path]:
+        """Export IPC-2581 (XML) via ``kicad-cli pcb export ipc2581``.
+
+        IPC-2581 is the open single-file fab/assembly interchange standard
+        (geometry + BOM + netlist). Returns the path or ``None``.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        args = ["pcb", "export", "ipc2581",
+                "--output", str(output_path), "__SRC__"]
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def ipc_d356(self, output_path: Path) -> Optional[Path]:
+        """Export an IPC-D-356 netlist via ``kicad-cli pcb export ipcd356``.
+
+        This is the bare-board electrical-test netlist a fab loads into a
+        flying-probe / bed-of-nails tester. Returns the path or ``None``.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        args = ["pcb", "export", "ipcd356",
+                "--output", str(output_path), "__SRC__"]
+        if self._run_cli(args) and output_path.exists():
+            return output_path
+        return None
+
+    def full_manufacturing(self, output_dir: Path,
+                           extras: bool = False) -> dict[str, list[Path]]:
+        """Complete manufacturing package — everything a fab house needs.
+
+        With ``extras=True`` also emits the modern single-file interchange
+        formats (ODB++, IPC-2581, IPC-D-356) and a top-side 3D render preview.
+        Defaults to off so the core bundle stays fast; one-click/GUI callers
+        opt in. Each extra is omitted (not failed) when kicad-cli can't
+        produce it.
+        """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -232,5 +434,15 @@ class ExportEngine:
         # only when kicad-cli is unavailable, so the rest still succeeds.
         step = self.step_3d(output_dir / "board.step")
         result["step"] = [step] if step else []
+
+        if extras:
+            odb = self.odb(output_dir / "board_odb.zip")
+            result["odb"] = [odb] if odb else []
+            ipc = self.ipc2581(output_dir / "board_ipc2581.xml")
+            result["ipc2581"] = [ipc] if ipc else []
+            d356 = self.ipc_d356(output_dir / "board.d356")
+            result["ipc_d356"] = [d356] if d356 else []
+            preview = self.render_3d(output_dir / "preview_top.png")
+            result["preview"] = [preview] if preview else []
 
         return result

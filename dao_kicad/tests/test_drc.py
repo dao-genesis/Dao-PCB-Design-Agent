@@ -1,5 +1,6 @@
 """Tests for DRC integration — exposed by Practice 1."""
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -41,6 +42,37 @@ class TestDrcEngine:
         drc = DrcEngine()
         result = drc.check_in_memory(builder.board)
         assert isinstance(result, DrcResult)
+
+    def test_parse_report_counts_unconnected_and_parity(self):
+        """kicad-cli emits open nets under 'unconnected_items' and parity
+        problems as a list. Regression guard: the parser previously read
+        'unresolved' (a key KiCad never writes) so open circuits counted as 0,
+        and treated the parity list as a bool (inverting clean/dirty)."""
+        report = {
+            "violations": [],
+            "unconnected_items": [
+                {"description": "Missing connection", "items": []},
+                {"description": "Missing connection", "items": []},
+            ],
+            "schematic_parity": [],
+        }
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "drc.json"
+            p.write_text(json.dumps(report))
+            result = DrcEngine()._parse_report(p)
+        assert result.unresolved_count == 2
+        assert result.schematic_parity is True
+
+    def test_parse_report_flags_parity_violations(self):
+        """A non-empty schematic_parity list means parity is NOT clean."""
+        report = {"violations": [], "unconnected_items": [],
+                  "schematic_parity": [{"description": "extra footprint"}]}
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "drc.json"
+            p.write_text(json.dumps(report))
+            result = DrcEngine()._parse_report(p)
+        assert result.unresolved_count == 0
+        assert result.schematic_parity is False
 
     def test_drc_detects_clearance_violation(self):
         """Tracks very close together should trigger DRC."""

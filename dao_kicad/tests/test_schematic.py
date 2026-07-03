@@ -30,6 +30,36 @@ class TestSymbolParser:
         assert len(sym.pins) > 20  # STM32 has many pins
         assert len(sym.power_pins) > 0
         assert len(sym.io_pins) > 0
+        # Pin numbers must be populated — netlist→PCB mapping (assign_net /
+        # pin_by_number) is useless without them. Regression: the old regex
+        # dropped every number (left "") because of nested (effects ...).
+        assert all(p.number for p in sym.pins)
+        assert sym.pin_by_number(sym.pins[0].number) is sym.pins[0]
+
+    def test_parse_derived_symbol_inherits_pins(self):
+        """Derived symbols (extends "Parent") carry no pins of their own; the
+        parser must resolve the parent. STM32F103C8Tx extends C8Tx's base."""
+        parser = SymbolParser()
+        sym = parser.parse_symbol("MCU_ST_STM32F1", "STM32F103C8Tx")
+        assert sym is not None
+        assert len(sym.pins) > 20
+        assert all(p.number for p in sym.pins)
+
+    def test_demorgan_alternate_not_double_counted(self):
+        """Parts with a DeMorgan alternate body style define their pins twice
+        (units ``_<u>_1`` and ``_<u>_2``). Scanning the whole block counted
+        both, reporting 26 pins for a 14-pin 74HC00 and duplicating every gate
+        pin number — which corrupts pin_by_number / power_pins / net mapping.
+        Only the standard representation must be counted."""
+        from collections import Counter
+        parser = SymbolParser()
+        # 74HC00 extends 74LS00, which carries a DeMorgan alternate.
+        sym = parser.parse_symbol("74xx", "74HC00")
+        assert sym is not None
+        assert len(sym.pins) == 14, len(sym.pins)
+        dups = {n: c for n, c in Counter(p.number for p in sym.pins).items()
+                if c > 1}
+        assert not dups, dups
 
     def test_parse_passive(self):
         parser = SymbolParser()

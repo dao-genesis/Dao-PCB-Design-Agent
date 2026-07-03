@@ -167,6 +167,73 @@ def find_kicad_python() -> Optional[Path]:
     return None
 
 
+def find_java() -> Optional[Path]:
+    """Find a Java runtime (freerouting 自动布线引擎所需)。"""
+    env = os.environ.get("JAVA_BIN")
+    if env and Path(env).exists():
+        return Path(env)
+    w = shutil.which("java")
+    return Path(w) if w else None
+
+
+_FREEROUTING_CANDIDATES: List[Path] = [
+    Path.home() / "freerouting.jar",
+    Path("/usr/share/freerouting/freerouting.jar"),
+    Path("/opt/freerouting/freerouting.jar"),
+    Path(r"C:\Program Files\freerouting\freerouting.jar"),
+]
+
+
+def find_freerouting() -> Optional[Path]:
+    """Find the freerouting jar (KiCad 本源外部自动布线引擎, DSN→SES)。
+
+    KiCad 自家不带自动布线器, 官方推荐 freerouting 经 Specctra DSN/SES 往返。
+    优先 env FREEROUTING_JAR, 再常见安装位; 找不到则调用方降级为 router_unavailable。
+    """
+    env = os.environ.get("FREEROUTING_JAR")
+    if env and Path(env).exists():
+        return Path(env)
+    for c in _FREEROUTING_CANDIDATES:
+        if c.exists():
+            return c
+    return None
+
+
+# freerouting 1.x 经典 CLI (-de/-do/-mp) 的官方发布资源 —— 与 native_route
+# 调用约定一致 (v2.x 改了 CLI 故锚定 1.9.0)。
+_FREEROUTING_URL = ("https://github.com/freerouting/freerouting/releases/"
+                    "download/v1.9.0/freerouting-1.9.0.jar")
+_FREEROUTING_MIN_BYTES = 1_000_000  # 完整 jar ~5MB; 截断/出错的下载远小于此
+
+
+def ensure_freerouting(dest: Optional[Path] = None,
+                       timeout: int = 120) -> Optional[Path]:
+    """确保 freerouting jar 可用; 缺则按官方发布自取到 ~/freerouting.jar。
+
+    KiCad 自家不带自动布线器 —— 这是"官方缺失、需我们自行补齐"的本源缺口。本函数把
+    缺口闭合: 已在位 (env/常见位) 即返回; 否则从 freerouting 官方 release 下载 1.9.0
+    (与 native_route 的 -de/-do/-mp CLI 约定一致) 落到候选位, 使整条 build→route→fab
+    本源链开箱即通。下载失败则返回 None (调用方降级 router_unavailable, 不崩)。
+    """
+    found = find_freerouting()
+    if found:
+        return found
+    target = Path(dest) if dest else (Path.home() / "freerouting.jar")
+    try:
+        import urllib.request
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(".jar.part")
+        with urllib.request.urlopen(_FREEROUTING_URL, timeout=timeout) as r:
+            tmp.write_bytes(r.read())
+        if tmp.stat().st_size < _FREEROUTING_MIN_BYTES:
+            tmp.unlink(missing_ok=True)
+            return None
+        tmp.replace(target)
+        return target
+    except Exception:  # noqa: BLE001 — 取不到即降级, 不崩
+        return None
+
+
 def has_kicad_install() -> bool:
     """Is KiCad installed and detectable?"""
     return KICAD_ROOT is not None

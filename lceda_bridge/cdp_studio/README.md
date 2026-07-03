@@ -35,7 +35,9 @@ WebSocket，只要经 Chrome 远程调试(CDP)在**主页面上下文** `Runtime
 - **账号层** = REST `pro.lceda.cn/api/*`(带登录 cookie):工程/文件夹/团队/用户的生命周期 CRUD。用 `eda_rest.py`。
 - **编辑器层** = `window._EXTAPI_ROOT_`(经 CDP):**已打开**工程/文档内的原理图、PCB、图元、渲染。用 `eda_api.py`。
 
-> 注:`_EXTAPI_ROOT_.dmt_Project.createProject` 在编辑器页是空操作、`getAllProjectsUuid` 只反映当前已打开工程;账号级工程 CRUD **必须走 REST 层**。详见 `PHASE4_FINDINGS.md`。
+> 注:`_EXTAPI_ROOT_.dmt_Project.createProject` 在编辑器页是空操作、`getAllProjectsUuid`(无参)只反映当前已打开工程;账号级工程 CRUD **必须走 REST 层**。详见 `PHASE4_FINDINGS.md`。
+>
+> **桌面离线版(免账号登录)**:工程创建由本地 `fetch("/api/client/createProject")`(Electron 主进程)接管,且**新建后需先以工程目录调一次 `getAllProjectsUuid("<projects_dir>")` 扫描注册**,`openProject` 才能加载板。详见 `DESKTOP_OFFLINE_FINDINGS.md`。
 
 ### Service Worker 健康化(关键坑)
 

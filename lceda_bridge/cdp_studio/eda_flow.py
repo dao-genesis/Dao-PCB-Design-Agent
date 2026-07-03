@@ -19,6 +19,7 @@
 """
 import base64
 import json
+import math
 import os
 import sys
 import time
@@ -721,7 +722,7 @@ class Flow:
         return ids
 
     # --- 原生自动布线(GUI:Route → Auto Routing → Run) ---
-    def autoroute_gui(self, wait=12):
+    def autoroute_gui(self, wait=12, settle=8, max_extra=150):
         """用编辑器**原生自动布线**把飞线全部变实铜(2层:顶红/底蓝 + 过孔)。
 
         实战发现(本会话攻克的边界,已硬验证):
@@ -757,8 +758,24 @@ class Flow:
             self.ws.cmd("Input.dispatchMouseEvent",
                         {"type": ev, "x": o["x"], "y": o["y"], "button": "left",
                          "clickCount": 0 if ev == "mouseMoved" else 1}, timeout=5)
+        # 先等初始 wait,再**轮询到布线稳定**(轨数连续 settle 秒不再增长即视为收敛),
+        # 密板(如 BGA 周边逃逸)原生布线器耗时随网数增长,固定 sleep 会在最后一条网前截断
+        # (本会话实证:28 网 BGA 定 wait=18 时角球 S27 未布通 → DRC Connection Error)。
         time.sleep(wait)
-        tracks = len(self.eda.call("pcb_PrimitiveLine.getAllPrimitiveId", timeout=15) or [])
+
+        def _ntracks():
+            return len(self.eda.call("pcb_PrimitiveLine.getAllPrimitiveId", timeout=15) or [])
+        tracks = _ntracks()
+        waited, stable = 0.0, 0.0
+        while waited < max_extra:
+            time.sleep(3); waited += 3
+            n = _ntracks()
+            if n > tracks:
+                tracks = n; stable = 0.0
+            else:
+                stable += 3
+                if stable >= settle:
+                    break
         vias = len(self.eda.call("pcb_PrimitiveVia.getAllPrimitiveId", timeout=15) or [])
         return {"tracks": tracks, "vias": vias}
 
@@ -1027,6 +1044,7 @@ class Flow:
                         "errorType": err.get("errorType"),
                         "objType": err.get("errorObjType"),
                         "rule": err.get("ruleName"),
+                        "net": err.get("net") or ed.get("net"),
                         "obj1": (err.get("obj1") or {}).get("suffix"),
                         "obj2": (err.get("obj2") or {}).get("suffix"),
                         "layer": err.get("layer"),
@@ -1048,6 +1066,142 @@ class Flow:
         for e in v:
             by[e["errorType"]] = by.get(e["errorType"], 0) + 1
         return {"total": len(v), "by_type": by}
+
+    def unrouted_nets(self, drc_viol=None, strict=True, timeout=60):
+        """返回**仍未布通**的网名集合(DRC「Connection Error / No Connection」涉及的网)。
+
+        逆出:结构化 DRC 违规里每条「Connection Error」都带 `net` 字段(见 _flatten_drc,
+        errData 亦冗余一份)——一个网只要有任一焊盘 disconnected 就会报,故据 net 去重即得
+        「没布通的网」清单。原生 GUI 自动布线器**非确定性**:密板(如 BGA 周边逃逸)偶尔遗留个别
+        网未布通,本法是 complete_residual_nets 的「眼睛」。drc_viol 可传入已算好的违规避免重算。"""
+        v = drc_viol if drc_viol is not None else self.drc_violations(strict=strict, timeout=timeout)
+        out = set()
+        for e in v:
+            if "onnect" in (e.get("errorType") or ""):
+                n = e.get("net")
+                if n:
+                    out.add(n)
+        return out
+
+    def _component_centers(self):
+        """返回 [(cx,cy, [(px,py)...]) ...]:板上每个器件的几何中心 + 其全部焊盘坐标。
+        用于给残余补布算「向外逃逸」方向(焊盘→器件中心的反方向即离开封装本体的方向)。"""
+        cids = self.eda.call("pcb_PrimitiveComponent.getAllPrimitiveId", timeout=15) or []
+        out = []
+        for c in cids:
+            pins = self.pcb_component_pins(c) or []
+            pts = [(p.get("x"), p.get("y")) for p in pins
+                   if p.get("x") is not None and p.get("y") is not None]
+            if not pts:
+                continue
+            cx = sum(p[0] for p in pts) / len(pts)
+            cy = sum(p[1] for p in pts) / len(pts)
+            out.append((cx, cy, pts))
+        return out
+
+    def _escape_via_point(self, pad, other, centers, breakout):
+        """给一个焊盘算「过孔落点」:沿**离开所属封装本体**的方向(焊盘→器件中心的反向)外移
+        breakout(mil),把过孔挪出细距脚列以免撞邻脚;找不到归属器件时退回「指向对端」方向。
+        返回 (vx,vy);breakout<=0 或无方向时原样返回焊盘坐标。"""
+        px, py = pad[0], pad[1]
+        # 找该焊盘所属器件(其焊盘集里离本坐标最近者)
+        best = None
+        bestd = 1e18
+        for cx, cy, pts in centers:
+            for qx, qy in pts:
+                dd = (qx - px) ** 2 + (qy - py) ** 2
+                if dd < bestd:
+                    bestd = dd
+                    best = (cx, cy)
+        ux = uy = 0.0
+        if best is not None and bestd <= 25.0:  # 命中同一焊盘(<=5mil)
+            dx, dy = px - best[0], py - best[1]
+            n = math.hypot(dx, dy)
+            if n > 1e-6:
+                ux, uy = dx / n, dy / n
+        if ux == 0.0 and uy == 0.0:  # 退回:指向对端
+            dx, dy = other[0] - px, other[1] - py
+            n = math.hypot(dx, dy)
+            if n > 1e-6:
+                ux, uy = dx / n, dy / n
+        if (ux == 0.0 and uy == 0.0) or breakout <= 0:
+            return (px, py)
+        return (px + ux * breakout, py + uy * breakout)
+
+    def complete_residual_nets(self, prefer_layer=2, width=10, breakout=50,
+                               hole=20, diameter=32, verify=True, drc_viol=None,
+                               strict=True, timeout=90):
+        """**残余网补布(通用·自校验·非破坏原语)**——把原生自动布线遗留的未通网补齐,且**永不恶化板子**。
+
+        道:嘉立创 web 端唯一可达的布线器是原生 GUI 自动布线器,它**非确定性**——同一密板
+        (如 BGA64 周边 28 球逃逸)多次布线,偶尔恰好遗留个别网(常是被四周逃逸挤死的角球)
+        未布通,报 Connection Error。与其把这类板判「布线器质量上限」而排除,不如给系统接一层
+        **残余补布**:扫 DRC 未通网,对每条未通网在**空闲层**把两端焊盘接通(真在铜层上接通并经 DRC 复核)。
+
+        本会话硬验证的两条教训,已内化为设计:
+        1) 直接在细距焊盘落过孔会撞邻脚 → 故对每端焊盘沿**离开封装本体**方向(焊盘→器件中心的反向)
+           走 `breakout` 短桩,把过孔挪出脚列,再在目标层把两端过孔直线串起(菊花链支持多脚网)。
+        2) 焊盘四周的扇出区在密板上可能已被别的网挤满,朴素几何逃逸会横穿既有铜 → 故 **verify=True**
+           时补布后复检 DRC:**只要引入任何新违规,就把本次新加的全部图元原样删除回滚**,诚实报告该网
+           未能干净补齐(remaining 里仍列它)。于是本原语退化为「能干净补则补、不能则安全 no-op」,
+           对**焊盘间距充裕/存在空闲内层**的板确定性收网,对拥挤板不制造脏铜——广泛适配、鲁棒、诚实。
+
+        目标层默认底层(2,恒为真实铜层);4 层板可传 prefer_layer=内层 id 走近乎全空的内层。
+        返回 {before, completed, reverted, remaining, drc_before, drc_after, layer, detail}。
+        completed=干净补齐(已并入板);reverted=补后引入违规已回滚;remaining=最终仍未通网(=[] 即净 DRC=0)。
+        """
+        before = self.unrouted_nets(drc_viol=drc_viol, strict=strict, timeout=timeout)
+        if not before:
+            return {"before": [], "completed": [], "reverted": [], "remaining": [],
+                    "drc_before": 0, "drc_after": 0, "layer": None, "detail": {}}
+        drc_before = len(self.drc_violations(strict=strict, timeout=timeout))
+        layer = prefer_layer
+        centers = self._component_centers()  # 每个焊盘 → 其器件几何中心(算「向外」方向用)
+        by = self.pcb_pins_by_net()
+        # 全板 id 快照:回滚只按「补布后新出现的 id」做集合差删除——不依赖 create() 返回值,鲁棒
+        snap_lines = set(self.pcb_track_ids() or [])
+        snap_vias = set(self.eda.call("pcb_PrimitiveVia.getAllPrimitiveId", timeout=15) or [])
+        detail = {}
+        for net in sorted(before):
+            pts = by.get(net) or []
+            if len(pts) < 2:
+                continue
+            made = 0
+            for i in range(len(pts) - 1):
+                a = pts[i]
+                b = pts[i + 1]
+                va = self._escape_via_point(a, b, centers, breakout)
+                vb = self._escape_via_point(b, a, centers, breakout)
+                if va != tuple(a):  # 顶层向外短桩:把过孔挪出细距封装(离开本体方向逃逸)
+                    self.pcb_track(net, a[0], a[1], va[0], va[1], layer=1, width=width); made += 1
+                if vb != tuple(b):
+                    self.pcb_track(net, b[0], b[1], vb[0], vb[1], layer=1, width=width); made += 1
+                self.pcb_via(net, va[0], va[1], hole=hole, diameter=diameter); made += 1
+                self.pcb_via(net, vb[0], vb[1], hole=hole, diameter=diameter); made += 1
+                self.pcb_track(net, va[0], va[1], vb[0], vb[1], layer=layer, width=width); made += 1
+            detail[net] = made
+        self.eda.call("pcb_Document.save", timeout=20)
+        time.sleep(1)
+        completed = sorted(detail.keys())
+        reverted = []
+        drc_after_try = len(self.drc_violations(strict=strict, timeout=timeout))
+        if verify and drc_after_try > drc_before:  # 引入新违规 → 全板 id 差集回滚(all-or-nothing)
+            add_lines = [i for i in (self.pcb_track_ids() or []) if i not in snap_lines]
+            add_vias = [i for i in (self.eda.call("pcb_PrimitiveVia.getAllPrimitiveId", timeout=15) or [])
+                        if i not in snap_vias]
+            if add_lines:
+                self.eda.call("pcb_PrimitiveLine.delete", add_lines, timeout=30)
+            if add_vias:
+                self.eda.call("pcb_PrimitiveVia.delete", add_vias, timeout=30)
+            self.eda.call("pcb_Document.save", timeout=20)
+            time.sleep(1)
+            reverted = completed
+            completed = []
+        remaining = sorted(self.unrouted_nets(strict=strict, timeout=timeout))
+        drc_after = len(self.drc_violations(strict=strict, timeout=timeout))
+        return {"before": sorted(before), "completed": completed, "reverted": reverted,
+                "remaining": remaining, "drc_before": drc_before, "drc_after": drc_after,
+                "layer": layer, "detail": detail}
 
     # 历史结论更正(本会话硬验证):此前认为 DRC 逐条违规「API 取不到、唯一真相源是 GUI 面板」。
     # 实测 v3.2.148 `pcb_Drc.check(strict, userInterface, includeVerboseError=true)` **直接**返回
@@ -1182,15 +1336,44 @@ class Flow:
                 pass
         return n
 
-    def export_all(self, out_dir, base="Dao"):
+    # web 在线端全谱制造/交换数据(实测真字节的格式;与桌面 dao_rpc_driver.export_all 对齐)。
+    # (key, pcb_ManufactureData 方法名, 额外实参 js)
+    _WEB_EXPORT_SUITE = (
+        ("gerber", "getGerberFile", ""),
+        ("bom", "getBomFile", ""),
+        ("pnp", "getPickAndPlaceFile", ""),
+        ("pdf", "getPdfFile", ""),
+        ("dxf", "getDxfFile", ""),
+        ("3d_step", "get3DFile", ',"step"'),
+        ("ipc_d356a", "getIpcD356AFile", ""),
+        ("odb", "getOpenDatabaseDoublePlusFile", ""),
+        ("ibom", "getInteractiveBomFile", ""),
+        ("altium", "getAltiumDesignerFile", ""),
+        ("testpoint", "getTestPointFile", ""),
+        ("netlist", "getNetlistFile", ""),
+        ("pads", "getPadsFile", ""),
+        ("flyprobe", "getFlyingProbeTestFile", ""),
+    )
+
+    def export_all(self, out_dir, base="Dao", suite=None):
+        """一次导出 web 在线端**全谱**制造/交换数据(纯 RPC、零 GUI)。
+
+        活体实测(pro.lceda.cn·登录态)12 格式真字节:gerber/bom/pnp/pdf/dxf/
+        3d_step/ipc_d356a/odb/ibom(≈5.4MB 单页)/altium/testpoint/netlist。
+        诚实定界(未纳入默认谱):`getIpc2581CFile` 返回 NO_RESULT(疑待 GUI 配置对话框);
+        `getAutoRouteJsonFile` 返回 NOT_BLOB(其为 JSON 对象而非 File,需另走
+        `pcb_import_autoroute_json` 通道)。逐格式**如实**记录 {size,name,path} 或
+        {err};单格式失败不阻断其余(无为而无不为:能导的全导,不能导的据实标注)。"""
         os.makedirs(out_dir, exist_ok=True)
         res = {}
-        for kind, fn in (("gerber", self.export_gerber), ("bom", self.export_bom),
-                         ("pnp", self.export_pick_and_place)):
+        for key, meth, extra in (suite or self._WEB_EXPORT_SUITE):
+            getter = ("window._EXTAPI_ROOT_.pcb_ManufactureData.%s(%s%s)"
+                      % (meth, json.dumps("%s_%s" % (base, key)), extra))
             try:
-                res[kind] = fn(os.path.join(out_dir, ""), name="%s_%s" % (base, kind))
+                r = self._export(getter, os.path.join(out_dir, ""), timeout=150)
+                res[key] = {"size": r["size"], "name": r.get("name"), "path": r["path"]}
             except Exception as ex:
-                res[kind] = {"err": str(ex)}
+                res[key] = {"err": str(ex)[:160]}
         return res
 
     # --- 反馈面:整页截图(getCurrentRenderedAreaImage 需特定参数, 这里用 CDP 截图兜底) ---

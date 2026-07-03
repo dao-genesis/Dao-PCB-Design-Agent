@@ -245,6 +245,78 @@ class TestDiffPairValidation:
         assert rep.routed
         assert rep.length_skew_pct < 1.0
 
+    def test_validate_counts_arc_segments(self):
+        """Length/skew must include arc segments at their true arc length.
+        Counting only PCB_TRACK chords drops arcs entirely (freerouting emits
+        them), under-reporting length and faking a 0% skew on a real board."""
+        b = _make_board(layers=2, w=60, h=40)
+        b.add_nets("CK_P", "CK_N")
+        board = b.board
+        nets = {n.GetNetname(): n for n in board.GetNetInfo().NetsByName().values()}
+        # CK_P: a single straight 10 mm track.
+        t = pcbnew.PCB_TRACK(board)
+        t.SetStart(pcbnew.VECTOR2I(0, 0))
+        t.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(10), 0))
+        t.SetLayer(pcbnew.F_Cu)
+        t.SetNet(nets["CK_P"])
+        board.Add(t)
+        # CK_N: the same 10 mm straight plus a quarter-arc (true len > chord).
+        t2 = pcbnew.PCB_TRACK(board)
+        t2.SetStart(pcbnew.VECTOR2I(0, pcbnew.FromMM(5)))
+        t2.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(10), pcbnew.FromMM(5)))
+        t2.SetLayer(pcbnew.F_Cu)
+        t2.SetNet(nets["CK_N"])
+        board.Add(t2)
+        arc = pcbnew.PCB_ARC(board)
+        arc.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(10), pcbnew.FromMM(5)))
+        arc.SetMid(pcbnew.VECTOR2I(pcbnew.FromMM(17.07), pcbnew.FromMM(7.93)))
+        arc.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(20), pcbnew.FromMM(15)))
+        arc.SetLayer(pcbnew.F_Cu)
+        arc.SetNet(nets["CK_N"])
+        board.Add(arc)
+
+        r = Router(board)
+        from dao_kicad.core.router import DiffPair
+        reps = {rep.base: rep for rep in r.validate_diff_pairs(
+            [DiffPair(base="CK", p_net="CK_P", n_net="CK_N")])}
+        rep = reps["CK"]
+        assert abs(rep.p_len_mm - 10.0) < 0.05
+        # straight 10 + arc (~15.7) = ~25.7, NOT the 20 mm chord-only sum.
+        assert rep.n_len_mm > 24.0
+
+    def test_diff_pair_declines_rather_than_shorting_over_pads(self, tmp_path):
+        """When the pair's two pads lie along the route axis, the constant-gap
+        coupled body would sweep straight over the opposite net's pad. The
+        router must decline (leave the pair to the generic router) rather than
+        emit that guaranteed short — verified by an actual DRC run, since the
+        old code shipped shorting_items here while still reporting routed==1."""
+        from dao_kicad.core.drc import DrcEngine
+
+        b = _make_board(layers=2, w=60, h=30)
+        b.add_nets("CLK_P", "CLK_N")
+        # 1x02 header laid out along the route axis: CLK_P then CLK_N sit on the
+        # same line as the J1->J2 run, so a constant-gap body crosses pads.
+        b.place("Connector_PinHeader_2.54mm",
+                "PinHeader_2x05_P2.54mm_Vertical", "J1", 10, 15, value="A")
+        b.place("Connector_PinHeader_2.54mm",
+                "PinHeader_2x05_P2.54mm_Vertical", "J2", 50, 15, value="B")
+        for j in ("J1", "J2"):
+            b.assign_net(j, "1", "CLK_P")
+            b.assign_net(j, "2", "CLK_N")
+        b.board.BuildListOfNets()
+
+        r = Router(b.board, min_clearance_mm=0.15)
+        result = r.route_diff_pairs(width_mm=0.2, gap_mm=0.2)
+        # The pair is declined, not emitted as a short.
+        assert result.routed == 0
+        assert result.failed == 1
+
+        # Authoritative check: the board the router produced ships no copper
+        # short / clearance violation (the bug was 3 shorting_items here).
+        path = b.save(tmp_path / "collinear_dp.kicad_pcb")
+        drc = DrcEngine().check(path)
+        assert drc.error_count == 0
+
 
 class TestSquareMeander:
     def test_added_length_is_exact(self):

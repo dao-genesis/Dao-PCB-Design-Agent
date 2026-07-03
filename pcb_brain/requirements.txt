@@ -1,22 +1,22 @@
 # PCBBrain 依赖
 # 已有 (Z:\道\AI-PCB设计\requirements.txt 基础上补充)
-skidl==2.0.1
-kinet2pcb==1.1.2
+skidl==2.2.3
+kinet2pcb==1.1.4
 kinparse==1.2.4
 
 # 五感: 截图/视觉
-mss>=9.0.1
-pillow>=10.0.0
+mss>=10.2.0
+pillow>=12.3.0
 pyautogui>=0.9.54
 
 # 五感: 窗口检测
 pygetwindow>=0.0.9
 
 # 方向B: GUI自动化控制 KiCad / 嘉立创EDA / Altium
-pywinauto>=0.6.8
+pywinauto>=0.6.9
 
 # 数据处理
-numpy>=1.26.4
+numpy>=2.2.6
 
 # Web服务 (pcb_server.py — 两面一体HTTP服务)
-flask>=3.0.0
+flask>=3.1.3

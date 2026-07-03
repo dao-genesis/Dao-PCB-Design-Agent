@@ -90,6 +90,44 @@ class TestLengthMatching:
         length = measure_net_length(builder.board, "NET1")
         assert abs(length - 20.0) < 0.1  # 20mm track
 
+    def test_measure_includes_arc_length_not_chord(self):
+        """Arc segments must contribute their true arc length, not the straight
+        chord. freerouting emits arcs; chord-measuring undercounts (~10% on a
+        quarter-arc) and silently corrupts length matching."""
+        builder = BoardBuilder.new(copper_layers=2, width_mm=60, height_mm=40)
+        builder.add_nets("CK")
+        net = builder.board.FindNet("CK")
+        # Quarter arc, radius 10mm: start (10,5) -> end (20,15), mid (17.07,7.93)
+        arc = pcbnew.PCB_ARC(builder.board)
+        arc.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(10), pcbnew.FromMM(5)))
+        arc.SetMid(pcbnew.VECTOR2I(pcbnew.FromMM(17.07), pcbnew.FromMM(7.93)))
+        arc.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(20), pcbnew.FromMM(15)))
+        arc.SetLayer(pcbnew.F_Cu)
+        arc.SetNet(net)
+        builder.board.Add(arc)
+
+        length = measure_net_length(builder.board, "CK")
+        # True arc length pi*r/2 = pi*10/2 ~= 15.708mm; chord would be ~14.142.
+        assert abs(length - 15.708) < 0.1, length
+        assert length > 15.0  # decisively above the 14.142 chord
+
+    def test_lengthmatcher_class_counts_arc(self):
+        """The LengthMatcher class shares the same measurement and must also
+        count arc length, not chord."""
+        from dao_kicad.core.length_match import LengthMatcher
+        builder = BoardBuilder.new(copper_layers=2, width_mm=60, height_mm=40)
+        builder.add_nets("CK")
+        net = builder.board.FindNet("CK")
+        arc = pcbnew.PCB_ARC(builder.board)
+        arc.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(10), pcbnew.FromMM(5)))
+        arc.SetMid(pcbnew.VECTOR2I(pcbnew.FromMM(17.07), pcbnew.FromMM(7.93)))
+        arc.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(20), pcbnew.FromMM(15)))
+        arc.SetLayer(pcbnew.F_Cu)
+        arc.SetNet(net)
+        builder.board.Add(arc)
+        lm = LengthMatcher(builder.board)
+        assert abs(lm._measure_net_length("CK") - 15.708) < 0.1
+
     def test_check_length_matching(self):
         board = pcbnew.CreateEmptyBoard()
         board.Add(pcbnew.NETINFO_ITEM(board, "D+"))

@@ -27,6 +27,20 @@ class TestStackup:
         assert "4 copper layers" in text
         assert "F.Cu" in text
 
+    def test_dielectric_height_is_gap_not_zspan(self):
+        """The dielectric height between two adjacent copper layers must equal
+        the actual dielectric (prepreg) thickness between them — NOT the
+        copper-top-to-copper-top z-span, which includes a copper thickness and
+        overstates the gap that sets impedance."""
+        s = standard_4layer(thickness_mm=1.6)
+        prepreg = s.dielectric_below("F.Cu")
+        h = s.dielectric_height("F.Cu", "In1.Cu")
+        assert abs(h - prepreg.thickness_mm) < 1e-9, (h, prepreg.thickness_mm)
+        # The z-span would be larger by the F.Cu copper thickness (~0.035mm).
+        names = dict(s.copper_layers)
+        zspan = abs(names["F.Cu"] - names["In1.Cu"])
+        assert zspan - h > 0.03
+
 
 class TestImpedance:
     def test_microstrip_reasonable(self):

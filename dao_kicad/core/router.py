@@ -462,6 +462,48 @@ class Router:
                     cost += 1
         return cost
 
+    @staticmethod
+    def _seg_point_dist_mm(ax: float, ay: float, bx: float, by: float,
+                           px: float, py: float) -> float:
+        """Shortest distance (mm) from point (px,py) to segment a→b."""
+        dx, dy = bx - ax, by - ay
+        seg2 = dx * dx + dy * dy
+        if seg2 <= 1e-12:
+            return math.hypot(px - ax, py - ay)
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / seg2))
+        return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+    def _pad_obstructed(self, poly: list[tuple[float, float]],
+                        width_mm: float, net_name: str, layer: int) -> bool:
+        """True if ``poly`` violates DRC clearance to a foreign pad on ``layer``.
+
+        Used to veto a differential-pair route that would short to (or clear by
+        less than ``clearance_mm`` of) another net's pad. Unlike the grid cost,
+        this uses the real pad copper extent + true clearance — no inflated
+        routing keep-out — so it never rejects a pair that DRC would pass.
+        """
+        margin = width_mm / 2.0 + self.clearance_mm
+        for fp in self.board.GetFootprints():
+            for pad in fp.Pads():
+                net = pad.GetNet()
+                nn = net.GetNetname() if (net and net.GetNetname()) else None
+                if nn == net_name:
+                    continue
+                attr = pad.GetAttribute()
+                through = attr in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH)
+                if not (through or pad.IsOnLayer(layer)):
+                    continue
+                pos = pad.GetPosition()
+                px, py = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
+                sz = pad.GetSize()
+                reach = max(pcbnew.ToMM(sz.x), pcbnew.ToMM(sz.y)) / 2.0 + margin
+                for i in range(len(poly) - 1):
+                    if self._seg_point_dist_mm(
+                            poly[i][0], poly[i][1], poly[i + 1][0],
+                            poly[i + 1][1], px, py) < reach:
+                        return True
+        return False
+
     def _clear_via_spot(self, x: float, y: float, net_name: str,
                         via_mm: float, extra_layer: Optional[int] = None):
         """Find a via location near (x, y) clear of foreign copper, trying the
@@ -973,6 +1015,22 @@ class Router:
                 if c == 0:
                     break
             chosen_layer = best[1]
+            # Real-clearance short guard. The emitted geometry is the whole
+            # fan-in→body→fan-in polyline of each half. When the pair's two pads
+            # lie along the route axis the constant-gap body sweeps straight
+            # over the opposite net's pad — a short — yet the body-only cost
+            # above (and the old code) never saw it. Re-check each half's full
+            # polyline against foreign pads at the *true* DRC clearance (not the
+            # inflated routing keep-out, which would also veto clean pairs). If
+            # it would collide, decline the pair and leave it to the collision-
+            # aware generic router. 知止不殆.
+            poly_p = [(pp.x_a, pp.y_a), a_p, b_p, (pp.x_b, pp.y_b)]
+            poly_n = [(pn.x_a, pn.y_a), a_n, b_n, (pn.x_b, pn.y_b)]
+            if (self._pad_obstructed(poly_p, width_mm, dp.p_net, primary_layer)
+                    or self._pad_obstructed(
+                        poly_n, width_mm, dp.n_net, primary_layer)):
+                result.failed += 1
+                continue
 
             def _emit(pair, net, sgn):
                 a_off, b_off = _offsets(sgn)
@@ -1031,15 +1089,18 @@ class Router:
 
         lengths: dict[str, float] = {}
         for track in self.board.GetTracks():
-            if track.GetClass() != "PCB_TRACK":
+            # PCB_ARC is a track item too; counting only PCB_TRACK and measuring
+            # the straight chord drops arc segments entirely (freerouting emits
+            # arcs), badly under-reporting length and skew. GetLength() is the
+            # true routed length of straight *and* arc segments.
+            if track.GetClass() not in ("PCB_TRACK", "PCB_ARC"):
                 continue
             n = track.GetNet()
             name = n.GetNetname() if n else ""
             if not name:
                 continue
-            s, e = track.GetStart(), track.GetEnd()
-            lengths[name] = lengths.get(name, 0.0) + math.hypot(
-                pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+            lengths[name] = lengths.get(name, 0.0) + pcbnew.ToMM(
+                track.GetLength())
 
         out: list[DiffPairReport] = []
         for dp in diff_pairs:
@@ -1053,15 +1114,15 @@ class Router:
     def _net_lengths(self, nets: set[str]) -> dict[str, float]:
         out: dict[str, float] = {}
         for track in self.board.GetTracks():
-            if track.GetClass() != "PCB_TRACK":
+            # Include arcs and use the true routed length (see
+            # validate_diff_pairs): chord-only over PCB_TRACK drops arcs.
+            if track.GetClass() not in ("PCB_TRACK", "PCB_ARC"):
                 continue
             n = track.GetNet()
             name = n.GetNetname() if n else ""
             if name not in nets:
                 continue
-            s, e = track.GetStart(), track.GetEnd()
-            out[name] = out.get(name, 0.0) + math.hypot(
-                pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+            out[name] = out.get(name, 0.0) + pcbnew.ToMM(track.GetLength())
         return out
 
     def tune_length_group(

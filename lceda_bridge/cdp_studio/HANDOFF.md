@@ -5,6 +5,8 @@
 
 ## 0. 一分钟上手
 
+- **桌面端零摩擦部署(干净机器一条命令)**：`python bootstrap_desktop.py --license <激活文件> --with-freerouting --verify`(幂等：下载客户端→解压→安放离线激活→拉起 CDP:29230 并等 `_EXTAPI_ROOT_` ns>0)。已部署过仅重起：`--launch-only --verify`。随后 `cd examples && PYTHONPATH=.. python3 run.py all --tries 5` 跑全链路板谱。详见 `DESKTOP_OFFLINE_FINDINGS.md` 末「一键复现部署」与「冷启动竞争」。
+
 - 引擎:`lceda_bridge/cdp_studio/eda_flow.py`(类 `Flow`,封装全部能力,逆向自嘉立创 EDA Pro v3.2.148 的 `window._EXTAPI_ROOT_` 私有 RPC 总线)。
 - 驱动:`dao_eda_cdp_driver.py` / `eda_api.py`(CDP 接到运行中的 Chrome,端口 `:29229`;编辑器在 `https://pro.lceda.cn/editor`)。
 - 账号:`15606700905`(用户 `aiotvr`)。冷启动登录见 `cold_start.py`(已固化确定性登录,根治"GUI 合成键入吞密码前缀"——改用 CDP 向 React 受控组件注入)。
@@ -35,7 +37,8 @@
 
 ### DRC / 导出
 - `drc_check(verbose)` / `drc_violations()` / `drc_summary()` — **API 直读**结构化违规树(更正旧论"明细唯 GUI 面板可得";v3.2.148 `pcb_Drc.check(strict,ui,includeVerboseError=true)` 直接返回)。(#27)
-- `export_gerber/export_bom/export_pick_and_place/export_pdf/export_dsn` / `export_all(out_dir)` — 真字节落地(走通用 blob 通道)。
+- `export_gerber/export_bom/export_pick_and_place/export_pdf/export_dsn` 及扩展格式 `export_3d/export_dxf/export_ipc_d356a/export_odb/export_ibom/export_altium/export_test_point/export_netlist` — 真字节落地(走通用 blob 通道)。
+- `export_all(out_dir)` 已全谱化(与桌面 `dao_rpc_driver.export_all` 对齐):web 登录态活体实测 **12 格式**真字节 gerber/bom/pnp/pdf/dxf/3d_step/ipc_d356a/odb/ibom(≈5.4MB)/altium/testpoint/netlist,逐格式如实记录 size/err、单格式失败不阻断其余。诚实定界:`getIpc2581CFile`→NO_RESULT、`getAutoRouteJsonFile`→NOT_BLOB(JSON 对象非 File,走 `pcb_import_autoroute_json`)。
 - `export_dsn` 须从**未布线**板导出(Freerouting 输入);SES 回灌见 `import_ses`。
 
 ## 2. 活体验证脚本(全部 RESULT PASS)
@@ -52,8 +55,17 @@
 | `build_2layer_det.py` | 2 层过孔布线解共线交叉对 DRC 0 |
 | `build_pour_det.py` | GND 覆铜 DRC 3→0、实铜算出 |
 | `build_capstone.py` / `build_capstone_full.py` | 端到端 / **全能力大合龙** |
+| `build_export_det.py` | **桌面纯 RPC 全谱导出**:DRC=0 板一次导齐 13 制造/交换格式真字节 |
+| `build_web_export_det.py` | **web 在线端全谱导出**:DRC=0 板一次导齐 12 制造/交换格式真字节(与桌面对偶,双通道对齐) |
 
 `build_capstone_full.py` 实测:nets [GND,NET_A,NET_B];信号 2 层各长 6000;poured=1;**DRC total=0**;export gerber=8496/bom=6739/pnp=6961 真字节。
+
+### 桌面纯 RPC 底座 · 制造数据全谱导出(`dao_rpc_driver.DaoRpc`,端口 29230)
+`pcb_ManufactureData` 远不止 Gerber/BOM/PnP。桌面离线底座已逐格式**活体实测**产出真
+字节,并固化为 `export_all(out_dir)`(`build_board` 可置 `spec["export_all"]=True` 全导)
+与 CLI `python dao_rpc_driver.py export <out_dir>`(对当前打开板):
+- 实测可达(13):`gerber/bom/pnp/pdf/3d_step(get3DFile step≈1.7MB)/dxf/ipc_d356a/odb(ODB++)/ibom(交互式 HTML≈5.5MB)/altium/testpoint/netlist(.enet)/autoroute_json`。
+- 诚实定界(不纳入全谱):`getIpc2581CFile` 无头底座**恒挂起**(疑待 GUI 配置对话框,显式 `fileType='xml'` 仍不返回);`get3DShellFile` 本板型返回 `no file`。
 
 ## 3. 诚实定界(不夸大、不造假)
 
@@ -78,5 +90,26 @@
 4. **Freerouting 闭环**:`export_dsn` → 外部布线 → `import_ses` 全自动化跑通密集板。
 5. **net 标志/电源符号**:`sch_PrimitiveComponent.createNetFlag` / `setNetFlagComponentUuid_Ground/Power` 做规范电源轨。
 6. **KiCad 道**(`kicad_origin/`):继续 IPC API 深融、3D/Gerber/STEP 导出对齐。
+
+## 6. 桌面端纯 RPC 轨 · 本会话新增能力与本源教训
+
+> 桌面端(`bootstrap_desktop.py` → CDP:29230)走 `dao_rpc_driver.py`(类 `DaoRpc`),
+> 全链路零 GUI:`place_and_net → apply_constraints → board_outline → autoroute(freerouting) → drc → length_audit → export`。
+> 板谱在 `examples/specs.py`(`BOARDS` 字典),`run.py <name|all> --tries N` 跑。
+
+### 已固化原语
+- **`auto_fanout(designator, pad_net, ...)`** — 几何驱动**通用扇出**:读目标器件**真实焊盘 (x,y)**(`pad_xy`)→算中心→每脚按 `|dx|`vs`|dy|` 主轴定逃逸边(右/左/上/下)、同侧沿边排序逐颗递增 `depth_step` 错位→串件落「脚垂直对齐线 × 外延深度」。**不对任何封装引脚布局做硬假设**。已在 QFP(四边)/ SOIC(双边)/ BGA(栅格外圈)三类几何验证 DRC=0 通用。谱里器件声明 `auto_fanout={脚:网}` 即接入。
+- **`place_and_net(components, chunk=10)`** — 按 `chunk` 件**分批多发 eval**:治大板(如 48 脚 QFP ~120 次绑网)单发破 90s `NO_RESULT`,对任意规模线性可扩。
+- **`length_audit(constraints)`** — 布线后以 `pcb_Net.getNetLength` 量实测铜长,报 diff_pair **skew**(`|lP-lN|`)/ equal_length **spread**(`max-min`),据实入 `audit.steps.length_audit`。把「约束兑现度」变成可量测数字。
+- **`_eval(..., retries=2)`** — 对**瞬时** `NO_RESULT`(CDP 偶发空结果)有限重试 + 重连编辑器会话;真错误/超时如实抛,不掩盖。
+
+### 本源教训(实证)
+- **几何优先**:高脚数器件能否一次布通,命门在**放置质量**而非布线器。qfp 实证——detached 栅格放 32 扇出残留 8 Connection Error;改「就近同侧逃逸」即一次过 DRC=0。`auto_fanout` 把这套手调几何**自动化**。
+- **几何优先**有方向性,不是「永远紧簇」**(本会话反例)**:mcu(双层无平面、16 LED 密集阴极汇流)把扇出链**竖列紧簇**反令 DRC 由 ~4 暴增到 0/37/51。**就近紧簇利于高脚数逃逸,却害双层密集汇流**——后者紧簇令 GND 汇流与限流支路两层互锁拥塞,**均匀铺开(_grid)反更优**。故 mcu 保留 _grid;实验证伪即纳之(反者道之动)。
+- **差分对约束需可并走的真实跨段**(cap vs qdiff 实证):`auto_fanout` 的「焊盘→1 串阻」退化短桩上声明 `diff_pairs` 触发 Differential Pair Error(cap 实测 DRC=1);给配对两网真实并走跨段(qdiff:源相邻两脚→远端竖向紧邻 sink),freerouting 差分布线即收敛 DRC=0、skew≈2.7mil。
+- **诚实定界**:① headless 无实铜覆铜(`rebuildCopperRegion` 恒 undefined,见 FINDINGS);② freerouting **仅通孔、不做长度调谐(蛇形)**——故 BGA **内圈球** escape 与差分严格等长是当前布线级前沿;③ length_audit 的 skew/spread 取决于放置对称性,如实记录(hs 对称放置恰好 skew=0,skewlen 不对称放置 spread=1380mil 验证审计量真);④ mcu 偶发不收敛(~1/8)是 **2 层无平面**的真实边界,据实存档,不以更差紧簇粉饰。
+
+### 板谱(13,VM 活体 DRC=0 CLEAN;mcu 见上注 ~1/8 偶发不收敛)
+`simple/medium/complex/mcu`(几何全链)· `hs`(约束级:网类+差分对+等长组+类线宽注入 DSN)· `via6`(6 层+自定义过孔+盲埋孔层对)· `qfp`(LQFP48 四边手调扇出)· `autofan`(同 QFP 但 auto_fanout 零手填坐标)· `soicfan`(SOIC16 双边 auto_fanout)· `bga`(BGA64 0.65mm 外圈通孔逃逸)· `skewlen`(不对称等长组反验 length_audit 报非零 spread)· `cap`(合龙:几何扇出+网类+等长+4 层+审计可组合)· `qdiff`(高脚数 QFP 真差分对 DRC=0)。
 
 > 接手姿势:先 `python build_capstone_full.py` 确认底座活;再挑一条前沿,逆向 → 实现 → `build_*_det.py` 活体验证 → py_compile → 干净 PR → CI 绿 → 合并。一直推进,一直完善。
