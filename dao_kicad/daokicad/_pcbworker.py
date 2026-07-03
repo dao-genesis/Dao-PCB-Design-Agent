@@ -50,6 +50,22 @@ def _layer(name):
 # nickname -> directory map from the project's fp-lib-table (set per build()).
 _LIB_DIRS: dict = {}
 
+# One shared s-expression IO plugin for every footprint load. The convenience
+# wrapper ``pcbnew.FootprintLoad`` constructs a fresh PCB_IO per call, and each
+# instance re-parses and caches the whole .pretty library it touches (~15 MB a
+# call against the stock lib) — on a 1500-part board that compounds to several
+# GB and the worker dies OOM. A single reused plugin keeps one cache per
+# distinct library, bounding memory by the number of libraries instead of the
+# number of parts (vme-wren: 7.7 GB OOM → ~0.4 GB).
+_FP_IO = None
+
+
+def _footprint_load(libdir, name):
+    global _FP_IO
+    if _FP_IO is None:
+        _FP_IO = pcbnew.PCB_IO_MGR.PluginFind(pcbnew.PCB_IO_MGR.KICAD_SEXP)
+    return _FP_IO.FootprintLoad(libdir, name)
+
 
 def _fp_dir(lib):
     # project-local libraries (from fp-lib-table) win over the install dir
@@ -443,7 +459,7 @@ def build(spec, out_path):
             # custom footprint generated from scratch (no library)
             fp = _make_footprint(board, fpspec)
         else:
-            fp = pcbnew.FootprintLoad(_fp_dir(fpspec["lib"]), fpspec["fp"])
+            fp = _footprint_load(_fp_dir(fpspec["lib"]), fpspec["fp"])
         if fp is None:
             return {"ok": False, "error": f"footprint not found: {fpspec.get('lib')}/{fpspec.get('fp')}"}
         # Library footprints (edge connectors, card sockets…) can carry
