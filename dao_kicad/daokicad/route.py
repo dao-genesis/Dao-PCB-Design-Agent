@@ -293,18 +293,21 @@ def route_dsn(dsn: str | Path, ses: str | Path, *,
 
 
 def _heap_cap_mb() -> int:
-    """JVM heap cap: half of physical RAM, clamped to [1 GiB, 4 GiB].
+    """JVM heap cap: a third of physical RAM, clamped to [1 GiB, 2.5 GiB].
 
     An uncapped JVM on a dense board (500+ footprints) grows until the whole
     machine thrashes/OOMs — the box hangs for the entire routing budget. A
     bounded heap turns that into an in-JVM OutOfMemoryError we can report.
+    The JVM's real RSS runs well past -Xmx (GC/metaspace/native), and KiCad
+    workers + the bridge share the box, so half-of-RAM still drew the kernel
+    OOM killer on an 8 GiB machine — a third leaves genuine headroom.
     """
     try:
         total_mb = (os.sysconf("SC_PAGE_SIZE")
                     * os.sysconf("SC_PHYS_PAGES")) // (1024 * 1024)
     except (ValueError, OSError, AttributeError):
         total_mb = 8192
-    return max(1024, min(4096, total_mb // 2))
+    return max(1024, min(2560, total_mb // 3))
 
 
 def _run_freerouting(java, jar, dsn: Path, ses: Path, timeout: int,
