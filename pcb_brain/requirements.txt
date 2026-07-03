@@ -13,7 +13,7 @@ pyautogui>=0.9.54
 pygetwindow>=0.0.9
 
 # 方向B: GUI自动化控制 KiCad / 嘉立创EDA / Altium
-pywinauto>=0.6.8
+pywinauto>=0.6.9
 
 # 数据处理
 numpy>=2.2.6
