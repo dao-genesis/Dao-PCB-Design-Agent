@@ -49,20 +49,24 @@ def _finish_build(lk, pcb, out_dir, args, build) -> int:
     # dense board. The routed board already carries every finished track, so
     # re-exporting it and routing again with more passes only has to close the
     # leftovers — the same escalation the closed-loop designer uses.
-    # freerouting is stochastic and may rip up finished copper, so each retry
-    # routes into a candidate file and is adopted only when it strictly
-    # improves DRC — the board can never get worse than the first pass. Each
-    # retry gets half the board-scaled budget: enough for a dense board's
-    # export + route, without doubling the whole build's wall clock.
+    # freerouting may rip up finished copper, so each retry routes into a
+    # candidate file and is adopted only when it strictly improves DRC — the
+    # board can never get worse than the first pass. Routing is deterministic
+    # per (DSN order, passes) since the DSN is canonicalized, so each retry
+    # bumps BOTH the effort and the ordering seed: more passes to push harder,
+    # a fresh seed to sample a different routing basin. Each retry gets half
+    # the board-scaled budget: enough for a dense board's export + route,
+    # without doubling the whole build's wall clock.
     if routed and route.get("ok"):
         import shutil as _shutil
         retry_timeout = max(300, lk.route_timeout_for(build.get("nets")) // 2)
-        passes = 8
+        passes, seed = 8, 0
         while drc.get("unconnected", 0) > 0 and passes < 32:
             passes += 12
+            seed += 1
             cand = pcb.with_name(pcb.stem + ".retry.kicad_pcb")
             retry = lk.autoroute(pcb, cand, passes=passes,
-                                 timeout=retry_timeout)
+                                 timeout=retry_timeout, seed=seed)
             if not retry.get("ok"):
                 break
             cand_drc = lk.drc(cand)
