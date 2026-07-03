@@ -422,6 +422,13 @@ def build(spec, out_path):
             fp = pcbnew.FootprintLoad(_fp_dir(fpspec["lib"]), fpspec["fp"])
         if fp is None:
             return {"ok": False, "error": f"footprint not found: {fpspec.get('lib')}/{fpspec.get('fp')}"}
+        # Library footprints (edge connectors, card sockets…) can carry
+        # Edge.Cuts graphics meant for flush board-edge mounting. The spec owns
+        # the board outline here, so those fragments only corrupt it
+        # (invalid_outline + bogus copper_edge_clearance DRC). Drop them.
+        for gitem in list(fp.GraphicalItems()):
+            if gitem.GetLayer() == pcbnew.Edge_Cuts:
+                fp.Remove(gitem)
         fp.SetReference(ref)
         if "value" in fpspec:
             fp.SetValue(str(fpspec["value"]))
