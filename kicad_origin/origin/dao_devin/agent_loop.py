@@ -29,6 +29,14 @@ from .tools import ToolRegistry
 
 _MAX_STEPS_DEFAULT = 8
 
+_INLINE_MARKUP_HINTS = ("invoke name=", "DSML", "antml:", "tool_calls>",
+                        "<function_call", "<tool_call")
+
+
+def _looks_like_inline_tool_markup(content: str) -> bool:
+    """模型把工具调用臆造成正文里的伪标记 (非结构化 tool_calls) → 应退回重问。"""
+    return any(h in content for h in _INLINE_MARKUP_HINTS)
+
 
 def run_turn(
     messages: List[Dict[str, Any]],
@@ -86,6 +94,13 @@ def run_turn(
         messages.append(assistant_msg)
 
         if not tcs:
+            if _looks_like_inline_tool_markup(content):
+                # 臆造拦截: 伪工具标记不落历史也不展示, 退回重问一次
+                messages.pop()
+                messages.append({"role": "user", "content":
+                                 "(系统) 上一条回复把工具调用写成了正文伪标记, 未被执行。"
+                                 "请用结构化 function-call 重新调工具, 或直接给出文字结论。"})
+                continue
             return {"ok": True, "content": content, "messages": messages,
                     "steps": steps, "truncated": False, "sp": sp_meta}
 
@@ -118,6 +133,9 @@ def run_turn(
     resp = chat_fn(ctx_msgs + messages, name=channel_name, model=model, **chat_opts)
     content = (resp.get("content") or "(达最大工具步数, 未收敛)") \
         if resp.get("ok", True) else "(达最大工具步数, 未收敛)"
+    if _looks_like_inline_tool_markup(content):
+        content = ("(达最大工具步数; 模型末答含未执行的伪工具标记, 已拦截。"
+                   "以上轨迹中的工具结果均真实生效, 可续问推进。)")
     messages.append({"role": "assistant", "content": content})
     return {"ok": True, "content": content, "messages": messages,
             "steps": steps, "truncated": True, "sp": sp_meta}

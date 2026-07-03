@@ -83,6 +83,38 @@ def _tool_brief(r: Any) -> Any:
     return "{" + ", ".join(keys) + "}" if keys else "ok"
 
 
+def _tool_line(tool: str, args: Any, r: Any) -> str:
+    """工具步 → 人话一句 (仿 AI IDE 轨迹行: 动作+要点, 非裸 JSON)。"""
+    res = r.get("result") if isinstance(r, dict) else None
+    try:
+        if tool == "kicad_move" and isinstance(res, dict) and res.get("after_mm"):
+            a = res["after_mm"]
+            return "%s 移至 (%.4g, %.4g) mm" % (res.get("ref"), a[0], a[1])
+        if tool == "kicad_route" and isinstance(res, dict):
+            return "%s 网布线 %s 段 · %.4g mm @%s" % (
+                res.get("net"), res.get("segments"),
+                float(res.get("length_mm") or 0), res.get("layer"))
+        if tool == "kicad_zone" and isinstance(res, dict):
+            return "%s 铺铜 %.4g mm\u00b2 @%s" % (
+                res.get("net"), float(res.get("filled_area_mm2") or 0),
+                res.get("layer"))
+        if tool == "kicad_drc" and isinstance(res, dict):
+            line = "%s 违规 · %s 未连接" % (res.get("violations"),
+                                          res.get("unconnected"))
+            d = (res.get("details") or [{}])[0]
+            if d.get("type"):
+                line += " · 首条: %s(%s)" % (d["type"], d.get("severity"))
+            return line
+        if tool == "kicad_save":
+            return "已存盘"
+        if tool == "kicad_eval" and isinstance(args, dict):
+            code = str(args.get("code") or "").replace("\n", " ⏎ ")
+            return "%s ⇒ %s" % (code[:60], str(res)[:90])
+    except Exception:  # noqa: BLE001
+        pass
+    return str(_tool_brief(r))[:160]
+
+
 def install_panel(plugin_dir: Optional[Path] = None) -> Path:
     """把本 dao_devin 包 + 一个 register 引导脚本落到 KiCad 插件目录 (幂等)。"""
     from kicad_origin.origin.native_live import _user_plugin_dir  # 复用同一目录解析
@@ -409,8 +441,9 @@ if _HAS_GUI:
             r = step.get("result") or {}
             ok = bool(r.get("ok")) if isinstance(r, dict) else True
             mark = "✔" if ok else "✘"
-            brief = str(_tool_brief(r) if ok else
-                        r.get("error") if isinstance(r, dict) else r)[:160]
+            brief = (_tool_line(str(step.get("tool")), step.get("args"), r)
+                     if ok else str(r.get("error") if isinstance(r, dict)
+                                    else r))[:160]
             self._say(f"  🔧 {step.get('tool')} {mark} {brief}",
                       C_TOOL if ok else C_ERR)
 

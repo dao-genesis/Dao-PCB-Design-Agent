@@ -261,6 +261,64 @@ def test_kicad_drc_tool_schema_aliases_and_bridge(tmp_path, monkeypatch):
     assert (tmp_path / "out" / "drc-live.json").exists()
 
 
+def test_run_turn_bounces_hallucinated_inline_tool_markup():
+    """模型把工具调用臆造成正文伪标记 → 不落历史不展示, 退回重问至收敛。"""
+    calls = []
+
+    def chat(messages, **kw):
+        calls.append([dict(m) for m in messages])
+        if len(calls) == 1:
+            return {"ok": True, "tool_calls": [], "content":
+                    '<| |DSML| tool_calls> invoke name="kicad_eval" …'}
+        return {"ok": True, "tool_calls": [], "content": "R2 已布通"}
+
+    msgs = [{"role": "user", "content": "修布线"}]
+    r = agent_loop.run_turn(msgs, tools.ToolRegistry(), chat_fn=chat)
+    assert r["ok"] and r["content"] == "R2 已布通"
+    assert all("DSML" not in str(m.get("content")) for m in msgs)
+    # 第二次请求带上了系统退回提示
+    assert any("伪标记" in str(m.get("content")) for m in calls[1])
+
+
+def test_run_turn_scrubs_markup_in_exhausted_summary():
+    """步数耗尽后的总结若仍是伪标记 → 拦截替换, 不外漏。"""
+    def chat(messages, tools=None, **kw):
+        if tools is not None:
+            return {"ok": True, "content": "", "tool_calls": [{
+                "id": "1", "function": {"name": "kicad_eval",
+                                        "arguments": '{"code": "1"}'}}]}
+        return {"ok": True, "content": '<| |DSML| invoke name="kicad_save"', "tool_calls": []}
+
+    msgs = [{"role": "user", "content": "修"}]
+    r = agent_loop.run_turn(msgs, tools.ToolRegistry(), chat_fn=chat, max_steps=2)
+    assert r["ok"] and r["truncated"] is True
+    assert "已拦截" in r["content"] and "DSML" not in r["content"]
+
+
+def test_panel_tool_line_humanizes_trace():
+    """面板轨迹行按工具人话化 (仿 AI IDE), 而非裸 JSON。"""
+    from kicad_origin.origin.dao_devin import panel
+    line = panel._tool_line("kicad_move", {}, {"ok": True, "result": {
+        "ref": "R2", "after_mm": [14.0, 10.0]}})
+    assert line == "R2 移至 (14, 10) mm"
+    line = panel._tool_line("kicad_route", {}, {"ok": True, "result": {
+        "net": "SIG", "segments": 2, "length_mm": 10.175, "layer": "F.Cu"}})
+    assert "SIG 网布线 2 段" in line and "10.18 mm" in line
+    line = panel._tool_line("kicad_zone", {}, {"ok": True, "result": {
+        "net": "SIG", "filled_area_mm2": 360.947, "layer": "B.Cu"}})
+    assert "铺铜" in line and "B.Cu" in line
+    line = panel._tool_line("kicad_drc", {}, {"ok": True, "result": {
+        "violations": 12, "unconnected": 1,
+        "details": [{"type": "clearance", "severity": "error"}]}})
+    assert "12 违规" in line and "clearance(error)" in line
+    assert panel._tool_line("kicad_save", {}, {"ok": True}) == "已存盘"
+    line = panel._tool_line("kicad_eval", {"code": "1+1"},
+                            {"ok": True, "result": 2})
+    assert line == "1+1 ⇒ 2"
+    # 未知工具回退通用摘要
+    assert panel._tool_line("x", {}, {"ok": True, "result": "abc"}) == "abc"
+
+
 def test_run_drc_cli_surfaces_violation_details(tmp_path, monkeypatch):
     """DRC 结果带违规明细 (类型/严重度/描述/坐标) —— AI IDE 诊断面板同构。"""
     import subprocess
