@@ -635,3 +635,25 @@ def test_library_edge_cuts_stripped_from_footprints(tmp_path):
     for fp in board.GetFootprints():
         assert not any(g.GetLayer() == pcbnew.Edge_Cuts
                        for g in fp.GraphicalItems()), fp.GetReference()
+
+
+@needs_script
+def test_duplicate_pad_numbers_all_join_net(tmp_path):
+    """Footprints expose several physical pads under one number (solder
+    jumpers, TO-263 tab+pin…). Every one must join the net — a leftover no-net
+    sibling trips hole/clearance DRC against its own footprint."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "dup_pads",
+        "footprints": [{"ref": "U1", "lib": "Package_TO_SOT_SMD",
+                        "fp": "TO-263-3_TabPin2"}],
+        "connections": [{"ref": "U1", "pad": "2", "net": "GND"}],
+    }
+    pcb = tmp_path / "dup.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    fp = board.FindFootprintByReference("U1")
+    pads2 = [p for p in fp.Pads() if p.GetNumber() == "2"]
+    assert len(pads2) >= 2
+    assert all(p.GetNetname() == "GND" for p in pads2)
