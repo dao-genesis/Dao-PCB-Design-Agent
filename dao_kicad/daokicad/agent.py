@@ -8,6 +8,7 @@ budget is exhausted.
 from __future__ import annotations
 
 import copy
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -126,6 +127,14 @@ class DesignAgent:
         drc = {}
         it = 0
         passes = 12  # freerouting effort; escalated when nets stay unconnected
+        # KiCad serializes footprints in random-UUID order, so the DSN fed to
+        # freerouting reshuffles run-to-run and route quality oscillates. Keep
+        # the best board seen across iterations and never hand back a worse one.
+        best_drc: dict = {}
+        best_pcb = pcb.with_name(pcb.stem + ".best.kicad_pcb")
+
+        def _score(d: dict) -> tuple:
+            return (d.get("unconnected", 0), d.get("violations", 0))
         for attempt in range(1, attempts + 1):
           spec = _dna.make(template, **template_kw)
           for it in range(1, max_iter + 1):
@@ -164,6 +173,9 @@ class DesignAgent:
             if drc["clean"]:
                 clean = True
                 break
+            if not best_drc or _score(drc) < _score(best_drc):
+                best_drc = drc
+                shutil.copyfile(pcb, best_pcb)
             # reflect -> mutate
             if drc.get("unconnected", 0) > 0:
                 passes = min(passes + 12, 60)  # harder routing problem
@@ -173,6 +185,15 @@ class DesignAgent:
           if clean:
               break
           passes = min(passes + 12, 60)  # next attempt routes harder
+
+        if not clean and best_drc and best_pcb.is_file() \
+                and _score(best_drc) < _score(drc):
+            shutil.copyfile(best_pcb, pcb)
+            drc = best_drc
+            trace.append(self._emit(Step("restore_best", {
+                "violations": drc.get("violations"),
+                "unconnected": drc.get("unconnected")})))
+        best_pcb.unlink(missing_ok=True)
 
         fab: dict = {}
         if clean and fabricate:
