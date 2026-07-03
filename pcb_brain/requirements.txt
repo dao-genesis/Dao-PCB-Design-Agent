@@ -1,6 +1,6 @@
 # PCBBrain 依赖
 # 已有 (Z:\道\AI-PCB设计\requirements.txt 基础上补充)
-skidl==2.0.1
+skidl==2.2.3
 kinet2pcb==1.1.2
 kinparse==1.2.4
 
