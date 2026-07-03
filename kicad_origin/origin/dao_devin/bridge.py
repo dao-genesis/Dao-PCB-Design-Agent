@@ -415,6 +415,13 @@ class DevinKiCadBridge:
         return store.run(conversation_id, self.registry(), max_steps=max_steps,
                          should_stop=should_stop, on_step=_journal_step)
 
+    def ai_conversation(self, conversation_id: str) -> Dict[str, Any]:
+        """取一个会话的完整消息史 (供面板切换会话时回放)。"""
+        c = self.convs().get(conversation_id)
+        if c is None:
+            return {"ok": False, "error": "无此对话: %s" % conversation_id}
+        return {"ok": True, "conversation": c.summary(), "messages": c.messages}
+
     def ai_delete_conversation(self, conversation_id: str) -> Dict[str, Any]:
         return {"ok": self.convs().delete(conversation_id)}
 

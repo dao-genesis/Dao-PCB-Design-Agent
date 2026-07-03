@@ -498,6 +498,21 @@ def test_bridge_ai_conversation_flow(monkeypatch):
     assert r["ok"] is True and r["steps"][0]["tool"] == "kicad_board_summary"
 
 
+def test_bridge_ai_conversation_history_replay(tmp_path):
+    """ai_conversation 回传完整消息史 (面板『历史』切换会话回放的后端)。"""
+    from kicad_origin.origin.dao_devin import bridge as br
+    b = br.DevinKiCadBridge(live_factory=lambda: None)
+    b._convs = agent_loop.ConversationStore(path=tmp_path / "c.json")
+    cid = b.ai_new_conversation(title="回放测试")["conversation"]["id"]
+    b._convs.append_user(cid, "看板况")
+    r = b.ai_conversation(cid)
+    assert r["ok"] is True
+    assert r["conversation"]["id"] == cid
+    assert r["messages"][0] == {"role": "user", "content": "看板况"}
+    miss = b.ai_conversation("conv-不存在")
+    assert miss["ok"] is False and "无此对话" in miss["error"]
+
+
 def test_install_panel_pkg_files_cover_bridge_deps(tmp_path):
     """install_panel 清单必须涵盖 dao_devin 包内全部 .py (漏一辐 GUI 内即炸)。"""
     from pathlib import Path

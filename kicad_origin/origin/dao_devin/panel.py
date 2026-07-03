@@ -284,10 +284,12 @@ if _HAS_GUI:
             if self.chan_choice.GetCount():
                 self.chan_choice.SetSelection(0)
             self.btn_newconv = wx.Button(p, label="＋ 新对话")
+            self.btn_hist = wx.Button(p, label="🕘 历史")
             self.btn_state = wx.Button(p, label="⚑ 项目全貌")
             self.btn_access = wx.ToggleButton(p, label="⚡ 反向接入")
             top.Add(self.chan_choice, 1, wx.EXPAND | wx.RIGHT, 4)
             top.Add(self.btn_newconv, 0, wx.RIGHT, 4)
+            top.Add(self.btn_hist, 0, wx.RIGHT, 4)
             top.Add(self.btn_state, 0, wx.RIGHT, 4)
             top.Add(self.btn_access, 0)
             v.Add(top, 0, wx.EXPAND | wx.ALL, 6)
@@ -323,6 +325,7 @@ if _HAS_GUI:
             self.btn_send.Bind(wx.EVT_BUTTON, self._on_ai)
             self.btn_stop.Bind(wx.EVT_BUTTON, self._on_stop)
             self.btn_newconv.Bind(wx.EVT_BUTTON, self._on_new_conv)
+            self.btn_hist.Bind(wx.EVT_BUTTON, self._on_history)
             self.btn_state.Bind(wx.EVT_BUTTON, self._on_state)
             self.btn_access.Bind(wx.EVT_TOGGLEBUTTON, self._on_access)
             self.msg_in.Bind(wx.EVT_KEY_DOWN, self._on_key)
@@ -486,6 +489,56 @@ if _HAS_GUI:
             self._ai_cid = ""
             self.chat.Clear()
             self._say_meta("── 新对话 (上下文已清) ──")
+
+        def _on_history(self, _evt: Any) -> None:
+            """弹出历史会话菜单 (仿 AI IDE 会话列表): 选中即切换并回放全史。"""
+            try:
+                convs = self.bridge.ai_conversations()
+            except Exception as e:  # noqa: BLE001
+                self._say(f"历史读取失败: {e}", C_ERR)
+                return
+            if not convs:
+                self._say_meta("(暂无历史会话)")
+                return
+            menu = wx.Menu()
+            ids: dict = {}
+            for c in convs[:20]:
+                mark = "● " if c["id"] == self._ai_cid else "  "
+                label = "%s%s · %d 条" % (mark, c.get("title") or c["id"][:8],
+                                           c.get("messages", 0))
+                item = menu.Append(wx.ID_ANY, label)
+                ids[item.GetId()] = c["id"]
+            menu.Bind(wx.EVT_MENU,
+                      lambda evt: self._switch_conv(ids.get(evt.GetId(), "")))
+            self.btn_hist.PopupMenu(menu)
+            menu.Destroy()
+
+        def _switch_conv(self, cid: str) -> None:
+            """切到指定会话并把消息史回放进对话流。"""
+            if not cid:
+                return
+            r = self.bridge.ai_conversation(cid)
+            if not r.get("ok"):
+                self._say(f"切换失败: {r.get('error')}", C_ERR)
+                return
+            self._ai_cid = cid
+            self.chat.Clear()
+            meta = r.get("conversation", {})
+            self._say_meta("── 已切到会话 %s (共 %d 条, 上下文延续) ──"
+                           % (meta.get("title") or cid[:8], meta.get("messages", 0)))
+            for m in r.get("messages", []):
+                role = m.get("role")
+                if role == "user":
+                    self._say_user(str(m.get("content") or ""))
+                elif role == "assistant":
+                    if m.get("content"):
+                        self._say_ai(str(m["content"]))
+                    for tc in m.get("tool_calls") or []:
+                        fn = (tc.get("function") or {}).get("name", "?")
+                        self._say_meta(f"  🔧 {fn} …")
+                elif role == "tool":
+                    brief = str(m.get("content") or "")[:160]
+                    self._say(f"    ↳ {brief}", C_TOOL)
 
         def _on_state(self, _evt: Any) -> None:
             import threading
