@@ -396,6 +396,22 @@ class DevinKiCadBridge:
                                 sp_strategy=sp_strategy, custom_sp=custom_sp)
         return {"ok": True, "conversation": c.summary()}
 
+    def ai_context(self) -> str:
+        """瞬态工作区上下文 (与 AI IDE 自动附带当前文件同构): 实时探活板况,
+        成则每回合前置送模型 (不入历史), 模型免去探路; 探不到则回空 (不阻断)。"""
+        r = self.live_eval(
+            "{'file': board.GetFileName(),"
+            " 'footprints': [fp.GetReference() for fp in board.GetFootprints()],"
+            " 'nets': board.GetNetCount(), 'tracks': len(board.GetTracks())}")
+        if not r.get("ok") or not isinstance(r.get("result"), dict):
+            return ""
+        d = r["result"]
+        refs = d.get("footprints") or []
+        return ("(实时板况·自动附带) 文件: %s · 封装 %d 个 [%s] · 网络 %s · 走线 %s。"
+                "如需更多细节再调工具。"
+                % (d.get("file") or "(未存盘)", len(refs),
+                   ", ".join(map(str, refs[:30])), d.get("nets"), d.get("tracks")))
+
     def ai_send(self, conversation_id: str, text: str, max_steps: int = 8,
                 should_stop: Optional[Any] = None,
                 on_step: Optional[Any] = None) -> Dict[str, Any]:
@@ -412,8 +428,13 @@ class DevinKiCadBridge:
             if on_step is not None:
                 on_step(step)
 
+        try:
+            ctx = self.ai_context()
+        except Exception:  # noqa: BLE001
+            ctx = ""
         return store.run(conversation_id, self.registry(), max_steps=max_steps,
-                         should_stop=should_stop, on_step=_journal_step)
+                         should_stop=should_stop, on_step=_journal_step,
+                         context=ctx)
 
     def ai_conversation(self, conversation_id: str) -> Dict[str, Any]:
         """取一个会话的完整消息史 (供面板切换会话时回放)。"""

@@ -513,6 +513,35 @@ def test_bridge_ai_conversation_history_replay(tmp_path):
     assert miss["ok"] is False and "无此对话" in miss["error"]
 
 
+def test_run_turn_context_is_transient_system_message():
+    """context 每次请求前置 system 消息送模型, 但不落进会话历史。"""
+    seen = []
+
+    def chat(messages, **kw):
+        seen.append([dict(m) for m in messages])
+        return {"ok": True, "content": "好", "tool_calls": []}
+
+    msgs = [{"role": "user", "content": "看板"}]
+    r = agent_loop.run_turn(msgs, tools.ToolRegistry(), chat_fn=chat,
+                            context="(实时板况) 2 封装")
+    assert r["ok"] is True
+    assert seen[0][0] == {"role": "system", "content": "(实时板况) 2 封装"}
+    assert all(m.get("content") != "(实时板况) 2 封装" for m in msgs)
+
+
+def test_bridge_ai_context_formats_live_board(monkeypatch):
+    from kicad_origin.origin.dao_devin import bridge as br
+    b = br.DevinKiCadBridge(live_factory=lambda: None)
+    monkeypatch.setattr(b, "live_eval", lambda code: {"ok": True, "result": {
+        "file": "/tmp/a.kicad_pcb", "footprints": ["R1", "R2"],
+        "nets": 3, "tracks": 5}})
+    ctx = b.ai_context()
+    assert "a.kicad_pcb" in ctx and "R1, R2" in ctx and "封装 2 个" in ctx
+    monkeypatch.setattr(b, "live_eval",
+                        lambda code: {"ok": False, "error": "无活体"})
+    assert b.ai_context() == ""
+
+
 def test_install_panel_pkg_files_cover_bridge_deps(tmp_path):
     """install_panel 清单必须涵盖 dao_devin 包内全部 .py (漏一辐 GUI 内即炸)。"""
     from pathlib import Path
