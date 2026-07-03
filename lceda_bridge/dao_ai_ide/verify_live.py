@@ -13,14 +13,15 @@ import dao_eda_cdp_driver as d
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get("DAO_CDP_PORT", "29230"))
 MOCK = os.environ.get("DAO_MOCK_LLM", "http://127.0.0.1:9944")
-MSG = os.environ.get("DAO_VERIFY_MSG", "请获取当前 EDA 上下文并确认引擎在线")
+MSG = os.environ.get("DAO_VERIFY_MSG", "多步验证: 读上下文并弹提示")
 
 
 def build_doc():
     html = open(os.path.join(HERE, "ide", "index.html"), encoding="utf-8").read()
-    appjs = open(os.path.join(HERE, "ide", "app.js"), encoding="utf-8").read()
-    # 内联 app.js(blob 文档无法解析相对资源)
-    html = html.replace('<script src="app.js"></script>', "<script>\n" + appjs + "\n</script>")
+    # 内联全部脚本(blob 文档无法解析相对资源): manifest → 动词运行时 → 面板逻辑
+    for name in ("verbs.manifest.js", "dao_verbs.js", "app.js"):
+        src = open(os.path.join(HERE, "ide", name), encoding="utf-8").read()
+        html = html.replace('<script src="%s"></script>' % name, "<script>\n" + src + "\n</script>")
     return html
 
 
@@ -67,14 +68,14 @@ def main():
             for(var i=0;i<msgs.length;i++){
               if(msgs[i].classList.contains('assistant')){
                 var c=msgs[i].querySelector('.content');
-                if(c && c.textContent && c.textContent.indexOf('就绪')>=0){done=true;txt=c.textContent;}
+                if(c && c.textContent && c.textContent.indexOf('就绪')>=0){done=true;txt=c.innerHTML;}
               }
             }
             var toolcalls=dc.querySelectorAll('#msgs .toolcall').length;
             var toolres=dc.querySelectorAll('#msgs .toolcall .res').length;
             var edaTxt=dc.getElementById('edaTxt').textContent;
             var ctxTxt=dc.getElementById('ctxTxt').textContent;
-            if(done || Date.now()-t0>20000){
+            if(done || Date.now()-t0>30000){
               clearInterval(iv);
               resolve(JSON.stringify({ok:done,final:txt,toolcalls:toolcalls,toolres:toolres,
                 msgCount:msgs.length,edaTxt:edaTxt,ctxTxt:ctxTxt}));
@@ -86,15 +87,18 @@ def main():
     }catch(e){resolve(JSON.stringify({ok:false,topErr:String(e&&e.message||e)}));}
   });
 })()""" % (json.dumps(boot), json.dumps(doc), json.dumps(MSG))
-    out, err = d.evaluate(ws, js, await_promise=True, timeout=40)
+    out, err = d.evaluate(ws, js, await_promise=True, timeout=60)
     print("RESULT:", out, err)
-    # 截图
-    shot = os.path.join(HERE, "..", "..", "dao_ai_ide_live.png")
+    # 截图为证
+    shot = os.environ.get("DAO_VERIFY_SHOT", "/tmp/dao_ai_ide_live.png")
     try:
-        res = d.evaluate(ws, "1", await_promise=False)  # keep ws warm
-        img, _ = d.evaluate(ws, "'noop'")
-    except Exception:
-        pass
+        r = ws.cmd("Page.captureScreenshot", {"format": "png"}, timeout=20)
+        data = r.get("result", {}).get("data") or r.get("data")
+        if data:
+            open(shot, "wb").write(base64.b64decode(data))
+            print("SHOT:", shot)
+    except Exception as e:
+        print("SHOT-ERR:", e)
     return out
 
 
