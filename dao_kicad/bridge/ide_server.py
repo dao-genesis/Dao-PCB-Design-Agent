@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import tempfile
 import threading
 import traceback
@@ -92,7 +93,11 @@ def api_render_pcb(path: str, layers: str) -> tuple[bytes, str] | dict:
 
 
 def api_netlist(body: dict) -> dict:
+    if not body.get("sch"):
+        return {"ok": False, "error": "missing 'sch' (path to .kicad_sch)"}
     sch = Path(body["sch"])
+    if not sch.is_file():
+        return {"ok": False, "error": f"no such schematic: {sch}"}
     out = Path(body.get("out") or sch.with_suffix(".net"))
     r = _lk().cli("sch", "export", "netlist", "--format", "kicadsexpr",
                   "-o", str(out), str(sch))
@@ -178,6 +183,43 @@ def api_auto(body: dict, jid: str | None = None) -> dict:
     _set_stage(jid, "drc")
     d = api_drc({"pcb": pcb})
     steps["drc"] = d
+    # Escalating finisher (same policy as the CLI): freerouting occasionally
+    # leaves a few ratlines on a dense board. Retry with more passes into a
+    # candidate board and adopt it only when DRC strictly improves, so the
+    # board can never get worse than the first pass.
+    if d.get("ok") and d.get("unconnected", 0) > 0:
+        lk = _lk()
+        pcbp = Path(pcb)
+        retry_timeout = max(300, int(body.get("timeout") or 0)
+                            or lk.route_timeout_for(steps["build"].get("nets")) // 2)
+        passes = int(body.get("passes") or 10)
+        while d.get("unconnected", 0) > 0 and passes < 32:
+            passes += 12
+            _set_stage(jid, f"finish(passes={passes})")
+            cand = pcbp.with_name(pcbp.stem + ".retry.kicad_pcb")
+            retry = lk.autoroute(pcbp, cand, passes=passes,
+                                 timeout=retry_timeout)
+            if not retry.get("ok"):
+                break
+            cand_drc = api_drc({"pcb": str(cand)})
+            better = (cand_drc.get("unconnected", 0) < d.get("unconnected", 0)
+                      and cand_drc.get("violations", 0) <= d.get("violations", 0))
+            if better:
+                shutil.move(str(cand), str(pcbp))
+                rep = cand.with_suffix(".drc.json")
+                if rep.is_file():
+                    shutil.move(str(rep), str(pcbp.with_suffix(".drc.json")))
+                d = cand_drc
+                d["report"] = str(pcbp.with_suffix(".drc.json"))
+                steps["drc"] = d
+                steps["route"] = {**steps["route"],
+                                  "tracks": retry.get("tracks"),
+                                  "finish_passes": passes}
+            else:
+                cand.unlink(missing_ok=True)
+        cand = pcbp.with_name(pcbp.stem + ".retry.kicad_pcb")
+        cand.unlink(missing_ok=True)
+        cand.with_suffix(".drc.json").unlink(missing_ok=True)
     if body.get("fab"):
         _set_stage(jid, "fab")
         steps["fab"] = api_fab({"pcb": pcb,
