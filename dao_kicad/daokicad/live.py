@@ -585,14 +585,15 @@ class LiveKiCad:
 
     def autoroute(self, pcb: str | Path, out: Optional[str | Path] = None, *,
                   margin_nm: int = 5000, passes: int = 10,
-                  timeout: Optional[int] = None) -> dict:
+                  timeout: Optional[int] = None, seed: int = 0) -> dict:
         """Round-trip a placed board through freerouting -> routed board.
 
         margin_nm widens netclass clearance only in the DSN handed to the
         router, so freerouting keeps a hair of slack and the re-imported board
         still passes KiCad DRC. ``timeout`` (seconds) bounds freerouting; when
         ``None`` the router's own default applies. Big boards need more — see
-        :func:`route_timeout_for`.
+        :func:`route_timeout_for`. ``seed`` picks a deterministic DSN ordering
+        so retries can sample a different routing basin reproducibly.
         """
         pcb = Path(pcb)
         out = Path(out) if out else pcb
@@ -611,7 +612,7 @@ class LiveKiCad:
         # lands too close to the edge (interf_u/stickhub DRC). Inset the DSN
         # boundary by that clearance so the routed copper stays legal.
         self._inset_dsn_boundary(dsn, exp.get("edge_clearance") or 0)
-        kw = {"passes": passes}
+        kw = {"passes": passes, "seed": seed}
         if timeout is not None:
             kw["timeout"] = timeout
         rr = _route.route_dsn(dsn, ses, **kw)

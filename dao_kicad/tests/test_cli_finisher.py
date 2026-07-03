@@ -28,9 +28,10 @@ class _FakeLK:
     def route_timeout_for(self, nets):
         return 600
 
-    def autoroute(self, pcb, out=None, *, passes, timeout=None):
+    def autoroute(self, pcb, out=None, *, passes, timeout=None, seed=0):
         self.route_calls.append({"pcb": Path(pcb), "out": out,
-                                 "passes": passes, "timeout": timeout})
+                                 "passes": passes, "timeout": timeout,
+                                 "seed": seed})
         if out is not None:
             Path(out).write_text("candidate board")
             Path(out).with_suffix(".drc.json").write_text("{}")

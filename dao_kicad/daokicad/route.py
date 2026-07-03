@@ -155,9 +155,13 @@ def _top_level_children(body: str, head: str) -> list[tuple[int, int]]:
     return spans
 
 
-def _sort_children(section: str, head: str, key_re: str) -> str:
+def _sort_children(section: str, head: str, key_re: str,
+                   seed: int = 0) -> str:
     """Rewrite ``section`` with its top-level ``(head …)`` children sorted by
-    the first ``key_re`` match inside each child; everything else stays put."""
+    the first ``key_re`` match inside each child; everything else stays put.
+    A non-zero ``seed`` applies a deterministic shuffle on top of the sort so
+    callers can sample a *different but reproducible* ordering."""
+    import random
     import re
     spans = _top_level_children(section, head)
     if len(spans) < 2:
@@ -168,6 +172,8 @@ def _sort_children(section: str, head: str, key_re: str) -> str:
         m = re.search(key_re, blk)
         return m.group(1) if m else ""
     ordered = sorted(blocks, key=k)
+    if seed:
+        random.Random(seed).shuffle(ordered)
     out = []
     prev = 0
     for (a, b), blk in zip(spans, ordered):
@@ -178,7 +184,7 @@ def _sort_children(section: str, head: str, key_re: str) -> str:
     return "".join(out)
 
 
-def canonicalize_dsn(dsn: str | Path) -> bool:
+def canonicalize_dsn(dsn: str | Path, seed: int = 0) -> bool:
     """Rewrite a DSN into component/net-order canonical form, in place.
 
     KiCad saves board footprints in random-UUID order, so ExportSpecctraDSN
@@ -188,6 +194,10 @@ def canonicalize_dsn(dsn: str | Path) -> bool:
     Sorting placement components (and each component's places) plus network
     nets by name makes the DSN a pure function of the placement, so routing a
     given board is reproducible. Returns True when the file was rewritten.
+
+    ``seed`` deterministically permutes the canonical order: freerouting's
+    heuristics are order-sensitive, so distinct seeds sample distinct routing
+    basins — reproducible multi-start instead of accidental randomness.
     """
     dsn = Path(dsn)
     try:
@@ -203,7 +213,7 @@ def canonicalize_dsn(dsn: str | Path) -> bool:
         spans = _top_level_children(text, section_head)
         for a, b in spans:
             sec = text[a:b]
-            new = _sort_children(sec, child_head, key)
+            new = _sort_children(sec, child_head, key, seed)
             if child_head == "component":
                 # also sort each component's (place REF …) rows
                 rebuilt = new
@@ -232,7 +242,8 @@ def canonicalize_dsn(dsn: str | Path) -> bool:
 
 
 def route_dsn(dsn: str | Path, ses: str | Path, *,
-              timeout: int = 600, passes: int = 10) -> RouteResult:
+              timeout: int = 600, passes: int = 10,
+              seed: int = 0) -> RouteResult:
     """Route a Specctra .dsn into a .ses using freerouting (headless).
 
     freerouting's own CLI re-splits the ``-de``/``-do`` values on whitespace, so
@@ -248,8 +259,9 @@ def route_dsn(dsn: str | Path, ses: str | Path, *,
         return RouteResult(False, None, "", "", "freerouting.jar not found")
     dsn, ses = Path(dsn), Path(ses)
     # KiCad emits DSN sections in random-UUID order; canonicalize so routing a
-    # given placement is reproducible instead of oscillating run-to-run.
-    canonicalize_dsn(dsn)
+    # given placement is reproducible instead of oscillating run-to-run. A
+    # non-zero seed samples a different (still deterministic) routing basin.
+    canonicalize_dsn(dsn, seed)
     ses.parent.mkdir(parents=True, exist_ok=True)
 
     import tempfile

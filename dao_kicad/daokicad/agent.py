@@ -153,7 +153,7 @@ class DesignAgent:
             self._snapshot(pcb, f"placed (iter {it})")
             # route (二生三): freerouting round-trip
             if use_freerouting:
-                rt = self.live.autoroute(pcb, passes=passes)
+                rt = self.live.autoroute(pcb, passes=passes, seed=it - 1)
                 trace.append(self._emit(Step("route", {
                     "iter": it, "ok": rt.get("ok"), "tracks": rt.get("tracks"),
                     "passes": passes, "stage": rt.get("stage"),
