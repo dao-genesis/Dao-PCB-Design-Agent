@@ -402,6 +402,33 @@ def build_skewlen():
                             "equal_length": {"EQ_AB": ["NA", "NB"]}}}
 
 
+def build_tune():
+    """板⑭·把『freerouting 不调长』边界**转成能力**:两网**可比长**、仅**适度失配**
+    (NB 跨 ~1100 vs NA 跨 ~800,skew~300mil),且**留足板内余量**(margin 400、上下错行)。
+    布线后跑 length_tune:在 NA 最长直段**原位插朝板内的曼哈顿蛇形**(删原段→同端点画更长
+    折线,端点不动故电气连续),把 spread 收到 tol(~8mil)内且 **DRC 仍 0**。
+
+    与 skewlen 之别(诚实定界):skewlen 是**病态**反例(NA 仅 ~220mil 却欠 1380mil,物理
+    无处可蛇 → 据实留大 residual);本板是**现实**等长场景(适度 skew + 可比长 + 有余量),
+    才是 length_tune 的收敛域。蛇形只吃单网最长段;跨多段分摊是更深前沿,如实记。"""
+    comps = [
+        {"ref": "RA1", "query": R, "rotation": 0, "x": 0, "y": 0,
+         "pins": {"1": "NA", "2": "TA1"}},
+        {"ref": "RA2", "query": R, "rotation": 0, "x": 800, "y": 0,
+         "pins": {"1": "NA", "2": "TA2"}},      # NA 跨 ~800mil
+        {"ref": "RB1", "query": R, "rotation": 0, "x": 0, "y": 700,
+         "pins": {"1": "NB", "2": "TB1"}},
+        {"ref": "RB2", "query": R, "rotation": 0, "x": 1100, "y": 700,
+         "pins": {"1": "NB", "2": "TB2"}},      # NB 跨 ~1100mil(+~300 失配)
+    ]
+    return {"name": "DAO_TN1_LenTune", "gnd_net": None,
+            "track_width": 10, "margin": 400, "copper_layers": 2,
+            "length_tune": True,        # 布线后原位蛇形调长,把 spread 收到 tol 内
+            "components": comps,
+            "constraints": {"net_classes": {"GRP": ["NA", "NB"]},
+                            "equal_length": {"EQ_AB": ["NA", "NB"]}}}
+
+
 def build_soicfan():
     """板⑨·跨几何泛化:在**双边** SOIC-16(74HC595)上跑同一 auto_fanout 原语。
     QFP 是四边、SOIC 是左右两排——若原语真无硬假设,应自动判出 L/R 两边逃逸并布通。
@@ -431,6 +458,7 @@ BOARDS = {
     "soicfan": build_soicfan,
     "bga": build_bga,
     "skewlen": build_skewlen,
+    "tune": build_tune,
     "cap": build_cap,
     "qdiff": build_qdiff,
 }
