@@ -657,3 +657,31 @@ def test_duplicate_pad_numbers_all_join_net(tmp_path):
     pads2 = [p for p in fp.Pads() if p.GetNumber() == "2"]
     assert len(pads2) >= 2
     assert all(p.GetNetname() == "GND" for p in pads2)
+
+
+@needs_script
+def test_intrinsic_mask_bridges_allowed(tmp_path):
+    """Fine-pitch connectors ship pads whose mask apertures overlap by design
+    (USB-C…). The builder must mark such footprints "allow bridged solder
+    mask" — the designer's own remedy — while separated pads stay strict."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "maskbridge",
+        "footprints": [
+            {"ref": "J1", "fp": "TIGHT", "pads": [
+                {"num": "1", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                {"num": "2", "x": 0.5, "y": 0.0, "w": 1.0, "h": 1.0}]},
+            {"ref": "J2", "fp": "LOOSE", "pads": [
+                {"num": "1", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                {"num": "2", "x": 3.0, "y": 0.0, "w": 1.0, "h": 1.0}]},
+        ],
+        "connections": [],
+    }
+    pcb = tmp_path / "mask.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    flags = {fp.GetReference():
+             bool(fp.GetAttributes() & pcbnew.FP_ALLOW_SOLDERMASK_BRIDGES)
+             for fp in board.GetFootprints()}
+    assert flags == {"J1": True, "J2": False}
