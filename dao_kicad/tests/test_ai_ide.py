@@ -233,6 +233,68 @@ def test_kicad_route_zone_tools_schema_aliases_and_codegen():
     assert "pcbnew.FromMM(0.2)" in code
 
 
+def test_kicad_delete_tool_schema_aliases_and_codegen():
+    for a in ("delete", "remove", "clear", "ripup", "rip_up", "delete_tracks"):
+        assert tools.normalize_name(a) == "kicad_delete"
+    ds = tools._SCHEMA_BY_NAME["kicad_delete"]["function"]["parameters"]
+    assert ds["properties"]["kind"]["enum"] == ["tracks", "zones", "all"]
+
+    import kicad_origin.origin.dao_devin.bridge as br
+    seen = {}
+
+    class _Live:
+        def eval(self, code):
+            seen["code"] = code
+            compile(code, "<delete>", "exec")  # 生成代码必须语法有效
+            return {"kind": "tracks", "net": "SIG", "layer": "*",
+                    "removed": {"tracks": 2, "vias": 0, "zones": 0},
+                    "total": 2}
+
+    b = br.DevinKiCadBridge(live_factory=lambda: _Live())
+    r = b.live_delete(net="SIG")
+    assert r["ok"] and r["result"]["total"] == 2
+    code = seen["code"]
+    assert "GetTracks()" in code and "RemoveNative" in code
+    assert "Zones()" not in code  # kind=tracks 不动铺铜
+
+    r = b.live_delete(kind="all", layer="F.Cu")
+    code = seen["code"]
+    assert "GetTracks()" in code and "Zones()" in code
+    assert "GetLayerID('F.Cu')" in code
+
+    assert b.live_delete(kind="nets")["ok"] is False  # 非法 kind 明确报错
+
+
+def test_kicad_delete_headless_on_real_board(tmp_path):
+    """真 pcbnew 上端到端: 布线→删 SIG 网→板上走线清零。"""
+    pcbnew = pytest.importorskip("pcbnew")
+    import shutil as _sh
+    from pathlib import Path
+
+    src = Path(__file__).parent / "fixtures" / "route_demo.kicad_pcb"
+    if not src.exists():
+        pytest.skip("无 route_demo fixture")
+    pcb = tmp_path / "route_demo.kicad_pcb"
+    _sh.copyfile(src, pcb)
+    board = pcbnew.LoadBoard(str(pcb))
+
+    import kicad_origin.origin.dao_devin.bridge as br
+
+    class _Live:
+        def eval(self, code):
+            from kicad_origin.origin.dao_devin.panel import _eval_last_expr
+            return _eval_last_expr(code, {"board": board, "pcbnew": pcbnew})
+
+    b = br.DevinKiCadBridge(live_factory=lambda: _Live())
+    r = b.live_route("R1", "R2", start_pad="2", end_pad="1")
+    assert r["ok"], r
+    assert len(list(board.GetTracks())) > 0
+    net = r["result"]["net"]
+    r = b.live_delete(net=net)
+    assert r["ok"] and r["result"]["total"] >= 1
+    assert len(list(board.GetTracks())) == 0
+
+
 def test_kicad_drc_tool_schema_aliases_and_bridge(tmp_path, monkeypatch):
     schema = tools._SCHEMA_BY_NAME.get("kicad_drc")
     assert schema is not None
@@ -311,6 +373,10 @@ def test_panel_tool_line_humanizes_trace():
         "violations": 12, "unconnected": 1,
         "details": [{"type": "clearance", "severity": "error"}]}})
     assert "12 违规" in line and "clearance(error)" in line
+    line = panel._tool_line("kicad_delete", {}, {"ok": True, "result": {
+        "net": "SIG", "total": 3,
+        "removed": {"tracks": 2, "vias": 1, "zones": 0}}})
+    assert "SIG 网拆除 3 项" in line and "线 2" in line
     assert panel._tool_line("kicad_save", {}, {"ok": True}) == "已存盘"
     line = panel._tool_line("kicad_eval", {"code": "1+1"},
                             {"ok": True, "result": 2})
