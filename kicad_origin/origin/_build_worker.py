@@ -13,8 +13,18 @@ spec JSON:
     {"ref":"R1","lib":"Resistor_SMD","fp":"R_0805_2012Metric","x":5,"y":10,
      "value":"10k","rot":0}
   ],
-  "nets": {"VOUT":[["R1","2"],["R2","1"]], "GND":[["R2","2"]]}
+  "nets": {"VOUT":[["R1","2"],["R2","1"]], "GND":[["R2","2"]]},
+  "netclasses": [                            # 可选: 差异化布线规则 (电源粗/信号细/差分)
+    {"name":"Power","track_width_mm":0.6,"clearance_mm":0.25,
+     "nets":["VCC","GND"]},
+    {"name":"Diff","diff_pair_width_mm":0.2,"diff_pair_gap_mm":0.15,
+     "nets":["USB_DP","USB_DM"]}
+  ]
 }
+
+netclass 经 NET_SETTINGS 落进 .kicad_pro (KiCad 9 净类存项目文件而非板文件); LoadBoard
+会随邻接 .kicad_pro 读回 effective netclass, 故 DSN 导出/freerouting 全程honor该宽度
+—— 整条 build→route 链对布线器的深控由此打通 (反臆造: 重载实测每网 effective 轨宽)。
 """
 from __future__ import annotations
 
@@ -43,10 +53,54 @@ def _load_fp(pcbnew, roots, lib: str, name: str):
     raise FileNotFoundError(f"footprint {lib}:{name} not found in {roots}")
 
 
+_NC_LEN_FIELDS = {
+    "track_width_mm": "SetTrackWidth",
+    "clearance_mm": "SetClearance",
+    "via_diameter_mm": "SetViaDiameter",
+    "via_drill_mm": "SetViaDrill",
+    "diff_pair_width_mm": "SetDiffPairWidth",
+    "diff_pair_gap_mm": "SetDiffPairGap",
+}
+
+
+def _apply_netclasses(pcbnew, board, specs, known_nets):
+    """把声明的净类落进 NET_SETTINGS (→ .kicad_pro), 每网经 pattern 精确指派。
+
+    反臆造: 指派到不存在的网如实报错, 不静默吞。返回每类的 effective 实测态势。
+    """
+    if not specs:
+        return []
+    ns = board.GetDesignSettings().m_NetSettings
+    ncmap = ns.GetNetclasses()
+    applied = []
+    for nc_spec in specs:
+        name = nc_spec["name"]
+        nc = pcbnew.NETCLASS(name)
+        for field, setter in _NC_LEN_FIELDS.items():
+            if nc_spec.get(field) is not None:
+                getattr(nc, setter)(pcbnew.FromMM(float(nc_spec[field])))
+        ncmap[name] = nc
+        for net in nc_spec.get("nets", []):
+            if net not in known_nets:
+                raise KeyError(
+                    f"netclass {name} refs unknown net {net}")
+            ns.SetNetclassPatternAssignment(net, name)
+        applied.append({"name": name, "nets": list(nc_spec.get("nets", []))})
+    ns.SetNetclasses(ncmap)
+    return applied
+
+
 def build(spec: dict) -> dict:
     import pcbnew  # noqa: PLC0415
 
     b = pcbnew.BOARD()
+    # 铜层数: 2/4/6 层叠。>2 层给密集 QFP/BGA 电源分配与布线留内层空间
+    # (信号/GND/电源/信号), 是双层布不通的密板的本源解 (反臆造: 重载实测层数)。
+    layer_count = int(spec.get("layer_count", 2))
+    if layer_count not in (2, 4, 6):
+        raise ValueError(f"layer_count must be 2/4/6, got {layer_count}")
+    if layer_count > 2:
+        b.SetCopperLayerCount(layer_count)
     roots = _fp_lib_roots(spec)
     placed = {}
     for comp in spec.get("components", []):
@@ -69,11 +123,17 @@ def build(spec: dict) -> dict:
             fp = placed.get(ref)
             if fp is None:
                 raise KeyError(f"net {netname} refs unknown component {ref}")
-            pad = next((p for p in fp.Pads() if p.GetName() == str(pad_name)),
-                       None)
-            if pad is None:
+            # 同名 pad 在 KiCad 里电气同点 (如 USB 屏蔽壳的多个 "6"、散热 EP),
+            # 须整组同网, 只连首个会留下无网兄弟 pad → DRC 短路 (反臆造)。
+            matched = [p for p in fp.Pads() if p.GetName() == str(pad_name)]
+            if not matched:
                 raise KeyError(f"{ref} has no pad {pad_name}")
-            pad.SetNet(net)
+            for pad in matched:
+                pad.SetNet(net)
+
+    # 净类 (差异化布线规则): 落进 NET_SETTINGS → .kicad_pro, 全链 honor
+    netclasses = _apply_netclasses(pcbnew, b, spec.get("netclasses", []),
+                                   set(spec.get("nets", {}).keys()))
 
     # 板框 Edge.Cuts
     if spec.get("size_mm"):
@@ -109,6 +169,8 @@ def build(spec: dict) -> dict:
             "components": len(placed),
             "nets": b.GetNetInfo().GetNetCount(),
             "unrouted": unrouted,
+            "netclasses": netclasses,
+            "copper_layers": b.GetCopperLayerCount(),
             "size_mm": [round(w, 3), round(h, 3)]}
 
 

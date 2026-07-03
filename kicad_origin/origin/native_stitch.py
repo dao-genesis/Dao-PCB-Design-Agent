@@ -55,6 +55,7 @@ class NativeStitch:
                region: Optional[List[float]] = None,
                clearance_mm: float = 0.5, via_dia_mm: float = 0.8,
                drill_mm: float = 0.4, margin_mm: float = 1.0,
+               hole_clearance_mm: float = 0.5,
                timeout: int = 120) -> StitchReport:
         rep = StitchReport(board=str(board), out=str(out), net=net)
         if not self.python:
@@ -64,7 +65,7 @@ class NativeStitch:
             "board": str(board), "out": str(out), "net": net,
             "pitch_mm": pitch_mm, "clearance_mm": clearance_mm,
             "via_dia_mm": via_dia_mm, "drill_mm": drill_mm,
-            "margin_mm": margin_mm,
+            "margin_mm": margin_mm, "hole_clearance_mm": hole_clearance_mm,
         }
         if region is not None:
             req["region"] = region

@@ -25,7 +25,6 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import eda_flow
-import eda_rest
 
 
 def _group_by_width(net_widths):
@@ -45,7 +44,9 @@ class BoardSpec:
     nets:  {网络名: [(designator, pinNumber), ...], ...}
     """
 
-    def __init__(self, name, parts, nets, introduction="", ground_pour=False, net_widths=None, diff_pairs=None):
+    def __init__(self, name, parts, nets, introduction="", ground_pour=False, net_widths=None, diff_pairs=None,
+                 auto_fanout=None, fanout_query="0603WAF1002T5E", fanout_offset=420, fanout_depth_step=180,
+                 copper_layers=2):
         self.name = name
         self.parts = parts
         self.nets = nets
@@ -53,6 +54,13 @@ class BoardSpec:
         self.ground_pour = ground_pour  # True 则布线后自动双面铺 GND 地平面
         self.net_widths = net_widths or {}  # {网络名: 线宽mil} 布线后逐条加粗目标网
         self.diff_pairs = diff_pairs or []  # [(name, pos_net, neg_net), ...] 差分对约束(落库,见 create_diff_pair)
+        # {ic_ref: {pad: net}} — 读器件**真实焊盘几何**后就近向外落一颗串阻(pad→R.1, R.2→net_T),
+        # 免手填每颗扇出电阻坐标(桌面 auto_fanout 原语的 web 对偶)。
+        self.auto_fanout = auto_fanout or {}
+        self.fanout_query = fanout_query
+        self.fanout_offset = fanout_offset      # 焊盘沿逃逸方向向外的基础距离(栅格单位)
+        self.fanout_depth_step = fanout_depth_step  # 同边多脚逐脚加深,错开避免抢道
+        self.copper_layers = int(copper_layers)  # 铜层数(2/4/6…);多层给密板(如 BGA 逃逸)让出内层,布线器更易收敛
 
     def pin_count_hint(self):
         """每个器件在 nets 里被引用到的最大引脚号(用于放件后粗校验引脚数是否够)。"""
@@ -85,12 +93,25 @@ class BoardBuilder:
                   ensure_ascii=False, indent=2)
 
     # ---- 阶段 1:建工程 + 原理图/PCB 文档 ----
-    def scaffold(self, spec):
-        rest = eda_rest.EdaRest()
-        pj = rest.create_project(spec.name + "_" + time.strftime("%H%M%S"),
-                                 introduction=spec.introduction)
-        puuid = pj.get("uuid") or pj.get("projectUuid") or (pj.get("result") or {}).get("uuid")
+    def scaffold(self, spec, tries=3):
+        """经 **CDP**(dmt_Project.createProject)建工程,再补建 SCH/PCB。
+
+        道:REST 建的工程虽在服务端落库,但**当前编辑器会话不会自动加载它**,
+        随后 open_project 等不到 _current_uuid → 报"未就绪"(本会话实证)。
+        改走 CDP dmt_Project.createProject:同一会话内建即被编辑器认知,open_project
+        稳定成功(与 build_chain_det._scaffold 同源)。createProject 偶发返回 None
+        (编辑器忙/告警框)→ 重试。"""
         f = eda_flow.Flow()
+        puuid = None
+        for _ in range(tries):
+            puuid = f.eda.call("dmt_Project.createProject",
+                               spec.name + "_" + time.strftime("%H%M%S"), timeout=40)
+            if puuid:
+                break
+            time.sleep(4)
+        if not puuid:
+            raise eda_flow.FlowError("createProject 连续返回 None(编辑器忙?)")
+        time.sleep(3)
         f.open_project(puuid)
         f.eda.call("dmt_Schematic.createSchematic", "SCH1", timeout=20)
         f.eda.call("dmt_Pcb.createPcb", "PCB1", timeout=20)
@@ -114,6 +135,23 @@ class BoardBuilder:
                 pass
         return out
 
+    @staticmethod
+    def _search_retry(f, query, tries=4):
+        """检索器件,容忍瞬时 NO_RESULT/异常并重试。
+
+        道:createProject 后库索引偶尔尚未就绪,lib_Device.search 瞬时返回 NO_RESULT
+        (eda_api 抛错)或空——直接放弃会误判"无此器件"而中断整板(本会话统一门面 selftest
+        实证:同一 '0603 10k' 直连命中 10 项,建板途中却瞬时 NO_RESULT)。重试几次即稳。"""
+        for _ in range(tries):
+            try:
+                hits = f.search_device(query)
+                if hits:
+                    return hits
+            except Exception:
+                pass
+            time.sleep(2)
+        return []
+
     def place(self, spec):
         f = eda_flow.Flow()
         f.open_document(self.state["sch_page"])
@@ -122,7 +160,7 @@ class BoardBuilder:
         before = self._valid_ids(f)
         hint = spec.pin_count_hint()
         for ref, query, (gx, gy) in spec.parts:
-            hits = f.search_device(query) or []
+            hits = self._search_retry(f, query)
             if not hits:
                 warns.append("no hit: %s (%s)" % (ref, query)); continue
             placed = None
@@ -146,6 +184,55 @@ class BoardBuilder:
                 warns.append("PIN MISMATCH %s: got %d pins, net needs >=%d (换料号?)"
                              % (ref, npins, hint[ref]))
             ids[ref] = placed
+        # ---- auto_fanout:读 IC 真实焊盘几何,就近向外落串阻(pad→R.1, R.2→net_T) ----
+        af_made = 0
+        for ic_ref, padmap in (getattr(spec, "auto_fanout", {}) or {}).items():
+            cid = ids.get(ic_ref)
+            if not cid:
+                warns.append("auto_fanout: 未放置 IC %s" % ic_ref); continue
+            c = f.eda.call("sch_PrimitiveComponent.get", cid)
+            cx, cy = c["x"], c["y"]
+            pinmap = {str(p["pinNumber"]): p for p in (f.component_pins(cid) or [])}
+            hits = self._search_retry(f, spec.fanout_query)
+            if not hits:
+                warns.append("auto_fanout: 扇出料 %s 无命中" % spec.fanout_query); continue
+            side_seq = {}  # 每边已用脚数 → 逐脚加深错开
+            for pad, net in padmap.items():
+                p = pinmap.get(str(pad))
+                if not p:
+                    warns.append("auto_fanout: %s 无焊盘 %s" % (ic_ref, pad)); continue
+                dx, dy = p["x"] - cx, p["y"] - cy
+                horiz = abs(dx) >= abs(dy)          # True=左右边(向 x 逃),False=上下边(向 y 逃)
+                sk = ("H+" if dx >= 0 else "H-") if horiz else ("V+" if dy >= 0 else "V-")
+                depth = spec.fanout_offset + side_seq.get(sk, 0) * spec.fanout_depth_step
+                side_seq[sk] = side_seq.get(sk, 0) + 1
+                if horiz:
+                    rx, ry = p["x"] + (depth if dx >= 0 else -depth), p["y"]
+                else:
+                    rx, ry = p["x"], p["y"] + (depth if dy >= 0 else -depth)
+                placed = None
+                for _ in range(3):
+                    f.place_device(hits[0], 640, 360)
+                    after = self._valid_ids(f)
+                    new = list(after - before)
+                    if new:
+                        placed = new[0]; before = after; break
+                    time.sleep(1)
+                if not placed:
+                    warns.append("auto_fanout: 落阻失败 %s.%s" % (ic_ref, pad)); continue
+                rref = "Rf_%s" % net
+                try:
+                    f.eda.call("sch_PrimitiveComponent.modify", placed,
+                               {"x": rx, "y": ry, "designator": rref}, timeout=15)
+                except Exception as e:
+                    warns.append("auto_fanout modify %s: %s" % (rref, str(e)[:40]))
+                ids[rref] = placed
+                spec.nets.setdefault(net, []).append((ic_ref, str(pad)))
+                spec.nets[net].append((rref, "1"))
+                spec.nets["%s_T" % net] = [(rref, "2")]
+                af_made += 1
+        if af_made:
+            warns.append("auto_fanout: 落 %d 颗扇出阻" % af_made)
         f.save_schematic()
         self.state["ids"] = ids
         self._save_state()
@@ -243,6 +330,17 @@ class BoardBuilder:
         f.reload_and_reopen(self.state["project"], self.state["pcb"])
         f.prepare_pcb_nets()
         time.sleep(2)
+        nlay = getattr(self, "_copper_layers", 2) or 2
+        layers_set = None
+        if nlay and nlay != 2:
+            try:
+                f.set_copper_layer_count(int(nlay)); time.sleep(1)
+                f.eda.call("pcb_Document.save", timeout=20); time.sleep(1)
+                f.reload_and_reopen(self.state["project"], self.state["pcb"])
+                f.prepare_pcb_nets(); time.sleep(2)
+                layers_set = f.get_copper_layer_count()
+            except Exception as e:
+                layers_set = "ERR:" + str(e)[:60]
         dps = getattr(self, "_diff_pairs", []) or []
         diff = None
         if dps:
@@ -261,6 +359,16 @@ class BoardBuilder:
                 widened[str(w_mil)] = f.widen_net_tracks(w_mil, grp)
             f.eda.call("pcb_Document.save", timeout=20)
             time.sleep(1)
+        # 残余网补布(自校验·非破坏):原生自动布线非确定性,偶留个别网未通;此步扫未通网并在空闲层
+        # 补齐,补后复检 DRC,一旦引入新违规即全板 id 差集回滚——能干净补则补、否则安全 no-op,永不恶化板子。
+        # **必须在敷铜之前**:补布后的敷铜会自动在新铜四周留间隙(避让);若在敷铜后补,新铜会撞满铺的地铜。
+        residual = None
+        if isinstance(route, dict) and route.get("tracks", 0) > 0:
+            try:
+                residual = f.complete_residual_nets(verify=True)
+                f.eda.call("pcb_Document.save", timeout=20)
+            except Exception as e:
+                residual = "ERR:" + str(e)[:60]
         pour = None
         if getattr(self, "_ground_pour", False):
             try:
@@ -275,7 +383,7 @@ class BoardBuilder:
         out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                (out_base or self.state.get("name", "Dao")) + "_fab")
         exp = f.export_all(out_dir, base=out_base or self.state.get("name", "Dao"))
-        return {"outline": bo, "diff": diff, "widened": widened, "route": route, "pour": pour, "drc": drc, "export_dir": out_dir,
+        return {"outline": bo, "layers": layers_set, "diff": diff, "widened": widened, "route": route, "residual": residual, "pour": pour, "drc": drc, "export_dir": out_dir,
                 "export": {k: (v.get("size") if isinstance(v, dict) else v) for k, v in exp.items()}}
 
     # ---- 一键全流程 ----
@@ -288,6 +396,7 @@ class BoardBuilder:
         self._ground_pour = getattr(spec, "ground_pour", False)
         self._net_widths = getattr(spec, "net_widths", {})
         self._diff_pairs = getattr(spec, "diff_pairs", [])
+        self._copper_layers = getattr(spec, "copper_layers", 2)
         report["route_export"] = self.route_export(out_base=spec.name, margin=margin)
         return report
 

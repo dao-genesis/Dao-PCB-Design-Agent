@@ -3,7 +3,7 @@
 > 一次性全量逆流·一劳永逸。承 EXTAPI 同法, 把 KiCad 9 本源整张声明面逆流为唯一事实源。
 > 机器可读完整目录见同目录 `KICAD_NATIVE_CATALOG.json`。
 >
-> - KiCad 版本: `9.0.9-9.0.9~ubuntu22.04.1`　生成: `2026-06-30`
+> - KiCad 版本: `9.0.9-9.0.9~ubuntu22.04.1`　生成: `2026-07-01`
 > - pcbnew 原生: **类 164** · **方法 7913** · 自由函数 302 · 常量/枚举 852
 > - kicad-cli 叶子命令 **34** · IPC(kipy) 可达: **False**
 
@@ -2782,5 +2782,18 @@
 
 _不可达: kipy not importable (no IPC API in this build)_ (此 KiCad 构建未带 kipy; 走 pcbnew SWIG 与 kicad-cli 即足)
 
+## 四、C++ 导出符号面 (kiface, SWIG 之下的本源引擎 — 知底备料)
+
+> 逆流 `_pcbnew.kiface` 的 C++ typeinfo 类名: 这是 SWIG 之上够不着的**本源引擎面** (TOOL 框架 / PNS 布线器 / DRC 引擎 / 连通引擎)。仅作"知我们没在用什么"的底图, 为 B2 (符号级/源码级) 掘进备料, 不参与运行期。
+
+- kiface: `/usr/bin/_pcbnew.kiface`　typeinfo 类: **345**
+
+- **tool_framework** (2): `ACTIONS::CURSOR_EVENT_TYPE`, `ACTIONS::REMOVE_FLAGS`
+- **pns_router** (3): `PNS::MEANDER_SIDE`, `PNS::PNS_MODE`, `PNS::ROUTER_MODE`
+- **drc_engine** (1): `DRC_RULES_LEXER`
+- **geometry** (6): `MICROWAVE_FOOTPRINT_SHAPE`, `PAD_DRILL_SHAPE`, `PAD_SHAPE`, `SHAPE_T`, `std::__future_base::_State_baseV2::_Setter<std::vector<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int>, std::allocator<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int> > >, std::__future_base::_State_baseV2::__exception_ptr_tag>`, `std::__future_base::_State_baseV2::_Setter<std::vector<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int>, std::allocator<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int> > >, std::vector<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int>, std::allocator<std::pair<std::shared_ptr<SHAPE_POLY_SET>, int> > >`
+- **io_plot** (2): `JOB_EXPORT_PCB_GERBER`, `JOB_EXPORT_PCB_GERBERS`
+
 ---
 > 反者道之动 · 不与成熟引擎争巧, 善用其本源之巧, 专注其上之全流程闭环。
+> 进程内活体融合内核 (`native_live` + `_live_server`): 常驻一活 pcbnew 进程, BOARD 内存长存、跨调用有状态、免重载, 全 SWIG 面可达 —— 守一之母。

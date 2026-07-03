@@ -195,12 +195,73 @@ def ipc_surface() -> Dict[str, Any]:
         return {"available": False, "reason": str(e)}
 
 
+# ────────────────── tier ④ C++ 导出符号面 (nm, SWIG 未暴露之底) ──────────────────
+# 逆流 pcbnew kiface 的 C++ 导出符号: 这是 SWIG 之下的本源引擎面 —— TOOL 框架、
+# PNS 布线器、DRC 引擎、连通引擎等"用户点得到但 SWIG 没暴露"的类. 仅作"知"的底图
+# (知道我们没在用什么), 为 B2 (符号级/源码级) 掘进备料; 不影响运行期.
+_CPP_ENGINE_BUCKETS = {
+    "tool_framework": ("TOOL_MANAGER", "TOOL_BASE", "TOOL_INTERACTIVE",
+                       "ACTIONS", "ACTION_MANAGER", "EDIT_TOOL", "PCB_TOOL",
+                       "SELECTION_TOOL", "DRAWING_TOOL", "ROUTER_TOOL"),
+    "pns_router": ("PNS", "ROUTER", "MEANDER", "DIFF_PAIR", "DRAGGER",
+                   "SHOVE", "OPTIMIZER", "TOPOLOGY"),
+    "drc_engine": ("DRC_ENGINE", "DRC_RULE", "DRC_TEST", "DRC_CONSTRAINT",
+                   "DRC_ITEM"),
+    "connectivity": ("CONNECTIVITY", "CN_", "RN_", "RATSNEST"),
+    "geometry": ("SHAPE", "SEG", "POLY", "CIRCLE", "BOX2", "VECTOR2"),
+    "io_plot": ("PLOTTER", "GERBER", "EXCELLON", "PCB_IO", "GENDRILL"),
+}
+
+
+def _bucket_cpp(names: List[str]) -> Dict[str, List[str]]:
+    buckets: Dict[str, List[str]] = {k: [] for k in _CPP_ENGINE_BUCKETS}
+    for n in names:
+        for b, pres in _CPP_ENGINE_BUCKETS.items():
+            if any(p in n for p in pres):
+                buckets[b].append(n)
+                break
+    return {k: sorted(set(v)) for k, v in buckets.items() if v}
+
+
+def cpp_symbol_surface() -> Dict[str, Any]:
+    """nm -DC 逆流 kiface 的 C++ typeinfo 类名 (SWIG 之下的本源引擎面)。"""
+    install = detect_kicad()
+    kiface = install.get("pcbnew_kiface") if isinstance(install, dict) else None
+    # 探测 kiface 路径 (随平台/装法; 缺则优雅降级)
+    candidates = [kiface] if kiface else []
+    candidates += ["/usr/bin/_pcbnew.kiface", "/usr/lib/kicad/_pcbnew.kiface"]
+    path = next((c for c in candidates if c and Path(c).exists()), None)
+    nm = None
+    for cand in ("nm", "/usr/bin/nm"):
+        try:
+            subprocess.run([cand, "--version"], capture_output=True, timeout=5)
+            nm = cand
+            break
+        except Exception:                    # noqa: BLE001
+            continue
+    if path is None or nm is None:
+        return {"available": False,
+                "reason": f"kiface={path} nm={nm} (nm/kiface 不可达, 优雅降级)"}
+    try:
+        r = subprocess.run([nm, "-DC", path], capture_output=True,
+                           text=True, timeout=120)
+    except Exception as e:                   # noqa: BLE001
+        return {"available": False, "reason": f"nm run: {e}"}
+    # typeinfo for X → 逆出 C++ 类名 X
+    classes = sorted({m.group(1) for m in
+                      re.finditer(r"typeinfo for ([A-Za-z_][\w:<>, ]+)", r.stdout)})
+    return {"available": True, "kiface": path, "class_count": len(classes),
+            "engine_buckets": _bucket_cpp(classes),
+            "note": "SWIG 未暴露之底面; 仅作 B2 掘进的知底, 不参与运行期"}
+
+
 # ───────────────────────────── 组装 ─────────────────────────────
 def build_catalog(cli_depth: int = 4) -> Dict[str, Any]:
     install = detect_kicad()
     cli = cli_surface(max_depth=cli_depth)
     pn = pcbnew_surface()
     ipc = ipc_surface()
+    cpp = cpp_symbol_surface()
     catalog: Dict[str, Any] = {
         "source": "KiCad native API — pcbnew SWIG (in-process) + kicad-cli + IPC",
         "kicad_version": pn.get("version") or install.get("cli"),
@@ -214,8 +275,9 @@ def build_catalog(cli_depth: int = 4) -> Dict[str, Any]:
             "pcbnew_constants": pn.get("constant_count", 0),
             "cli_leaf_commands": cli.get("leaf_count", 0),
             "ipc_available": ipc.get("available", False),
+            "cpp_symbol_classes": cpp.get("class_count", 0),
         },
-        "tiers": {"pcbnew": pn, "cli": cli, "ipc": ipc},
+        "tiers": {"pcbnew": pn, "cli": cli, "ipc": ipc, "cpp_symbols": cpp},
     }
     return catalog
 
@@ -331,8 +393,31 @@ def render_reference(catalog: Dict[str, Any]) -> str:
         a(f"_不可达: {ipc.get('reason')}_ "
           "(此 KiCad 构建未带 kipy; 走 pcbnew SWIG 与 kicad-cli 即足)")
     a("")
+
+    # ── tier ④ C++ 导出符号 (SWIG 未暴露之底) ──
+    cpp = catalog["tiers"].get("cpp_symbols", {})
+    a("## 四、C++ 导出符号面 (kiface, SWIG 之下的本源引擎 — 知底备料)")
+    a("")
+    a("> 逆流 `_pcbnew.kiface` 的 C++ typeinfo 类名: 这是 SWIG 之上够不着的"
+      "**本源引擎面** (TOOL 框架 / PNS 布线器 / DRC 引擎 / 连通引擎)。"
+      "仅作\"知我们没在用什么\"的底图, 为 B2 (符号级/源码级) 掘进备料, 不参与运行期。")
+    a("")
+    if cpp.get("available"):
+        a(f"- kiface: `{cpp.get('kiface')}`　typeinfo 类: **{cpp.get('class_count')}**")
+        a("")
+        for bkt, names in cpp.get("engine_buckets", {}).items():
+            sample = ", ".join(f"`{n}`" for n in names[:16])
+            more = f" … (共 {len(names)})" if len(names) > 16 else ""
+            a(f"- **{bkt}** ({len(names)}): {sample}{more}")
+        a("")
+    else:
+        a(f"_不可达: {cpp.get('reason')}_")
+        a("")
+
     a("---")
     a("> 反者道之动 · 不与成熟引擎争巧, 善用其本源之巧, 专注其上之全流程闭环。")
+    a("> 进程内活体融合内核 (`native_live` + `_live_server`): 常驻一活 pcbnew 进程,"
+      " BOARD 内存长存、跨调用有状态、免重载, 全 SWIG 面可达 —— 守一之母。")
     a("")
     return "\n".join(L)
 

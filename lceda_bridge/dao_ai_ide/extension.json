@@ -1,0 +1,49 @@
+{
+    "name": "dao-ai-ide",
+    "uuid": "da0a11de0000000000000000da0a11de",
+    "displayName": "DAO AI IDE (道之枢机)",
+    "description": "把嘉立创EDA本体化为 AI IDE — 原生对话面板 + 会话管理 + 外接API多模型(Proxy Pro式) + 提示词库 + 工具调用直驱EDA引擎",
+    "version": "1.0.0",
+    "publisher": "Dao <pcb_brain@local>",
+    "engines": { "eda": "^2.2.0" },
+    "license": "Apache-2.0",
+    "repository": { "type": "extension-store", "url": "" },
+    "categories": "Other",
+    "keywords": ["ai", "ide", "chat", "llm", "agent", "copilot"],
+    "images": { "logo": "./images/logo.png" },
+    "homepage": "",
+    "bugs": "",
+    "activationEvents": { "onStartupFinished": true },
+    "entry": "./dist/index",
+    "dependentExtensions": {},
+    "headerMenus": {
+        "home": [
+            {
+                "id": "dao-ai-ide-menu",
+                "title": "DAO AI",
+                "menuItems": [
+                    { "id": "open",  "title": "打开 AI IDE",  "registerFn": "openIDE" },
+                    { "id": "about", "title": "关于",          "registerFn": "about" }
+                ]
+            }
+        ],
+        "sch": [
+            {
+                "id": "dao-ai-ide-menu",
+                "title": "DAO AI",
+                "menuItems": [
+                    { "id": "open", "title": "打开 AI IDE", "registerFn": "openIDE" }
+                ]
+            }
+        ],
+        "pcb": [
+            {
+                "id": "dao-ai-ide-menu",
+                "title": "DAO AI",
+                "menuItems": [
+                    { "id": "open", "title": "打开 AI IDE", "registerFn": "openIDE" }
+                ]
+            }
+        ]
+    }
+}

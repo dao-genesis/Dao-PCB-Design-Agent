@@ -103,7 +103,9 @@ class NativeHealer:
 
     # ── 自愈环 ──
     def heal(self, board: str, out: str, *, max_passes: int = 4,
-             do_route: bool = True, gap_mm: float = 2.0) -> HealReport:
+             do_route: bool = True, gap_mm: float = 2.0,
+             route_passes: int = 10,
+             route_skip_nets: Optional[List[str]] = None) -> HealReport:
         out_p = Path(out)
         out_p.parent.mkdir(parents=True, exist_ok=True)
         work = out_p.parent / "_heal"
@@ -141,7 +143,9 @@ class NativeHealer:
             if do_route and diag["unconnected"] > 0 and self.router.router_available:
                 routed = str(work / f"pass{i}_routed.kicad_pcb")
                 rr = self.router.route(cur, routed,
-                                       workdir=str(work / f"pass{i}_route"))
+                                       workdir=str(work / f"pass{i}_route"),
+                                       passes=route_passes,
+                                       skip_nets=route_skip_nets)
                 step["actions"].append({"route": rr.as_dict()})
                 if rr.ok:
                     cur = routed

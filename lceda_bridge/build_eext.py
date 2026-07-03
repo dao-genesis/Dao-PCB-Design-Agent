@@ -5,8 +5,8 @@ LCEDA Bridge — .eext 扩展打包器
 将 L2_extension/ 目录打包为 嘉立创EDA 可导入的 .eext 文件 (本质是 ZIP)
 
 用法:
-    python build_eext.py
-    → 输出: dist/lceda-bridge.eext
+    python build_eext.py                 # 默认打包 L2_extension → dist/lceda-bridge.eext
+    python build_eext.py <源目录> <输出名>  # 如: python build_eext.py dao_ai_ide dao-ai-ide.eext
 
 之后:
     1. 打开嘉立创EDA专业版
@@ -17,25 +17,46 @@ LCEDA Bridge — .eext 扩展打包器
 from __future__ import annotations
 import json
 import os
+import re
 import sys
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-SRC_DIR = ROOT / 'L2_extension'
+SRC_DIR = ROOT / (sys.argv[1] if len(sys.argv) > 1 else 'L2_extension')
 DIST_DIR = ROOT / 'dist'
-EEXT_NAME = 'lceda-bridge.eext'
+EEXT_NAME = sys.argv[2] if len(sys.argv) > 2 else 'lceda-bridge.eext'
 
 # ── 应被排除的文件/目录 ──
 EXCLUDE_PATTERNS = {
     '__pycache__', '.git', '.vscode', 'node_modules',
     '.DS_Store', 'Thumbs.db', '.edaignore', '.gitignore',
 }
+EXCLUDE_SUFFIXES = {'.py', '.pyc'}
 
 
 def should_include(path: Path) -> bool:
     parts = path.parts
+    if path.suffix in EXCLUDE_SUFFIXES:
+        return False
     return not any(p in EXCLUDE_PATTERNS or p.startswith('.') and p != '.' for p in parts)
+
+
+def inline_scripts(html_path: Path) -> tuple[str, set[Path]]:
+    """把 <script src="x.js"></script> 内联为内容(面板 blob 文档无法解析相对资源)。"""
+    html = html_path.read_text(encoding='utf-8')
+    consumed: set[Path] = set()
+
+    def repl(m: re.Match) -> str:
+        src = m.group(1)
+        js_path = (html_path.parent / src).resolve()
+        if js_path.is_file():
+            consumed.add(js_path)
+            return '<script>\n' + js_path.read_text(encoding='utf-8') + '\n</script>'
+        return m.group(0)
+
+    html = re.sub(r'<script\s+src="([^"]+)"\s*>\s*</script>', repl, html)
+    return html, consumed
 
 
 def build():
@@ -77,11 +98,25 @@ def build():
     DIST_DIR.mkdir(exist_ok=True)
     eext_path = DIST_DIR / EEXT_NAME
 
+    inlined: dict[Path, str] = {}
+    consumed_all: set[Path] = set()
+    for path in files:
+        if path.suffix == '.html':
+            html, consumed = inline_scripts(path)
+            inlined[path] = html
+            consumed_all |= consumed
+
     with zipfile.ZipFile(eext_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for path in files:
+            if path in consumed_all:
+                continue
             arc = path.relative_to(SRC_DIR).as_posix()
-            zf.write(path, arc)
-            print(f'  + {arc}  ({path.stat().st_size} bytes)')
+            if path in inlined:
+                zf.writestr(arc, inlined[path])
+                print(f'  + {arc}  ({len(inlined[path])} bytes, 已内联脚本)')
+            else:
+                zf.write(path, arc)
+                print(f'  + {arc}  ({path.stat().st_size} bytes)')
 
     size = eext_path.stat().st_size
     print()

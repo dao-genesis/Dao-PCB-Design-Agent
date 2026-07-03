@@ -29,6 +29,60 @@ HERE = Path(__file__).resolve().parent
 ROUTE_WORKER = HERE / "_route_worker.py"
 
 
+def _match_paren_end(text: str, open_idx: int) -> int:
+    """从 open_idx 处的 '(' 起, 返回配对 ')' 之后一位 (paren 平衡扫描)。"""
+    depth = 0
+    for i in range(open_idx, len(text)):
+        c = text[i]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(text)
+
+
+def _strip_nets_from_dsn(text: str, skip: List[str]) -> tuple:
+    """从 Specctra DSN 摘除指定网: 删 (net NAME ...) 块 + 从 (class ...) 头去网名。
+
+    freerouting 只布 DSN network 里列出的网; 摘除后该网留给铺铜平面/缝合过孔处理。
+    返回 (新文本, 实际删除的网名列表)。反臆造: 只记真删掉的。
+    """
+    import re
+    dropped: List[str] = []
+    for net in skip:
+        m = re.search(r"\(net\s+" + re.escape(net) + r"[\s)]", text)
+        if not m:
+            continue
+        end = _match_paren_end(text, m.start())
+        text = text[:m.start()].rstrip(" ") + text[end:]
+        # class 头 (从 "(class" 到其首个 "(") 内的该网名 token 一并去除。
+        text = re.sub(
+            r"(\(class\b[^(]*?)(?<=\s)" + re.escape(net) + r"(?=[\s])",
+            r"\1", text)
+        dropped.append(net)
+    return text, dropped
+
+
+def _mark_plane_layers(text: str, plane_layers: List[str]) -> tuple:
+    """把指定铜层在 DSN 里标为 (type power) 平面层, freerouting 便不在其上布信号线。
+
+    多层板的内层地/电源平面须留给整片铜面 (由 zonefill 浇 + 扇出过孔并网), 若布线器
+    误在其上走信号线, 浇铜后必与之短路。Specctra 约定 power 层不布信号, 只作平面。
+    返回 (新文本, 实际改标的层名列表)。反臆造: 只记真改到的。
+    """
+    import re
+    marked: List[str] = []
+    for ly in plane_layers:
+        pat = r"(\(layer\s+" + re.escape(ly) + r"\s*\(type\s+)signal(\))"
+        new, n = re.subn(pat, r"\1power\2", text)
+        if n:
+            text = new
+            marked.append(ly)
+    return text, marked
+
+
 @dataclass
 class RouteReport:
     board: str
@@ -54,13 +108,20 @@ class NativeRouter:
     """本源布线编排器: pcbnew Specctra 往返 + freerouting 无头引擎。"""
 
     def __init__(self, python: Optional[str] = None, java: Optional[str] = None,
-                 jar: Optional[str] = None) -> None:
+                 jar: Optional[str] = None, auto_provision: bool = False) -> None:
         self.python = str(python) if python else (
             str(find_kicad_python()) if find_kicad_python() else None)
         self.java = str(java) if java else (
             str(find_java()) if find_java() else None)
-        self.jar = str(jar) if jar else (
-            str(find_freerouting()) if find_freerouting() else None)
+        if jar:
+            self.jar = str(jar)
+        else:
+            found = find_freerouting()
+            # 官方缺失的布线器: 显式 auto_provision 时自取补齐 (不在构造里偷偷联网)。
+            if found is None and auto_provision:
+                from kicad_origin.origin.env import ensure_freerouting
+                found = ensure_freerouting()
+            self.jar = str(found) if found else None
 
     @property
     def router_available(self) -> bool:
@@ -107,7 +168,9 @@ class NativeRouter:
 
     # ── 一步编排: 板 → 已布线板 ──
     def route(self, board: str, out: str, *, passes: int = 10,
-              workdir: Optional[str] = None) -> RouteReport:
+              workdir: Optional[str] = None,
+              skip_nets: Optional[List[str]] = None,
+              plane_layers: Optional[List[str]] = None) -> RouteReport:
         board = str(board)
         rep = RouteReport(board=board, out=str(out),
                           router_available=self.router_available)
@@ -124,6 +187,32 @@ class NativeRouter:
         if not d.get("ok"):
             rep.error = "export DSN failed: " + str(d.get("error", ""))
             return rep
+
+        # 让 freerouting 略过指定网 (典型: GND —— 由双面铺铜平面 + 缝合过孔独立
+        # 承担, 不必以细窄走线硬布)。宽电源/地网在细间距 QFP 上难以逃逸, 交平面
+        # 处理是产业标准做法; 这里从 DSN 摘除其 (net ...) 与 class 中的网名。
+        if skip_nets:
+            try:
+                txt = Path(rep.dsn).read_text(encoding="utf-8")
+                txt, dropped = _strip_nets_from_dsn(txt, list(skip_nets))
+                Path(rep.dsn).write_text(txt, encoding="utf-8")
+                rep.steps["skip_nets"] = {"requested": list(skip_nets),
+                                          "dropped": dropped}
+            except OSError as e:
+                rep.error = "skip_nets rewrite failed: " + str(e)
+                return rep
+
+        # 把内层平面层标为 power, freerouting 只在信号层 (F/B) 布线, 不占平面层。
+        if plane_layers:
+            try:
+                txt = Path(rep.dsn).read_text(encoding="utf-8")
+                txt, marked = _mark_plane_layers(txt, list(plane_layers))
+                Path(rep.dsn).write_text(txt, encoding="utf-8")
+                rep.steps["plane_layers"] = {"requested": list(plane_layers),
+                                             "marked": marked}
+            except OSError as e:
+                rep.error = "plane_layers rewrite failed: " + str(e)
+                return rep
 
         if not self.router_available:
             rep.error = ("router_unavailable: 设 FREEROUTING_JAR 或装 java/"
