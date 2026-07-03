@@ -1046,6 +1046,32 @@ def import_ses(pcb_path, ses_path, out_path):
             "tracks": len(list(b.Tracks())) if ok else 0}
 
 
+def harvest(pcb_path, pretty_dir):
+    """Write every unique footprint embedded in a finished board out to
+    ``pretty_dir`` as ``.kicad_mod`` files. Returns ``{original_fpid: name}``
+    so the caller can re-point a build spec at the harvested library."""
+    os.makedirs(pretty_dir, exist_ok=True)
+    board = pcbnew.LoadBoard(str(pcb_path))
+    io = pcbnew.PCB_IO_KICAD_SEXPR()
+    mapping = {}
+    used = set()
+    for fp in board.GetFootprints():
+        fpid = fp.GetFPIDAsString()
+        if fpid in mapping:
+            continue
+        base = str(fp.GetFPID().GetLibItemName()) or fp.GetReference()
+        name = base
+        i = 1
+        while name in used:
+            name = "%s__%d" % (base, i)
+            i += 1
+        used.add(name)
+        fp.SetFPID(pcbnew.LIB_ID("harvested", name))
+        io.FootprintSave(str(pretty_dir), fp)
+        mapping[fpid] = name
+    return {"ok": True, "pretty": str(pretty_dir), "mapping": mapping}
+
+
 def main(argv):
     cmd = argv[1]
     if cmd == "build":
@@ -1060,6 +1086,8 @@ def main(argv):
         result = import_ses(argv[2], argv[3], argv[4])
     elif cmd == "tracks":
         result = tracks(argv[2])
+    elif cmd == "harvest":
+        result = harvest(argv[2], argv[3])
     elif cmd == "version":
         result = {"ok": True, "pcbnew": pcbnew.Version(), "full": pcbnew.FullVersion()}
     else:

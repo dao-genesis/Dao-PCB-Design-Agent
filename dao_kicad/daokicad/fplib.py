@@ -48,23 +48,47 @@ def resolve_lib_dirs(project_dir: str | Path | None) -> dict[str, str]:
     if not project_dir:
         return {}
     pdir = Path(project_dir)
-    table = pdir / "fp-lib-table"
-    if not table.is_file():
-        return {}
-    try:
-        text = table.read_text(encoding="utf-8")
-    except OSError:
-        return {}
     out: dict[str, str] = {}
-    for m in _LIB_RE.finditer(text):
-        nick = m.group("name") or m.group("name_bare")
-        uri = m.group("uri") or m.group("uri_bare")
-        if not nick or not uri:
-            continue
-        d = Path(_expand(uri, pdir))
-        if d.is_dir():
-            out[nick] = str(d)
+    # Table-less discovery first, so explicit table entries override it: real
+    # projects (e.g. MNT Reform) often ship a bare mod directory ("footprints/")
+    # whose name is the nickname the schematics cite, with the mapping living
+    # only in the designer's user-global table. Any directory of ``.kicad_mod``
+    # files at depth <= 2 is a project library named after the directory
+    # (".pretty" suffix stripped).
+    for d in _mod_dirs(pdir):
+        out.setdefault(d.name.removesuffix(".pretty"), str(d))
+    table = pdir / "fp-lib-table"
+    if table.is_file():
+        try:
+            text = table.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        for m in _LIB_RE.finditer(text):
+            nick = m.group("name") or m.group("name_bare")
+            uri = m.group("uri") or m.group("uri_bare")
+            if not nick or not uri:
+                continue
+            d = Path(_expand(uri, pdir))
+            if d.is_dir():
+                out[nick] = str(d)
     return out
+
+
+def _mod_dirs(pdir: Path) -> list[Path]:
+    """Directories under ``pdir`` (depth <= 2) holding ``.kicad_mod`` files."""
+    found: list[Path] = []
+    try:
+        level1 = [e for e in pdir.iterdir() if e.is_dir()]
+    except OSError:
+        return found
+    for d in [pdir] + level1 + [g for d in level1
+                                for g in d.iterdir() if g.is_dir()]:
+        try:
+            if any(f.suffix == ".kicad_mod" for f in d.iterdir()):
+                found.append(d)
+        except OSError:
+            continue
+    return found
 
 
 def footprint_dir(lib: str, lib_dirs: dict[str, str] | None,
