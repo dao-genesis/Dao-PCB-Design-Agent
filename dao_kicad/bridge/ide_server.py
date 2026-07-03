@@ -22,6 +22,7 @@ import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from daokicad.live import LiveKiCad
@@ -137,14 +138,107 @@ def api_fab(body: dict) -> dict:
             "pos": [str(a) for a in (p.artifacts or [])]}
 
 
+def _set_stage(jid: str | None, stage: str) -> None:
+    if jid:
+        with _JOBS_LOCK:
+            j = _JOBS.get(jid)
+            if j is not None:
+                j["stage"] = stage
+
+
+def api_auto(body: dict, jid: str | None = None) -> dict:
+    """One-shot closed loop: sch|netlist -> build -> route -> DRC [-> fab].
+
+    The whole design-automation cycle a human would click through, run as a
+    single job with live ``stage`` progress (一键闭环, 无为而无不为).
+    """
+    steps: dict[str, Any] = {}
+    if body.get("sch") and not body.get("netlist"):
+        _set_stage(jid, "netlist")
+        n = api_netlist({"sch": body["sch"]})
+        steps["netlist"] = n
+        if not n["ok"]:
+            return {"ok": False, "stage": "netlist", "steps": steps}
+        body["netlist"] = n["net"]
+    net = Path(body["netlist"])
+    pcb = str(body.get("out") or net.with_name(net.stem + "_dao.kicad_pcb"))
+    _set_stage(jid, "build")
+    b = api_build({"netlist": str(net), "out": pcb,
+                   "layers": body.get("layers"),
+                   "project_dir": body.get("project_dir") or str(net.parent)})
+    steps["build"] = b
+    if not b.get("ok"):
+        return {"ok": False, "stage": "build", "steps": steps}
+    _set_stage(jid, "route")
+    r = api_route({"pcb": pcb, "passes": body.get("passes") or 10,
+                   "timeout": body.get("timeout")})
+    steps["route"] = r
+    if not r.get("ok"):
+        return {"ok": False, "stage": "route", "steps": steps, "pcb": pcb}
+    _set_stage(jid, "drc")
+    d = api_drc({"pcb": pcb})
+    steps["drc"] = d
+    if body.get("fab"):
+        _set_stage(jid, "fab")
+        steps["fab"] = api_fab({"pcb": pcb,
+                                "out": str(Path(pcb).with_suffix("")) + "_fab"})
+    return {"ok": bool(d.get("clean")), "pcb": pcb, "clean": d.get("clean"),
+            "steps": steps}
+
+
 _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
-            "drc": api_drc, "erc": api_erc, "fab": api_fab}
-_SLOW = {"build", "route", "fab"}
+            "drc": api_drc, "erc": api_erc, "fab": api_fab, "auto": api_auto}
+_SLOW = {"build", "route", "fab", "auto"}
+
+_CAPABILITIES = {
+    "service": "dao-kicad-ide",
+    "description": "REST bridge to the DAO-KiCad engine: schematic/PCB "
+                   "rendering, netlist->board build, freerouting autoroute, "
+                   "DRC/ERC, fabrication outputs, one-shot auto pipeline.",
+    "doc": "/api/doc",
+    "tools": [
+        {"method": "GET", "path": "/api/health", "params": {},
+         "doc": "Service + KiCad availability/version."},
+        {"method": "GET", "path": "/api/tree", "params": {"root": "dir"},
+         "doc": "Discover KiCad projects (sch/pcb/net files) under root."},
+        {"method": "GET", "path": "/api/render/sch",
+         "params": {"path": ".kicad_sch"}, "doc": "Schematic as SVG."},
+        {"method": "GET", "path": "/api/render/pcb",
+         "params": {"path": ".kicad_pcb", "layers": "csv, optional"},
+         "doc": "Board as SVG."},
+        {"method": "POST", "path": "/api/netlist",
+         "params": {"sch": ".kicad_sch", "out": "optional .net"},
+         "doc": "Schematic -> netlist."},
+        {"method": "POST", "path": "/api/build", "job": True,
+         "params": {"netlist": ".net", "out": ".kicad_pcb",
+                    "layers": "int=2", "project_dir": "optional"},
+         "doc": "Netlist -> placed board (footprint auto-healing included)."},
+        {"method": "POST", "path": "/api/route", "job": True,
+         "params": {"pcb": ".kicad_pcb", "passes": "int=10",
+                    "timeout": "secs, optional"},
+         "doc": "Autoroute via freerouting (DSN->SES round-trip)."},
+        {"method": "POST", "path": "/api/drc",
+         "params": {"pcb": ".kicad_pcb"}, "doc": "KiCad DRC."},
+        {"method": "POST", "path": "/api/erc",
+         "params": {"sch": ".kicad_sch"}, "doc": "KiCad ERC."},
+        {"method": "POST", "path": "/api/fab", "job": True,
+         "params": {"pcb": ".kicad_pcb", "out": "dir"},
+         "doc": "Gerbers + drill + placement CSV."},
+        {"method": "POST", "path": "/api/auto", "job": True,
+         "params": {"sch": "or netlist", "netlist": "or sch",
+                    "out": "optional .kicad_pcb", "layers": "int=2",
+                    "passes": "int=10", "timeout": "secs, optional",
+                    "fab": "bool=false"},
+         "doc": "Full closed loop: netlist->build->route->DRC[->fab]."},
+        {"method": "GET", "path": "/api/job", "params": {"id": "job id"},
+         "doc": "Poll a job: {done, stage?, result?}."},
+    ],
+}
 
 
 def _run_job(jid: str, fn, body: dict) -> None:
     try:
-        res = fn(body)
+        res = fn(body, jid) if fn is api_auto else fn(body)
     except Exception as e:  # surfaced to the client, never crashes the server
         res = {"ok": False, "error": f"{type(e).__name__}: {e}",
                "trace": traceback.format_exc()[-1000:]}
@@ -213,6 +307,14 @@ class Handler(BaseHTTPRequestHandler):
                 if isinstance(r, dict):
                     return self._send(r, 400)
                 return self._send_raw(*r)
+            if u.path == "/api/capabilities":
+                return self._send(_CAPABILITIES)
+            if u.path == "/api/doc":
+                doc = Path(__file__).with_name("AGENT_BRIDGE.md")
+                if doc.is_file():
+                    return self._send_raw(doc.read_bytes(),
+                                          "text/markdown; charset=utf-8")
+                return self._send({"ok": False, "error": "doc missing"}, 404)
             if u.path == "/api/job":
                 with _JOBS_LOCK:
                     j = _JOBS.get(q.get("id", ""))

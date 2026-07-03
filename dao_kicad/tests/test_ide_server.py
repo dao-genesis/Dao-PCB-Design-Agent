@@ -80,6 +80,32 @@ def test_http_slow_action_returns_job(server, tmp_path):
     assert s["result"]["ok"] is False
 
 
+def test_http_capabilities_and_doc(server):
+    code, j = _get(server + "/api/capabilities")
+    assert code == 200 and j["service"] == "dao-kicad-ide"
+    paths = {t["path"] for t in j["tools"]}
+    assert {"/api/auto", "/api/build", "/api/route", "/api/job"} <= paths
+    req = urllib.request.Request(server + "/api/doc")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        assert r.status == 200 and b"DAO-KiCad" in r.read()
+
+
+def test_auto_pipeline_reports_failing_stage(server, tmp_path):
+    # a bogus netlist must fail at build, carrying per-stage evidence
+    bad = tmp_path / "bad.net"
+    bad.write_text("(export (version E))")
+    code, j = _post(server + "/api/auto", {"netlist": str(bad)})
+    assert code == 200 and j["job"]
+    import time
+    for _ in range(120):
+        _, s = _get(server + "/api/job?id=" + j["job"])
+        if s.get("done"):
+            break
+        time.sleep(1)
+    assert s["done"] and s["result"]["ok"] is False
+    assert s["result"]["stage"] == "build" and "build" in s["result"]["steps"]
+
+
 def test_http_chunked_body(server, tmp_path):
     # Node/fetch clients send JSON with Transfer-Encoding: chunked (no
     # Content-Length); the bridge must decode it, not see an empty body.
