@@ -84,6 +84,37 @@ async function ensureServer(context) {
 }
 
 // ---------- 中间面板: 整块 EDA ----------
+async function runTool(port, tool, args) {
+  const r = await apiJson(port, "POST", "/api/agent", { tool, args: args || {} });
+  if (!r || !r.ok || !r.job) return null;
+  const deadline = Date.now() + 3 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise((res) => setTimeout(res, 1200));
+    const j = await apiJson(port, "GET", "/api/agent/" + r.job);
+    if (j && j.ok && j.job.status !== "running") return j.job;
+  }
+  return null;
+}
+
+async function screenshotPanel(context) {
+  const port = await ensureServer(context);
+  if (!port) return;
+  const job = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "嘉立创EDA 画布截图…" },
+    () => runTool(port, "canvas.image"));
+  const step = job && job.steps && job.steps[0];
+  let src = step && step.status === "done" ? step.result : null;
+  if (src && src._truncated) src = src._truncated;
+  if (typeof src !== "string" || !src.startsWith("data:image")) {
+    vscode.window.showErrorMessage("DAO LCEDA: 截图失败(画布未就绪或桥接未响应)");
+    return;
+  }
+  const panel = vscode.window.createWebviewPanel(
+    "daoLcedaShot", "EDA 画布截图", vscode.ViewColumn.Active, {});
+  panel.webview.html = `<!DOCTYPE html><html><body style="margin:0;background:#1e1e1e">` +
+    `<img src="${src}" style="max-width:100%"></body></html>`;
+}
+
 async function openPanel(context) {
   const port = await ensureServer(context);
   if (!port) return;
@@ -134,6 +165,7 @@ class ProjectTreeProvider {
         const it = new vscode.TreeItem(
           "原理图: " + (s.name || s.uuid || "?"), vscode.TreeItemCollapsibleState.None);
         it.iconPath = new vscode.ThemeIcon("file-code");
+        if (s.uuid) it.command = { command: "daoLceda.openDoc", title: "打开文档", arguments: [s.uuid] };
         cur.childrenItems.push(it);
       }
       items.push(cur);
@@ -142,6 +174,7 @@ class ProjectTreeProvider {
       if (tree.current && (uuid === tree.current.uuid)) continue;
       const it = new vscode.TreeItem("工程 " + uuid, vscode.TreeItemCollapsibleState.None);
       it.iconPath = new vscode.ThemeIcon("repo");
+      it.command = { command: "daoLceda.openProject", title: "切换工程", arguments: [uuid] };
       items.push(it);
     }
     if (!items.length) items.push(new vscode.TreeItem("(EDA 内暂无打开的工程)"));
@@ -218,6 +251,7 @@ class ChatViewProvider {
         if (j.job.status !== "running") break;
       }
       this.pushContext(view, port);
+      vscode.commands.executeCommand("daoLceda.refreshTree");
     });
   }
   async pushContext(view, port) {
@@ -239,6 +273,8 @@ body{font:13px/1.5 var(--vscode-font-family);color:var(--vscode-foreground);marg
 #chip{padding:4px 8px;font-size:11px;opacity:.85;border-bottom:1px solid var(--vscode-panel-border);display:flex;justify-content:space-between;align-items:center;}
 #chip .ctx{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:8px;padding:1px 8px;}
 #chip a{cursor:pointer;text-decoration:underline;}
+#quick{padding:3px 8px;border-bottom:1px solid var(--vscode-panel-border);display:flex;gap:6px;}
+#quick a{cursor:pointer;font-size:11px;background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border-radius:8px;padding:1px 8px;}
 #log{flex:1;overflow-y:auto;padding:8px;}
 .msg{margin:4px 0;padding:6px 8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;}
 .user{background:var(--vscode-editor-inactiveSelectionBackground);}
@@ -252,6 +288,7 @@ body{font:13px/1.5 var(--vscode-font-family);color:var(--vscode-foreground);marg
 button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:0;padding:4px 10px;cursor:pointer;}
 </style></head><body>
 <div id="chip"><span>当前工程: <span class="ctx" id="ctx">…</span></span><a id="clear">清空会话</a></div>
+<div id="quick"><a data-t="当前工程信息">工程信息</a><a data-t="画布截图">画布截图</a><a data-t="DRC">DRC</a><a data-t="全链路">全链路</a></div>
 <div id="log"><div class="msg bot">道之助手(Copilot 式)已就绪。输入 / 可选工具; 或说: 建工程 / 检索 STM32F103 / 布局 / 板框 / 自动布线 / 覆铜 / DRC / 出产 / 全链路 / 当前工程信息 / 画布截图。</div></div>
 <div id="bar"><div id="menu"></div><input id="in" placeholder="向嘉立创EDA下令… (/工具名 直调)"><button id="send">发</button></div>
 <script>
@@ -275,6 +312,9 @@ function add(cls, text, img, persist){
 function send(){ const t=input.value.trim(); if(!t) return; hideMenu(); add('user', t); input.value=''; vscodeApi.postMessage({type:'chat', text:t}); }
 document.getElementById('send').onclick = send;
 document.getElementById('clear').onclick = ()=> vscodeApi.postMessage({type:'clear'});
+[].forEach.call(document.querySelectorAll('#quick a'), a=>{
+  a.onclick = ()=>{ input.value = a.dataset.t; send(); };
+});
 function showMenu(prefix){
   const q = prefix.slice(1).toLowerCase();
   const hits = toolList.filter(t=> t.tool.includes(q) || (t.desc||'').toLowerCase().includes(q));
@@ -341,11 +381,32 @@ function activate(context) {
   status.tooltip = "打开嘉立创EDA 道之面板";
   status.command = "daoLceda.open";
   status.show();
+  const pollHealth = async () => {
+    const ok = await health(cfg().get("port") || 9940);
+    status.text = ok ? "$(circuit-board) 嘉立创EDA" : "$(debug-disconnect) 嘉立创EDA(桥断)";
+    status.tooltip = ok ? "桥接在线 · 打开道之面板" : "桥接未就绪 · 点击启动";
+  };
+  pollHealth();
+  const healthTimer = setInterval(pollHealth, 15000);
+  context.subscriptions.push({ dispose: () => clearInterval(healthTimer) });
+  const treeOp = async (tool, args, label) => {
+    const port = await ensureServer(context);
+    if (!port) return;
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: label },
+      () => runTool(port, tool, args));
+    treeProvider.refresh();
+  };
   context.subscriptions.push(
     status,
     vscode.commands.registerCommand("daoLceda.open", () => openPanel(context)),
     vscode.commands.registerCommand("daoLceda.refreshTree", () => treeProvider.refresh()),
     vscode.commands.registerCommand("daoLceda.clearChat", () => chatProvider.clear()),
+    vscode.commands.registerCommand("daoLceda.screenshot", () => screenshotPanel(context)),
+    vscode.commands.registerCommand("daoLceda.openDoc",
+      (uuid) => treeOp("doc.open", { uuid }, "打开文档…")),
+    vscode.commands.registerCommand("daoLceda.openProject",
+      (uuid) => treeOp("project.open", { uuid }, "切换工程…")),
     vscode.commands.registerCommand("daoLceda.restartBridge", async () => {
       if (serverProc) serverProc.kill();
       serverProc = null;

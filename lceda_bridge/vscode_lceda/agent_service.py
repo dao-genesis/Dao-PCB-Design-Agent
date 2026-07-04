@@ -30,6 +30,30 @@ def _tool_create_project(args):
     return info
 
 
+def _tool_open_project(args):
+    T.verb("dmt_Project.openProject", args["uuid"], timeout=60)
+    time.sleep(4)
+    return T.verb("dmt_Project.getCurrentProjectInfo", timeout=40)
+
+
+def _tool_open_doc(args):
+    T.open_doc(args["uuid"])
+    return {"opened": args["uuid"]}
+
+
+def _tool_sch_list(_args):
+    return T.verb("dmt_Schematic.getAllSchematicsInfo", timeout=40)
+
+
+def _tool_editor_version(_args):
+    return T.verb("sys_Environment.getEditorCurrentVersion", timeout=20)
+
+
+def _tool_verb_call(args):
+    return T.verb(args["ns"], *(args.get("args") or []),
+                  timeout=min(int(args.get("timeout", 60)), 120))
+
+
 def _tool_search_device(args):
     kw = args.get("keyword", "")
     # 实战缺陷结论: search 只收关键字一个参数, 追加分页参数会命中另一重载并返回空。
@@ -101,6 +125,17 @@ TOOLS = {
                        "desc": "读取当前工程信息(名称/uuid/图页/PCB)"},
     "project.create": {"fn": _tool_create_project, "params": {"name": "str?", "desc": "str?"},
                        "desc": "新建并切换到工程(含 openProject 上下文修正)"},
+    "project.open":   {"fn": _tool_open_project, "params": {"uuid": "str"},
+                       "desc": "切换到指定 uuid 的工程"},
+    "doc.open":       {"fn": _tool_open_doc, "params": {"uuid": "str"},
+                       "desc": "在 EDA 打开指定文档(原理图页/PCB)"},
+    "sch.list":       {"fn": _tool_sch_list, "params": {},
+                       "desc": "列出当前工程全部原理图"},
+    "editor.version": {"fn": _tool_editor_version, "params": {},
+                       "desc": "读取 EDA 编辑器版本"},
+    "verb.call":      {"fn": _tool_verb_call,
+                       "params": {"ns": "str", "args": "list?", "timeout": "int?"},
+                       "desc": "直调任意官方 EXTAPI 动词(91 命名空间 · 操作一切本源)"},
     "device.search":  {"fn": _tool_search_device, "params": {"keyword": "str"},
                        "desc": "元件库检索(LCSC), 返回可放置对象"},
     "sch.place":      {"fn": _tool_place,
@@ -227,6 +262,10 @@ def route(text):
         return ("正在导出 Gerber/BOM/贴片坐标。", [("fab.outputs", {}, None)])
     if has("工程信息", "当前工程"):
         return ("正在读取当前工程信息。", [("project.info", {}, None)])
+    if has("列出原理图", "原理图列表"):
+        return ("正在列出当前工程原理图。", [("sch.list", {}, None)])
+    if has("版本", "version"):
+        return ("正在读取编辑器版本。", [("editor.version", {}, None)])
     if has("画布", "截图"):
         return ("正在取画布渲染图。", [("canvas.image", {}, None)])
     return (("道之助手(Copilot 式)。可说: 建工程 / 检索 <关键词> / 布局 / 板框 / "
