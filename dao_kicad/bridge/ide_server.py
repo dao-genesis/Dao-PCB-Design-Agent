@@ -256,8 +256,100 @@ def api_auto(body: dict, jid: str | None = None) -> dict:
             "steps": steps}
 
 
+# \b sits between two word chars when CJK text abuts an English keyword
+# ("跑个ERC"), so keyword isolation uses ASCII-letter lookarounds instead.
+def _kw(*words: str) -> re.Pattern:
+    alts = "|".join(f"(?<![a-zA-Z]){w}(?![a-zA-Z])" if w.isascii() else w
+                    for w in words)
+    return re.compile(alts, re.I)
+
+
+_INTENTS = [
+    ("auto", _kw("全链路", "闭环", "复刻", "一键", "auto")),
+    ("erc", _kw("erc", "电气规则", "原理图检查")),
+    ("drc", _kw("drc", "设计规则", "板子检查")),
+    ("route", _kw("布线", "走线", "route")),
+    ("build", _kw("建板", "搭板", "build")),
+    ("netlist", _kw("网表", "netlist")),
+    ("fab", _kw("制造", "生产", "gerber", "fab")),
+]
+
+_PATH_RE = re.compile(r"[\w~./\\:-]+\.(?:kicad_sch|kicad_pcb|net)\b")
+
+
+def _agent_paths(text: str, root: str | None) -> dict[str, str]:
+    """Resolve schematic/board/netlist paths cited (or implied) by a chat turn.
+
+    Explicit paths in the message win; otherwise the workspace root is scanned
+    and a lone match per kind is used — the copilot UX is "just say 全链路",
+    not "paste absolute paths".
+    """
+    out: dict[str, str] = {}
+    kinds = {".kicad_sch": "sch", ".kicad_pcb": "pcb", ".net": "netlist"}
+    for m in _PATH_RE.finditer(text):
+        p = Path(m.group(0)).expanduser()
+        if not p.is_absolute() and root:
+            p = Path(root) / p
+        if p.is_file():
+            out.setdefault(kinds[p.suffix], str(p))
+    if root and Path(root).is_dir():
+        for suf, kind in kinds.items():
+            if kind in out:
+                continue
+            found = [p for p in sorted(Path(root).rglob(f"*{suf}"))
+                     if "_dao" not in p.name][:2]
+            if len(found) == 1:
+                out[kind] = str(found[0])
+    return out
+
+
+def api_agent(body: dict) -> dict:
+    """Copilot-style chat turn: natural language in, chain actions out.
+
+    Deterministic intent routing into the same handlers the REST endpoints
+    use — the dialog box is just another face of the one bridge (归一).
+    Slow actions come back as ``{job}`` for the caller to poll via /api/job.
+    """
+    text = (body.get("text") or "").strip()
+    if not text:
+        return {"ok": False, "reply": "说点什么吧 — 例如“对这个工程跑全链路”、“ERC”、“布线”。"}
+    action = next((a for a, rx in _INTENTS if rx.search(text)), None)
+    if action is None:
+        tools = ", ".join(a for a, _ in _INTENTS)
+        return {"ok": True, "reply": f"我能直接干的活: {tools}。"
+                                     "把意图说出来(可带文件路径), 我路由到引擎。"}
+    paths = _agent_paths(text, body.get("root"))
+    req: dict = {}
+    need = {"auto": ["sch"], "erc": ["sch"], "netlist": ["sch"],
+            "build": ["netlist"], "route": ["pcb"], "drc": ["pcb"],
+            "fab": ["pcb"]}[action]
+    for k in need:
+        if k not in paths:
+            return {"ok": False, "action": action,
+                    "reply": f"要跑 {action} 需要 {k} 文件。工作区里没找到唯一候选,"
+                             " 把路径直接写在消息里即可。"}
+        req[k] = paths[k]
+    if action == "build":
+        req["out"] = str(Path(req["netlist"]).with_suffix("")) + "_dao.kicad_pcb"
+    if action == "auto":
+        req["fab"] = bool(re.search(r"制造|gerber|fab", text, re.I))
+    fn = _ACTIONS[action]
+    if action in _SLOW:
+        jid = uuid.uuid4().hex[:12]
+        with _JOBS_LOCK:
+            _JOBS[jid] = {"done": False}
+        threading.Thread(target=_run_job, args=(jid, fn, req),
+                         daemon=True).start()
+        return {"ok": True, "action": action, "job": jid, "request": req,
+                "reply": f"{action} 已启动 (job {jid}), 轮询 /api/job 到出结果。"}
+    res = fn(req)
+    return {"ok": bool(res.get("ok")), "action": action, "result": res,
+            "reply": f"{action} 完成。"}
+
+
 _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
-            "drc": api_drc, "erc": api_erc, "fab": api_fab, "auto": api_auto}
+            "drc": api_drc, "erc": api_erc, "fab": api_fab, "auto": api_auto,
+            "agent": api_agent}
 _SLOW = {"build", "route", "fab", "auto"}
 
 _CAPABILITIES = {
@@ -300,6 +392,10 @@ _CAPABILITIES = {
                     "passes": "int=10", "timeout": "secs, optional",
                     "fab": "bool=false"},
          "doc": "Full closed loop: netlist->build->route->DRC[->fab]."},
+        {"method": "POST", "path": "/api/agent",
+         "params": {"text": "natural language", "root": "workspace dir"},
+         "doc": "Copilot chat turn: intent-routed into the endpoints above; "
+                "slow actions return {job}."},
         {"method": "GET", "path": "/api/job", "params": {"id": "job id"},
          "doc": "Poll a job: {done, stage?, result?}."},
     ],

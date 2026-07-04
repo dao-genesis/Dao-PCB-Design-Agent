@@ -88,8 +88,37 @@ async function openHome(context) {
   panel.webview.html = html;
 }
 
+function chatHtml(context, port) {
+  let html = fs.readFileSync(path.join(context.extensionPath, "media", "chat.html"), "utf8");
+  const root = (vscode.workspace.workspaceFolders || [])[0];
+  return html
+    .replace(/__SERVER__/g, "http://127.0.0.1:" + port)
+    .replace(/__ROOT__/g, root ? root.uri.fsPath.replace(/\\/g, "\\\\") : "");
+}
+
+class ChatViewProvider {
+  constructor(context) { this.context = context; }
+  async resolveWebviewView(view) {
+    view.webview.options = { enableScripts: true };
+    const port = await ensureServer(this.context);
+    view.webview.html = chatHtml(this.context, port || 9931);
+  }
+}
+
+async function openChat(context) {
+  const port = await ensureServer(context);
+  if (!port) return;
+  const panel = vscode.window.createWebviewPanel(
+    "daoKicadChat", "DAO KiCad Copilot", vscode.ViewColumn.Beside,
+    { enableScripts: true, retainContextWhenHidden: true });
+  panel.webview.html = chatHtml(context, port);
+}
+
 function activate(context) {
   context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider("daoKicad.chatView",
+      new ChatViewProvider(context), { webviewOptions: { retainContextWhenHidden: true } }),
+    vscode.commands.registerCommand("daoKicad.openChat", () => openChat(context)),
     vscode.commands.registerCommand("daoKicad.openHome", () => openHome(context)),
     vscode.commands.registerCommand("daoKicad.restartBridge", async () => {
       if (serverProc) serverProc.kill();
