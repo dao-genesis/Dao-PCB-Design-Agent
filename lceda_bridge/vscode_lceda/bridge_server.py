@@ -529,6 +529,9 @@ def _native_fetch(url, method, headers, body):
         return e.code, list(e.headers.items()), e.read()
 
 
+# 哨兵: 区分"未传 prebody(自读 rfile)"与"prebody 为 None(空体)"。
+_UNSET = object()
+
 # 主机可解析性缓存: 桌面客户端的 https://client 是 Electron 协议拦截出的虚拟主机,
 # 网络层 DNS 无法解析 → 改走 CDP 页内 fetch(客户端即数据面)。
 _RESOLVABLE = {}
@@ -625,10 +628,16 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/panel.js":
             self._serve_file("panel.js", "application/javascript; charset=utf-8")
         else:
-            self._send(404, {"ok": False, "err": "not found"})
+            # 原生嵌入运行期: 编辑器加载后以绝对路径(/api /page /a ...)向源发请求,
+            # 浏览器按代理源解析 → 这些请求落到本桥。透传回 EDA 本体(经 CDP 页内 fetch),
+            # 使 /native 内的真实编辑器与本地数据面全链路闭环。
+            self._serve_native("GET")
 
-    def _serve_native(self, method):
-        """本源级原生嵌入(非投屏): 反代 EDA 真实页面进 IDE 面板。"""
+    def _serve_native(self, method, prebody=_UNSET):
+        """本源级原生嵌入(非投屏): 反代 EDA 真实页面进 IDE 面板。
+
+        prebody 非哨兵时用其作为请求体(调用方已从 rfile 读走), 否则本方法自读。
+        """
         origin = SESSION.native_origin()
         if not origin:
             self._send(503, {"ok": False, "err": "NO_TARGET — EDA 未就绪(需带 CDP 启动)"})
@@ -642,8 +651,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        n = int(self.headers.get("Content-Length", 0) or 0)
-        body = self.rfile.read(n) if n else None
+        if prebody is not _UNSET:
+            body = prebody
+        else:
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            body = self.rfile.read(n) if n else None
         fetch_fn = _native_fetch if _host_resolvable(origin) else _cdp_page_fetch
         try:
             status, hdrs, out = native_proxy.proxy(
@@ -672,10 +684,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         path = u.path
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        raw = self.rfile.read(n) if n else b""
         if path == "/native" or path.startswith("/native/"):
-            self._serve_native("POST")
+            self._serve_native("POST", prebody=(raw or None))
             return
-        body = self._read_json()
+        try:
+            body = json.loads(raw.decode("utf-8")) if raw else {}
+        except Exception:
+            body = {}
         if path == "/api/input":
             kind = body.get("kind")
             if kind == "mouse":
@@ -718,7 +735,8 @@ class Handler(BaseHTTPRequestHandler):
                                        timeout=min(int(body.get("timeout", 30)), 120))
             self._send(200, {"ok": err is None, "ret": val, "err": err})
         else:
-            self._send(404, {"ok": False, "err": "not found"})
+            # 运行期原生透传(POST): 见 do_GET 同名分支说明。
+            self._serve_native("POST", prebody=(raw or None))
 
 
 def main():
