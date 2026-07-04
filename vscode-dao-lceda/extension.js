@@ -165,28 +165,59 @@ body{font:13px/1.5 var(--vscode-font-family);color:var(--vscode-foreground);marg
 #in{flex:1;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);padding:4px 6px;}
 button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:0;padding:4px 10px;cursor:pointer;}
 </style></head><body>
-<div id="log"><div class="msg bot">道之助手已就绪。可说: 当前工程信息 / 列出原理图 / 编辑器版本, 或直接给动词地址(如 dmt_Project.getCurrentProjectInfo)。</div></div>
+<div id="log"><div class="msg bot">道之助手(Copilot 式)已就绪。可说: 建工程 / 检索 STM32F103 / 布局 / 板框 / 自动布线 / 覆铜 / DRC / 出产 / 全链路 / 当前工程信息 / 画布截图。</div></div>
 <div id="bar"><input id="in" placeholder="向嘉立创EDA下令…"><button id="send">发</button></div>
 <script>
 const vscodeApi = acquireVsCodeApi();
 const log = document.getElementById('log'); const input = document.getElementById('in');
-function add(cls, text){ const d=document.createElement('div'); d.className='msg '+cls; d.textContent=text; log.appendChild(d); log.scrollTop=log.scrollHeight; }
+const jobs = {};
+function add(cls, text){ const d=document.createElement('div'); d.className='msg '+cls; d.textContent=text; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
 function send(){ const t=input.value.trim(); if(!t) return; add('user', t); input.value=''; vscodeApi.postMessage({type:'chat', text:t}); }
 document.getElementById('send').onclick = send;
 input.addEventListener('keydown', e=>{ if(e.key==='Enter') send(); });
-window.addEventListener('message', e=>{ const m=e.data; if(m.type==='reply'){ add('bot', m.text); } });
+window.addEventListener('message', e=>{
+  const m = e.data;
+  if (m.type === 'reply') { add('bot', m.text); }
+  else if (m.type === 'jobStart') { jobs[m.job] = add('bot', m.text + '\\n⏳ 作业 ' + m.job + ' 执行中…'); }
+  else if (m.type === 'jobUpdate') {
+    const el = jobs[m.job]; if (!el) return;
+    let text = m.text;
+    for (const s of m.steps || []) {
+      const mark = s.status === 'done' ? '✔' : (s.status === 'failed' ? '✘' : '⏳');
+      text += '\\n' + mark + ' ' + s.tool + (s.ms ? ' (' + s.ms + 'ms)' : '');
+      if (s.error) text += ' — ' + s.error;
+      else if (s.status === 'done' && s.result !== undefined) text += ' → ' + JSON.stringify(s.result).slice(0, 300);
+    }
+    if (m.status === 'done') text += '\\n✔ 作业完成';
+    if (m.status === 'failed') text += '\\n✘ 作业失败';
+    el.textContent = text; log.scrollTop = log.scrollHeight;
+  }
+});
 </script></body></html>`;
     view.webview.onDidReceiveMessage(async (m) => {
       if (m.type !== "chat") return;
       const port = cfg().get("port") || 9940;
-      const r = await apiJson(port, "POST", "/api/chat", { text: m.text });
-      let text = r && r.reply ? r.reply : "(桥接未响应)";
-      if (r && r.steps && r.steps.length) {
-        for (const s of r.steps) {
-          text += "\n· " + s.verb + " → " + JSON.stringify(s.result).slice(0, 800);
-        }
+      const r = await apiJson(port, "POST", "/api/agent", { text: m.text });
+      if (!r || !r.ok) {
+        view.webview.postMessage({ type: "reply", text: "(桥接未响应)" });
+        return;
       }
-      view.webview.postMessage({ type: "reply", text });
+      if (!r.job) {
+        view.webview.postMessage({ type: "reply", text: r.reply });
+        return;
+      }
+      view.webview.postMessage({ type: "jobStart", job: r.job, text: r.reply });
+      const deadline = Date.now() + 15 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((res) => setTimeout(res, 1500));
+        const j = await apiJson(port, "GET", "/api/agent/" + r.job);
+        if (!j || !j.ok) continue;
+        view.webview.postMessage({
+          type: "jobUpdate", job: r.job, text: r.reply,
+          steps: j.job.steps, status: j.job.status,
+        });
+        if (j.job.status !== "running") break;
+      }
     });
   }
 }

@@ -401,6 +401,20 @@ def chat_agent(session, text):
 
 
 # ----------------------------------------------------------------------------
+# 道之编排服务(懒加载: agent_service 反过来经本桥 HTTP 调 dao_tools, 需服务已监听)
+# ----------------------------------------------------------------------------
+_AGENT = None
+
+
+def _agent():
+    global _AGENT
+    if _AGENT is None:
+        import agent_service
+        _AGENT = agent_service
+    return _AGENT
+
+
+# ----------------------------------------------------------------------------
 # HTTP 服务
 # ----------------------------------------------------------------------------
 SESSION = EdaSession(CDP_PORTS)
@@ -465,6 +479,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"seq": seq, "meta": meta, "hasFrame": bool(b64)})
         elif path == "/api/tree":
             self._send(200, SESSION.project_tree())
+        elif path == "/api/tools":
+            # 原生第三方接入: 机器可读工具目录(dao_tools 全链路能力)。
+            self._send(200, {"ok": True, "tools": _agent().catalog()})
+        elif path.startswith("/api/agent/"):
+            job = _agent().JOBS.get(path.rsplit("/", 1)[-1])
+            if job:
+                self._send(200, {"ok": True, "job": job})
+            else:
+                self._send(404, {"ok": False, "err": "no such job"})
         elif path in ("/", "/panel", "/index.html"):
             self._serve_file("panel.html", "text/html; charset=utf-8")
         elif path == "/panel.js":
@@ -499,6 +522,16 @@ class Handler(BaseHTTPRequestHandler):
                                          timeout=min(int(body.get("timeout", 20)), 120)))
         elif path == "/api/chat":
             self._send(200, chat_agent(SESSION, body.get("text", "")))
+        elif path == "/api/agent":
+            # Copilot 式编排: 自然语言或显式计划 → 异步作业, 轮询取步骤流。
+            A = _agent()
+            if body.get("tool"):
+                plan = [(body["tool"], body.get("args") or {}, None)]
+                reply = "已直调工具 " + body["tool"]
+            else:
+                reply, plan = A.route(body.get("text", ""))
+            jid = A.JOBS.submit(plan, body.get("text", "")) if plan else None
+            self._send(200, {"ok": True, "reply": reply, "job": jid})
         elif path == "/api/eval":
             # 高阶通道(仅本机): 原样在 EDA 页求值 JS 表达式, 供编排/实战脚本使用。
             val, err = SESSION.eval_js(body.get("expr", ""),

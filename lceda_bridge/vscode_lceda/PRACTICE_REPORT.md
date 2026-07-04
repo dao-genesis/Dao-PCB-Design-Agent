@@ -57,6 +57,25 @@
   2. `lib_Device.search` 返回列表而非分页对象; create 需 {uuid,libraryUuid,name} 全对象
   3. `sch_PrimitiveWire.create` 斜线/浮点端点必 "create failed" → stub 必须轴对齐整数端点
 
+## Copilot 式前端 + 双外接通道 (agent_service.py + AGENT_API.md)
+
+前端对用户即一个对话框(与 Copilot/Augment 同形), 底层全部替换为与嘉立创EDA的深度融合:
+
+- `agent_service.py`: 工具目录(14 个高阶工具, dao_tools 全链路能力机器可读) +
+  作业机(长链路后台线程执行, 步骤流式) + 自然语言路由(建工程/检索/布局/布线/覆铜/DRC/出产/全链路)
+- 桥新端点: `GET /api/tools`(能力发现) `POST /api/agent`(自然语言或直调工具→异步作业)
+  `GET /api/agent/<job>`(进度轮询) —— **原生第三方 API 通道**
+- 插件对话升级: /api/agent + 1.5s 轮询, 步骤 ✔/✘/⏳ 流式渲染(Copilot 式体验)
+- `AGENT_API.md`: **MD 文档通道** —— 外接 Agent 读完即可全接管底层(端点总览/工具目录/
+  最短配方/零依赖 SDK)
+- 通道实战(practice_agent_channel.py, 不 import dao_tools, 纯经 /api/agent):
+  Type-C 供电 LED 指示小系统板(7件6网) 从零到出产 **23/23 步通过**, DRC 零违规,
+  Gerber/BOM/坐标全出产
+- 实战暴露并修复的新真缺陷:
+  4. `lib_Device.search` 多传分页参数会命中另一重载并返回空 → 只传关键字(已入库)
+  5. 新建工程后不打开图页, `sch_PrimitiveComponent.create` 永挂 NO_RESULT →
+     project.create 内置"建完即开第一张图页"(已入库)
+
 ## 本轮桥增强
 
 - `POST /api/eval`: 本机高阶通道, 原样在 EDA 页求值 JS(实战放件/板框/GUI 兜底所需)
