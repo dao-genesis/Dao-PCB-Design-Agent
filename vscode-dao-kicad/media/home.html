@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <!-- DAO KiCad · VS Code 中间面板 = 单网页 IDE 本体.
      唯一事实源是桥接服务的 webui (ide_server 的 GET /), 此处仅作薄壳 iframe 承载:
-     KiCad 六板块 (主页/工程/原理图/板图/检查/制造/接入) 全部由 KiCad 原生引擎渲染进 IDE。
-     ?embed=1 → webui 隐藏其内置左栏 (VS Code 侧栏已有 Copilot 对话)。 -->
+     KiCad 板块 (主页/工程/原理图/符号/板图/封装/检查/制造/接入) 全部由 KiCad 原生引擎渲染进 IDE。
+     ?embed=1 → webui 隐藏其内置左栏 (VS Code 侧栏已有 Copilot 对话)。
+     注意: webview 内 fetch http://127.0.0.1 会被混合内容策略拦截,
+     所以健康探测由插件宿主 (extension.js, Node http) 完成并 postMessage 通知本页。 -->
 <html lang="zh">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; connect-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+      content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <title>DAO KiCad · 归一工作台</title>
 <style>
   html,body{margin:0;padding:0;width:100%;height:100vh;overflow:hidden;background:#12141a}
@@ -27,17 +29,18 @@
   const fail = document.getElementById("fail");
   const root = "__ROOT__";
   const src = "__SERVER__/?embed=1" + (root ? "&root=" + encodeURIComponent(root) : "");
-  let up = false;
-  async function probe() {
-    try {
-      await fetch("__SERVER__/api/health");
-      if (!up) { up = true; fail.style.display = "none"; f.style.display = "block"; f.src = src; }
-    } catch (e) {
-      if (up || !f.src) { up = false; f.style.display = "none"; fail.style.display = "block"; }
-      setTimeout(probe, 2000);
+  f.src = src;                       // iframe 直挂 (frame-src 放行, 不受混合内容限制)
+  window.addEventListener("message", (e) => {
+    const m = e.data || {};
+    if (m.type !== "daokicad.health") return;
+    if (m.up) {
+      fail.style.display = "none"; f.style.display = "block";
+      if (!f.src) f.src = src;
+      if (m.reload) f.src = src;     // 服务从挂到活: 重载 iframe
+    } else {
+      f.style.display = "none"; fail.style.display = "block";
     }
-  }
-  probe();
+  });
 </script>
 </body>
 </html>
