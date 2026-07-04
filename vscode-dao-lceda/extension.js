@@ -69,7 +69,8 @@ async function ensureServer(context) {
     env: {
       ...process.env,
       LCEDA_BRIDGE_PORT: String(port),
-      DAO_CDP_PORTS: cfg().get("cdpPorts") || "29229,29230",
+      DAO_CDP_PORTS: cfg().get("cdpPorts") || "9222,29229,29230",
+      DAO_PREFER_LOCAL_EDA: cfg().get("preferLocalEda") === false ? "0" : "1",
     },
   });
   serverProc.on("error", (e) =>
@@ -119,6 +120,10 @@ async function openPanel(context) {
   const port = await ensureServer(context);
   if (!port) return;
   const base = "http://127.0.0.1:" + port;
+  // 本源: 默认「原生嵌入」— 面板直接承载 EDA 本体真实页面(经本桥反代中转),
+  // 真实 DOM / 真实登录态 / 原生交互, 非投屏。screencast 仅作显式兜底。
+  const mode = cfg().get("panelMode") || "native";
+  const framePath = mode === "screencast" ? "/panel" : "/native";
   const panel = vscode.window.createWebviewPanel(
     "daoLcedaPanel", "嘉立创EDA (道之面板)", vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true });
@@ -128,7 +133,7 @@ async function openPanel(context) {
       content="default-src 'none'; frame-src ${base}; style-src 'unsafe-inline';">
 <style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#1e1e1e;}
 iframe{border:0;width:100%;height:100vh;}</style></head>
-<body><iframe src="${base}/panel" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
+<body><iframe src="${base}${framePath}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
 }
 
 // ---------- 左侧: 工程树 ----------
@@ -380,9 +385,10 @@ vscodeApi.postMessage({type:'init'});
 function activate(context) {
   const treeProvider = new ProjectTreeProvider(context);
   const chatProvider = new ChatViewProvider(context);
-  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  // 右下角状态栏按钮: 一键弹出 EDA 面板。
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, -1000);
   status.text = "$(circuit-board) 嘉立创EDA";
-  status.tooltip = "打开嘉立创EDA 道之面板";
+  status.tooltip = "一键弹出嘉立创EDA 道之面板";
   status.command = "daoLceda.open";
   status.show();
   const pollHealth = async () => {

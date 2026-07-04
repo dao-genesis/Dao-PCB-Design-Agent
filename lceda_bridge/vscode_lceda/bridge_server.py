@@ -31,13 +31,18 @@ import socket
 import struct
 import sys
 import threading
-import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
+
+import local_lceda
+import native_proxy
 
 BRIDGE_PORT = int(os.environ.get("LCEDA_BRIDGE_PORT", "9940"))
-CDP_PORTS = [int(x) for x in os.environ.get("DAO_CDP_PORTS", "29229,29230").split(",") if x.strip()]
+# 本源·本地优先: 桌面客户端 CDP(9222) 排最前, Web 版(29229/29230)为兜底。
+CDP_PORTS = [int(x) for x in os.environ.get("DAO_CDP_PORTS", "9222,29229,29230").split(",") if x.strip()]
+PREFER_LOCAL = os.environ.get("DAO_PREFER_LOCAL_EDA", "1") != "0"
 FRAME_QUALITY = int(os.environ.get("LCEDA_FRAME_QUALITY", "60"))
 
 
@@ -212,11 +217,22 @@ class EdaSession:
                      "offsetTop": 0, "scrollOffsetX": 0, "scrollOffsetY": 0}
         self._lock = threading.Lock()
         self._connect_lock = threading.Lock()
+        self._local_tried = False
+        self.local_eda = {"alive": False, "exe": None}
 
     def ensure(self):
         with self._connect_lock:
             if self.cdp and self.cdp.alive:
                 return True
+            # 本源·本地优先: 先唤起用户本机安装的嘉立创EDA客户端(带 CDP),
+            # 使 /native 的底层数据来源即用户自己的机器; 失败则自然回落 Web 版。
+            if PREFER_LOCAL and not self._local_tried:
+                self._local_tried = True
+                try:
+                    alive, exe = local_lceda.ensure_running()
+                    self.local_eda = {"alive": alive, "exe": exe}
+                except Exception:
+                    self.local_eda = {"alive": False, "exe": None}
             port, target = discover_target(self.ports)
             if not target:
                 return False
@@ -227,6 +243,8 @@ class EdaSession:
             cdp.on("Page.screencastFrame", self._on_frame)
             cdp.cmd("Page.enable", {}, timeout=5)
             cdp.cmd("Runtime.enable", {}, timeout=5)
+            # Network 域: 供 /native 反代取用户登录态 cookie(尽力而为)。
+            cdp.cmd("Network.enable", {}, timeout=5)
             cdp.cmd("Page.startScreencast", {
                 "format": "jpeg", "quality": FRAME_QUALITY,
                 "maxWidth": 1920, "maxHeight": 1080, "everyNthFrame": 1,
@@ -290,6 +308,37 @@ class EdaSession:
             return {"ok": False, "err": "NO_TARGET"}
         self.cdp.send_nowait("Input.dispatchKeyEvent", {"type": "char", "text": text})
         return {"ok": True}
+
+    # --- 本源级原生嵌入(非投屏): 上游源与登录态 ---
+    def native_origin(self):
+        """EDA 本体页面所在源(scheme://host[:port]), 供 /native 反代用。"""
+        if not self.ensure():
+            return None
+        return native_proxy.origin_of((self.target or {}).get("url", ""))
+
+    def native_target_path(self):
+        """EDA 本体文档路径(如 /editor), /native 首跳落点。"""
+        if not self.target:
+            return "/"
+        p = urlparse(self.target.get("url", ""))
+        return (p.path or "/") + (("?" + p.query) if p.query else "")
+
+    def cookie_header(self, origin):
+        """从 CDP 会话取上游域 cookie, 拼成 Cookie 头 — 面板呈现的即用户已登录的真实会话。"""
+        if not self.ensure() or not origin:
+            return ""
+        host = urlparse(origin).hostname or ""
+        r = self.cdp.cmd("Network.getCookies", {"urls": [origin]}, timeout=8) \
+            or self.cdp.cmd("Storage.getCookies", {}, timeout=8)
+        cookies = (r or {}).get("result", r) or {}
+        items = cookies.get("cookies") or []
+        pairs = []
+        for c in items:
+            dom = (c.get("domain") or "").lstrip(".")
+            if dom and not (host == dom or host.endswith("." + dom)):
+                continue
+            pairs.append("%s=%s" % (c.get("name", ""), c.get("value", "")))
+        return "; ".join(pairs)
 
     # --- EXTAPI 动词 ---
     def eval_js(self, expr, timeout=20):
@@ -420,6 +469,24 @@ def _agent():
 SESSION = EdaSession(CDP_PORTS)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# /native 上游取数: 直连(绕过系统代理)、不自动跟随跳转(由代理层改写 Location)。
+_NATIVE_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}),
+    type("NoRedirect", (urllib.request.HTTPRedirectHandler,),
+         {"redirect_request": lambda *a, **k: None})(),
+)
+
+
+def _native_fetch(url, method, headers, body):
+    req = urllib.request.Request(url, data=body, method=method)
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
+    try:
+        resp = _NATIVE_OPENER.open(req, timeout=45)
+        return resp.status, list(resp.headers.items()), resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, list(e.headers.items()), e.read()
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -461,6 +528,7 @@ class Handler(BaseHTTPRequestHandler):
             ok = SESSION.ensure()
             self._send(200, {"ok": ok, "cdpPort": SESSION.port,
                              "target": (SESSION.target or {}).get("url"),
+                             "localEda": SESSION.local_eda,
                              "frameSeq": SESSION.frame_seq})
         elif path == "/api/frame":
             b64, seq, meta = SESSION.get_frame()
@@ -488,12 +556,47 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, "job": job})
             else:
                 self._send(404, {"ok": False, "err": "no such job"})
+        elif path == "/native" or path.startswith("/native/"):
+            self._serve_native("GET")
         elif path in ("/", "/panel", "/index.html"):
             self._serve_file("panel.html", "text/html; charset=utf-8")
         elif path == "/panel.js":
             self._serve_file("panel.js", "application/javascript; charset=utf-8")
         else:
             self._send(404, {"ok": False, "err": "not found"})
+
+    def _serve_native(self, method):
+        """本源级原生嵌入(非投屏): 反代 EDA 真实页面进 IDE 面板。"""
+        origin = SESSION.native_origin()
+        if not origin:
+            self._send(503, {"ok": False, "err": "NO_TARGET — EDA 未就绪(需带 CDP 启动)"})
+            return
+        raw_path = self.path
+        tgt = SESSION.native_target_path()
+        if raw_path == "/native" and tgt not in ("", "/"):
+            # 首跳: 302 到 EDA 本体文档路径, 之后一切相对/绝对引用都被代理层归一。
+            self.send_response(302)
+            self.send_header("Location", "/native" + tgt)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        body = self.rfile.read(n) if n else None
+        try:
+            status, hdrs, out = native_proxy.proxy(
+                _native_fetch, origin, raw_path, method=method,
+                headers=dict(self.headers.items()), body=body,
+                cookie=SESSION.cookie_header(origin), prefix="/native")
+        except Exception as e:
+            self._send(502, {"ok": False, "err": "UPSTREAM " + str(e)[:300]})
+            return
+        self.send_response(status)
+        for k, v in hdrs:
+            self.send_header(k, v)
+        self.send_header("Content-Length", str(len(out)))
+        self.end_headers()
+        if out:
+            self.wfile.write(out)
 
     def _serve_file(self, name, ctype):
         fp = os.path.join(HERE, "web", name)
@@ -506,6 +609,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         path = u.path
+        if path == "/native" or path.startswith("/native/"):
+            self._serve_native("POST")
+            return
         body = self._read_json()
         if path == "/api/input":
             kind = body.get("kind")

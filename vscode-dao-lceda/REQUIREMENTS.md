@@ -5,10 +5,15 @@
 
 ## R1 · EDA 整块路由(呈现面)
 
+> 反者道之动: 本源不是"把画面截图再回灌坐标"(投屏), 而是**把 EDA 本体的真实页面
+> 经本桥「中枢中转」直接搬进 IDE 面板** —— 真实 DOM、真实登录态、原生交互, 无一帧
+> 截图、无一次坐标模拟。screencast 降级为显式兜底(`daoLceda.panelMode=screencast`)。
+
 | # | 需求 | 状态 |
 |---|---|---|
-| R1.1 | 中间面板整块承载 EDA 画面(CDP screencast → /api/frame) | ✅ |
-| R1.2 | 面板内鼠键输入回灌 EDA(/api/input) | ✅ |
+| R1.0 | **原生嵌入(本源·非投屏)**: `/native` 反代 EDA 真实页面进面板(剥离禁嵌头 X-Frame-Options/CSP + 注入 CDP 会话 cookie + 改写 <base>/绝对源/Location) | ✅ 本PR · 默认 |
+| R1.1 | 帧流兜底: 中间面板承载 EDA 画面(CDP screencast → /api/frame) | ✅ 降级兜底 |
+| R1.2 | 帧流兜底下鼠键输入回灌 EDA(/api/input) | ✅ 降级兜底 |
 | R1.3 | Web 版(29229)/桌面版(29230) CDP 目标一视同仁自动发现 | ✅ |
 | R1.4 | 桥自愈: 目标断线自动重连 | ✅ |
 
