@@ -149,57 +149,56 @@ class ProjectTreeProvider {
   }
 }
 
-// ---------- 右/下方: 道之对话 ----------
+// ---------- 右/下方: 道之对话 (Copilot/Augment 式) ----------
+const HISTORY_KEY = "daoLceda.chatHistory";
+const HISTORY_MAX = 200;
+
 class ChatViewProvider {
-  constructor(context) { this.context = context; }
+  constructor(context) {
+    this.context = context;
+    this.views = new Set();
+  }
+  loadHistory() { return this.context.globalState.get(HISTORY_KEY) || []; }
+  saveHistory(items) {
+    this.context.globalState.update(HISTORY_KEY, items.slice(-HISTORY_MAX));
+  }
+  pushHistory(entry) {
+    const items = this.loadHistory();
+    items.push(entry);
+    this.saveHistory(items);
+  }
+  clear() {
+    this.saveHistory([]);
+    for (const v of this.views) v.webview.postMessage({ type: "clear" });
+  }
   resolveWebviewView(view) {
     view.webview.options = { enableScripts: true };
-    view.webview.html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-body{font:13px/1.5 var(--vscode-font-family);color:var(--vscode-foreground);margin:0;display:flex;flex-direction:column;height:100vh;}
-#log{flex:1;overflow-y:auto;padding:8px;}
-.msg{margin:4px 0;padding:6px 8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;}
-.user{background:var(--vscode-editor-inactiveSelectionBackground);}
-.bot{background:var(--vscode-editorWidget-background);}
-#bar{display:flex;padding:6px;gap:6px;border-top:1px solid var(--vscode-panel-border);}
-#in{flex:1;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);padding:4px 6px;}
-button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:0;padding:4px 10px;cursor:pointer;}
-</style></head><body>
-<div id="log"><div class="msg bot">道之助手(Copilot 式)已就绪。可说: 建工程 / 检索 STM32F103 / 布局 / 板框 / 自动布线 / 覆铜 / DRC / 出产 / 全链路 / 当前工程信息 / 画布截图。</div></div>
-<div id="bar"><input id="in" placeholder="向嘉立创EDA下令…"><button id="send">发</button></div>
-<script>
-const vscodeApi = acquireVsCodeApi();
-const log = document.getElementById('log'); const input = document.getElementById('in');
-const jobs = {};
-function add(cls, text){ const d=document.createElement('div'); d.className='msg '+cls; d.textContent=text; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
-function send(){ const t=input.value.trim(); if(!t) return; add('user', t); input.value=''; vscodeApi.postMessage({type:'chat', text:t}); }
-document.getElementById('send').onclick = send;
-input.addEventListener('keydown', e=>{ if(e.key==='Enter') send(); });
-window.addEventListener('message', e=>{
-  const m = e.data;
-  if (m.type === 'reply') { add('bot', m.text); }
-  else if (m.type === 'jobStart') { jobs[m.job] = add('bot', m.text + '\\n⏳ 作业 ' + m.job + ' 执行中…'); }
-  else if (m.type === 'jobUpdate') {
-    const el = jobs[m.job]; if (!el) return;
-    let text = m.text;
-    for (const s of m.steps || []) {
-      const mark = s.status === 'done' ? '✔' : (s.status === 'failed' ? '✘' : '⏳');
-      text += '\\n' + mark + ' ' + s.tool + (s.ms ? ' (' + s.ms + 'ms)' : '');
-      if (s.error) text += ' — ' + s.error;
-      else if (s.status === 'done' && s.result !== undefined) text += ' → ' + JSON.stringify(s.result).slice(0, 300);
-    }
-    if (m.status === 'done') text += '\\n✔ 作业完成';
-    if (m.status === 'failed') text += '\\n✘ 作业失败';
-    el.textContent = text; log.scrollTop = log.scrollHeight;
-  }
-});
-</script></body></html>`;
+    view.webview.html = chatHtml();
+    this.views.add(view);
+    view.onDidDispose(() => this.views.delete(view));
     view.webview.onDidReceiveMessage(async (m) => {
-      if (m.type !== "chat") return;
       const port = cfg().get("port") || 9940;
-      const r = await apiJson(port, "POST", "/api/agent", { text: m.text });
+      if (m.type === "init") {
+        view.webview.postMessage({ type: "history", items: this.loadHistory() });
+        const tools = await apiJson(port, "GET", "/api/tools");
+        if (tools && tools.ok) view.webview.postMessage({ type: "tools", tools: tools.tools });
+        this.pushContext(view, port);
+        return;
+      }
+      if (m.type === "context") { this.pushContext(view, port); return; }
+      if (m.type === "persist") { this.pushHistory(m.entry); return; }
+      if (m.type === "clear") { this.clear(); return; }
+      if (m.type !== "chat") return;
+      // 斜杠命令: /tool.name {json参数}  → 直调工具; 否则自然语言路由
+      let payload = { text: m.text };
+      const sm = /^\/([a-z]+\.[a-z]+)\s*(\{.*\})?\s*$/i.exec(m.text || "");
+      if (sm) {
+        payload = { tool: sm[1] };
+        if (sm[2]) { try { payload.args = JSON.parse(sm[2]); } catch (e) { /* 保持无参 */ } }
+      }
+      const r = await apiJson(port, "POST", "/api/agent", payload);
       if (!r || !r.ok) {
-        view.webview.postMessage({ type: "reply", text: "(桥接未响应)" });
+        view.webview.postMessage({ type: "reply", text: "(桥接未响应 — 可运行命令 DAO LCEDA: 重启桥接服务)" });
         return;
       }
       if (!r.job) {
@@ -218,15 +217,135 @@ window.addEventListener('message', e=>{
         });
         if (j.job.status !== "running") break;
       }
+      this.pushContext(view, port);
     });
   }
+  async pushContext(view, port) {
+    const tree = await apiJson(port, "GET", "/api/tree");
+    let label = "未连接";
+    if (tree && tree.ok) {
+      label = tree.current
+        ? (tree.current.friendlyName || tree.current.name || tree.current.uuid)
+        : "已连接 · 无打开工程";
+    }
+    view.webview.postMessage({ type: "contextChip", label });
+  }
+}
+
+function chatHtml() {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{font:13px/1.5 var(--vscode-font-family);color:var(--vscode-foreground);margin:0;display:flex;flex-direction:column;height:100vh;}
+#chip{padding:4px 8px;font-size:11px;opacity:.85;border-bottom:1px solid var(--vscode-panel-border);display:flex;justify-content:space-between;align-items:center;}
+#chip .ctx{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:8px;padding:1px 8px;}
+#chip a{cursor:pointer;text-decoration:underline;}
+#log{flex:1;overflow-y:auto;padding:8px;}
+.msg{margin:4px 0;padding:6px 8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;}
+.user{background:var(--vscode-editor-inactiveSelectionBackground);}
+.bot{background:var(--vscode-editorWidget-background);}
+.msg img{max-width:100%;display:block;margin-top:6px;border:1px solid var(--vscode-panel-border);}
+#menu{display:none;position:absolute;bottom:44px;left:6px;right:6px;max-height:180px;overflow-y:auto;background:var(--vscode-editorWidget-background);border:1px solid var(--vscode-panel-border);z-index:9;}
+#menu div{padding:4px 8px;cursor:pointer;}
+#menu div.sel,#menu div:hover{background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground);}
+#bar{display:flex;padding:6px;gap:6px;border-top:1px solid var(--vscode-panel-border);position:relative;}
+#in{flex:1;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);padding:4px 6px;}
+button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:0;padding:4px 10px;cursor:pointer;}
+</style></head><body>
+<div id="chip"><span>当前工程: <span class="ctx" id="ctx">…</span></span><a id="clear">清空会话</a></div>
+<div id="log"><div class="msg bot">道之助手(Copilot 式)已就绪。输入 / 可选工具; 或说: 建工程 / 检索 STM32F103 / 布局 / 板框 / 自动布线 / 覆铜 / DRC / 出产 / 全链路 / 当前工程信息 / 画布截图。</div></div>
+<div id="bar"><div id="menu"></div><input id="in" placeholder="向嘉立创EDA下令… (/工具名 直调)"><button id="send">发</button></div>
+<script>
+const vscodeApi = acquireVsCodeApi();
+const log = document.getElementById('log'); const input = document.getElementById('in');
+const menu = document.getElementById('menu');
+const jobs = {}; let toolList = []; let menuSel = 0;
+const IMG_RE = /^(data:image\\/[a-z+]+;base64,|iVBORw0KGgo|\\/9j\\/)/;
+function asImgSrc(v){
+  if (typeof v !== 'string' || v.length < 200 || !IMG_RE.test(v)) return null;
+  if (v.startsWith('data:image')) return v;
+  return 'data:image/' + (v.startsWith('iVBOR') ? 'png' : 'jpeg') + ';base64,' + v;
+}
+function add(cls, text, img, persist){
+  const d=document.createElement('div'); d.className='msg '+cls; d.textContent=text;
+  if (img){ const i=document.createElement('img'); i.src=img; d.appendChild(i); }
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+  if (persist !== false) vscodeApi.postMessage({type:'persist', entry:{cls, text, img: img||null}});
+  return d;
+}
+function send(){ const t=input.value.trim(); if(!t) return; hideMenu(); add('user', t); input.value=''; vscodeApi.postMessage({type:'chat', text:t}); }
+document.getElementById('send').onclick = send;
+document.getElementById('clear').onclick = ()=> vscodeApi.postMessage({type:'clear'});
+function showMenu(prefix){
+  const q = prefix.slice(1).toLowerCase();
+  const hits = toolList.filter(t=> t.tool.includes(q) || (t.desc||'').toLowerCase().includes(q));
+  if (!hits.length){ hideMenu(); return; }
+  menu.innerHTML=''; menuSel=0;
+  hits.forEach((t,i)=>{ const d=document.createElement('div'); if(i===0)d.className='sel';
+    d.textContent='/'+t.tool+' — '+t.desc; d.onclick=()=>{ input.value='/'+t.tool+' '; hideMenu(); input.focus(); };
+    menu.appendChild(d); });
+  menu.style.display='block';
+}
+function hideMenu(){ menu.style.display='none'; }
+input.addEventListener('input', ()=>{ const v=input.value; (v.startsWith('/') && !v.includes(' ')) ? showMenu(v) : hideMenu(); });
+input.addEventListener('keydown', e=>{
+  if (menu.style.display==='block'){
+    const items=[].slice.call(menu.children);
+    if (e.key==='ArrowDown'||e.key==='ArrowUp'){ e.preventDefault();
+      items[menuSel]&&(items[menuSel].className='');
+      menuSel=(menuSel+(e.key==='ArrowDown'?1:items.length-1))%items.length;
+      items[menuSel].className='sel'; items[menuSel].scrollIntoView({block:'nearest'}); return; }
+    if (e.key==='Tab'||e.key==='Enter'){ e.preventDefault(); items[menuSel]&&items[menuSel].onclick(); return; }
+    if (e.key==='Escape'){ hideMenu(); return; }
+  }
+  if(e.key==='Enter') send();
+});
+function renderSteps(el, m){
+  let text = m.text; let img=null;
+  for (const s of m.steps || []) {
+    const mark = s.status === 'done' ? '✔' : (s.status === 'failed' ? '✘' : '⏳');
+    text += '\\n' + mark + ' ' + s.tool + (s.ms ? ' (' + s.ms + 'ms)' : '');
+    if (s.error) text += ' — ' + s.error;
+    else if (s.status === 'done' && s.result !== undefined) {
+      const src = asImgSrc(s.result) || asImgSrc(s.result && s.result._truncated);
+      if (src) { img = src; text += ' → [图像]'; }
+      else text += ' → ' + JSON.stringify(s.result).slice(0, 300);
+    }
+  }
+  if (m.status === 'done') text += '\\n✔ 作业完成';
+  if (m.status === 'failed') text += '\\n✘ 作业失败';
+  el.textContent = text;
+  if (img){ const i=document.createElement('img'); i.src=img; el.appendChild(i); }
+  log.scrollTop = log.scrollHeight;
+  if (m.status && m.status !== 'running')
+    vscodeApi.postMessage({type:'persist', entry:{cls:'bot', text, img: img||null}});
+}
+window.addEventListener('message', e=>{
+  const m = e.data;
+  if (m.type === 'history') { for (const h of m.items || []) add(h.cls, h.text, h.img, false); }
+  else if (m.type === 'tools') { toolList = m.tools || []; }
+  else if (m.type === 'contextChip') { document.getElementById('ctx').textContent = m.label; }
+  else if (m.type === 'clear') { log.innerHTML=''; add('bot','(会话已清空)', null, false); }
+  else if (m.type === 'reply') { add('bot', m.text); }
+  else if (m.type === 'jobStart') { jobs[m.job] = add('bot', m.text + '\\n⏳ 作业 ' + m.job + ' 执行中…', null, false); }
+  else if (m.type === 'jobUpdate') { const el = jobs[m.job]; if (el) renderSteps(el, m); }
+});
+vscodeApi.postMessage({type:'init'});
+</script></body></html>`;
 }
 
 function activate(context) {
   const treeProvider = new ProjectTreeProvider(context);
+  const chatProvider = new ChatViewProvider(context);
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  status.text = "$(circuit-board) 嘉立创EDA";
+  status.tooltip = "打开嘉立创EDA 道之面板";
+  status.command = "daoLceda.open";
+  status.show();
   context.subscriptions.push(
+    status,
     vscode.commands.registerCommand("daoLceda.open", () => openPanel(context)),
     vscode.commands.registerCommand("daoLceda.refreshTree", () => treeProvider.refresh()),
+    vscode.commands.registerCommand("daoLceda.clearChat", () => chatProvider.clear()),
     vscode.commands.registerCommand("daoLceda.restartBridge", async () => {
       if (serverProc) serverProc.kill();
       serverProc = null;
@@ -234,7 +353,8 @@ function activate(context) {
       vscode.window.showInformationMessage("DAO LCEDA 桥接已重启");
     }),
     vscode.window.registerTreeDataProvider("daoLcedaProjects", treeProvider),
-    vscode.window.registerWebviewViewProvider("daoLcedaChat", new ChatViewProvider(context)),
+    vscode.window.registerWebviewViewProvider("daoLcedaChat", chatProvider),
+    vscode.window.registerWebviewViewProvider("daoLcedaChatSide", chatProvider),
   );
 }
 

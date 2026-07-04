@@ -116,7 +116,8 @@ TOOLS = {
     "pcb.drc":        {"fn": _tool_drc, "params": {}, "desc": "设计规则检查"},
     "fab.outputs":    {"fn": _tool_fab, "params": {"prefix": "str?"},
                        "desc": "出产: Gerber/BOM/贴片坐标(blob→base64→落盘)"},
-    "canvas.image":   {"fn": _tool_canvas_image, "params": {}, "desc": "画布渲染图"},
+    "canvas.image":   {"fn": _tool_canvas_image, "params": {}, "desc": "画布渲染图",
+                       "big": True},
 }
 
 
@@ -150,7 +151,8 @@ class JobStore:
             try:
                 ret = TOOLS[tool]["fn"](args or {})
                 step["status"] = "done"
-                step["result"] = _trim(ret)
+                limit = 4000000 if TOOLS[tool].get("big") else 4000
+                step["result"] = _trim(ret, limit)
             except Exception as e:
                 step["status"] = "failed"
                 step["error"] = str(e)[:400]

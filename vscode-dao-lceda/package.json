@@ -12,7 +12,8 @@
     "commands": [
       { "command": "daoLceda.open", "title": "DAO LCEDA: 打开嘉立创EDA (Open LCEDA Panel)" },
       { "command": "daoLceda.restartBridge", "title": "DAO LCEDA: 重启桥接服务 (Restart Bridge)" },
-      { "command": "daoLceda.refreshTree", "title": "DAO LCEDA: 刷新工程树 (Refresh Tree)", "icon": "$(refresh)" }
+      { "command": "daoLceda.refreshTree", "title": "DAO LCEDA: 刷新工程树 (Refresh Tree)", "icon": "$(refresh)" },
+      { "command": "daoLceda.clearChat", "title": "DAO LCEDA: 清空对话会话 (Clear Chat History)" }
     ],
     "views": {
       "explorer": [
@@ -20,11 +21,17 @@
       ],
       "daoLcedaChatContainer": [
         { "id": "daoLcedaChat", "type": "webview", "name": "道之对话 (LCEDA AI)" }
+      ],
+      "daoLcedaSideContainer": [
+        { "id": "daoLcedaChatSide", "type": "webview", "name": "道之对话 (LCEDA AI)" }
       ]
     },
     "viewsContainers": {
       "panel": [
         { "id": "daoLcedaChatContainer", "title": "道之对话", "icon": "$(comment-discussion)" }
+      ],
+      "activitybar": [
+        { "id": "daoLcedaSideContainer", "title": "嘉立创EDA", "icon": "$(circuit-board)" }
       ]
     },
     "menus": {
