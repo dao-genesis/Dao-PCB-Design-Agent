@@ -340,6 +340,28 @@ class EdaSession:
             pairs.append("%s=%s" % (c.get("name", ""), c.get("value", "")))
         return "; ".join(pairs)
 
+    # --- CDP 页内取数: 上游主机在网络层不可解析时(如桌面客户端的 https://client 虚拟主机),
+    # 由 EDA 页面自身 fetch — 客户端即数据面, 登录态/协议拦截全部天然生效。 ---
+    def cdp_fetch(self, url, method="GET", headers=None, body=None, timeout=45):
+        """在 EDA 页面上下文里 fetch(携凭据), 回传 (status, headers_list, raw_bytes)。"""
+        payload = {
+            "url": url,
+            "method": method,
+            "headers": {k: v for k, v in (headers or {}).items()
+                        if k.lower() not in ("host", "cookie", "accept-encoding",
+                                             "content-length", "connection")},
+            "bodyB64": base64.b64encode(body).decode() if body else None,
+        }
+        expr = _CDP_FETCH_TPL % json.dumps(payload)
+        val, err = self.eval_js(expr, timeout=timeout)
+        if err or not val:
+            raise RuntimeError("CDP_FETCH " + str(err or "NO_RESULT"))
+        r = json.loads(val)
+        if not r.get("ok"):
+            raise RuntimeError("CDP_FETCH " + str(r.get("err"))[:200])
+        raw = base64.b64decode(r.get("b64") or "")
+        return int(r.get("status", 200)), [tuple(h) for h in (r.get("headers") or [])], raw
+
     # --- EXTAPI 动词 ---
     def eval_js(self, expr, timeout=20):
         if not self.ensure():
@@ -387,6 +409,25 @@ _CALL_TPL = r"""(async function(){
     if(typeof fn!=='function') return JSON.stringify({ok:false, err:'NO_API '+key});
     var r = await fn.apply(ctx, %(args)s);
     return JSON.stringify({ok:true, ret:(r===undefined?null:r)});
+  }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e)}); }
+})()"""
+
+# JS: 页内 fetch 包装 — 把响应体 base64 回传(含状态码与响应头)。
+_CDP_FETCH_TPL = r"""(async function(){
+  try{
+    var q = %s;
+    var init = { method:q.method, headers:q.headers, credentials:'include', redirect:'manual' };
+    if(q.bodyB64){
+      var bin = atob(q.bodyB64), arr = new Uint8Array(bin.length);
+      for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+      init.body = arr;
+    }
+    var resp = await fetch(q.url, init);
+    var buf = await resp.arrayBuffer();
+    var u8 = new Uint8Array(buf), s='';
+    for(var j=0;j<u8.length;j+=32768) s += String.fromCharCode.apply(null, u8.subarray(j, j+32768));
+    var hs=[]; resp.headers.forEach(function(v,k){ hs.push([k,v]); });
+    return JSON.stringify({ok:true, status:resp.status||200, headers:hs, b64:btoa(s)});
   }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e)}); }
 })()"""
 
@@ -488,6 +529,27 @@ def _native_fetch(url, method, headers, body):
         return e.code, list(e.headers.items()), e.read()
 
 
+# 主机可解析性缓存: 桌面客户端的 https://client 是 Electron 协议拦截出的虚拟主机,
+# 网络层 DNS 无法解析 → 改走 CDP 页内 fetch(客户端即数据面)。
+_RESOLVABLE = {}
+
+
+def _host_resolvable(origin):
+    host = urlparse(origin).hostname or ""
+    if host in _RESOLVABLE:
+        return _RESOLVABLE[host]
+    try:
+        socket.getaddrinfo(host, None)
+        _RESOLVABLE[host] = True
+    except OSError:
+        _RESOLVABLE[host] = False
+    return _RESOLVABLE[host]
+
+
+def _cdp_page_fetch(url, method, headers, body):
+    return SESSION.cdp_fetch(url, method=method, headers=headers, body=body)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -582,9 +644,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         n = int(self.headers.get("Content-Length", 0) or 0)
         body = self.rfile.read(n) if n else None
+        fetch_fn = _native_fetch if _host_resolvable(origin) else _cdp_page_fetch
         try:
             status, hdrs, out = native_proxy.proxy(
-                _native_fetch, origin, raw_path, method=method,
+                fetch_fn, origin, raw_path, method=method,
                 headers=dict(self.headers.items()), body=body,
                 cookie=SESSION.cookie_header(origin), prefix="/native")
         except Exception as e:
