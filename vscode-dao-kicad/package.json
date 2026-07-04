@@ -2,7 +2,7 @@
   "name": "dao-kicad",
   "displayName": "DAO KiCad — 归一 PCB 工作台",
   "description": "KiCad in your IDE: schematic/PCB viewing, netlist→board build, freerouting autoroute, DRC/ERC and fab outputs — all bridged to the daokicad engine, no KiCad GUI needed.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "dao",
   "license": "MIT",
   "engines": { "vscode": "^1.80.0" },

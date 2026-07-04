@@ -64,8 +64,10 @@ nav#boards .tab.on{color:var(--fg);background:var(--bg);border-color:var(--line)
 .proj .file:hover{color:var(--fg)}
 .proj .acts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 .proj .acts button{padding:3px 8px;font-size:11px}
-#layerbar{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);
+#layerbar,.libbar{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);
           font-size:12px;color:var(--dim);flex-wrap:wrap}
+.libbar select{background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:6px;
+          padding:4px 6px;font-size:12px;max-width:340px}
 .chip{padding:2px 8px;border:1px solid var(--line);border-radius:10px;cursor:pointer;user-select:none}
 .chip.on{border-color:var(--acc);color:var(--acc)}
 .viewer{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:#0c0e13}
@@ -127,6 +129,18 @@ td,th{border:1px solid var(--line);padding:3px 8px}
       <div id="layerbar"><span>图层:</span></div>
       <div class="viewer" id="pcbview"><span class="hint">「📁 工程」里点一个板文件即可渲染</span></div>
     </div>
+    <!-- 🧩 符号 (对齐 KiCad 符号编辑器) -->
+    <div class="board" data-b="sym">
+      <div id="symbar" class="libbar"><span>符号库:</span><select id="symlib"></select>
+        <span id="symnames"></span></div>
+      <div class="viewer" id="symview"><span class="hint">载入工程后选择符号库与符号即可渲染</span></div>
+    </div>
+    <!-- 📦 封装 (对齐 KiCad 封装编辑器) -->
+    <div class="board" data-b="fp">
+      <div id="fpbar" class="libbar"><span>封装库:</span><select id="fplib"></select>
+        <span id="fpnames"></span></div>
+      <div class="viewer" id="fpview"><span class="hint">载入工程后选择封装库与封装即可渲染</span></div>
+    </div>
     <!-- 🔬 检查 -->
     <div class="board pad" data-b="check">
       <div class="card"><h3>🔬 ERC / DRC</h3>
@@ -140,6 +154,9 @@ td,th{border:1px solid var(--line);padding:3px 8px}
         <div class="kv">Gerber + 钻孔 + 贴片 CSV。「📁 工程」卡片点「制造」或 AI 面板说
         「fab /路径/x.kicad_pcb」。</div></div>
       <div class="card"><h3>最近产物</h3><pre id="fabout">尚无</pre></div>
+      <div class="card"><h3>🔍 Gerber 查看器</h3>
+        <div class="kv" id="gerberfiles">跑一次制造输出后, 产物文件列于此, 点击直读内容。</div>
+        <pre id="gerberview" style="max-height:340px">尚无</pre></div>
     </div>
     <!-- 🔌 接入 -->
     <div class="board pad" data-b="api">
@@ -160,8 +177,8 @@ const LAYERS=["F.Cu","In1.Cu","In2.Cu","B.Cu","F.SilkS","F.Mask","Edge.Cuts"];
 const DEFAULT_ON=new Set(["F.Cu","B.Cu","F.SilkS","Edge.Cuts"]);
 const SLASH=[["auto","全链路: 网表→建板→布线→DRC"],["drc","板子 DRC"],["erc","原理图 ERC"],
              ["route","自动布线"],["build","网表建板"],["netlist","导出网表"],["fab","Gerber/钻孔/贴片"]];
-const BOARDS=[["home","🏠 主页"],["proj","📁 工程"],["sch","📐 原理图"],
-              ["pcb","🟩 板图"],["check","🔬 检查"],["fab","🏭 制造"],["api","🔌 接入"]];
+const BOARDS=[["home","🏠 主页"],["proj","📁 工程"],["sch","📐 原理图"],["sym","🧩 符号"],
+              ["pcb","🟩 板图"],["fp","📦 封装"],["check","🔬 检查"],["fab","🏭 制造"],["api","🔌 接入"]];
 let curPcb=null;
 
 // ── 板块路由: 单网页下多张平级子网页, 标签即汉堡列表 ──
@@ -204,6 +221,7 @@ async function loadTree(){
   const j=await (await fetch("/api/tree?root="+encodeURIComponent(root))).json();
   const box=$("#projects"); box.innerHTML="";
   if(!j.ok){box.textContent=j.error;return;}
+  fillLibs(j);
   if(!j.projects.length){box.textContent="该目录下没有 .kicad_pro 工程";return;}
   for(const p of j.projects){
     const d=document.createElement("div"); d.className="proj";
@@ -256,6 +274,58 @@ function renderLayerbar(){
     c.onclick=()=>{c.classList.toggle("on");
       $("#pcbview").innerHTML=`<img src="${pcbUrl(curPcb)}" alt="pcb">`;};
     bar.appendChild(c);
+  }
+}
+
+// ── 🧩 符号 / 📦 封装 子页 (对齐 KiCad 符号/封装编辑器) ──
+function fillLibs(tree){
+  fillLibSel("symlib",tree.sym_libs||[],loadSyms);
+  fillLibSel("fplib",tree.fp_libs||[],loadFps);
+}
+function fillLibSel(id,libs,onPick){
+  const sel=document.getElementById(id); sel.innerHTML="";
+  const o0=document.createElement("option"); o0.value=""; o0.textContent=libs.length?"选择库…":"(工程内无库)";
+  sel.appendChild(o0);
+  for(const l of libs){const o=document.createElement("option");o.value=l;
+    o.textContent=l.split(/[\\/]/).pop();o.title=l;sel.appendChild(o);}
+  sel.onchange=()=>{if(sel.value)onPick(sel.value);};
+}
+async function loadSyms(lib){
+  const j=await (await fetch("/api/sym/list?lib="+encodeURIComponent(lib))).json();
+  const box=$("#symnames"); box.innerHTML="";
+  for(const n of (j.symbols||[])){
+    const c=document.createElement("span"); c.className="chip"; c.textContent=n;
+    c.onclick=()=>{$("#symview").innerHTML=
+      `<img src="/api/render/sym?lib=${encodeURIComponent(lib)}&name=${encodeURIComponent(n)}" alt="sym">`;};
+    box.appendChild(c);
+  }
+  if(!(j.symbols||[]).length) box.textContent=j.error||"(空库)";
+}
+async function loadFps(lib){
+  const j=await (await fetch("/api/fp/list?lib="+encodeURIComponent(lib))).json();
+  const box=$("#fpnames"); box.innerHTML="";
+  for(const n of (j.footprints||[])){
+    const c=document.createElement("span"); c.className="chip"; c.textContent=n;
+    c.onclick=()=>{$("#fpview").innerHTML=
+      `<img src="/api/render/fp?lib=${encodeURIComponent(lib)}&name=${encodeURIComponent(n)}" alt="fp">`;};
+    box.appendChild(c);
+  }
+  if(!(j.footprints||[]).length) box.textContent=j.error||"(空库)";
+}
+
+// ── 🔍 Gerber 查看器: 制造产物直读 ──
+function fillGerbers(res){
+  const files=[...(res.gerbers||[]),...(res.drill||[]),...(res.pos||[])];
+  if(!files.length)return;
+  const box=$("#gerberfiles"); box.innerHTML="";
+  for(const f of files){
+    const c=document.createElement("span"); c.className="chip"; c.style.margin="2px";
+    c.textContent=f.split(/[\\/]/).pop(); c.title=f;
+    c.onclick=async()=>{
+      try{$("#gerberview").textContent=await (await fetch("/api/file?path="+encodeURIComponent(f))).text();}
+      catch(e){$("#gerberview").textContent="读取失败: "+e;}
+    };
+    box.appendChild(c);
   }
 }
 
@@ -328,12 +398,16 @@ function finishTurn(action,res){
   // 检查/制造板块沉淀最近结果
   if(action==="drc"||action==="erc"||(res.steps&&res.steps.drc))
     $("#checkout").textContent=JSON.stringify(drc||res,null,2);
-  if(action==="fab"||(res.steps&&res.steps.fab))
-    $("#fabout").textContent=JSON.stringify(res.steps&&res.steps.fab||res,null,2);
+  if(action==="fab"||(res.steps&&res.steps.fab)){
+    const fr=res.steps&&res.steps.fab||res;
+    $("#fabout").textContent=JSON.stringify(fr,null,2);
+    fillGerbers(fr);
+  }
 }
 // 初始板块: ?board=xxx 优先, 否则恢复上次; ?embed=1 (VS Code 插件内嵌) 时隐藏左 AI 栏 (侧栏已有 Copilot 对话)
 (()=>{ const p=new URLSearchParams(location.search);
   if(p.get("embed")==="1"){ $("#ai").style.display="none"; }
+  const r=p.get("root"); if(r){ $("#root").value=r; }
   showBoard(p.get("board")||localStorage.getItem("dao.board")||"home"); })();
 if($("#root").value) loadTree();
 </script>

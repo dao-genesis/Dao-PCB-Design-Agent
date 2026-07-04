@@ -59,7 +59,10 @@ def api_tree(root: str) -> dict:
             "pcb": [str(p) for p in sorted(d.glob("*.kicad_pcb"))],
             "net": [str(p) for p in sorted(d.glob("*.net"))],
         })
-    return {"ok": True, "root": str(rootp), "projects": projects}
+    syms = [str(p) for p in sorted(rootp.rglob("*.kicad_sym"))[:200]]
+    fps = [str(p) for p in sorted(rootp.rglob("*.pretty"))[:200] if p.is_dir()]
+    return {"ok": True, "root": str(rootp), "projects": projects,
+            "sym_libs": syms, "fp_libs": fps}
 
 
 # ── rendering (原理图 / PCB → SVG) ─────────────────────────────────────
@@ -88,6 +91,76 @@ def api_render_pcb(path: str, layers: str) -> tuple[bytes, str] | dict:
         if not out.is_file():
             return {"ok": False, "error": r.stderr[-500:] or "no svg produced"}
         return out.read_bytes(), "image/svg+xml"
+
+
+def api_render_sym(lib: str, name: str) -> tuple[bytes, str] | dict:
+    """Render one symbol of a .kicad_sym library to SVG (符号编辑器视图)."""
+    src = Path(lib)
+    if not src.is_file():
+        return {"ok": False, "error": f"no such symbol lib: {lib}"}
+    with tempfile.TemporaryDirectory() as td:
+        args = ["sym", "export", "svg", "--no-background-color", "-o", td]
+        if name:
+            args += ["--symbol", name]
+        r = _lk().cli(*args, str(src))
+        svgs = sorted(Path(td).glob("*.svg"))
+        if not svgs:
+            return {"ok": False, "error": r.stderr[-500:] or "no svg produced"}
+        return svgs[0].read_bytes(), "image/svg+xml"
+
+
+def api_render_fp(lib: str, name: str) -> tuple[bytes, str] | dict:
+    """Render one footprint of a .pretty library to SVG (封装编辑器视图)."""
+    src = Path(lib)
+    if not src.is_dir():
+        return {"ok": False, "error": f"no such footprint lib: {lib}"}
+    with tempfile.TemporaryDirectory() as td:
+        args = ["fp", "export", "svg", "-o", td]
+        if name:
+            args += ["--footprint", name]
+        r = _lk().cli(*args, str(src))
+        svgs = sorted(Path(td).glob("*.svg"))
+        if not svgs:
+            return {"ok": False, "error": r.stderr[-500:] or "no svg produced"}
+        pick = next((s for s in svgs if s.stem == name), svgs[0])
+        return pick.read_bytes(), "image/svg+xml"
+
+
+_SYM_RE = re.compile(r'^\s{2}\(symbol\s+"([^"]+)"', re.M)
+
+
+def api_sym_list(lib: str) -> dict:
+    src = Path(lib)
+    if not src.is_file():
+        return {"ok": False, "error": f"no such symbol lib: {lib}"}
+    names = [n for n in _SYM_RE.findall(src.read_text(errors="replace"))
+             if ":" not in n and "_" != n[:1]]
+    return {"ok": True, "lib": str(src), "symbols": sorted(set(names))}
+
+
+def api_fp_list(lib: str) -> dict:
+    src = Path(lib)
+    if not src.is_dir():
+        return {"ok": False, "error": f"no such footprint lib: {lib}"}
+    return {"ok": True, "lib": str(src),
+            "footprints": sorted(p.stem for p in src.glob("*.kicad_mod"))}
+
+
+_FILE_EXT = {".gbr", ".gbl", ".gtl", ".gba", ".gta", ".gbs", ".gts", ".gbo",
+             ".gto", ".gbp", ".gtp", ".gm1", ".drl", ".csv", ".net", ".rpt",
+             ".json", ".pos", ".txt", ".md", ".kicad_mod"}
+
+
+def api_file(path: str) -> tuple[bytes, str] | dict:
+    """Read a fabrication/text artifact (Gerber 查看器等板块的文本直读)."""
+    src = Path(path)
+    if src.suffix.lower() not in _FILE_EXT:
+        return {"ok": False, "error": f"unsupported file type: {src.suffix}"}
+    if not src.is_file():
+        return {"ok": False, "error": f"no such file: {path}"}
+    if src.stat().st_size > 2_000_000:
+        return {"ok": False, "error": "file too large (>2MB)"}
+    return src.read_bytes(), "text/plain; charset=utf-8"
 
 
 # ── engine actions ─────────────────────────────────────────────────────
@@ -390,6 +463,21 @@ _CAPABILITIES = {
         {"method": "GET", "path": "/api/render/pcb",
          "params": {"path": ".kicad_pcb", "layers": "csv, optional"},
          "doc": "Board as SVG."},
+        {"method": "GET", "path": "/api/render/sym",
+         "params": {"lib": ".kicad_sym", "name": "symbol, optional"},
+         "doc": "Symbol (符号编辑器视图) as SVG."},
+        {"method": "GET", "path": "/api/render/fp",
+         "params": {"lib": ".pretty dir", "name": "footprint, optional"},
+         "doc": "Footprint (封装编辑器视图) as SVG."},
+        {"method": "GET", "path": "/api/sym/list",
+         "params": {"lib": ".kicad_sym"},
+         "doc": "List symbols inside a symbol library."},
+        {"method": "GET", "path": "/api/fp/list",
+         "params": {"lib": ".pretty dir"},
+         "doc": "List footprints inside a footprint library."},
+        {"method": "GET", "path": "/api/file",
+         "params": {"path": "gerber/drill/csv/net/report file"},
+         "doc": "Read a fabrication/text artifact (Gerber 查看器)."},
         {"method": "POST", "path": "/api/netlist",
          "params": {"sch": ".kicad_sch", "out": "optional .net"},
          "doc": "Schematic -> netlist."},
@@ -498,6 +586,25 @@ class Handler(BaseHTTPRequestHandler):
                 layers = q.get("layers",
                                "F.Cu,B.Cu,F.SilkS,Edge.Cuts,F.Mask")
                 r = api_render_pcb(q.get("path", ""), layers)
+                if isinstance(r, dict):
+                    return self._send(r, 400)
+                return self._send_raw(*r)
+            if u.path == "/api/render/sym":
+                r = api_render_sym(q.get("lib", ""), q.get("name", ""))
+                if isinstance(r, dict):
+                    return self._send(r, 400)
+                return self._send_raw(*r)
+            if u.path == "/api/render/fp":
+                r = api_render_fp(q.get("lib", ""), q.get("name", ""))
+                if isinstance(r, dict):
+                    return self._send(r, 400)
+                return self._send_raw(*r)
+            if u.path == "/api/sym/list":
+                return self._send(api_sym_list(q.get("lib", "")))
+            if u.path == "/api/fp/list":
+                return self._send(api_fp_list(q.get("lib", "")))
+            if u.path == "/api/file":
+                r = api_file(q.get("path", ""))
                 if isinstance(r, dict):
                     return self._send(r, 400)
                 return self._send_raw(*r)
