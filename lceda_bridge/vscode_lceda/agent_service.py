@@ -37,8 +37,16 @@ def _tool_open_project(args):
 
 
 def _tool_open_doc(args):
-    T.open_doc(args["uuid"])
-    return {"opened": args["uuid"]}
+    uuid = args["uuid"]
+    try:
+        for sch in T.verb("dmt_Schematic.getAllSchematicsInfo", timeout=40) or []:
+            if sch.get("uuid") == uuid and sch.get("page"):
+                uuid = sch["page"][0]["uuid"]
+                break
+    except Exception:
+        pass
+    T.open_doc(uuid)
+    return {"opened": uuid}
 
 
 def _tool_sch_list(_args):

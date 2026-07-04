@@ -162,11 +162,15 @@ class ProjectTreeProvider {
       cur.iconPath = new vscode.ThemeIcon("circuit-board");
       cur.childrenItems = [];
       for (const s of tree.schematics || []) {
-        const it = new vscode.TreeItem(
-          "原理图: " + (s.name || s.uuid || "?"), vscode.TreeItemCollapsibleState.None);
-        it.iconPath = new vscode.ThemeIcon("file-code");
-        if (s.uuid) it.command = { command: "daoLceda.openDoc", title: "打开文档", arguments: [s.uuid] };
-        cur.childrenItems.push(it);
+        const pages = (s.page || []).length ? s.page : [s];
+        for (const p of pages) {
+          const label = "原理图: " + (s.name || s.uuid || "?") +
+            (pages.length > 1 ? " · " + (p.name || p.uuid) : "");
+          const it = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+          it.iconPath = new vscode.ThemeIcon("file-code");
+          if (p.uuid) it.command = { command: "daoLceda.openDoc", title: "打开文档", arguments: [p.uuid] };
+          cur.childrenItems.push(it);
+        }
       }
       items.push(cur);
     }
