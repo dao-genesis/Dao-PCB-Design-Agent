@@ -39,6 +39,7 @@ health 不通 = 桥未启动, 按第 0 节启动; `kicad: null` = 该机未装 K
 | `/api/erc` | POST | `{sch}` | ERC 校验 |
 | `/api/fab` | POST·job | `{pcb, out}` | Gerber + 钻孔 + 贴片 CSV |
 | `/api/auto` | POST·job | `{sch\|netlist, out?, layers?, passes?, timeout?, fab?}` | **一键全闭环**: 网表→建板→布线→DRC[→制造] |
+| `/api/agent` | POST | `{text, root?}` | **Copilot 对话回合**: 自然语言→意图路由到上面各端点; 慢动作返回 `{job}` |
 | `/api/job` | GET | `?id=job号` | 轮询任务 `{done, stage?, result?}` |
 
 标注 `job` 的端点立即返回 `{"job":"<id>"}`; 轮询 `/api/job?id=` 直至 `done:true`,
