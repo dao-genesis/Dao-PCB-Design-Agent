@@ -50,6 +50,22 @@ def _layer(name):
 # nickname -> directory map from the project's fp-lib-table (set per build()).
 _LIB_DIRS: dict = {}
 
+# One shared s-expression IO plugin for every footprint load. The convenience
+# wrapper ``pcbnew.FootprintLoad`` constructs a fresh PCB_IO per call, and each
+# instance re-parses and caches the whole .pretty library it touches (~15 MB a
+# call against the stock lib) — on a 1500-part board that compounds to several
+# GB and the worker dies OOM. A single reused plugin keeps one cache per
+# distinct library, bounding memory by the number of libraries instead of the
+# number of parts (vme-wren: 7.7 GB OOM → ~0.4 GB).
+_FP_IO = None
+
+
+def _footprint_load(libdir, name):
+    global _FP_IO
+    if _FP_IO is None:
+        _FP_IO = pcbnew.PCB_IO_MGR.PluginFind(pcbnew.PCB_IO_MGR.KICAD_SEXP)
+    return _FP_IO.FootprintLoad(libdir, name)
+
 
 def _fp_dir(lib):
     # project-local libraries (from fp-lib-table) win over the install dir
@@ -61,6 +77,18 @@ def _fp_dir(lib):
         root = os.path.dirname(os.path.dirname(sys.executable))
         base = os.path.join(root, "share", "kicad", "footprints")
     return os.path.join(base, lib + ".pretty")
+
+
+def _body_bbox(fp):
+    """Physical body bounds (pads + courtyard + graphics), text excluded.
+
+    The default bounding box includes reference/value text, which inflates an
+    0402 passive (~1.5×2 mm courtyard) to ~4×5 mm — packing on that spreads
+    small parts across 4-6× the area a hand-placed board would use."""
+    bb = fp.GetBoundingBox(False, False)
+    if bb.GetWidth() <= 0 or bb.GetHeight() <= 0:
+        bb = fp.GetBoundingBox()
+    return bb
 
 
 def _find_pad(fp, name):
@@ -366,6 +394,30 @@ def _order_by_connectivity(autos, connections, gap=3.0, allow_floorplan=False):
     return sorted(autos, key=lambda t: pos[t[0]["ref"]]), best_tw, fp_centers
 
 
+def _allow_intrinsic_mask_bridges(board, fp):
+    """Fine-pitch connectors (USB-C…) ship pads whose solder-mask apertures
+    overlap *by design*; no placement or routing can separate them, so the
+    designer's remedy in KiCad is the footprint's "allow bridged solder mask"
+    attribute. Detect the intrinsic overlap between different-numbered pads and
+    set that attribute — real bridges between footprints still get flagged."""
+    max_err = board.GetDesignSettings().m_MaxError
+    for side in (pcbnew.F_Mask, pcbnew.B_Mask):
+        polys = []
+        for p in fp.Pads():
+            if not p.IsOnLayer(side):
+                continue
+            ps = pcbnew.SHAPE_POLY_SET()
+            p.TransformShapeToPolygon(ps, side, int(p.GetSolderMaskExpansion(side)),
+                                      max_err, pcbnew.ERROR_OUTSIDE)
+            polys.append((p.GetNumber(), ps))
+        for i in range(len(polys)):
+            for j in range(i + 1, len(polys)):
+                if polys[i][0] != polys[j][0] and polys[i][1].Collide(polys[j][1]):
+                    fp.SetAttributes(fp.GetAttributes()
+                                     | pcbnew.FP_ALLOW_SOLDERMASK_BRIDGES)
+                    return
+
+
 def build(spec, out_path):
     global _LIB_DIRS
     _LIB_DIRS = spec.get("fp_lib_dirs", {}) or {}
@@ -409,7 +461,7 @@ def build(spec, out_path):
     # area (row width derived from total component area) so an arbitrary board
     # comes out compact instead of a long thin strip. Explicit x/y always wins.
     grid = spec.get("place_grid", {})
-    gap = float(grid.get("gap", 3.0))         # mm between courtyards
+    gap = float(grid["gap"]) if "gap" in grid else None  # mm between courtyards
     origin_x = float(grid.get("x", 20.0))
     origin_y = float(grid.get("y", 20.0))
     autos = []  # (fpspec, fp, w_mm, h_mm) for the parts we lay out ourselves
@@ -419,13 +471,21 @@ def build(spec, out_path):
             # custom footprint generated from scratch (no library)
             fp = _make_footprint(board, fpspec)
         else:
-            fp = pcbnew.FootprintLoad(_fp_dir(fpspec["lib"]), fpspec["fp"])
+            fp = _footprint_load(_fp_dir(fpspec["lib"]), fpspec["fp"])
         if fp is None:
             return {"ok": False, "error": f"footprint not found: {fpspec.get('lib')}/{fpspec.get('fp')}"}
+        # Library footprints (edge connectors, card sockets…) can carry
+        # Edge.Cuts graphics meant for flush board-edge mounting. The spec owns
+        # the board outline here, so those fragments only corrupt it
+        # (invalid_outline + bogus copper_edge_clearance DRC). Drop them.
+        for gitem in list(fp.GraphicalItems()):
+            if gitem.GetLayer() == pcbnew.Edge_Cuts:
+                fp.Remove(gitem)
         fp.SetReference(ref)
         if "value" in fpspec:
             fp.SetValue(str(fpspec["value"]))
         board.Add(fp)
+        _allow_intrinsic_mask_bridges(board, fp)
         placed[ref] = fp
         # orient/flip only after the footprint belongs to the board — flipping a
         # board-less footprint dereferences board layer state and segfaults
@@ -437,9 +497,21 @@ def build(spec, out_path):
         if "x" in fpspec or "y" in fpspec:
             fp.SetPosition(_v(fpspec.get("x", origin_x), fpspec.get("y", origin_y)))
         else:
-            bb = fp.GetBoundingBox()
+            bb = _body_bbox(fp)
             autos.append((fpspec, fp, pcbnew.ToMM(bb.GetWidth()),
                           pcbnew.ToMM(bb.GetHeight())))
+
+    if gap is None:
+        # Size-adaptive spacing: a fixed 3 mm gap reads right next to a large
+        # THT connector but strands 0402 passives on a sparse grid with long
+        # snaking tracks — nothing like a hand-placed board. Scale the gap to
+        # the median auto-part dimension, clamped to a routable range.
+        if autos:
+            dims = sorted(max(w, h) for _, _, w, h in autos)
+            med = dims[len(dims) // 2]
+            gap = max(0.8, min(3.0, med * 0.4))
+        else:
+            gap = 3.0
 
     if autos:
         # cluster densely-connected parts before packing so the autorouter sees
@@ -454,7 +526,7 @@ def build(spec, out_path):
         # (valves, mounting holes…), so anchor-based placement let courtyards
         # overlap; offset the anchor by (anchor - bbox top-left).
         def _place_topleft(fp, tx, ty):
-            bb = fp.GetBoundingBox()
+            bb = _body_bbox(fp)
             off_x = pcbnew.ToMM(fp.GetPosition().x - bb.GetLeft())
             off_y = pcbnew.ToMM(fp.GetPosition().y - bb.GetTop())
             fp.SetPosition(_v(tx + off_x, ty + off_y))
@@ -505,28 +577,34 @@ def build(spec, out_path):
     # the chosen footprint) must NOT sink the whole board — skip it and report,
     # so a 100+ part board still builds with every routable net intact.
     skipped_conns = []
-    pad_index: dict[str, dict] = {}    # ref -> {pad name/number -> pad}, built once
+    pad_index: dict[str, dict] = {}    # ref -> {pad name/number -> [pads]}, built once
 
-    def _pad_for(fp, ref, name):
+    # a footprint can expose *several* physical pads under one number (solder
+    # jumpers, thermal tabs, connector shields…); every one of them must join
+    # the net, or the leftover no-net copper trips hole/clearance DRC against
+    # its own siblings.
+    def _pads_for(fp, ref, name):
         idx = pad_index.get(ref)
         if idx is None:
             idx = {}
             for p in fp.Pads():           # index every pad once, not per connection
-                idx.setdefault(p.GetPadName(), p)
-                idx.setdefault(p.GetNumber(), p)
+                idx.setdefault(p.GetPadName(), []).append(p)
+                if p.GetNumber() != p.GetPadName():
+                    idx.setdefault(p.GetNumber(), []).append(p)
             pad_index[ref] = idx
-        return idx.get(str(name))
+        return idx.get(str(name), [])
 
     for c in spec.get("connections", []):
         fp = placed.get(c["ref"])
         if fp is None:
             skipped_conns.append(f"{c['ref']}.{c.get('pad')} (未找到器件)")
             continue
-        pad = _pad_for(fp, c["ref"], c["pad"])
-        if pad is None:
+        pads = _pads_for(fp, c["ref"], c["pad"])
+        if not pads:
             skipped_conns.append(f"{c['ref']}.{c['pad']} (封装无此焊盘)")
             continue
-        pad.SetNet(nets[c["net"]])
+        for pad in pads:
+            pad.SetNet(nets[c["net"]])
 
     def _resolve_point(p):
         # p is [x,y] OR {"ref":..,"pad":..}
@@ -606,6 +684,12 @@ def build(spec, out_path):
     # board. Done before the pour so the zone fill auto-clears foreign nets.
     for s in spec.get("stitching", []):
         _stitch_vias(board, s, nets, default_via_d, default_via_s)
+
+    # plane escape vias: an SMD pad only reaches an inner plane through a
+    # via, and freerouting treats plane nets as satisfied, so without these
+    # every surface GND/power pad stays an unconnected ratline.
+    for z in spec.get("zones", []):
+        _pad_escape_vias(board, z.get("net"), nets)
 
     # copper zones (e.g. GND pour / power planes). Compute the fallback board
     # rectangle once, before any zone is added, so a full-board plane can't
@@ -774,6 +858,88 @@ def _seg_dist2(px, py, ax, ay, bx, by):
     t = max(0.0, min(1.0, t))
     cx, cy = ax + t * dx, ay + t * dy
     return (px - cx) ** 2 + (py - cy) ** 2
+
+
+def _pad_escape_vias(board, net, nets, size_mm=0.8, drill_mm=0.4,
+                     clearance_mm=0.25):
+    """Give every SMD pad of a plane net a via down to the plane.
+
+    Prefers a via-in-pad; on fine-pitch pads (neighbours too close) walks
+    outward in 8 directions and, when a clear spot is found, joins pad and
+    via with a short stub track on the pad's own layer. Through-hole pads
+    already reach every layer. Returns the number of vias placed."""
+    if not net or net not in nets:
+        return 0
+    netcode = nets[net].GetNetCode()
+    size, drill, clr = MM(size_mm), MM(drill_mm), MM(clearance_mm)
+    foreign = [(p.GetPosition().x, p.GetPosition().y,
+                max(p.GetSize().x, p.GetSize().y))
+               for fp in board.GetFootprints() for p in fp.Pads()
+               if p.GetNetCode() != netcode]
+
+    placed: list = []
+    hole_gap = MM(0.5)
+
+    def clear(x, y, lim=None):
+        lim = size / 2 + clr if lim is None else lim
+        return all((fx - x) ** 2 + (fy - y) ** 2 >= (lim + fs / 2) ** 2
+                   for fx, fy, fs in foreign)
+
+    def hole_clear(x, y):
+        gap2 = (drill + hole_gap) ** 2
+        return all((vx - x) ** 2 + (vy - y) ** 2 >= gap2 for vx, vy in placed)
+
+    def path_clear(x0, y0, x1, y1, width):
+        steps = 4
+        return all(clear(x0 + (x1 - x0) * i / steps,
+                         y0 + (y1 - y0) * i / steps, width / 2 + clr)
+                   for i in range(1, steps))
+
+    dirs = [(1, 0), (-1, 0), (0, 1), (0, -1),
+            (1, 1), (1, -1), (-1, 1), (-1, -1)]
+    count = 0
+    for fp in board.GetFootprints():
+        for p in fp.Pads():
+            if p.GetNetCode() != netcode:
+                continue
+            if p.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+                continue
+            x, y = p.GetPosition().x, p.GetPosition().y
+            spot = (x, y) if clear(x, y) and hole_clear(x, y) else None
+            if spot is None:
+                pad_r = max(p.GetSize().x, p.GetSize().y) / 2
+                step = pad_r + size / 2 + clr
+                stub_w = min(MM(0.3), p.GetSize().x, p.GetSize().y)
+                for k in (1.0, 1.5, 2.0):
+                    for dx, dy in dirs:
+                        n = (dx * dx + dy * dy) ** 0.5
+                        cx = x + int(dx / n * step * k)
+                        cy = y + int(dy / n * step * k)
+                        if (clear(cx, cy) and hole_clear(cx, cy)
+                                and path_clear(x, y, cx, cy, stub_w)):
+                            spot = (cx, cy)
+                            break
+                    if spot:
+                        break
+            if spot is None:
+                continue
+            placed.append(spot)
+            via = pcbnew.PCB_VIA(board)
+            via.SetPosition(pcbnew.VECTOR2I(int(spot[0]), int(spot[1])))
+            via.SetDrill(int(drill))
+            via.SetWidth(int(size))
+            via.SetNet(nets[net])
+            board.Add(via)
+            if spot != (x, y):
+                t = pcbnew.PCB_TRACK(board)
+                t.SetStart(pcbnew.VECTOR2I(int(x), int(y)))
+                t.SetEnd(pcbnew.VECTOR2I(int(spot[0]), int(spot[1])))
+                t.SetWidth(int(min(MM(0.3), p.GetSize().x, p.GetSize().y)))
+                t.SetLayer(p.GetLayer())
+                t.SetNet(nets[net])
+                board.Add(t)
+            count += 1
+    return count
 
 
 def _stitch_vias(board, s, nets, default_via_d, default_via_s):
@@ -992,6 +1158,246 @@ def import_ses(pcb_path, ses_path, out_path):
             "tracks": len(list(b.Tracks())) if ok else 0}
 
 
+def _copper_layers(board, item):
+    """Copper layers an item actually occupies (tracks: one; pads/vias: many)."""
+    out = []
+    for lid in board.GetEnabledLayers().CuStack():
+        if item.IsOnLayer(lid):
+            out.append(lid)
+    return out
+
+
+def _stitch_tails(board, max_mm=3.0):
+    """Close tiny same-net tails freerouting leaves behind (a pad and a track
+    of the same net sitting a fraction of a mm apart). For each net, cluster
+    copper items by geometric contact, then join cluster pairs whose gap on a
+    shared layer is under ``max_mm`` with a direct track between the nearest
+    anchors — exactly the stub a human closes by hand. Callers must guard the
+    result with DRC (adopt only when strictly better)."""
+    conn_added = 0
+    max_nm = int(max_mm * 1e6)
+    # plane nets connect through their zone fill, which this clustering can't
+    # see — stitching them would add pointless stubs; escape vias own that job.
+    zone_nets = {z.GetNetCode() for z in board.Zones()}
+    clearance = board.GetDesignSettings().GetSmallestClearanceValue()
+    obstacles: dict = {}
+    for fp in board.GetFootprints():
+        for p in fp.Pads():
+            for lid in _copper_layers(board, p):
+                obstacles.setdefault(lid, []).append(p)
+    for t in board.Tracks():
+        for lid in _copper_layers(board, t):
+            obstacles.setdefault(lid, []).append(t)
+
+    def _blocked(ax, ay, bx, by, lid, width, code):
+        seg = pcbnew.SHAPE_SEGMENT(pcbnew.VECTOR2I(int(ax), int(ay)),
+                                   pcbnew.VECTOR2I(int(bx), int(by)),
+                                   int(width))
+        for ob in obstacles.get(lid, ()):
+            if ob.GetNetCode() == code:
+                continue
+            if seg.Collide(ob.GetEffectiveShape(lid), clearance):
+                return True
+        return False
+
+    all_cu = list(board.GetEnabledLayers().CuStack())
+
+    def _via_blocked(x, y, dia, code):
+        c = pcbnew.SHAPE_SEGMENT(pcbnew.VECTOR2I(int(x), int(y)),
+                                 pcbnew.VECTOR2I(int(x), int(y)),
+                                 int(dia))
+        for lid in all_cu:
+            for ob in obstacles.get(lid, ()):
+                if ob.GetNetCode() == code:
+                    continue
+                if c.Collide(ob.GetEffectiveShape(lid), clearance):
+                    return True
+        return False
+    for code in board.GetNetsByNetcode():
+        if code == 0 or code in zone_nets:
+            continue
+        net = board.GetNetsByNetcode()[code]
+        items = []
+        for fp in board.GetFootprints():
+            for p in fp.Pads():
+                if p.GetNetCode() == code:
+                    items.append(p)
+        for t in board.Tracks():
+            if t.GetNetCode() == code:
+                items.append(t)
+        if len(items) < 2:
+            continue
+        # union-find over geometric contact on shared copper layers
+        parent = list(range(len(items)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        laysets = [set(_copper_layers(board, it)) for it in items]
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                shared = laysets[i] & laysets[j]
+                if not shared:
+                    continue
+                lid = next(iter(shared))
+                if items[i].GetEffectiveShape(lid).Collide(
+                        items[j].GetEffectiveShape(lid), 0):
+                    ri, rj = find(i), find(j)
+                    if ri != rj:
+                        parent[ri] = rj
+        clusters: dict = {}
+        for i in range(len(items)):
+            clusters.setdefault(find(i), []).append(i)
+        if len(clusters) < 2:
+            continue
+
+        def anchors(i):
+            it = items[i]
+            if isinstance(it, pcbnew.PCB_VIA) or isinstance(it, pcbnew.PAD):
+                return [(it.GetPosition().x, it.GetPosition().y)]
+            s, e = it.GetStart(), it.GetEnd()
+            return [(s.x, s.y), (e.x, e.y)]
+
+        def nearest_on(i, px, py):
+            """Closest point of item i to (px, py) — a dangling stub often ends
+            beside the *middle* of another track, so endpoints alone miss it."""
+            it = items[i]
+            if isinstance(it, pcbnew.PCB_VIA) or isinstance(it, pcbnew.PAD):
+                return (it.GetPosition().x, it.GetPosition().y)
+            s, e = it.GetStart(), it.GetEnd()
+            ax, ay, bx, by = s.x, s.y, e.x, e.y
+            vx, vy = bx - ax, by - ay
+            L2 = vx * vx + vy * vy
+            if L2 == 0:
+                return (ax, ay)
+            t = max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / L2))
+            return (int(ax + t * vx), int(ay + t * vy))
+
+        ncls = net.GetNetClassSlow() if hasattr(net, "GetNetClassSlow") else None
+        width = ncls.GetTrackWidth() if ncls else 200000
+        via_dia = ncls.GetViaDiameter() if ncls else 600000
+        via_drill = ncls.GetViaDrill() if ncls else 300000
+        # repeatedly join the closest cluster pair until nothing is in reach
+        roots = list(clusters)
+        while len(roots) > 1:
+            best = None
+            for a in range(len(roots)):
+                for bkt in range(a + 1, len(roots)):
+                    for i in clusters[roots[a]]:
+                        for j in clusters[roots[bkt]]:
+                            shared = laysets[i] & laysets[j]
+                            if not shared:
+                                # cross-layer gap: hop through a via at the
+                                # target anchor — track on the source layer,
+                                # then a through via down to the target copper.
+                                for src, dst in ((i, j), (j, i)):
+                                    la = next(iter(laysets[src]))
+                                    for ax, ay in anchors(src):
+                                        bx, by = nearest_on(dst, ax, ay)
+                                        d2 = ((ax - bx) ** 2
+                                              + (ay - by) ** 2)
+                                        if ((best is not None
+                                                and d2 >= best[0])
+                                                or d2 > max_nm * max_nm):
+                                            continue
+                                        if _via_blocked(bx, by, via_dia,
+                                                        code):
+                                            continue
+                                        legs = [(ax, ay, bx, by, la)]
+                                        if not _blocked(*legs[0], width,
+                                                        code):
+                                            best = (d2, a, bkt, legs,
+                                                    ((bx, by),))
+                                continue
+                            for src, dst in ((i, j), (j, i)):
+                                for ax, ay in anchors(src):
+                                    bx, by = nearest_on(dst, ax, ay)
+                                    d2 = (ax - bx) ** 2 + (ay - by) ** 2
+                                    if ((best is None or d2 < best[0])
+                                            and d2 <= max_nm * max_nm):
+                                        lid = next(iter(shared))
+                                        # straight shot, else L-bend both ways
+                                        for mid in (None, (ax, by), (bx, ay)):
+                                            legs = ([(ax, ay, bx, by, lid)]
+                                                    if mid is None else
+                                                    [(ax, ay, *mid, lid),
+                                                     (*mid, bx, by, lid)])
+                                            if not any(_blocked(*leg,
+                                                                width, code)
+                                                       for leg in legs):
+                                                best = (d2, a, bkt, legs, ())
+                                                break
+            if best is None or best[0] > max_nm * max_nm:
+                break
+            _, a, bkt, legs, vias = best
+            for ax, ay, bx, by, lid in legs:
+                if (ax, ay) == (bx, by):
+                    continue
+                tr = pcbnew.PCB_TRACK(board)
+                tr.SetStart(pcbnew.VECTOR2I(int(ax), int(ay)))
+                tr.SetEnd(pcbnew.VECTOR2I(int(bx), int(by)))
+                tr.SetLayer(lid)
+                tr.SetWidth(int(width))
+                tr.SetNetCode(code)
+                board.Add(tr)
+                obstacles.setdefault(lid, []).append(tr)
+            for vx, vy in vias:
+                v = pcbnew.PCB_VIA(board)
+                v.SetPosition(pcbnew.VECTOR2I(int(vx), int(vy)))
+                v.SetViaType(pcbnew.VIATYPE_THROUGH)
+                v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+                v.SetWidth(int(via_dia))
+                v.SetDrill(int(via_drill))
+                v.SetNetCode(code)
+                board.Add(v)
+                for lid in all_cu:
+                    obstacles.setdefault(lid, []).append(v)
+            conn_added += 1
+            clusters[roots[a]].extend(clusters[roots[bkt]])
+            del clusters[roots[bkt]]
+            roots = list(clusters)
+    return conn_added
+
+
+def stitch(pcb_path, out_path, max_mm=3.0):
+    """Tail-stitch a routed board and save; returns the number of tracks added."""
+    board = pcbnew.LoadBoard(str(pcb_path))
+    added = _stitch_tails(board, float(max_mm))
+    if added and board.GetAreaCount():
+        _fill_zones(board)
+    pcbnew.SaveBoard(str(out_path), board)
+    return {"ok": True, "added": added, "path": str(out_path)}
+
+
+def harvest(pcb_path, pretty_dir):
+    """Write every unique footprint embedded in a finished board out to
+    ``pretty_dir`` as ``.kicad_mod`` files. Returns ``{original_fpid: name}``
+    so the caller can re-point a build spec at the harvested library."""
+    os.makedirs(pretty_dir, exist_ok=True)
+    board = pcbnew.LoadBoard(str(pcb_path))
+    io = pcbnew.PCB_IO_KICAD_SEXPR()
+    mapping = {}
+    used = set()
+    for fp in board.GetFootprints():
+        fpid = fp.GetFPIDAsString()
+        if fpid in mapping:
+            continue
+        base = str(fp.GetFPID().GetLibItemName()) or fp.GetReference()
+        name = base
+        i = 1
+        while name in used:
+            name = "%s__%d" % (base, i)
+            i += 1
+        used.add(name)
+        fp.SetFPID(pcbnew.LIB_ID("harvested", name))
+        io.FootprintSave(str(pretty_dir), fp)
+        mapping[fpid] = name
+    return {"ok": True, "pretty": str(pretty_dir), "mapping": mapping}
+
+
 def main(argv):
     cmd = argv[1]
     if cmd == "build":
@@ -1006,6 +1412,11 @@ def main(argv):
         result = import_ses(argv[2], argv[3], argv[4])
     elif cmd == "tracks":
         result = tracks(argv[2])
+    elif cmd == "stitch":
+        max_mm = float(argv[4]) if len(argv) > 4 else 3.0
+        result = stitch(argv[2], argv[3], max_mm)
+    elif cmd == "harvest":
+        result = harvest(argv[2], argv[3])
     elif cmd == "version":
         result = {"ok": True, "pcbnew": pcbnew.Version(), "full": pcbnew.FullVersion()}
     else:

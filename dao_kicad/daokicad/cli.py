@@ -36,13 +36,75 @@ def _finish_build(lk, pcb, out_dir, args, build) -> int:
         if build.get(k):
             result[k] = build[k]
 
-    if not args.no_route and lk.routing_available():
+    routed = not args.no_route and lk.routing_available()
+    if routed:
         route = lk.autoroute(pcb, passes=8,
                              timeout=lk.route_timeout_for(build.get("nets")))
         result["route"] = {"ok": route.get("ok"), "tracks": route.get("tracks"),
                            "reason": route.get("reason")}
 
     drc = lk.drc(pcb)
+
+    # Escalating finisher: freerouting occasionally leaves a last ratline on a
+    # dense board. The routed board already carries every finished track, so
+    # re-exporting it and routing again with more passes only has to close the
+    # leftovers — the same escalation the closed-loop designer uses.
+    # freerouting may rip up finished copper, so each retry routes into a
+    # candidate file and is adopted only when it strictly improves DRC — the
+    # board can never get worse than the first pass. Retries keep the canonical
+    # seed=0 ordering: reshuffling an already-routed board's DSN (seed>0) makes
+    # freerouting revisit every finished wire and blow the retry budget
+    # (measured: complex_hierarchy times out on every non-zero seed); seeded
+    # basin-sampling only pays off from a placement-only board, which is the
+    # design agent's iteration loop, not this finisher. Each retry gets half
+    # the board-scaled budget: enough for a dense board's export + route,
+    # without doubling the whole build's wall clock.
+    if routed and route.get("ok"):
+        import shutil as _shutil
+        retry_timeout = max(300, lk.route_timeout_for(build.get("nets")) // 2)
+        passes = 8
+        while drc.get("unconnected", 0) > 0 and passes < 32:
+            passes += 12
+            cand = pcb.with_name(pcb.stem + ".retry.kicad_pcb")
+            retry = lk.autoroute(pcb, cand, passes=passes,
+                                 timeout=retry_timeout)
+            if not retry.get("ok"):
+                break
+            cand_drc = lk.drc(cand)
+            better = (cand_drc.get("unconnected", 0) < drc.get("unconnected", 0)
+                      and cand_drc.get("violations", 0) <= drc.get("violations", 0))
+            if better:
+                _shutil.move(str(cand), str(pcb))
+                _shutil.move(str(cand.with_suffix(".drc.json")),
+                             str(pcb.with_suffix(".drc.json")))
+                drc = cand_drc
+                result["route"] = {"ok": True, "tracks": retry.get("tracks"),
+                                   "reason": retry.get("reason"),
+                                   "passes": passes}
+            else:
+                cand.unlink(missing_ok=True)
+        cand_report = pcb.with_name(pcb.stem + ".retry.drc.json")
+        cand_report.unlink(missing_ok=True)
+        # Tail stitcher: close the last same-net gaps with clearance-checked
+        # direct/L tracks (the stubs a human closes by hand). Same DRC guard.
+        if drc.get("unconnected", 0) > 0:
+            cand = pcb.with_name(pcb.stem + ".stitch.kicad_pcb")
+            st = lk.stitch(pcb, cand)
+            if st.get("ok") and st.get("added"):
+                cand_drc = lk.drc(cand)
+                if (cand_drc.get("unconnected", 0) < drc.get("unconnected", 0)
+                        and cand_drc.get("violations", 0)
+                        <= drc.get("violations", 0)):
+                    _shutil.move(str(cand), str(pcb))
+                    rep = cand.with_suffix(".drc.json")
+                    if rep.is_file():
+                        _shutil.move(str(rep), str(pcb.with_suffix(".drc.json")))
+                    drc = cand_drc
+                    result["route"] = {**result["route"],
+                                       "stitched": st.get("added")}
+            cand.unlink(missing_ok=True)
+            cand.with_suffix(".drc.json").unlink(missing_ok=True)
+
     result["drc"] = {k: drc.get(k) for k in
                      ("violations", "warnings", "unconnected", "clean")}
 

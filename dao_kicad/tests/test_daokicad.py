@@ -613,3 +613,75 @@ def test_ipc_session_no_gui_is_graceful():
     assert res["ok"] is False and "reason" in res
     assert s.connected is False
     assert s.board_info()["ok"] is False
+
+
+@needs_script
+def test_library_edge_cuts_stripped_from_footprints(tmp_path):
+    """Edge-connector footprints (USB-C…) ship Edge.Cuts fragments meant for
+    flush board-edge mounting; placed mid-board they corrupt the spec-owned
+    outline (invalid_outline + bogus copper_edge_clearance). The builder must
+    drop them so the board carries only the spec outline."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "edgecut",
+        "footprints": [{"ref": "J1", "lib": "Connector_USB",
+                        "fp": "USB_C_Receptacle_Amphenol_12401948E412A"}],
+        "connections": [],
+    }
+    pcb = tmp_path / "edge.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    for fp in board.GetFootprints():
+        assert not any(g.GetLayer() == pcbnew.Edge_Cuts
+                       for g in fp.GraphicalItems()), fp.GetReference()
+
+
+@needs_script
+def test_duplicate_pad_numbers_all_join_net(tmp_path):
+    """Footprints expose several physical pads under one number (solder
+    jumpers, TO-263 tab+pin…). Every one must join the net — a leftover no-net
+    sibling trips hole/clearance DRC against its own footprint."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "dup_pads",
+        "footprints": [{"ref": "U1", "lib": "Package_TO_SOT_SMD",
+                        "fp": "TO-263-3_TabPin2"}],
+        "connections": [{"ref": "U1", "pad": "2", "net": "GND"}],
+    }
+    pcb = tmp_path / "dup.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    fp = board.FindFootprintByReference("U1")
+    pads2 = [p for p in fp.Pads() if p.GetNumber() == "2"]
+    assert len(pads2) >= 2
+    assert all(p.GetNetname() == "GND" for p in pads2)
+
+
+@needs_script
+def test_intrinsic_mask_bridges_allowed(tmp_path):
+    """Fine-pitch connectors ship pads whose mask apertures overlap by design
+    (USB-C…). The builder must mark such footprints "allow bridged solder
+    mask" — the designer's own remedy — while separated pads stay strict."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "maskbridge",
+        "footprints": [
+            {"ref": "J1", "fp": "TIGHT", "pads": [
+                {"num": "1", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                {"num": "2", "x": 0.5, "y": 0.0, "w": 1.0, "h": 1.0}]},
+            {"ref": "J2", "fp": "LOOSE", "pads": [
+                {"num": "1", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                {"num": "2", "x": 3.0, "y": 0.0, "w": 1.0, "h": 1.0}]},
+        ],
+        "connections": [],
+    }
+    pcb = tmp_path / "mask.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    flags = {fp.GetReference():
+             bool(fp.GetAttributes() & pcbnew.FP_ALLOW_SOLDERMASK_BRIDGES)
+             for fp in board.GetFootprints()}
+    assert flags == {"J1": True, "J2": False}

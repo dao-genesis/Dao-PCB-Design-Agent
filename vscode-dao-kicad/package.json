@@ -1,0 +1,52 @@
+{
+  "name": "dao-kicad",
+  "displayName": "DAO KiCad — 归一 PCB 工作台",
+  "description": "KiCad in your IDE: schematic/PCB viewing, netlist→board build, freerouting autoroute, DRC/ERC and fab outputs — all bridged to the daokicad engine, no KiCad GUI needed.",
+  "version": "0.3.2",
+  "publisher": "dao",
+  "license": "MIT",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other", "Visualization"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      { "command": "daoKicad.openHome", "title": "DAO KiCad: 打开归一主页 (Open Home)" },
+      { "command": "daoKicad.openChat", "title": "DAO KiCad: 打开 Copilot 对话 (Open Chat)" },
+      { "command": "daoKicad.restartBridge", "title": "DAO KiCad: 重启桥接服务 (Restart Bridge)" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "daoKicad", "title": "DAO KiCad", "icon": "media/dao.svg" }
+      ]
+    },
+    "views": {
+      "daoKicad": [
+        { "type": "webview", "id": "daoKicad.chatView", "name": "Copilot 对话" }
+      ]
+    },
+    "configuration": {
+      "title": "DAO KiCad",
+      "properties": {
+        "daoKicad.enginePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the dao_kicad engine folder (contains daokicad/ and bridge/). Empty = auto-detect in workspace."
+        },
+        "daoKicad.python": {
+          "type": "string",
+          "default": "python3",
+          "description": "Python interpreter used to run the bridge server."
+        },
+        "daoKicad.port": {
+          "type": "number",
+          "default": 9931,
+          "description": "Localhost port for the bridge REST service."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "npx --yes @vscode/vsce package --allow-missing-repository"
+  }
+}

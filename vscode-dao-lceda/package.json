@@ -1,0 +1,53 @@
+{
+  "name": "dao-lceda",
+  "displayName": "DAO LCEDA (嘉立创EDA · 归一面板)",
+  "description": "把整个嘉立创EDA(Web/桌面, Windows/Linux)整块路由进 VS Code / Devin Desktop:中间面板承载 EDA 本体, 左侧工程树, 右侧道之对话。",
+  "version": "0.1.0",
+  "publisher": "dao",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      { "command": "daoLceda.open", "title": "DAO LCEDA: 打开嘉立创EDA (Open LCEDA Panel)" },
+      { "command": "daoLceda.restartBridge", "title": "DAO LCEDA: 重启桥接服务 (Restart Bridge)" },
+      { "command": "daoLceda.refreshTree", "title": "DAO LCEDA: 刷新工程树 (Refresh Tree)", "icon": "$(refresh)" },
+      { "command": "daoLceda.clearChat", "title": "DAO LCEDA: 清空对话会话 (Clear Chat History)" },
+      { "command": "daoLceda.screenshot", "title": "DAO LCEDA: 画布截图 (Canvas Screenshot)" }
+    ],
+    "views": {
+      "explorer": [
+        { "id": "daoLcedaProjects", "name": "嘉立创EDA 工程" }
+      ],
+      "daoLcedaChatContainer": [
+        { "id": "daoLcedaChat", "type": "webview", "name": "道之对话 (LCEDA AI)" }
+      ],
+      "daoLcedaSideContainer": [
+        { "id": "daoLcedaChatSide", "type": "webview", "name": "道之对话 (LCEDA AI)" }
+      ]
+    },
+    "viewsContainers": {
+      "panel": [
+        { "id": "daoLcedaChatContainer", "title": "道之对话", "icon": "$(comment-discussion)" }
+      ],
+      "activitybar": [
+        { "id": "daoLcedaSideContainer", "title": "嘉立创EDA", "icon": "$(circuit-board)" }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        { "command": "daoLceda.refreshTree", "when": "view == daoLcedaProjects", "group": "navigation" }
+      ]
+    },
+    "configuration": {
+      "title": "DAO LCEDA",
+      "properties": {
+        "daoLceda.port": { "type": "number", "default": 9940, "description": "本地桥接端口" },
+        "daoLceda.python": { "type": "string", "default": "python3", "description": "Python 可执行文件(Windows 可设为 python)" },
+        "daoLceda.bridgePath": { "type": "string", "default": "", "description": "bridge_server.py 所在目录(留空则在工作区内自动发现 lceda_bridge/vscode_lceda)" },
+        "daoLceda.cdpPorts": { "type": "string", "default": "29229,29230", "description": "候选 CDP 端口(Web 版 29229 / 桌面版 29230)" }
+      }
+    }
+  }
+}
