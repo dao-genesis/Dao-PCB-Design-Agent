@@ -100,25 +100,29 @@ td,th{border:1px solid var(--line);padding:3px 8px}
   <!-- 中: 板块子页 — 分而治之, 每板块一张平级子网页 -->
   <section id="center">
     <nav id="boards"></nav>
-    <!-- 🏠 主页 -->
-    <div class="board pad" data-b="home">
-      <div class="card"><h3>🏠 DAO KiCad · 归一面板</h3>
-        <div class="kv">一个网页代替 KiCad GUI: 不管用户装的是 Linux / Windows / macOS 版 KiCad,
-        本插件把 KiCad 一切本源路由到此单网页 — 用户全程无需打开 KiCad。</div>
-        <div class="kv" id="homehealth" style="margin-top:6px">…</div></div>
-      <div class="card"><h3>⚡ 快速开始</h3>
-        <div class="kv">1. 「📁 工程」载入根目录 → 2. 点文件渲染原理图/板图 →
-        3. 左侧 AI 面板说意图 (全链路 / ERC / DRC / 布线 / 制造) → 引擎自动闭环。</div></div>
-      <div class="card"><h3>🧩 板块一览</h3><div class="kv" id="homeboards"></div></div>
+    <!-- 🏠 工程管理器 — 对齐 KiCad 本体: 左=工程文件树, 右=九大编辑器启动入口 -->
+    <div class="board" data-b="home">
+      <div id="rootbar">
+        <input id="root" placeholder="工程根目录, 如 /home/ubuntu/practice">
+        <button class="primary" onclick="loadHome()">载入</button>
+        <span class="kv" id="homehealth" style="align-self:center">…</span>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div id="filetree" style="width:290px;min-width:180px;overflow:auto;border-right:1px solid var(--line);padding:8px;font-size:12px">
+          <div class="hint">工程文件 — 载入根目录后显示 (对齐 KiCad 工程管理器左窗格)</div>
+        </div>
+        <div id="launcher" style="flex:1;overflow:auto;padding:14px">
+          <div class="card"><h3>☰ KiCad 编辑器 · 原生板块直达</h3>
+            <div class="kv">与 KiCad 工程管理器同构: 点击即在本面板内打开对应编辑器板块,
+            内容全部取自 KiCad 本源 (kicad-cli / 官方库 / 官方 PCM 仓库)。</div></div>
+          <div id="editors"></div>
+        </div>
+      </div>
     </div>
     <!-- 📁 工程 -->
     <div class="board" data-b="proj">
-      <div id="rootbar">
-        <input id="root" placeholder="工程根目录, 如 /home/ubuntu/practice">
-        <button class="primary" onclick="loadTree()">载入</button>
-      </div>
       <div id="projects"><div style="padding:8px;color:var(--dim);font-size:12px">
-        输入根目录并载入, 即可浏览 KiCad 工程 — 全程无需打开 KiCad。</div></div>
+        在「🏠 工程管理器」载入根目录, 即可浏览 KiCad 工程 — 全程无需打开 KiCad。</div></div>
     </div>
     <!-- 📐 原理图 -->
     <div class="board" data-b="sch">
@@ -158,6 +162,73 @@ td,th{border:1px solid var(--line);padding:3px 8px}
         <div class="kv" id="gerberfiles">跑一次制造输出后, 产物文件列于此, 点击直读内容。</div>
         <pre id="gerberview" style="max-height:340px">尚无</pre></div>
     </div>
+    <!-- 🔍 Gerber 查看器 (对齐 KiCad Gerber Viewer) -->
+    <div class="board" data-b="gerber">
+      <div class="libbar"><span>Gerber 查看器 · 预览 Gerber 文件</span>
+        <button onclick="gerberScan()">扫描工程产物</button></div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div id="gbrList" style="width:280px;overflow:auto;border-right:1px solid var(--line);padding:8px;font-size:12px">
+          <span class="hint">扫描后列出工程内全部 Gerber/钻孔/贴片产物</span></div>
+        <pre id="gbrView" style="flex:1;margin:0;border:none;border-radius:0">点左侧文件直读内容</pre>
+      </div>
+    </div>
+    <!-- 🖼 图片转换器 (对齐 KiCad Image Converter) -->
+    <div class="board pad" data-b="img">
+      <div class="card"><h3>🖼 图片转换器 · 位图 → KiCad 原生元件</h3>
+        <div class="kv">与 KiCad bitmap2component 同源: 位图阈值化后生成原生
+        .kicad_mod (封装/丝印 logo) 或 .kicad_sym (符号)。</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+          <input type="file" id="imgFile" accept="image/*">
+          <input id="imgName" placeholder="元件名" style="width:120px" value="dao_logo">
+          <select id="imgFmt"><option value="fp">封装 .kicad_mod</option>
+            <option value="sym">符号 .kicad_sym</option></select>
+          <input id="imgThr" type="number" value="128" min="0" max="255" style="width:70px" title="阈值">
+          <label class="kv"><input type="checkbox" id="imgInv">反相</label>
+          <input id="imgOut" placeholder="保存目录(可选)" style="flex:1;min-width:160px">
+          <button class="primary" onclick="imgConvert()">转换</button>
+        </div>
+        <pre id="imgResult" style="margin-top:10px;max-height:380px">尚未转换</pre></div>
+    </div>
+    <!-- 🧮 计算工具 (对齐 KiCad PCB Calculator) -->
+    <div class="board pad" data-b="calc">
+      <div class="card"><h3>🧮 计算工具 · 与 KiCad PCB Calculator 同源公式</h3>
+        <div class="kv">轨道载流 (IPC-2221) · 欧姆定律 · E 系列电阻</div></div>
+      <div class="card"><h3>轨道宽度 (IPC-2221)</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          电流<input id="cI" type="number" value="1" step="0.1" style="width:70px">A
+          温升<input id="cDT" type="number" value="10" style="width:70px">℃
+          铜厚<input id="cTh" type="number" value="0.035" step="0.001" style="width:80px">mm
+          <button class="primary" onclick="calcTrack()">计算</button></div>
+        <pre id="cTrackOut">—</pre></div>
+      <div class="card"><h3>欧姆定律</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          V<input id="oV" type="number" style="width:80px">
+          I<input id="oI" type="number" style="width:80px">
+          R<input id="oR" type="number" style="width:80px">
+          P<input id="oP" type="number" style="width:80px">
+          <button class="primary" onclick="calcOhm()">补全缺项</button></div>
+        <pre id="oOut">填写任意两项</pre></div>
+      <div class="card"><h3>E 系列电阻</h3>
+        <div style="display:flex;gap:6px;align-items:center">目标
+          <input id="eV" type="number" value="4700" style="width:110px">Ω
+          <button class="primary" onclick="calcE()">匹配 E24/E96</button></div>
+        <pre id="eOut">—</pre></div>
+    </div>
+    <!-- 📄 图框编辑器 (对齐 KiCad Drawing Sheet Editor) -->
+    <div class="board" data-b="wks">
+      <div class="libbar"><span>图框:</span><select id="wksSel"></select>
+        <button onclick="wksScan()">扫描</button></div>
+      <div class="viewer" id="wksView"><span class="hint">扫描后选一个 .kicad_wks, 由 KiCad 本体渲染预览</span></div>
+    </div>
+    <!-- 📦 扩展内容管理器 (对齐 KiCad PCM) -->
+    <div class="board pad" data-b="pcm">
+      <div class="card"><h3>📦 扩展内容管理器 · 官方 PCM 仓库</h3>
+        <div class="kv">直连 repository.kicad.org 官方仓库, 安装/卸载到 KiCad 本体 3rdparty 目录。
+          <button onclick="pcmLoad()" style="margin-left:8px">刷新</button>
+          <input id="pcmFilter" placeholder="搜索包…" style="margin-left:6px" oninput="pcmRender()"></div>
+        <div class="kv" id="pcmInstalled" style="margin-top:8px">…</div></div>
+      <div class="card"><h3>可用包</h3><div id="pcmRepo" class="kv">点「刷新」载入官方仓库…</div></div>
+    </div>
     <!-- 🔌 接入 / AI 管理 (对齐 Proxy Pro 三面板: 渠道配置 / 模型路由 / 对话数据) -->
     <div class="board pad" data-b="api">
       <div class="card"><h3>② 渠道配置 · 第三方 API (Proxy Pro 式)</h3>
@@ -193,8 +264,22 @@ const LAYERS=["F.Cu","In1.Cu","In2.Cu","B.Cu","F.SilkS","F.Mask","Edge.Cuts"];
 const DEFAULT_ON=new Set(["F.Cu","B.Cu","F.SilkS","Edge.Cuts"]);
 const SLASH=[["auto","全链路: 网表→建板→布线→DRC"],["drc","板子 DRC"],["erc","原理图 ERC"],
              ["route","自动布线"],["build","网表建板"],["netlist","导出网表"],["fab","Gerber/钻孔/贴片"]];
-const BOARDS=[["home","🏠 主页"],["proj","📁 工程"],["sch","📐 原理图"],["sym","🧩 符号"],
-              ["pcb","🟩 板图"],["fp","📦 封装"],["check","🔬 检查"],["fab","🏭 制造"],["api","🔌 接入"]];
+const BOARDS=[["home","🏠 工程管理器"],["proj","📁 工程"],["sch","📐 原理图"],["sym","🧩 符号"],
+              ["pcb","🟩 PCB"],["fp","📦 封装"],["gerber","🔍 Gerber"],["img","🖼 图片转换"],
+              ["calc","🧮 计算"],["wks","📄 图框"],["pcm","🧭 扩展"],["check","🔬 检查"],
+              ["fab","🏭 制造"],["api","🔌 接入"]];
+// KiCad 启动器九大编辑器 — 与 KiCad 工程管理器右侧入口同构, 点击直达本面板内对应板块
+const EDITORS=[
+  ["sch","📐","原理图编辑器","编辑工程原理图"],
+  ["sym","🧩","符号编辑器","编辑全局/工程原理符号库"],
+  ["pcb","🟩","PCB 编辑器","编辑 PCB 设计图"],
+  ["fp","📦","封装编辑器","编辑全局/工程 PCB 封装库"],
+  ["gerber","🔍","Gerber 查看器","预览 Gerber 文件"],
+  ["img","🖼","图片转换器","将位图图像转换为原理符号或 PCB 封装"],
+  ["calc","🧮","计算工具","显示计算电阻、电流容量等的工具"],
+  ["wks","📄","图框编辑器","编辑用于原理图和 PCB 设计的图纸边框和工程明细表"],
+  ["pcm","🧭","扩展内容管理器","管理从 KiCad 和第三方仓库下载的扩展内容包"],
+];
 let curPcb=null;
 
 // ── 板块路由: 单网页下多张平级子网页, 标签即汉堡列表 ──
@@ -209,7 +294,164 @@ function showBoard(k){
   localStorage.setItem("dao.board",k);
   if(k==="api") loadApiBoard();
 }
-$("#homeboards").textContent=BOARDS.map(b=>b[1]).join(" · ");
+// 启动器入口 (与 KiCad 右侧列表同构)
+{
+  const box=$("#editors");
+  for(const [b,icon,title,desc] of EDITORS){
+    const d=document.createElement("div"); d.className="card"; d.style.cursor="pointer";
+    d.innerHTML=`<h3>${icon} ${title}</h3><div class="kv">${desc}</div>`;
+    d.onclick=()=>{showBoard(b);
+      if(b==="wks")wksScan(); if(b==="gerber")gerberScan(); if(b==="pcm")pcmLoad();};
+    box.appendChild(d);
+  }
+}
+// 工程文件树 (对齐 KiCad 工程管理器左窗格)
+async function loadHome(){
+  await loadTree();
+  const root=$("#root").value.trim(); if(!root)return;
+  const j=await (await fetch("/api/files?root="+encodeURIComponent(root))).json();
+  const box=$("#filetree"); box.innerHTML="";
+  if(!j.ok){box.textContent=j.error;return;}
+  box.appendChild(treeNode({name:j.root.split(/[\\/]/).pop()||j.root,path:j.root,dir:true,children:j.tree},0));
+}
+function treeNode(n,depth){
+  const d=document.createElement("div"); d.style.marginLeft=(depth?12:0)+"px";
+  const row=document.createElement("div"); row.style.cursor="pointer"; row.style.whiteSpace="nowrap";
+  row.textContent=(n.dir?"📂 ":fileIcon(n.ext))+n.name; row.title=n.path;
+  d.appendChild(row);
+  if(n.dir){
+    const kids=document.createElement("div"); kids.style.display=depth<1?"block":"none";
+    for(const c of (n.children||[])) kids.appendChild(treeNode(c,depth+1));
+    d.appendChild(kids);
+    row.onclick=()=>{kids.style.display=kids.style.display==="none"?"block":"none";};
+  } else row.onclick=()=>openFile(n);
+  return d;
+}
+function fileIcon(ext){
+  return {".kicad_sch":"📐 ",".kicad_pcb":"🟩 ",".kicad_sym":"🧩 ",".kicad_mod":"📦 ",
+          ".kicad_wks":"📄 ",".kicad_pro":"⚙️ ",".net":"🔗 "}[ext]||"📄 ";
+}
+function openFile(n){
+  if(n.ext===".kicad_sch")return showSch(n.path);
+  if(n.ext===".kicad_pcb")return showPcb(n.path);
+  if(n.ext===".kicad_wks"){showBoard("wks");
+    $("#wksView").innerHTML=`<img src="/api/render/wks?path=${encodeURIComponent(n.path)}" alt="wks">`;return;}
+  if(n.ext===".kicad_sym"){showBoard("sym");loadSyms(n.path);return;}
+  if(/\.(g[a-z0-9]{1,2}|drl|gbr)$/i.test(n.name)){showBoard("gerber");gerberOpen(n.path);return;}
+  fetch("/api/file?path="+encodeURIComponent(n.path)).then(r=>r.text())
+    .then(t=>{showBoard("gerber");$("#gbrView").textContent=t;}).catch(()=>{});
+}
+
+// ── 🔍 Gerber 查看器板块 ──
+async function gerberScan(){
+  const root=$("#root").value.trim(); if(!root){$("#gbrList").textContent="先在工程管理器载入根目录";return;}
+  const j=await (await fetch("/api/files?root="+encodeURIComponent(root))).json();
+  if(!j.ok){$("#gbrList").textContent=j.error;return;}
+  const out=[];
+  (function walk(ns){for(const n of ns){
+    if(n.dir)walk(n.children||[]);
+    else if(/\.(g[a-z0-9]{1,2}|drl|gbr|pos)$/i.test(n.name)||/-(pos|drl)\.(csv|txt)$/i.test(n.name))out.push(n);
+  }})(j.tree);
+  const box=$("#gbrList"); box.innerHTML="";
+  if(!out.length){box.textContent="工程内没有 Gerber 产物 — 先在「🏭 制造」跑一次输出";return;}
+  for(const n of out){
+    const c=document.createElement("div"); c.className="file"; c.textContent=n.name; c.title=n.path;
+    c.style.cursor="pointer"; c.onclick=()=>gerberOpen(n.path);
+    box.appendChild(c);
+  }
+}
+async function gerberOpen(p){
+  try{$("#gbrView").textContent=await (await fetch("/api/file?path="+encodeURIComponent(p))).text();}
+  catch(e){$("#gbrView").textContent="读取失败: "+e;}
+}
+
+// ── 🖼 图片转换器板块 ──
+async function imgConvert(){
+  const f=$("#imgFile").files[0]; if(!f){alert("先选一张图片");return;}
+  const b64=await new Promise((res,rej)=>{const r=new FileReader();
+    r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f);});
+  $("#imgResult").textContent="转换中…";
+  const j=await (await fetch("/api/convert",{method:"POST",body:JSON.stringify({
+    image_b64:b64,name:$("#imgName").value.trim(),format:$("#imgFmt").value,
+    threshold:+$("#imgThr").value,invert:$("#imgInv").checked,
+    out:$("#imgOut").value.trim()||undefined})})).json();
+  $("#imgResult").textContent=j.ok?
+    `✓ ${j.name} · ${j.rects} 个填充区${j.saved?" · 已存 "+j.saved:""}\n\n`+(j.content||""):
+    "失败: "+(j.error||JSON.stringify(j));
+}
+
+// ── 🧮 计算工具 (KiCad PCB Calculator 同源公式) ──
+function calcTrack(){
+  const I=+$("#cI").value, dT=+$("#cDT").value, th=+$("#cTh").value;
+  // IPC-2221: I = k * dT^0.44 * A^0.725, A in mil^2 (外层 k=0.048, 内层 k=0.024)
+  const A=(k)=>Math.pow(I/(k*Math.pow(dT,0.44)),1/0.725);
+  const thMil=th/0.0254;
+  const wExt=A(0.048)/thMil*0.0254, wInt=A(0.024)/thMil*0.0254;
+  $("#cTrackOut").textContent=
+    `外层最小宽度: ${wExt.toFixed(3)} mm\n内层最小宽度: ${wInt.toFixed(3)} mm`;
+}
+function calcOhm(){
+  let V=+$("#oV").value||null,I=+$("#oI").value||null,R=+$("#oR").value||null,P=+$("#oP").value||null;
+  if(V&&I){R=V/I;P=V*I;} else if(V&&R){I=V/R;P=V*I;} else if(V&&P){I=P/V;R=V/I;}
+  else if(I&&R){V=I*R;P=V*I;} else if(I&&P){V=P/I;R=V/I;} else if(R&&P){V=Math.sqrt(P*R);I=V/R;}
+  else {$("#oOut").textContent="填写任意两项";return;}
+  $("#oOut").textContent=`V=${V.toPrecision(5)} V\nI=${I.toPrecision(5)} A\nR=${R.toPrecision(5)} Ω\nP=${P.toPrecision(5)} W`;
+}
+function calcE(){
+  const t=+$("#eV").value; if(!(t>0))return;
+  const series=(n)=>Array.from({length:n},(_,i)=>Math.pow(10,i/n));
+  const near=(vals)=>{const d=Math.pow(10,Math.floor(Math.log10(t)));
+    let best=null;for(const e of [d/10,d,d*10])for(const v of vals){const x=v*e;
+      if(best===null||Math.abs(x-t)<Math.abs(best-t))best=x;}return best;};
+  const e24=near(series(24)),e96=near(series(96));
+  $("#eOut").textContent=`E24 最近: ${e24.toPrecision(3)} Ω (偏差 ${((e24-t)/t*100).toFixed(2)}%)\n`+
+    `E96 最近: ${e96.toPrecision(4)} Ω (偏差 ${((e96-t)/t*100).toFixed(2)}%)`;
+}
+
+// ── 📄 图框编辑器板块 ──
+async function wksScan(){
+  const j=await (await fetch("/api/wks/list?root="+encodeURIComponent($("#root").value.trim()))).json();
+  const sel=$("#wksSel"); sel.innerHTML="";
+  const o0=document.createElement("option"); o0.value=""; o0.textContent=(j.sheets||[]).length?"选择图框…":"(未找到 .kicad_wks)";
+  sel.appendChild(o0);
+  for(const s of (j.sheets||[])){const o=document.createElement("option");o.value=s;
+    o.textContent=s.split(/[\\/]/).pop();o.title=s;sel.appendChild(o);}
+  sel.onchange=()=>{if(sel.value)$("#wksView").innerHTML=
+    `<img src="/api/render/wks?path=${encodeURIComponent(sel.value)}" alt="wks">`;};
+}
+
+// ── 🧭 扩展内容管理器板块 (官方 PCM 仓库) ──
+let pcmData=null;
+async function pcmLoad(){
+  $("#pcmInstalled").textContent="载入中…";
+  try{pcmData=await (await fetch("/api/pcm/list")).json();}catch(e){$("#pcmInstalled").textContent="失败: "+e;return;}
+  pcmRender();
+}
+function pcmRender(){
+  if(!pcmData)return;
+  const inst=$("#pcmInstalled"); inst.innerHTML="<b>已安装</b> ("+pcmData.dir+"): ";
+  if(!(pcmData.installed||[]).length)inst.innerHTML+="无";
+  for(const p of (pcmData.installed||[])){
+    const d=document.createElement("div"); d.style.margin="2px 0";
+    d.textContent=`${p.kind}/${p.id}`;
+    const del=document.createElement("button"); del.textContent="卸载"; del.style.marginLeft="8px";
+    del.onclick=async()=>{await fetch("/api/pcm/remove",{method:"POST",body:JSON.stringify({id:p.id})});pcmLoad();};
+    d.appendChild(del); inst.appendChild(d);
+  }
+  const q=($("#pcmFilter").value||"").toLowerCase();
+  const box=$("#pcmRepo"); box.innerHTML="";
+  const pkgs=(pcmData.repository||[]).filter(p=>!q||(p.id+p.name+p.description).toLowerCase().includes(q)).slice(0,60);
+  if(!pkgs.length){box.textContent=pcmData.repo_error?("仓库不可达: "+pcmData.repo_error):"无匹配包";return;}
+  for(const p of pkgs){
+    const d=document.createElement("div"); d.style.margin="4px 0";
+    d.innerHTML=`<b>${p.name}</b> <span style="color:var(--dim)">${p.type} · ${p.id}</span><br>${p.description||""}`;
+    const ins=document.createElement("button"); ins.textContent="安装"; ins.style.marginLeft="8px";
+    ins.onclick=async()=>{ins.textContent="安装中…";
+      const j=await (await fetch("/api/pcm/install",{method:"POST",body:JSON.stringify({id:p.id})})).json();
+      ins.textContent=j.ok?"✓ 已装":"失败"; pcmLoad();};
+    d.appendChild(ins); box.appendChild(d);
+  }
+}
 
 // ── health ──
 fetch("/api/health").then(r=>r.json()).then(j=>{
@@ -479,7 +721,7 @@ function finishTurn(action,res){
   if(p.get("embed")==="1"){ $("#ai").style.display="none"; }
   const r=p.get("root"); if(r){ $("#root").value=r; }
   showBoard(p.get("board")||localStorage.getItem("dao.board")||"home"); })();
-if($("#root").value) loadTree();
+if($("#root").value) loadHome();
 </script>
 </body>
 </html>

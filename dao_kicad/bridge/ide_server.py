@@ -170,6 +170,264 @@ def api_file(path: str) -> tuple[bytes, str] | dict:
     return src.read_bytes(), "text/plain; charset=utf-8"
 
 
+# ── KiCad 启动器板块本源 (工程文件树 / 图框 / 图片转换 / 扩展内容管理) ──
+# 对齐 KiCad 工程管理器: 左侧工程文件树 + 九大编辑器入口, 内容全部取自 KiCad 本体.
+
+_TREE_SKIP = {".git", "__pycache__", "node_modules", ".venv", "venv",
+              "-backups", ".pcm_cache"}
+
+
+def api_files(root: str) -> dict:
+    """工程文件树 — 对齐 KiCad 工程管理器左侧「工程文件」窗格."""
+    rootp = Path(root).expanduser()
+    if not rootp.is_dir():
+        return {"ok": False, "error": f"not a directory: {root}"}
+
+    def walk(d: Path, depth: int) -> list:
+        out = []
+        try:
+            entries = sorted(d.iterdir(),
+                             key=lambda p: (p.is_file(), p.name.lower()))
+        except OSError:
+            return out
+        for p in entries[:400]:
+            if p.name.startswith(".") or any(s in p.name for s in _TREE_SKIP):
+                continue
+            if p.is_dir():
+                node = {"name": p.name, "path": str(p), "dir": True}
+                if depth < 6:
+                    node["children"] = walk(p, depth + 1)
+                out.append(node)
+            else:
+                out.append({"name": p.name, "path": str(p), "dir": False,
+                            "ext": p.suffix.lower()})
+        return out
+
+    return {"ok": True, "root": str(rootp), "tree": walk(rootp, 0)}
+
+
+def api_wks_list(root: str) -> dict:
+    """图框 (.kicad_wks) 一览: 工程内 + KiCad 系统模板目录."""
+    found: list[str] = []
+    rootp = Path(root).expanduser() if root else None
+    if rootp and rootp.is_dir():
+        found += [str(p) for p in sorted(rootp.rglob("*.kicad_wks"))[:100]]
+    for sysdir in ("/usr/share/kicad/template",
+                   "C:/Program Files/KiCad/9.0/share/kicad/template",
+                   "D:/KICAD/share/kicad/template",
+                   str(Path.home() / ".local/share/kicad")):
+        d = Path(sysdir)
+        if d.is_dir():
+            found += [str(p) for p in sorted(d.rglob("*.kicad_wks"))[:100]]
+    seen: list[str] = []
+    for f in found:
+        if f not in seen:
+            seen.append(f)
+    return {"ok": True, "sheets": seen}
+
+
+_BLANK_SCH = ('(kicad_sch (version 20231120) (generator "dao")\n'
+              '  (uuid "00000000-0000-0000-0000-000000000000")'
+              ' (paper "A4"))\n')
+
+
+def api_render_wks(path: str) -> tuple[bytes, str] | dict:
+    """图框编辑器视图: 用 KiCad 本体在空原理图上渲染工作表."""
+    wks = Path(path)
+    if not wks.is_file():
+        return {"ok": False, "error": f"no such drawing sheet: {path}"}
+    with tempfile.TemporaryDirectory() as td:
+        blank = Path(td) / "blank.kicad_sch"
+        blank.write_text(_BLANK_SCH, encoding="utf-8")
+        r = _lk().cli("sch", "export", "svg", "--no-background-color",
+                      "--drawing-sheet", str(wks), "-o", td, str(blank))
+        svgs = sorted(Path(td).glob("*.svg"))
+        if not svgs:
+            return {"ok": False, "error": r.stderr[-500:] or "no svg produced"}
+        return svgs[0].read_bytes(), "image/svg+xml"
+
+
+def api_convert(body: dict) -> dict:
+    """图片转换器: 位图 → KiCad 原生 .kicad_mod / .kicad_sym (多边形走线).
+
+    与 KiCad bitmap2component 同源思路: 阈值化 → 行程合并为矩形填充区.
+    """
+    import base64 as _b64
+    try:
+        from PIL import Image
+    except ImportError:
+        return {"ok": False, "error": "需要 Pillow: pip install pillow"}
+    raw = body.get("image_b64") or ""
+    if "," in raw[:80]:
+        raw = raw.split(",", 1)[1]
+    try:
+        data = _b64.b64decode(raw)
+    except Exception as e:
+        return {"ok": False, "error": f"bad image_b64: {e}"}
+    import io
+    img = Image.open(io.BytesIO(data)).convert("L")
+    if img.width > 400:
+        img = img.resize((400, max(1, img.height * 400 // img.width)))
+    thr = int(body.get("threshold") or 128)
+    invert = bool(body.get("invert"))
+    mm = float(body.get("mm_per_px") or 0.1)
+    px = img.load()
+    name = re.sub(r"[^\w.-]", "_", body.get("name") or "dao_image") or "img"
+    kind = body.get("format") or "fp"
+    layer = body.get("layer") or "F.SilkS"
+    rects = []
+    for y in range(img.height):
+        x = 0
+        while x < img.width:
+            on = (px[x, y] < thr) != invert
+            if on:
+                x0 = x
+                while x < img.width and ((px[x, y] < thr) != invert):
+                    x += 1
+                rects.append((x0, y, x, y + 1))
+            else:
+                x += 1
+    if not rects:
+        return {"ok": False, "error": "阈值下没有前景像素, 调整 threshold/invert"}
+    if kind == "sym":
+        polys = "".join(
+            f'    (polyline (pts (xy {x0*mm:.3f} {-y0*mm:.3f}) '
+            f'(xy {x1*mm:.3f} {-y0*mm:.3f}) (xy {x1*mm:.3f} {-y1*mm:.3f}) '
+            f'(xy {x0*mm:.3f} {-y1*mm:.3f}) (xy {x0*mm:.3f} {-y0*mm:.3f}))\n'
+            f'      (stroke (width 0)) (fill (type outline)))\n'
+            for x0, y0, x1, y1 in rects)
+        text = (f'(kicad_symbol_lib (version 20231120) (generator "dao")\n'
+                f'  (symbol "{name}" (in_bom no) (on_board no)\n'
+                f'   (symbol "{name}_0_1"\n{polys}   )))\n')
+        fname = f"{name}.kicad_sym"
+    else:
+        polys = "".join(
+            f'  (fp_poly (pts (xy {x0*mm:.3f} {y0*mm:.3f}) '
+            f'(xy {x1*mm:.3f} {y0*mm:.3f}) (xy {x1*mm:.3f} {y1*mm:.3f}) '
+            f'(xy {x0*mm:.3f} {y1*mm:.3f}))\n'
+            f'    (stroke (width 0) (type solid)) (fill solid) '
+            f'(layer "{layer}"))\n'
+            for x0, y0, x1, y1 in rects)
+        text = (f'(footprint "{name}" (version 20240108) (generator "dao")\n'
+                f'  (layer "F.Cu") (attr board_only exclude_from_pos_files '
+                f'exclude_from_bom)\n{polys})\n')
+        fname = f"{name}.kicad_mod"
+    out = body.get("out")
+    saved = None
+    if out:
+        outp = Path(out).expanduser()
+        outp.mkdir(parents=True, exist_ok=True)
+        (outp / fname).write_text(text, encoding="utf-8")
+        saved = str(outp / fname)
+    return {"ok": True, "name": fname, "rects": len(rects),
+            "saved": saved, "content": text if len(text) < 400_000 else None}
+
+
+# ── 扩展内容管理器 (对齐 KiCad PCM: 官方仓库 + 已安装 3rdparty) ──
+
+_PCM_REPO = "https://repository.kicad.org/repository.json"
+_PCM_CACHE: dict[str, Any] = {}
+
+
+def _pcm_dir() -> Path:
+    for c in (Path.home() / ".local/share/kicad",
+              Path.home() / "Documents/KiCad"):
+        if c.is_dir():
+            vers = sorted((p for p in c.iterdir()
+                           if re.match(r"\d+\.\d+", p.name)), reverse=True)
+            if vers:
+                return vers[0] / "3rdparty"
+    return Path.home() / ".local/share/kicad/9.0/3rdparty"
+
+
+_UA = {"User-Agent": "KiCad/9.0 dao-kicad-ide"}
+
+
+def _http_json(url: str) -> Any:
+    import urllib.request
+    req = urllib.request.Request(url, headers=_UA)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read())
+
+
+def api_pcm_list(_q: dict | None = None) -> dict:
+    base = _pcm_dir()
+    installed = []
+    for kind in ("plugins", "symbols", "footprints", "templates", "colors"):
+        d = base / kind
+        if d.is_dir():
+            installed += [{"id": p.name, "kind": kind, "path": str(p)}
+                          for p in sorted(d.iterdir()) if p.is_dir()]
+    remote = _PCM_CACHE.get("packages")
+    if remote is None:
+        try:
+            repo = _http_json(_PCM_REPO)
+            pk = _http_json(repo["packages"]["url"])
+            remote = [{"id": p["identifier"], "name": p["name"],
+                       "type": p["type"],
+                       "description": p.get("description", "")[:200],
+                       "versions": [v.get("version") for v in
+                                    p.get("versions", [])][:3]}
+                      for p in pk.get("packages", [])]
+            _PCM_CACHE["packages"] = remote
+            _PCM_CACHE["raw"] = {p["identifier"]: p
+                                 for p in pk.get("packages", [])}
+        except Exception as e:
+            remote = []
+            _PCM_CACHE.setdefault("error", str(e))
+    return {"ok": True, "dir": str(base), "installed": installed,
+            "repository": remote, "repo_error": _PCM_CACHE.get("error")}
+
+
+def api_pcm_install(body: dict) -> dict:
+    ident = body.get("id") or ""
+    api_pcm_list()
+    pkg = (_PCM_CACHE.get("raw") or {}).get(ident)
+    if not pkg:
+        return {"ok": False, "error": f"unknown package: {ident}"}
+    vers = pkg.get("versions") or []
+    ver = next((v for v in vers if v.get("download_url")), None)
+    if not ver:
+        return {"ok": False, "error": "package has no downloadable version"}
+    import io
+    import urllib.request
+    import zipfile
+    req = urllib.request.Request(ver["download_url"], headers=_UA)
+    with urllib.request.urlopen(req, timeout=300) as r:
+        blob = r.read()
+    safe = ident.replace(".", "_")
+    base = _pcm_dir()
+    extracted = []
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        for m in z.namelist():
+            parts = Path(m).parts
+            if not parts or m.endswith("/") or ".." in parts:
+                continue
+            top = parts[0]
+            if top == "metadata.json":
+                continue
+            dest = base / top / safe / Path(*parts[1:])
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(z.read(m))
+            extracted.append(str(dest))
+    return {"ok": True, "id": ident, "version": ver.get("version"),
+            "files": len(extracted), "dir": str(base)}
+
+
+def api_pcm_remove(body: dict) -> dict:
+    ident = (body.get("id") or "").replace(".", "_")
+    base = _pcm_dir()
+    removed = []
+    for kind in ("plugins", "symbols", "footprints", "templates", "colors"):
+        d = base / kind / ident
+        if d.is_dir():
+            shutil.rmtree(d)
+            removed.append(str(d))
+    if not removed:
+        return {"ok": False, "error": f"not installed: {body.get('id')}"}
+    return {"ok": True, "removed": removed}
+
+
 # ── engine actions ─────────────────────────────────────────────────────
 
 
@@ -214,7 +472,8 @@ def api_erc(body: dict) -> dict:
 
 
 def api_fab(body: dict) -> dict:
-    pcb, out = body["pcb"], Path(body["out"])
+    pcb = body["pcb"]
+    out = Path(body.get("out") or Path(pcb).parent / "fab")
     g = _lk().export_gerbers(pcb, out / "gerbers")
     d = _lk().export_drill(pcb, out / "gerbers")
     p = _lk().export_pos(pcb, out / "pos.csv")
@@ -618,7 +877,8 @@ def api_agent(body: dict) -> dict:
 _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
             "drc": api_drc, "erc": api_erc, "fab": api_fab, "auto": api_auto,
             "agent": api_agent, "chat": api_ai_chat, "config": api_ai_config,
-            "del": api_chat_del}
+            "del": api_chat_del, "convert": api_convert,
+            "install": api_pcm_install, "remove": api_pcm_remove}
 _SLOW = {"build", "route", "fab", "auto"}
 
 _CAPABILITIES = {
@@ -632,6 +892,27 @@ _CAPABILITIES = {
          "doc": "Service + KiCad availability/version."},
         {"method": "GET", "path": "/api/tree", "params": {"root": "dir"},
          "doc": "Discover KiCad projects (sch/pcb/net files) under root."},
+        {"method": "GET", "path": "/api/files", "params": {"root": "dir"},
+         "doc": "工程文件树 (对齐 KiCad 工程管理器左侧窗格)."},
+        {"method": "GET", "path": "/api/wks/list", "params": {"root": "dir"},
+         "doc": "图框 (.kicad_wks) 一览: 工程内 + KiCad 系统模板."},
+        {"method": "GET", "path": "/api/render/wks",
+         "params": {"path": ".kicad_wks"},
+         "doc": "图框编辑器视图: KiCad 本体渲染工作表为 SVG."},
+        {"method": "POST", "path": "/api/convert",
+         "params": {"image_b64": "png/jpg", "format": "fp|sym",
+                    "name": "...", "threshold": "0-255", "invert": "bool",
+                    "mm_per_px": "float=0.1", "layer": "F.SilkS",
+                    "out": "optional dir"},
+         "doc": "图片转换器: 位图 → KiCad 原生 .kicad_mod/.kicad_sym."},
+        {"method": "GET", "path": "/api/pcm/list", "params": {},
+         "doc": "扩展内容管理器: 官方仓库 + 已安装 3rdparty 包."},
+        {"method": "POST", "path": "/api/pcm/install",
+         "params": {"id": "package identifier"},
+         "doc": "从官方 PCM 仓库安装扩展包."},
+        {"method": "POST", "path": "/api/pcm/remove",
+         "params": {"id": "package identifier"},
+         "doc": "卸载已安装扩展包."},
         {"method": "GET", "path": "/api/render/sch",
          "params": {"path": ".kicad_sch"}, "doc": "Schematic as SVG."},
         {"method": "GET", "path": "/api/render/pcb",
@@ -768,6 +1049,17 @@ class Handler(BaseHTTPRequestHandler):
                                    "service": "dao-kicad-ide"})
             if u.path == "/api/tree":
                 return self._send(api_tree(q.get("root", ".")))
+            if u.path == "/api/files":
+                return self._send(api_files(q.get("root", ".")))
+            if u.path == "/api/wks/list":
+                return self._send(api_wks_list(q.get("root", "")))
+            if u.path == "/api/render/wks":
+                r = api_render_wks(q.get("path", ""))
+                if isinstance(r, dict):
+                    return self._send(r, 400)
+                return self._send_raw(*r)
+            if u.path == "/api/pcm/list":
+                return self._send(api_pcm_list(q))
             if u.path == "/api/render/sch":
                 r = api_render_sch(q.get("path", ""))
                 if isinstance(r, dict):
