@@ -86,7 +86,14 @@ def _tool_fab(args):
 
 
 def _tool_canvas_image(_args):
-    return T.verb("dmt_EditorControl.getCurrentRenderedAreaImage", timeout=40)
+    # getCurrentRenderedAreaImage 返回 Blob, 经 verb 通道 JSON 序列化会变成 {} →
+    # 页内转 dataURL 后回传。
+    return T.ev(
+        "(async()=>{const r=await window._EXTAPI_ROOT_"
+        ".dmt_EditorControl.getCurrentRenderedAreaImage();"
+        "if(!(r instanceof Blob))return null;"
+        "return await new Promise(res=>{const f=new FileReader();"
+        "f.onload=()=>res(f.result);f.readAsDataURL(r)})})()", timeout=60)
 
 
 TOOLS = {
