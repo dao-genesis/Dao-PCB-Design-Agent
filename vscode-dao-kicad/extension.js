@@ -126,6 +126,8 @@ function activate(context) {
       await ensureServer(context);
       vscode.window.showInformationMessage("DAO KiCad 桥接已重启");
     }));
+  // 启动即拉起桥接并打开归一工作台 (仅当工作区内有引擎时)
+  if (findEngine()) openHome(context);
 }
 
 function deactivate() {

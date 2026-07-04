@@ -7,10 +7,6 @@ KiCad natively without the user ever opening the KiCad GUI.
 
     python -m bridge.ide_server --port 9931
 
-``GET /`` serves the bundled single-page IDE (webui.html): project tree,
-schematic/board rendering, chat-driven engine and one-click pipeline — the
-web page *is* the KiCad face for the user.
-
 Design: stdlib-only (http.server), threaded, CORS-open for webviews. Slow
 operations (build / route) run as jobs: POST returns ``{"job": id}``
 immediately and ``GET /api/job?id=`` polls until ``done``.
@@ -32,11 +28,6 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from daokicad.live import LiveKiCad
-
-try:
-    from . import native
-except ImportError:  # run as a loose script (python bridge/ide_server.py)
-    import native  # type: ignore
 
 _LK: LiveKiCad | None = None
 _JOBS: dict[str, dict] = {}
@@ -485,12 +476,6 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
-            if u.path in ("/", "/index.html", "/webui.html"):
-                page = Path(__file__).with_name("webui.html")
-                if page.is_file():
-                    return self._send_raw(page.read_bytes(),
-                                          "text/html; charset=utf-8")
-                return self._send({"ok": False, "error": "webui missing"}, 404)
             if u.path == "/api/health":
                 e = _lk().env
                 return self._send({"ok": True, "kicad": e.version,
@@ -522,29 +507,6 @@ class Handler(BaseHTTPRequestHandler):
                 with _JOBS_LOCK:
                     j = _JOBS.get(q.get("id", ""))
                 return self._send(j or {"done": False, "unknown": True})
-            if u.path == "/api/native/windows":
-                return self._send({"ok": True, "native": native.IS_WIN,
-                                   "windows": [w.as_dict()
-                                               for w in native.list_windows()]})
-            if u.path == "/api/native/frame":
-                try:
-                    hwnd = int(q.get("hwnd", "0"))
-                    scale = float(q.get("scale", "1"))
-                except ValueError:
-                    return self._send({"ok": False, "error": "bad hwnd"}, 400)
-                r = native.capture(hwnd, scale)
-                if r is None:
-                    return self._send({"ok": False, "error": "no frame"}, 404)
-                png, w, h = r
-                self.send_response(200)
-                self.send_header("Content-Type", "image/png")
-                self.send_header("Content-Length", str(len(png)))
-                self.send_header("X-Frame-W", str(w))
-                self.send_header("X-Frame-H", str(h))
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                return self.wfile.write(png)
             return self._send({"ok": False, "error": "not found"}, 404)
         except Exception as e:
             return self._send({"ok": False,
@@ -552,25 +514,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
-        if u.path in ("/api/native/launch", "/api/native/input"):
-            try:
-                body = json.loads(self._read_body() or b"{}")
-            except Exception as e:
-                return self._send({"ok": False, "error": f"bad json: {e}"}, 400)
-            try:
-                if u.path == "/api/native/launch":
-                    root = _lk().env.root
-                    res = native.launch(root, body.get("tool", "kicad"),
-                                        body.get("path", ""))
-                    if res.get("ok"):
-                        win = native.find_by_pid(res["pid"])
-                        res["window"] = win
-                    return self._send(res)
-                return self._send(native.send_input(int(body.get("hwnd", 0)),
-                                                    body))
-            except Exception as e:
-                return self._send({"ok": False,
-                                   "error": f"{type(e).__name__}: {e}"}, 500)
         name = u.path.rsplit("/", 1)[-1]
         fn = _ACTIONS.get(name) if u.path.startswith("/api/") else None
         if fn is None:
