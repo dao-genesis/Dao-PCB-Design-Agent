@@ -476,6 +476,12 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
+            if u.path in ("/", "/index.html", "/webui.html"):
+                page = Path(__file__).with_name("webui.html")
+                if page.is_file():
+                    return self._send_raw(page.read_bytes(),
+                                          "text/html; charset=utf-8")
+                return self._send({"ok": False, "error": "webui missing"}, 404)
             if u.path == "/api/health":
                 e = _lk().env
                 return self._send({"ok": True, "kicad": e.version,
