@@ -454,6 +454,23 @@ _TREE_JS = r"""(async function(){
 })()"""
 
 
+def _local_projects():
+    """本地数据面: 扫描用户机上的 LCEDA-Pro 工程文件(projects + example-projects)。"""
+    root = os.path.join(os.path.expanduser("~"), "Documents", "LCEDA-Pro")
+    out = []
+    for sub in ("projects", "example-projects"):
+        d = os.path.join(root, sub)
+        try:
+            names = sorted(os.listdir(d))
+        except OSError:
+            continue
+        for name in names:
+            p = os.path.join(d, name)
+            if name.endswith(".eprj2") or os.path.isdir(p):
+                out.append({"name": name.rsplit(".eprj2", 1)[0], "path": p, "kind": sub})
+    return out
+
+
 # ----------------------------------------------------------------------------
 # 极简自然语言 → 动词编排(可被更强的 Agent 替换; 这里保证闭环可用)
 # ----------------------------------------------------------------------------
@@ -611,7 +628,9 @@ class Handler(BaseHTTPRequestHandler):
             b64, seq, meta = SESSION.get_frame()
             self._send(200, {"seq": seq, "meta": meta, "hasFrame": bool(b64)})
         elif path == "/api/tree":
-            self._send(200, SESSION.project_tree())
+            tree = SESSION.project_tree()
+            tree["localProjects"] = _local_projects()
+            self._send(200, tree)
         elif path == "/api/tools":
             # 原生第三方接入: 机器可读工具目录(dao_tools 全链路能力)。
             self._send(200, {"ok": True, "tools": _agent().catalog()})
