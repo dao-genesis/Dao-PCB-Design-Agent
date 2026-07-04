@@ -149,6 +149,29 @@ _SPECS = {
 }
 
 
+def engine_os_of_path(sample_path: str) -> str:
+    """由**引擎自报路径**的拼写判定引擎侧 OS(引擎 OS 可能 ≠ 宿主 OS)。
+
+    本源场景:Linux 宿主经 Wine 跑 Windows 版引擎——Python 侧 platform.system()
+    是 Linux,但引擎把路径 normalize 成 Windows 形(盘符/反斜杠),项目注册表
+    (projectPaths)按该拼写索引。判定依据:`sys_FileSystem.getEdaPath` 返回值。"""
+    p = sample_path or ""
+    if "\\" in p or (len(p) >= 2 and p[1] == ":"):
+        return "windows"
+    return "linux"
+
+
+def engine_dir(posix_dir: str, engine_os: str) -> str:
+    """把宿主 POSIX 目录翻译成**引擎侧注册表拼写**。
+
+    Windows 引擎(含 Wine)对无盘符 POSIX 路径做 path.normalize → 反斜杠形
+    (`/home/x` → `\\home\\x`),projectPaths 注册表按该形索引;scan/filter 的
+    dir 参数必须同形字符串全等才命中。Linux/mac 引擎原样返回。"""
+    if engine_os == "windows":
+        return posix_dir.replace("/", "\\")
+    return posix_dir
+
+
 def spec_for(os_name: str) -> PlatformSpec:
     """按 OS 名取矩阵(未知系统回落 linux 语义,尽量可用)。"""
     key = normalize_os(os_name)
