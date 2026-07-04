@@ -1,255 +1,33 @@
 <!DOCTYPE html>
+<!-- DAO KiCad · VS Code 中间面板 = 单网页 IDE 本体.
+     唯一事实源是桥接服务的 webui (ide_server 的 GET /), 此处仅作薄壳 iframe 承载:
+     KiCad 六板块 (主页/工程/原理图/板图/检查/制造/接入) 全部由 KiCad 原生引擎渲染进 IDE。
+     ?embed=1 → webui 隐藏其内置左栏 (VS Code 侧栏已有 Copilot 对话)。 -->
 <html lang="zh">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; connect-src http://127.0.0.1:* http://localhost:* https:; img-src http://127.0.0.1:* http://localhost:* data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-<title>DAO KiCad 归一主页</title>
+      content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<title>DAO KiCad · 归一工作台</title>
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body { margin: 0; display: flex; height: 100vh; font: 13px/1.5 -apple-system, "Segoe UI", sans-serif;
-         background: #1b1e23; color: #d7dae0; }
-  #side { width: 200px; background: #14161a; padding: 10px 0; flex: none; overflow-y: auto; }
-  #side h1 { font-size: 14px; margin: 4px 14px 12px; color: #7ecfff; }
-  .mod { padding: 8px 14px; cursor: pointer; border-left: 3px solid transparent; }
-  .mod:hover { background: #22262c; }
-  .mod.active { background: #262b33; border-left-color: #7ecfff; color: #fff; }
-  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  #bar { padding: 8px 12px; background: #20242a; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  #bar input, #bar select { background: #14161a; color: #d7dae0; border: 1px solid #333a44;
-        border-radius: 4px; padding: 4px 8px; min-width: 280px; }
-  button { background: #2d64a0; color: #fff; border: 0; border-radius: 4px; padding: 5px 12px; cursor: pointer; }
-  button:hover { background: #3a7cc4; }
-  button.warn { background: #7a4a20; }
-  #view { flex: 1; overflow: auto; padding: 12px; }
-  #view img { max-width: 100%; background: #fff; border-radius: 4px; }
-  pre { background: #14161a; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
-  .proj { padding: 8px 10px; border: 1px solid #2a2f37; border-radius: 6px; margin-bottom: 8px; cursor: pointer; }
-  .proj:hover { border-color: #7ecfff; }
-  .proj b { color: #7ecfff; }
-  .ok { color: #7fd77f; } .bad { color: #e88; }
-  #status { margin-left: auto; opacity: .8; }
-  .spin { display: inline-block; animation: r 1s linear infinite; }
-  @keyframes r { to { transform: rotate(360deg); } }
+  html,body{margin:0;padding:0;width:100%;height:100vh;overflow:hidden;background:#12141a}
+  iframe{border:0;width:100%;height:100%}
+  #fail{display:none;color:#d8dce6;font:13px/1.6 -apple-system,"Segoe UI",sans-serif;padding:20px}
+  #fail code{color:#4da3ff}
 </style>
 </head>
 <body>
-<div id="side">
-  <h1>☯ DAO KiCad</h1>
-  <div class="mod active" data-m="projects">📁 项目</div>
-  <div class="mod" data-m="sch">📜 原理图</div>
-  <div class="mod" data-m="pcb">🟩 PCB</div>
-  <div class="mod" data-m="build">🛠 构建 (网表→板)</div>
-  <div class="mod" data-m="route">🕸 自动布线</div>
-  <div class="mod" data-m="check">✔ DRC / ERC</div>
-  <div class="mod" data-m="fab">📦 制造输出</div>
-  <div class="mod" data-m="auto">☯ 一键闭环</div>
-  <div class="mod" data-m="ai">🤖 AI 智能体</div>
-</div>
-<div id="main">
-  <div id="bar">
-    <input id="path" placeholder="文件路径 (.kicad_sch / .kicad_pcb / .net)">
-    <button id="go">执行</button>
-    <span id="status"></span>
-  </div>
-  <div id="view"></div>
+<iframe id="app" src="__SERVER__/?embed=1" allow="clipboard-read; clipboard-write"></iframe>
+<div id="fail">
+  ☯ 桥接服务未就绪 (<code>__SERVER__</code>)。<br>
+  请执行命令 <code>DAO KiCad: 重启桥接服务</code>, 或检查设置 <code>daoKicad.enginePath</code>。
 </div>
 <script>
-const SERVER = "__SERVER__";
-const ROOT = "__ROOT__";
-let mode = "projects";
-const $ = (s) => document.querySelector(s);
-const view = $("#view"), pathI = $("#path"), status = $("#status");
-
-function busy(msg) { status.innerHTML = '<span class="spin">☯</span> ' + msg; }
-function idle(msg, ok=true) { status.innerHTML = '<span class="' + (ok?'ok':'bad') + '">' + msg + '</span>'; }
-
-async function api(p, body) {
-  const r = await fetch(SERVER + p, body ? {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body) } : {});
-  return r.json();
-}
-
-async function job(p, body) {
-  const j = await api(p, body);
-  if (!j.job) return j;
-  for (;;) {
-    await new Promise((r) => setTimeout(r, 1500));
-    const s = await api("/api/job?id=" + j.job);
-    if (s.done) return s.result;
-  }
-}
-
-async function showProjects() {
-  busy("扫描项目…");
-  const t = await api("/api/tree?root=" + encodeURIComponent(ROOT || "."));
-  if (!t.ok) { view.innerHTML = "<pre>" + t.error + "</pre>"; idle("失败", false); return; }
-  view.innerHTML = t.projects.map((p) =>
-    '<div class="proj" data-d="' + p.dir + '" data-sch="' + (p.sch[0]||"") + '" data-pcb="' + (p.pcb[0]||"") + '">' +
-    "<b>" + p.name + "</b><br><small>" + p.dir + "</small><br>" +
-    "原理图 " + p.sch.length + " · PCB " + p.pcb.length + " · 网表 " + p.net.length + "</div>").join("") ||
-    "<pre>工作区内未发现 .kicad_pro 项目</pre>";
-  idle(t.projects.length + " 个项目");
-  view.querySelectorAll(".proj").forEach((el) => el.onclick = () => {
-    pathI.value = el.dataset.sch || el.dataset.pcb || el.dataset.d;
+  const f = document.getElementById("app");
+  fetch("__SERVER__/api/health").catch(() => {
+    f.style.display = "none";
+    document.getElementById("fail").style.display = "block";
   });
-}
-
-async function render(kind) {
-  const p = pathI.value.trim();
-  if (!p) { idle("请输入文件路径", false); return; }
-  busy("渲染中…");
-  const url = SERVER + "/api/render/" + kind + "?path=" + encodeURIComponent(p) + "&t=" + Date.now();
-  const r = await fetch(url);
-  if (!r.ok) { view.innerHTML = "<pre>" + await r.text() + "</pre>"; idle("渲染失败", false); return; }
-  const blob = await r.blob();
-  view.innerHTML = '<img src="' + URL.createObjectURL(blob) + '">';
-  idle("渲染完成");
-}
-
-async function run() {
-  const p = pathI.value.trim();
-  try {
-    if (mode === "projects") return showProjects();
-    if (mode === "sch") return render("sch");
-    if (mode === "pcb") return render("pcb");
-    if (mode === "build") {
-      busy("构建中 (网表→板)…");
-      let net = p, dir = p.replace(/[\\/][^\\/]*$/, "");
-      if (/\.kicad_sch$/.test(p)) {
-        const n = await api("/api/netlist", { sch: p });
-        if (!n.ok) throw n;
-        net = n.net;
-      }
-      const out = net.replace(/\.[^.]+$/, "") + "_dao.kicad_pcb";
-      const r = await job("/api/build", { netlist: net, out, project_dir: dir, layers: 2 });
-      view.innerHTML = "<pre>" + JSON.stringify(r, null, 1) + "</pre>";
-      if (r.ok) { pathI.value = out; idle("构建成功 → " + out); } else idle("构建失败", false);
-      return;
-    }
-    if (mode === "route") {
-      busy("freerouting 布线中 (大板可能需要数分钟)…");
-      const r = await job("/api/route", { pcb: p, passes: 10 });
-      view.innerHTML = "<pre>" + JSON.stringify(r, null, 1) + "</pre>";
-      idle(r.ok ? "布线完成 " + (r.tracks||"") + " tracks" : "布线失败", !!r.ok);
-      return;
-    }
-    if (mode === "check") {
-      busy("检查中…");
-      const r = /\.kicad_sch$/.test(p) ? await api("/api/erc", { sch: p })
-                                       : await api("/api/drc", { pcb: p });
-      view.innerHTML = "<pre>" + JSON.stringify(r, null, 1) + "</pre>";
-      idle(r.clean ? "✔ 干净" : "违规 " + (r.violations ?? "?") + " · 未连 " + (r.unconnected ?? "-"), !!r.clean);
-      return;
-    }
-    if (mode === "fab") {
-      busy("导出制造文件…");
-      const r = await job("/api/fab", { pcb: p, out: p.replace(/\.[^.]+$/, "") + "_fab" });
-      view.innerHTML = "<pre>" + JSON.stringify(r, null, 1) + "</pre>";
-      idle(r.ok ? "Gerber/钻孔/贴片 已导出" : "导出失败", !!r.ok);
-      return;
-    }
-    if (mode === "auto") {
-      busy("一键闭环中 (网表→建板→布线→DRC→制造)…");
-      const body = /\.kicad_sch$/.test(p) ? { sch: p, fab: true } : { netlist: p, fab: true };
-      const j = await api("/api/auto", body);
-      if (!j.job) throw j;
-      for (;;) {
-        await new Promise((r) => setTimeout(r, 1500));
-        const s = await api("/api/job?id=" + j.job);
-        if (s.stage) busy("闭环阶段: " + s.stage);
-        if (s.done) {
-          view.innerHTML = "<pre>" + JSON.stringify(s.result, null, 1) + "</pre>";
-          if (s.result.pcb) pathI.value = s.result.pcb;
-          idle(s.result.ok ? "☯ 闭环完成 · DRC 干净" : "闭环未达标 (阶段 " + (s.result.stage||"drc") + ")", !!s.result.ok);
-          return;
-        }
-      }
-    }
-    if (mode === "ai") return; // AI 面板自带发送按钮
-  } catch (e) {
-    view.innerHTML = "<pre>" + JSON.stringify(e, null, 1) + "</pre>";
-    idle("出错", false);
-  }
-}
-
-// ── AI 智能体: OpenAI 兼容第三方 API 接入 + 工具调度闭环 ──
-const AI_KEYS = ["aiBase", "aiKey", "aiModel"];
-function aiCfg() {
-  return { base: localStorage.getItem("aiBase") || "https://api.openai.com/v1",
-           key: localStorage.getItem("aiKey") || "",
-           model: localStorage.getItem("aiModel") || "gpt-4o-mini" };
-}
-function showAI() {
-  const c = aiCfg();
-  view.innerHTML =
-    '<div style="max-width:760px">' +
-    '<b style="color:#7ecfff">🤖 AI 智能体 · 第三方 API 管理与工具调度</b>' +
-    '<div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap">' +
-    '<input id="aiBase" placeholder="API Base (OpenAI 兼容)" value="' + c.base + '" style="flex:2;min-width:220px">' +
-    '<input id="aiKey" type="password" placeholder="API Key" value="' + c.key + '" style="flex:2;min-width:180px">' +
-    '<input id="aiModel" placeholder="模型" value="' + c.model + '" style="flex:1;min-width:120px">' +
-    '</div>' +
-    '<div style="display:flex;gap:6px"><input id="aiQ" placeholder="用自然语言驱动 KiCad 底层, 如: 把路径框里的原理图全自动闭环到制造文件" style="flex:1">' +
-    '<button id="aiGo">发送</button></div>' +
-    '<pre id="aiLog" style="margin-top:10px;min-height:200px">未配置 API Key 时, 可先用左侧「☯ 一键闭环」无 AI 直接跑全管线。\n任意 Agent 接入文档: GET ' + SERVER + '/api/doc</pre></div>';
-  AI_KEYS.forEach((k) => { $("#" + k).onchange = (e) => localStorage.setItem(k, e.target.value.trim()); });
-  $("#aiGo").onclick = aiRun;
-  $("#aiQ").onkeydown = (e) => { if (e.key === "Enter") aiRun(); };
-}
-async function aiRun() {
-  const c = aiCfg(), logE = $("#aiLog"), q = $("#aiQ").value.trim();
-  const put = (m) => { logE.textContent += m + "\n"; logE.scrollTop = 1e9; };
-  if (!q) return;
-  if (!c.key) { put("⚠ 请先填入 API Key (OpenAI 兼容端点均可)"); return; }
-  logE.textContent = "";
-  put("❯ " + q);
-  const caps = await api("/api/capabilities");
-  const tools = caps.tools.filter((t) => t.method === "POST").map((t) => ({
-    type: "function",
-    function: { name: t.path.slice(5), description: t.doc + (t.job ? " (长任务, 自动等待完成)" : ""),
-      parameters: { type: "object", properties: Object.fromEntries(
-        Object.entries(t.params).map(([k, v]) => [k, { type: "string", description: String(v) }])) } }
-  }));
-  const messages = [
-    { role: "system", content: "你是 DAO-KiCad 智能体, 通过工具直控 KiCad 底层 (网表/建板/布线/DRC/制造/auto 全闭环)。当前路径框: " + pathI.value + " · 工作区: " + ROOT + "。优先用 auto 工具一键闭环。路径用绝对路径。" },
-    { role: "user", content: q }];
-  try {
-    for (let i = 0; i < 8; i++) {
-      busy("AI 思考中…");
-      const r = await fetch(c.base.replace(/\/$/, "") + "/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + c.key },
-        body: JSON.stringify({ model: c.model, messages, tools }) });
-      if (!r.ok) { put("⚠ API " + r.status + ": " + (await r.text()).slice(0, 300)); break; }
-      const msg = (await r.json()).choices[0].message;
-      messages.push(msg);
-      if (!msg.tool_calls || !msg.tool_calls.length) { put("🤖 " + (msg.content || "(无内容)")); break; }
-      for (const tc of msg.tool_calls) {
-        const args = JSON.parse(tc.function.arguments || "{}");
-        if (args.fab !== undefined) args.fab = String(args.fab) === "true";
-        put("⚙ " + tc.function.name + " " + JSON.stringify(args));
-        busy("执行 " + tc.function.name + "…");
-        const res = await job("/api/" + tc.function.name, args);
-        put("↳ " + JSON.stringify(res).slice(0, 500));
-        messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(res).slice(0, 4000) });
-      }
-    }
-  } catch (e) { put("⚠ " + e); }
-  idle("AI 完成");
-}
-
-document.querySelectorAll(".mod").forEach((el) => el.onclick = () => {
-  document.querySelectorAll(".mod").forEach((x) => x.classList.remove("active"));
-  el.classList.add("active");
-  mode = el.dataset.m;
-  if (mode === "projects") showProjects();
-  if (mode === "ai") showAI();
-});
-$("#go").onclick = run;
-pathI.onkeydown = (e) => { if (e.key === "Enter") run(); };
-showProjects();
 </script>
 </body>
 </html>
