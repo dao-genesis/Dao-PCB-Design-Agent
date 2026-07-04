@@ -177,7 +177,6 @@ function showBoard(k){
   if(k==="api") loadApiBoard();
 }
 $("#homeboards").textContent=BOARDS.map(b=>b[1]).join(" · ");
-showBoard(localStorage.getItem("dao.board")||"home");
 
 // ── health ──
 fetch("/api/health").then(r=>r.json()).then(j=>{
@@ -332,6 +331,7 @@ function finishTurn(action,res){
   if(action==="fab"||(res.steps&&res.steps.fab))
     $("#fabout").textContent=JSON.stringify(res.steps&&res.steps.fab||res,null,2);
 }
+showBoard(localStorage.getItem("dao.board")||"home");   // 恢复上次板块 (置于定义之后)
 if($("#root").value) loadTree();
 </script>
 </body>
