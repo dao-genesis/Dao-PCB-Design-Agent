@@ -79,6 +79,18 @@ def _fp_dir(lib):
     return os.path.join(base, lib + ".pretty")
 
 
+def _body_bbox(fp):
+    """Physical body bounds (pads + courtyard + graphics), text excluded.
+
+    The default bounding box includes reference/value text, which inflates an
+    0402 passive (~1.5×2 mm courtyard) to ~4×5 mm — packing on that spreads
+    small parts across 4-6× the area a hand-placed board would use."""
+    bb = fp.GetBoundingBox(False, False)
+    if bb.GetWidth() <= 0 or bb.GetHeight() <= 0:
+        bb = fp.GetBoundingBox()
+    return bb
+
+
 def _find_pad(fp, name):
     for p in fp.Pads():
         if p.GetPadName() == str(name) or p.GetNumber() == str(name):
@@ -449,7 +461,7 @@ def build(spec, out_path):
     # area (row width derived from total component area) so an arbitrary board
     # comes out compact instead of a long thin strip. Explicit x/y always wins.
     grid = spec.get("place_grid", {})
-    gap = float(grid.get("gap", 3.0))         # mm between courtyards
+    gap = float(grid["gap"]) if "gap" in grid else None  # mm between courtyards
     origin_x = float(grid.get("x", 20.0))
     origin_y = float(grid.get("y", 20.0))
     autos = []  # (fpspec, fp, w_mm, h_mm) for the parts we lay out ourselves
@@ -485,9 +497,21 @@ def build(spec, out_path):
         if "x" in fpspec or "y" in fpspec:
             fp.SetPosition(_v(fpspec.get("x", origin_x), fpspec.get("y", origin_y)))
         else:
-            bb = fp.GetBoundingBox()
+            bb = _body_bbox(fp)
             autos.append((fpspec, fp, pcbnew.ToMM(bb.GetWidth()),
                           pcbnew.ToMM(bb.GetHeight())))
+
+    if gap is None:
+        # Size-adaptive spacing: a fixed 3 mm gap reads right next to a large
+        # THT connector but strands 0402 passives on a sparse grid with long
+        # snaking tracks — nothing like a hand-placed board. Scale the gap to
+        # the median auto-part dimension, clamped to a routable range.
+        if autos:
+            dims = sorted(max(w, h) for _, _, w, h in autos)
+            med = dims[len(dims) // 2]
+            gap = max(0.8, min(3.0, med * 0.4))
+        else:
+            gap = 3.0
 
     if autos:
         # cluster densely-connected parts before packing so the autorouter sees
@@ -502,7 +526,7 @@ def build(spec, out_path):
         # (valves, mounting holes…), so anchor-based placement let courtyards
         # overlap; offset the anchor by (anchor - bbox top-left).
         def _place_topleft(fp, tx, ty):
-            bb = fp.GetBoundingBox()
+            bb = _body_bbox(fp)
             off_x = pcbnew.ToMM(fp.GetPosition().x - bb.GetLeft())
             off_y = pcbnew.ToMM(fp.GetPosition().y - bb.GetTop())
             fp.SetPosition(_v(tx + off_x, ty + off_y))
