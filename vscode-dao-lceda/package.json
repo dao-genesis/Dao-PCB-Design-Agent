@@ -47,7 +47,8 @@
         "daoLceda.port": { "type": "number", "default": 9940, "description": "本地桥接端口" },
         "daoLceda.python": { "type": "string", "default": "python3", "description": "Python 可执行文件(Windows 可设为 python)" },
         "daoLceda.bridgePath": { "type": "string", "default": "", "description": "bridge_server.py 所在目录(留空则在工作区内自动发现 lceda_bridge/vscode_lceda)" },
-        "daoLceda.cdpPorts": { "type": "string", "default": "29229,29230", "description": "候选 CDP 端口(Web 版 29229 / 桌面版 29230)" }
+        "daoLceda.cdpPorts": { "type": "string", "default": "9222,29229,29230", "description": "候选 CDP 端口(本机桌面客户端 9222 优先 / Web 版 29229,29230 兜底)" },
+        "daoLceda.preferLocalEda": { "type": "boolean", "default": true, "description": "本源·本地优先: 自动唤起并优先接管用户本机安装的嘉立创EDA客户端(底层数据来源于用户自己的机器, 云端仅兜底)" }
       }
     }
   }

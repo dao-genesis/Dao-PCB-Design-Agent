@@ -69,7 +69,8 @@ async function ensureServer(context) {
     env: {
       ...process.env,
       LCEDA_BRIDGE_PORT: String(port),
-      DAO_CDP_PORTS: cfg().get("cdpPorts") || "29229,29230",
+      DAO_CDP_PORTS: cfg().get("cdpPorts") || "9222,29229,29230",
+      DAO_PREFER_LOCAL_EDA: cfg().get("preferLocalEda") === false ? "0" : "1",
     },
   });
   serverProc.on("error", (e) =>
@@ -384,9 +385,10 @@ vscodeApi.postMessage({type:'init'});
 function activate(context) {
   const treeProvider = new ProjectTreeProvider(context);
   const chatProvider = new ChatViewProvider(context);
-  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  // 右下角状态栏按钮: 一键弹出 EDA 面板。
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, -1000);
   status.text = "$(circuit-board) 嘉立创EDA";
-  status.tooltip = "打开嘉立创EDA 道之面板";
+  status.tooltip = "一键弹出嘉立创EDA 道之面板";
   status.command = "daoLceda.open";
   status.show();
   const pollHealth = async () => {

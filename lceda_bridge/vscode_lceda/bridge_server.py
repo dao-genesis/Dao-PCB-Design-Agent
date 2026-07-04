@@ -36,10 +36,13 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+import local_lceda
 import native_proxy
 
 BRIDGE_PORT = int(os.environ.get("LCEDA_BRIDGE_PORT", "9940"))
-CDP_PORTS = [int(x) for x in os.environ.get("DAO_CDP_PORTS", "29229,29230").split(",") if x.strip()]
+# 本源·本地优先: 桌面客户端 CDP(9222) 排最前, Web 版(29229/29230)为兜底。
+CDP_PORTS = [int(x) for x in os.environ.get("DAO_CDP_PORTS", "9222,29229,29230").split(",") if x.strip()]
+PREFER_LOCAL = os.environ.get("DAO_PREFER_LOCAL_EDA", "1") != "0"
 FRAME_QUALITY = int(os.environ.get("LCEDA_FRAME_QUALITY", "60"))
 
 
@@ -214,11 +217,22 @@ class EdaSession:
                      "offsetTop": 0, "scrollOffsetX": 0, "scrollOffsetY": 0}
         self._lock = threading.Lock()
         self._connect_lock = threading.Lock()
+        self._local_tried = False
+        self.local_eda = {"alive": False, "exe": None}
 
     def ensure(self):
         with self._connect_lock:
             if self.cdp and self.cdp.alive:
                 return True
+            # 本源·本地优先: 先唤起用户本机安装的嘉立创EDA客户端(带 CDP),
+            # 使 /native 的底层数据来源即用户自己的机器; 失败则自然回落 Web 版。
+            if PREFER_LOCAL and not self._local_tried:
+                self._local_tried = True
+                try:
+                    alive, exe = local_lceda.ensure_running()
+                    self.local_eda = {"alive": alive, "exe": exe}
+                except Exception:
+                    self.local_eda = {"alive": False, "exe": None}
             port, target = discover_target(self.ports)
             if not target:
                 return False
@@ -514,6 +528,7 @@ class Handler(BaseHTTPRequestHandler):
             ok = SESSION.ensure()
             self._send(200, {"ok": ok, "cdpPort": SESSION.port,
                              "target": (SESSION.target or {}).get("url"),
+                             "localEda": SESSION.local_eda,
                              "frameSeq": SESSION.frame_seq})
         elif path == "/api/frame":
             b64, seq, meta = SESSION.get_frame()
