@@ -35,6 +35,7 @@ import subprocess
 import time
 
 import dao_eda_cdp_driver as _d
+import dao_platform as _plat
 import eda_api
 
 EXT = "window._EXTAPI_ROOT_"
@@ -148,9 +149,24 @@ class DaoRpc:
         self.port = port
         self.eda = eda_api.EDA(port=port, validate=False)
         self.ws = _d.connect_editor(port)
-        self.projects_dir = projects_dir or os.path.expanduser(
-            "~/Documents/LCEDA-Pro/projects")
         self.metrics = {"rpc_calls": 0, "evals": 0}
+        self.projects_dir = projects_dir or self._default_projects_dir()
+
+    def _default_projects_dir(self):
+        """默认工程目录 —— 按**引擎侧 OS**拼写(引擎 OS 可能 ≠ 宿主 OS)。
+
+        本源差异:Linux 宿主经 Wine 跑 Windows 版引擎时,引擎把 POSIX 路径
+        normalize 成反斜杠形(`/home/x` → `\\home\\x`),项目注册表(projectPaths)
+        按该拼写索引;`dmt_Project.getAllProjectsUuid(dir)` 是对 dir 字符串全等
+        过滤,形不同则永返 [] → openProject 链断。故以引擎自报路径判定引擎
+        OS,把目录翻译成引擎侧拼写 —— 同一套驱动在原生/Wine 端同行。"""
+        posix_dir = os.path.expanduser("~/Documents/LCEDA-Pro/projects")
+        try:
+            eda_path = self._call("sys_FileSystem.getEdaPath", timeout=15)
+        except Exception:
+            eda_path = None
+        eng_os = _plat.engine_os_of_path(eda_path or posix_dir)
+        return _plat.engine_dir(posix_dir, eng_os)
 
     # ---------- 底层封装 ----------
     def _eval(self, js, timeout=45, retries=2):
@@ -223,8 +239,10 @@ class DaoRpc:
     # ---------- 钥匙 1：工程 ----------
     def create_project(self, name):
         """renderer 内 REST 建工程（嘉立创桌面的规范本源入口），返回工程 uuid。"""
-        # 同名工程已存在时 REST 返回 success:false → 追加短时戳保证可重跑、确定可达
-        for cand in (name, "%s_%d" % (name, int(time.time()))):
+        # 同名工程已存在时 REST 返回 success:false → 追加短时戳保证可重跑、确定可达;
+        # 再缀端口区分同机双引擎(原生/Wine 共享同一工程目录,同秒同名会双双失败)
+        for cand in (name, "%s_%d" % (name, int(time.time())),
+                     "%s_%d_p%d" % (name, int(time.time()), self.port)):
             js = (r'''(async function(){var b={path:%s,name:%s,content:"",public:false,default_sheet:""};
 var r=await fetch("/api/client/createProject",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});
 var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.result||{})[0]});})()'''
