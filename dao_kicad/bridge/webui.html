@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!-- DAO KiCad · 单网页 IDE — 一个网页代替 KiCad GUI: 工程树 / 原理图·板图渲染 /
+     对话驱动 (斜杠命令 + 会话历史 + 板图内联) / 全链路·DRC·ERC·布线·制造 一键直达。
+     纯静态单文件, 只依赖同源 REST 桥 (ide_server), 零构建、零外部依赖。 -->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>☯ DAO KiCad · 单网页 IDE</title>
+<style>
+:root{--bg:#12141a;--panel:#1a1e27;--line:#2a3040;--fg:#d8dce6;--dim:#8a93a6;
+      --acc:#4da3ff;--ok:#39c07f;--bad:#e0596a;--chip:#232a38}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+     background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:12px;padding:8px 14px;
+       border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:15px;margin:0;font-weight:600}
+#health{font-size:12px;color:var(--dim)}
+#health.ok{color:var(--ok)} #health.bad{color:var(--bad)}
+main{flex:1;display:flex;min-height:0}
+#left{width:270px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--panel)}
+#rootbar{display:flex;gap:6px;padding:8px}
+#rootbar input{flex:1;background:var(--bg);border:1px solid var(--line);color:var(--fg);
+               border-radius:6px;padding:5px 8px;font-size:12px}
+button{background:var(--chip);border:1px solid var(--line);color:var(--fg);border-radius:6px;
+       padding:5px 10px;cursor:pointer;font-size:12px}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);border-color:var(--acc);color:#08111f;font-weight:600}
+#projects{flex:1;overflow:auto;padding:0 8px 8px}
+.proj{border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;background:var(--bg)}
+.proj h3{margin:0 0 4px;font-size:13px;color:var(--acc)}
+.proj .file{font-size:12px;color:var(--dim);cursor:pointer;padding:2px 0;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj .file:hover{color:var(--fg)}
+.proj .acts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.proj .acts button{padding:3px 8px;font-size:11px}
+#center{flex:1;display:flex;flex-direction:column;min-width:0}
+#layerbar{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);
+          font-size:12px;color:var(--dim);flex-wrap:wrap}
+.chip{padding:2px 8px;border:1px solid var(--line);border-radius:10px;cursor:pointer;user-select:none}
+.chip.on{border-color:var(--acc);color:var(--acc)}
+#viewer{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:#0c0e13}
+#viewer img{max-width:96%;max-height:96%;background:#fff;border-radius:4px}
+#viewer .hint{color:var(--dim)}
+#right{width:360px;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--panel)}
+#chatlog{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.msg{border-radius:10px;padding:7px 10px;max-width:95%;white-space:pre-wrap;word-break:break-word;font-size:13px}
+.msg.user{align-self:flex-end;background:#243b5e}
+.msg.bot{align-self:flex-start;background:var(--chip)}
+.msg.stage{align-self:flex-start;color:var(--dim);background:none;padding:0 4px;font-size:12px}
+.msg img{max-width:100%;background:#fff;border-radius:6px;margin-top:6px;display:block}
+#slash{display:none;padding:4px 10px;border-top:1px solid var(--line);flex-wrap:wrap;gap:4px}
+#slash.show{display:flex}
+#chatbar{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
+#chatbar input{flex:1;background:var(--bg);border:1px solid var(--line);color:var(--fg);
+               border-radius:6px;padding:7px 9px;font-size:13px}
+#chathead{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;
+          border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+</style>
+</head>
+<body>
+<header>
+  <h1>☯ DAO KiCad · 单网页 IDE</h1>
+  <span id="health">连接中…</span>
+</header>
+<main>
+  <aside id="left">
+    <div id="rootbar">
+      <input id="root" placeholder="工程根目录, 如 /home/ubuntu/practice">
+      <button class="primary" onclick="loadTree()">载入</button>
+    </div>
+    <div id="projects"><div style="padding:8px;color:var(--dim);font-size:12px">
+      输入根目录并载入, 即可浏览 KiCad 工程 — 全程无需打开 KiCad。</div></div>
+  </aside>
+  <section id="center">
+    <div id="layerbar"><span>图层:</span></div>
+    <div id="viewer"><span class="hint">左侧选择原理图/板文件即可渲染</span></div>
+  </section>
+  <aside id="right">
+    <div id="chathead"><span>对话 · 自然语言驱动引擎</span>
+      <button onclick="clearChat()" title="清空会话历史">清空</button></div>
+    <div id="chatlog"></div>
+    <div id="slash"></div>
+    <div id="chatbar">
+      <input id="chatin" placeholder="说意图, 如: 对这个工程跑全链路 (/ 看命令)">
+      <button class="primary" onclick="send()">发送</button>
+    </div>
+  </aside>
+</main>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const LAYERS=["F.Cu","In1.Cu","In2.Cu","B.Cu","F.SilkS","F.Mask","Edge.Cuts"];
+const DEFAULT_ON=new Set(["F.Cu","B.Cu","F.SilkS","Edge.Cuts"]);
+const SLASH=[["auto","全链路: 网表→建板→布线→DRC"],["drc","板子 DRC"],["erc","原理图 ERC"],
+             ["route","自动布线"],["build","网表建板"],["netlist","导出网表"],["fab","Gerber/钻孔/贴片"]];
+let curPcb=null;
+
+// ── health ──
+fetch("/api/health").then(r=>r.json()).then(j=>{
+  const h=$("#health");
+  h.textContent=j.ok?`已连接 · KiCad ${j.kicad}`:"桥不可用";
+  h.className=j.ok?"ok":"bad";
+}).catch(()=>{const h=$("#health");h.textContent="桥不可用";h.className="bad";});
+
+// ── project tree ──
+$("#root").value=localStorage.getItem("dao.root")||"";
+async function loadTree(){
+  const root=$("#root").value.trim(); if(!root)return;
+  localStorage.setItem("dao.root",root);
+  const j=await (await fetch("/api/tree?root="+encodeURIComponent(root))).json();
+  const box=$("#projects"); box.innerHTML="";
+  if(!j.ok){box.textContent=j.error;return;}
+  if(!j.projects.length){box.textContent="该目录下没有 .kicad_pro 工程";return;}
+  for(const p of j.projects){
+    const d=document.createElement("div"); d.className="proj";
+    d.innerHTML=`<h3>${p.name}</h3>`;
+    for(const s of p.sch) d.appendChild(fileRow("原理图",s,()=>showSch(s)));
+    for(const b of p.pcb) d.appendChild(fileRow("板",b,()=>showPcb(b)));
+    const acts=document.createElement("div"); acts.className="acts";
+    const sch=p.sch[0], pcb=p.pcb[0];
+    if(sch) acts.appendChild(actBtn("全链路",()=>sendText(`全链路 ${sch}`)));
+    if(sch) acts.appendChild(actBtn("ERC",()=>sendText(`erc ${sch}`)));
+    if(pcb) acts.appendChild(actBtn("DRC",()=>sendText(`drc ${pcb}`)));
+    if(pcb) acts.appendChild(actBtn("布线",()=>sendText(`布线 ${pcb}`)));
+    if(pcb) acts.appendChild(actBtn("制造",()=>sendText(`fab ${pcb}`)));
+    d.appendChild(acts); box.appendChild(d);
+  }
+}
+function fileRow(kind,path,fn){
+  const f=document.createElement("div"); f.className="file";
+  f.textContent=`[${kind}] ${path.split("/").pop()}`; f.title=path; f.onclick=fn;
+  return f;
+}
+function actBtn(label,fn){const b=document.createElement("button");b.textContent=label;b.onclick=fn;return b;}
+
+// ── viewers ──
+function showSch(path){
+  curPcb=null; renderLayerbar();
+  setViewer("/api/render/sch?path="+encodeURIComponent(path));
+}
+function showPcb(path){
+  curPcb=path; renderLayerbar();
+  setViewer(pcbUrl(path));
+}
+function onLayers(){
+  return LAYERS.filter(l=>{
+    const c=document.querySelector(`.chip[data-l="${l}"]`);
+    return c?c.classList.contains("on"):DEFAULT_ON.has(l);
+  });
+}
+function pcbUrl(path){
+  return "/api/render/pcb?path="+encodeURIComponent(path)+
+         "&layers="+encodeURIComponent(onLayers().join(","))+"&t="+Date.now();
+}
+function renderLayerbar(){
+  const bar=$("#layerbar"); bar.innerHTML="<span>图层:</span>";
+  if(!curPcb)return;
+  for(const l of LAYERS){
+    const c=document.createElement("span");
+    c.className="chip"+(DEFAULT_ON.has(l)?" on":""); c.dataset.l=l; c.textContent=l;
+    c.onclick=()=>{c.classList.toggle("on"); setViewer(pcbUrl(curPcb));};
+    bar.appendChild(c);
+  }
+}
+function setViewer(url){
+  $("#viewer").innerHTML=`<img src="${url}" alt="render">`;
+}
+
+// ── chat: history persisted, slash commands, job polling, inline board ──
+const LOG_KEY="dao.chat";
+function chatHistory(){try{return JSON.parse(localStorage.getItem(LOG_KEY))||[];}catch(e){return [];}}
+function pushHistory(m){const h=chatHistory();h.push(m);localStorage.setItem(LOG_KEY,JSON.stringify(h.slice(-200)));}
+function clearChat(){localStorage.removeItem(LOG_KEY);$("#chatlog").innerHTML="";}
+function addMsg(role,text,pcb,save=true){
+  const d=document.createElement("div"); d.className="msg "+role; d.textContent=text;
+  if(pcb){const i=document.createElement("img");i.src=pcbUrl(pcb);d.appendChild(i);}
+  $("#chatlog").appendChild(d); $("#chatlog").scrollTop=1e9;
+  if(save&&role!=="stage") pushHistory({role,text,pcb:pcb||null});
+  return d;
+}
+for(const m of chatHistory()) addMsg(m.role,m.text,m.pcb,false);
+
+const slash=$("#slash");
+for(const [cmd,doc] of SLASH){
+  const c=document.createElement("span"); c.className="chip"; c.textContent=`/${cmd} · ${doc}`;
+  c.onclick=()=>{$("#chatin").value=`/${cmd} `;slash.classList.remove("show");$("#chatin").focus();};
+  slash.appendChild(c);
+}
+$("#chatin").addEventListener("input",e=>{
+  slash.classList.toggle("show",e.target.value.startsWith("/")&&!e.target.value.includes(" "));
+});
+$("#chatin").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
+
+function sendText(t){$("#chatin").value=t;send();}
+async function send(){
+  let text=$("#chatin").value.trim(); if(!text)return;
+  $("#chatin").value=""; slash.classList.remove("show");
+  addMsg("user",text);
+  if(text.startsWith("/")) text=text.slice(1);   // "/drc x.kicad_pcb" → intent word
+  const root=$("#root").value.trim()||null;
+  let j;
+  try{
+    j=await (await fetch("/api/agent",{method:"POST",
+        body:JSON.stringify({text,root})})).json();
+  }catch(e){addMsg("bot","桥不可达: "+e);return;}
+  addMsg("bot",j.reply||JSON.stringify(j));
+  if(j.job) pollJob(j.job,j.action);
+  else if(j.result) finishTurn(j.action,j.result);
+}
+async function pollJob(id,action){
+  const st=addMsg("stage","…","",false);
+  for(;;){
+    await new Promise(r=>setTimeout(r,3000));
+    let s; try{s=await (await fetch("/api/job?id="+id)).json();}catch(e){continue;}
+    if(s.done){st.remove();finishTurn(action,s.result||{});return;}
+    st.textContent="⏳ "+(s.stage||"运行中")+" …";
+  }
+}
+function finishTurn(action,res){
+  const pcb=res.pcb||(res.steps&&res.steps.build&&res.steps.build.path)||null;
+  const drc=res.steps&&res.steps.drc||( "violations" in res?res:null);
+  let line=`${action} ${res.ok?"完成 ✔":"未完全收敛"}`;
+  if(drc) line+=` · violations ${drc.violations??"?"} · unconnected ${drc.unconnected??"?"}`;
+  if(pcb) line+=`\n${pcb}`;
+  addMsg("bot",line,pcb);
+  if(pcb){curPcb=pcb;renderLayerbar();setViewer(pcbUrl(pcb));}
+}
+if($("#root").value) loadTree();
+</script>
+</body>
+</html>

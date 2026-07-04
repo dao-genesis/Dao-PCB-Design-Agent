@@ -7,6 +7,10 @@ KiCad natively without the user ever opening the KiCad GUI.
 
     python -m bridge.ide_server --port 9931
 
+``GET /`` serves the bundled single-page IDE (webui.html): project tree,
+schematic/board rendering, chat-driven engine and one-click pipeline — the
+web page *is* the KiCad face for the user.
+
 Design: stdlib-only (http.server), threaded, CORS-open for webviews. Slow
 operations (build / route) run as jobs: POST returns ``{"job": id}``
 immediately and ``GET /api/job?id=`` polls until ``done``.
@@ -476,6 +480,12 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
+            if u.path in ("/", "/index.html", "/webui.html"):
+                page = Path(__file__).with_name("webui.html")
+                if page.is_file():
+                    return self._send_raw(page.read_bytes(),
+                                          "text/html; charset=utf-8")
+                return self._send({"ok": False, "error": "webui missing"}, 404)
             if u.path == "/api/health":
                 e = _lk().env
                 return self._send({"ok": True, "kicad": e.version,
