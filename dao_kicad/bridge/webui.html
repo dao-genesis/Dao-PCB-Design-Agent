@@ -193,12 +193,15 @@ $("#chatin").addEventListener("input",e=>{
 });
 $("#chatin").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
 
+let lastAskedPcb=null;
 function sendText(t){$("#chatin").value=t;send();}
 async function send(){
   let text=$("#chatin").value.trim(); if(!text)return;
   $("#chatin").value=""; slash.classList.remove("show");
   addMsg("user",text);
   if(text.startsWith("/")) text=text.slice(1);   // "/drc x.kicad_pcb" → intent word
+  const m=text.match(/\S+\.kicad_pcb\b/);
+  lastAskedPcb=m?m[0]:null;
   const root=$("#root").value.trim()||null;
   let j;
   try{
@@ -219,10 +222,14 @@ async function pollJob(id,action){
   }
 }
 function finishTurn(action,res){
-  const pcb=res.pcb||(res.steps&&res.steps.build&&res.steps.build.path)||null;
+  const pcb=res.pcb||(res.steps&&res.steps.build&&res.steps.build.path)
+            ||lastAskedPcb||null;
   const drc=res.steps&&res.steps.drc||( "violations" in res?res:null);
   let line=`${action} ${res.ok?"完成 ✔":"未完全收敛"}`;
-  if(drc) line+=` · violations ${drc.violations??"?"} · unconnected ${drc.unconnected??"?"}`;
+  if(drc){
+    line+=` · violations ${drc.violations??"?"}`;
+    if(drc.unconnected!==undefined) line+=` · unconnected ${drc.unconnected}`;
+  }
   if(pcb) line+=`\n${pcb}`;
   addMsg("bot",line,pcb);
   if(pcb){curPcb=pcb;renderLayerbar();setViewer(pcbUrl(pcb));}
