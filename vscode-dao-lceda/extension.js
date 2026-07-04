@@ -186,6 +186,14 @@ class ProjectTreeProvider {
       it.command = { command: "daoLceda.openProject", title: "切换工程", arguments: [uuid] };
       items.push(it);
     }
+    for (const lp of tree.localProjects || []) {
+      const it = new vscode.TreeItem(
+        (lp.kind === "example-projects" ? "示例: " : "本地: ") + lp.name,
+        vscode.TreeItemCollapsibleState.None);
+      it.iconPath = new vscode.ThemeIcon("file-directory");
+      it.tooltip = lp.path;
+      items.push(it);
+    }
     if (!items.length) items.push(new vscode.TreeItem("(EDA 内暂无打开的工程)"));
     return items;
   }
