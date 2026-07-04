@@ -1199,6 +1199,20 @@ def _stitch_tails(board, max_mm=3.0):
             if seg.Collide(ob.GetEffectiveShape(lid), clearance):
                 return True
         return False
+
+    all_cu = list(board.GetEnabledLayers().CuStack())
+
+    def _via_blocked(x, y, dia, code):
+        c = pcbnew.SHAPE_SEGMENT(pcbnew.VECTOR2I(int(x), int(y)),
+                                 pcbnew.VECTOR2I(int(x), int(y)),
+                                 int(dia))
+        for lid in all_cu:
+            for ob in obstacles.get(lid, ()):
+                if ob.GetNetCode() == code:
+                    continue
+                if c.Collide(ob.GetEffectiveShape(lid), clearance):
+                    return True
+        return False
     for code in board.GetNetsByNetcode():
         if code == 0 or code in zone_nets:
             continue
@@ -1262,8 +1276,10 @@ def _stitch_tails(board, max_mm=3.0):
             t = max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / L2))
             return (int(ax + t * vx), int(ay + t * vy))
 
-        width = net.GetNetClassSlow().GetTrackWidth() if hasattr(
-            net, "GetNetClassSlow") else 200000
+        ncls = net.GetNetClassSlow() if hasattr(net, "GetNetClassSlow") else None
+        width = ncls.GetTrackWidth() if ncls else 200000
+        via_dia = ncls.GetViaDiameter() if ncls else 600000
+        via_drill = ncls.GetViaDrill() if ncls else 300000
         # repeatedly join the closest cluster pair until nothing is in reach
         roots = list(clusters)
         while len(roots) > 1:
@@ -1274,6 +1290,27 @@ def _stitch_tails(board, max_mm=3.0):
                         for j in clusters[roots[bkt]]:
                             shared = laysets[i] & laysets[j]
                             if not shared:
+                                # cross-layer gap: hop through a via at the
+                                # target anchor — track on the source layer,
+                                # then a through via down to the target copper.
+                                for src, dst in ((i, j), (j, i)):
+                                    la = next(iter(laysets[src]))
+                                    for ax, ay in anchors(src):
+                                        bx, by = nearest_on(dst, ax, ay)
+                                        d2 = ((ax - bx) ** 2
+                                              + (ay - by) ** 2)
+                                        if ((best is not None
+                                                and d2 >= best[0])
+                                                or d2 > max_nm * max_nm):
+                                            continue
+                                        if _via_blocked(bx, by, via_dia,
+                                                        code):
+                                            continue
+                                        legs = [(ax, ay, bx, by, la)]
+                                        if not _blocked(*legs[0], width,
+                                                        code):
+                                            best = (d2, a, bkt, legs,
+                                                    ((bx, by),))
                                 continue
                             for src, dst in ((i, j), (j, i)):
                                 for ax, ay in anchors(src):
@@ -1284,19 +1321,19 @@ def _stitch_tails(board, max_mm=3.0):
                                         lid = next(iter(shared))
                                         # straight shot, else L-bend both ways
                                         for mid in (None, (ax, by), (bx, ay)):
-                                            legs = ([(ax, ay, bx, by)]
+                                            legs = ([(ax, ay, bx, by, lid)]
                                                     if mid is None else
-                                                    [(ax, ay, *mid),
-                                                     (*mid, bx, by)])
-                                            if not any(_blocked(*leg, lid,
+                                                    [(ax, ay, *mid, lid),
+                                                     (*mid, bx, by, lid)])
+                                            if not any(_blocked(*leg,
                                                                 width, code)
                                                        for leg in legs):
-                                                best = (d2, a, bkt, legs, lid)
+                                                best = (d2, a, bkt, legs, ())
                                                 break
             if best is None or best[0] > max_nm * max_nm:
                 break
-            _, a, bkt, legs, lid = best
-            for ax, ay, bx, by in legs:
+            _, a, bkt, legs, vias = best
+            for ax, ay, bx, by, lid in legs:
                 if (ax, ay) == (bx, by):
                     continue
                 tr = pcbnew.PCB_TRACK(board)
@@ -1307,6 +1344,17 @@ def _stitch_tails(board, max_mm=3.0):
                 tr.SetNetCode(code)
                 board.Add(tr)
                 obstacles.setdefault(lid, []).append(tr)
+            for vx, vy in vias:
+                v = pcbnew.PCB_VIA(board)
+                v.SetPosition(pcbnew.VECTOR2I(int(vx), int(vy)))
+                v.SetViaType(pcbnew.VIATYPE_THROUGH)
+                v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+                v.SetWidth(int(via_dia))
+                v.SetDrill(int(via_drill))
+                v.SetNetCode(code)
+                board.Add(v)
+                for lid in all_cu:
+                    obstacles.setdefault(lid, []).append(v)
             conn_added += 1
             clusters[roots[a]].extend(clusters[roots[bkt]])
             del clusters[roots[bkt]]

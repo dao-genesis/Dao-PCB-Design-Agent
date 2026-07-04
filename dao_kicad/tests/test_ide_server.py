@@ -55,6 +55,17 @@ def _post(url, body):
         return r.status, json.loads(r.read())
 
 
+def test_http_serves_webui(server):
+    with urllib.request.urlopen(server + "/", timeout=30) as r:
+        assert r.status == 200
+        assert r.headers["Content-Type"].startswith("text/html")
+        page = r.read().decode()
+    # the page must reach every module face of the bridge (网页代替 KiCad)
+    for endpoint in ("/api/tree", "/api/render/sch", "/api/render/pcb",
+                     "/api/agent", "/api/job", "/api/health"):
+        assert endpoint in page
+
+
 def test_http_health_and_tree(server, tmp_path):
     code, j = _get(server + "/api/health")
     assert code == 200 and j["ok"] and j["service"] == "dao-kicad-ide"

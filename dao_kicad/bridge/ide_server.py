@@ -20,6 +20,7 @@ import re
 import shutil
 import tempfile
 import threading
+import time
 import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -59,7 +60,15 @@ def api_tree(root: str) -> dict:
             "pcb": [str(p) for p in sorted(d.glob("*.kicad_pcb"))],
             "net": [str(p) for p in sorted(d.glob("*.net"))],
         })
-    return {"ok": True, "root": str(rootp), "projects": projects}
+    syms = [str(p) for p in sorted(rootp.rglob("*.kicad_sym"))[:200]]
+    fps = [str(p) for p in sorted(rootp.rglob("*.pretty"))[:200] if p.is_dir()]
+    env = _lk().env
+    if env.symbols and env.symbols.is_dir():
+        syms += [str(p) for p in sorted(env.symbols.glob("*.kicad_sym"))]
+    if env.footprints and env.footprints.is_dir():
+        fps += [str(p) for p in sorted(env.footprints.glob("*.pretty")) if p.is_dir()]
+    return {"ok": True, "root": str(rootp), "projects": projects,
+            "sym_libs": syms, "fp_libs": fps}
 
 
 # ── rendering (原理图 / PCB → SVG) ─────────────────────────────────────
@@ -88,6 +97,335 @@ def api_render_pcb(path: str, layers: str) -> tuple[bytes, str] | dict:
         if not out.is_file():
             return {"ok": False, "error": r.stderr[-500:] or "no svg produced"}
         return out.read_bytes(), "image/svg+xml"
+
+
+def api_render_sym(lib: str, name: str) -> tuple[bytes, str] | dict:
+    """Render one symbol of a .kicad_sym library to SVG (符号编辑器视图)."""
+    src = Path(lib)
+    if not src.is_file():
+        return {"ok": False, "error": f"no such symbol lib: {lib}"}
+    with tempfile.TemporaryDirectory() as td:
+        args = ["sym", "export", "svg", "-o", td]
+        if name:
+            args += ["--symbol", name]
+        r = _lk().cli(*args, str(src))
+        svgs = sorted(Path(td).glob("*.svg"))
+        if not svgs:
+            return {"ok": False, "error": r.stderr[-500:] or "no svg produced"}
+        return svgs[0].read_bytes(), "image/svg+xml"
+
+
+def api_render_fp(lib: str, name: str) -> tuple[bytes, str] | dict:
+    """Render one footprint of a .pretty library to SVG (封装编辑器视图)."""
+    src = Path(lib)
+    if not src.is_dir():
+        return {"ok": False, "error": f"no such footprint lib: {lib}"}
+    with tempfile.TemporaryDirectory() as td:
+        args = ["fp", "export", "svg", "-o", td]
+        if name:
+            args += ["--footprint", name]
+        r = _lk().cli(*args, str(src))
+        svgs = sorted(Path(td).glob("*.svg"))
+        if not svgs:
+            return {"ok": False, "error": r.stderr[-500:] or "no svg produced"}
+        pick = next((s for s in svgs if s.stem == name), svgs[0])
+        return pick.read_bytes(), "image/svg+xml"
+
+
+_SYM_RE = re.compile(r'\(symbol\s+"([^"]+)"')
+_SYM_UNIT_RE = re.compile(r'_\d+_\d+$')
+
+
+def api_sym_list(lib: str) -> dict:
+    src = Path(lib)
+    if not src.is_file():
+        return {"ok": False, "error": f"no such symbol lib: {lib}"}
+    names = [n for n in _SYM_RE.findall(src.read_text(errors="replace"))
+             if ":" not in n and "_" != n[:1] and not _SYM_UNIT_RE.search(n)]
+    return {"ok": True, "lib": str(src), "symbols": sorted(set(names))}
+
+
+def api_fp_list(lib: str) -> dict:
+    src = Path(lib)
+    if not src.is_dir():
+        return {"ok": False, "error": f"no such footprint lib: {lib}"}
+    return {"ok": True, "lib": str(src),
+            "footprints": sorted(p.stem for p in src.glob("*.kicad_mod"))}
+
+
+_FILE_EXT = {".gbr", ".gbl", ".gtl", ".gba", ".gta", ".gbs", ".gts", ".gbo",
+             ".gto", ".gbp", ".gtp", ".gm1", ".drl", ".csv", ".net", ".rpt",
+             ".json", ".pos", ".txt", ".md", ".kicad_mod"}
+
+
+def api_file(path: str) -> tuple[bytes, str] | dict:
+    """Read a fabrication/text artifact (Gerber 查看器等板块的文本直读)."""
+    src = Path(path)
+    if src.suffix.lower() not in _FILE_EXT:
+        return {"ok": False, "error": f"unsupported file type: {src.suffix}"}
+    if not src.is_file():
+        return {"ok": False, "error": f"no such file: {path}"}
+    if src.stat().st_size > 2_000_000:
+        return {"ok": False, "error": "file too large (>2MB)"}
+    return src.read_bytes(), "text/plain; charset=utf-8"
+
+
+# ── KiCad 启动器板块本源 (工程文件树 / 图框 / 图片转换 / 扩展内容管理) ──
+# 对齐 KiCad 工程管理器: 左侧工程文件树 + 九大编辑器入口, 内容全部取自 KiCad 本体.
+
+_TREE_SKIP = {".git", "__pycache__", "node_modules", ".venv", "venv",
+              "-backups", ".pcm_cache"}
+
+
+def api_files(root: str) -> dict:
+    """工程文件树 — 对齐 KiCad 工程管理器左侧「工程文件」窗格."""
+    rootp = Path(root).expanduser()
+    if not rootp.is_dir():
+        return {"ok": False, "error": f"not a directory: {root}"}
+
+    def walk(d: Path, depth: int) -> list:
+        out = []
+        try:
+            entries = sorted(d.iterdir(),
+                             key=lambda p: (p.is_file(), p.name.lower()))
+        except OSError:
+            return out
+        for p in entries[:400]:
+            if p.name.startswith(".") or any(s in p.name for s in _TREE_SKIP):
+                continue
+            if p.is_dir():
+                node = {"name": p.name, "path": str(p), "dir": True}
+                if depth < 6:
+                    node["children"] = walk(p, depth + 1)
+                out.append(node)
+            else:
+                out.append({"name": p.name, "path": str(p), "dir": False,
+                            "ext": p.suffix.lower()})
+        return out
+
+    return {"ok": True, "root": str(rootp), "tree": walk(rootp, 0)}
+
+
+def api_wks_list(root: str) -> dict:
+    """图框 (.kicad_wks) 一览: 工程内 + KiCad 系统模板目录."""
+    found: list[str] = []
+    rootp = Path(root).expanduser() if root else None
+    if rootp and rootp.is_dir():
+        found += [str(p) for p in sorted(rootp.rglob("*.kicad_wks"))[:100]]
+    for sysdir in ("/usr/share/kicad/template",
+                   "C:/Program Files/KiCad/9.0/share/kicad/template",
+                   "D:/KICAD/share/kicad/template",
+                   str(Path.home() / ".local/share/kicad")):
+        d = Path(sysdir)
+        if d.is_dir():
+            found += [str(p) for p in sorted(d.rglob("*.kicad_wks"))[:100]]
+    seen: list[str] = []
+    for f in found:
+        if f not in seen:
+            seen.append(f)
+    return {"ok": True, "sheets": seen}
+
+
+_BLANK_SCH = ('(kicad_sch (version 20231120) (generator "dao")\n'
+              '  (uuid "00000000-0000-0000-0000-000000000000")'
+              ' (paper "A4"))\n')
+
+
+def api_render_wks(path: str) -> tuple[bytes, str] | dict:
+    """图框编辑器视图: 用 KiCad 本体在空原理图上渲染工作表."""
+    wks = Path(path)
+    if not wks.is_file():
+        return {"ok": False, "error": f"no such drawing sheet: {path}"}
+    with tempfile.TemporaryDirectory() as td:
+        blank = Path(td) / "blank.kicad_sch"
+        blank.write_text(_BLANK_SCH, encoding="utf-8")
+        r = _lk().cli("sch", "export", "svg", "--no-background-color",
+                      "--drawing-sheet", str(wks), "-o", td, str(blank))
+        svgs = sorted(Path(td).glob("*.svg"))
+        if not svgs:
+            return {"ok": False, "error": r.stderr[-500:] or "no svg produced"}
+        return svgs[0].read_bytes(), "image/svg+xml"
+
+
+def api_convert(body: dict) -> dict:
+    """图片转换器: 位图 → KiCad 原生 .kicad_mod / .kicad_sym (多边形走线).
+
+    与 KiCad bitmap2component 同源思路: 阈值化 → 行程合并为矩形填充区.
+    """
+    import base64 as _b64
+    try:
+        from PIL import Image
+    except ImportError:
+        return {"ok": False, "error": "需要 Pillow: pip install pillow"}
+    raw = body.get("image_b64") or ""
+    if "," in raw[:80]:
+        raw = raw.split(",", 1)[1]
+    try:
+        data = _b64.b64decode(raw)
+    except Exception as e:
+        return {"ok": False, "error": f"bad image_b64: {e}"}
+    import io
+    img = Image.open(io.BytesIO(data)).convert("L")
+    if img.width > 400:
+        img = img.resize((400, max(1, img.height * 400 // img.width)))
+    thr = int(body.get("threshold") or 128)
+    invert = bool(body.get("invert"))
+    mm = float(body.get("mm_per_px") or 0.1)
+    px = img.load()
+    name = re.sub(r"[^\w.-]", "_", body.get("name") or "dao_image") or "img"
+    kind = body.get("format") or "fp"
+    layer = body.get("layer") or "F.SilkS"
+    rects = []
+    for y in range(img.height):
+        x = 0
+        while x < img.width:
+            on = (px[x, y] < thr) != invert
+            if on:
+                x0 = x
+                while x < img.width and ((px[x, y] < thr) != invert):
+                    x += 1
+                rects.append((x0, y, x, y + 1))
+            else:
+                x += 1
+    if not rects:
+        return {"ok": False, "error": "阈值下没有前景像素, 调整 threshold/invert"}
+    if kind == "sym":
+        polys = "".join(
+            f'    (polyline (pts (xy {x0*mm:.3f} {-y0*mm:.3f}) '
+            f'(xy {x1*mm:.3f} {-y0*mm:.3f}) (xy {x1*mm:.3f} {-y1*mm:.3f}) '
+            f'(xy {x0*mm:.3f} {-y1*mm:.3f}) (xy {x0*mm:.3f} {-y0*mm:.3f}))\n'
+            f'      (stroke (width 0)) (fill (type outline)))\n'
+            for x0, y0, x1, y1 in rects)
+        text = (f'(kicad_symbol_lib (version 20231120) (generator "dao")\n'
+                f'  (symbol "{name}" (in_bom no) (on_board no)\n'
+                f'   (symbol "{name}_0_1"\n{polys}   )))\n')
+        fname = f"{name}.kicad_sym"
+    else:
+        polys = "".join(
+            f'  (fp_poly (pts (xy {x0*mm:.3f} {y0*mm:.3f}) '
+            f'(xy {x1*mm:.3f} {y0*mm:.3f}) (xy {x1*mm:.3f} {y1*mm:.3f}) '
+            f'(xy {x0*mm:.3f} {y1*mm:.3f}))\n'
+            f'    (stroke (width 0) (type solid)) (fill solid) '
+            f'(layer "{layer}"))\n'
+            for x0, y0, x1, y1 in rects)
+        text = (f'(footprint "{name}" (version 20240108) (generator "dao")\n'
+                f'  (layer "F.Cu") (attr board_only exclude_from_pos_files '
+                f'exclude_from_bom)\n{polys})\n')
+        fname = f"{name}.kicad_mod"
+    out = body.get("out")
+    saved = None
+    if out:
+        outp = Path(out).expanduser()
+        outp.mkdir(parents=True, exist_ok=True)
+        (outp / fname).write_text(text, encoding="utf-8")
+        saved = str(outp / fname)
+    return {"ok": True, "name": fname, "rects": len(rects),
+            "saved": saved, "content": text if len(text) < 400_000 else None}
+
+
+# ── 扩展内容管理器 (对齐 KiCad PCM: 官方仓库 + 已安装 3rdparty) ──
+
+_PCM_REPO = "https://repository.kicad.org/repository.json"
+_PCM_CACHE: dict[str, Any] = {}
+
+
+def _pcm_dir() -> Path:
+    for c in (Path.home() / ".local/share/kicad",
+              Path.home() / "Documents/KiCad"):
+        if c.is_dir():
+            vers = sorted((p for p in c.iterdir()
+                           if re.match(r"\d+\.\d+", p.name)), reverse=True)
+            if vers:
+                return vers[0] / "3rdparty"
+    return Path.home() / ".local/share/kicad/9.0/3rdparty"
+
+
+_UA = {"User-Agent": "KiCad/9.0 dao-kicad-ide"}
+
+
+def _http_json(url: str) -> Any:
+    import urllib.request
+    req = urllib.request.Request(url, headers=_UA)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read())
+
+
+def api_pcm_list(_q: dict | None = None) -> dict:
+    base = _pcm_dir()
+    installed = []
+    for kind in ("plugins", "symbols", "footprints", "templates", "colors"):
+        d = base / kind
+        if d.is_dir():
+            installed += [{"id": p.name, "kind": kind, "path": str(p)}
+                          for p in sorted(d.iterdir()) if p.is_dir()]
+    remote = _PCM_CACHE.get("packages")
+    if remote is None:
+        try:
+            repo = _http_json(_PCM_REPO)
+            pk = _http_json(repo["packages"]["url"])
+            remote = [{"id": p["identifier"], "name": p["name"],
+                       "type": p["type"],
+                       "description": p.get("description", "")[:200],
+                       "versions": [v.get("version") for v in
+                                    p.get("versions", [])][:3]}
+                      for p in pk.get("packages", [])]
+            _PCM_CACHE["packages"] = remote
+            _PCM_CACHE["raw"] = {p["identifier"]: p
+                                 for p in pk.get("packages", [])}
+        except Exception as e:
+            remote = []
+            _PCM_CACHE.setdefault("error", str(e))
+    return {"ok": True, "dir": str(base), "installed": installed,
+            "repository": remote, "repo_error": _PCM_CACHE.get("error")}
+
+
+def api_pcm_install(body: dict) -> dict:
+    ident = body.get("id") or ""
+    api_pcm_list()
+    pkg = (_PCM_CACHE.get("raw") or {}).get(ident)
+    if not pkg:
+        return {"ok": False, "error": f"unknown package: {ident}"}
+    vers = pkg.get("versions") or []
+    ver = next((v for v in vers if v.get("download_url")), None)
+    if not ver:
+        return {"ok": False, "error": "package has no downloadable version"}
+    import io
+    import urllib.request
+    import zipfile
+    req = urllib.request.Request(ver["download_url"], headers=_UA)
+    with urllib.request.urlopen(req, timeout=300) as r:
+        blob = r.read()
+    safe = ident.replace(".", "_")
+    base = _pcm_dir()
+    extracted = []
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        for m in z.namelist():
+            parts = Path(m).parts
+            if not parts or m.endswith("/") or ".." in parts:
+                continue
+            top = parts[0]
+            if top == "metadata.json":
+                continue
+            dest = base / top / safe / Path(*parts[1:])
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(z.read(m))
+            extracted.append(str(dest))
+    return {"ok": True, "id": ident, "version": ver.get("version"),
+            "files": len(extracted), "dir": str(base)}
+
+
+def api_pcm_remove(body: dict) -> dict:
+    ident = (body.get("id") or "").replace(".", "_")
+    base = _pcm_dir()
+    removed = []
+    for kind in ("plugins", "symbols", "footprints", "templates", "colors"):
+        d = base / kind / ident
+        if d.is_dir():
+            shutil.rmtree(d)
+            removed.append(str(d))
+    if not removed:
+        return {"ok": False, "error": f"not installed: {body.get('id')}"}
+    return {"ok": True, "removed": removed}
 
 
 # ── engine actions ─────────────────────────────────────────────────────
@@ -134,7 +472,8 @@ def api_erc(body: dict) -> dict:
 
 
 def api_fab(body: dict) -> dict:
-    pcb, out = body["pcb"], Path(body["out"])
+    pcb = body["pcb"]
+    out = Path(body.get("out") or Path(pcb).parent / "fab")
     g = _lk().export_gerbers(pcb, out / "gerbers")
     d = _lk().export_drill(pcb, out / "gerbers")
     p = _lk().export_pos(pcb, out / "pos.csv")
@@ -325,6 +664,172 @@ def _agent_paths(text: str, root: str | None) -> dict[str, str]:
     return out
 
 
+# ── AI 管理 (对齐 devin-remote Proxy Pro 本源: 渠道配置 / 模型路由 / 对话数据) ──
+# 底层全部替换为 KiCad 板块路由: 意图词直达引擎, 其余经第三方 OpenAI 兼容渠道。
+
+_DAO_DIR = Path.home() / ".dao"
+_AI_CFG = _DAO_DIR / "kicad_ai.json"
+_CHATS = _DAO_DIR / "kicad_chats.json"
+_STORE_LOCK = threading.Lock()
+
+
+def _store_read(p: Path, default):
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def _store_write(p: Path, obj) -> None:
+    _DAO_DIR.mkdir(exist_ok=True)
+    p.write_text(json.dumps(obj, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _mask(key: str) -> str:
+    return key[:4] + "…" + key[-4:] if len(key) > 10 else "…"
+
+
+def api_ai_config_get(_q: dict) -> dict:
+    with _STORE_LOCK:
+        cfg = _store_read(_AI_CFG, {"channels": [], "active": "", "system": ""})
+    chans = [{**c, "key": _mask(c.get("key", ""))} for c in cfg.get("channels", [])]
+    return {"ok": True, "channels": chans, "active": cfg.get("active", ""),
+            "system": cfg.get("system", "")}
+
+
+def api_ai_config(body: dict) -> dict:
+    with _STORE_LOCK:
+        cfg = _store_read(_AI_CFG, {"channels": [], "active": "", "system": ""})
+        op = body.get("op", "")
+        if op == "add":
+            ch = {"name": body.get("name", "").strip(),
+                  "endpoint": body.get("endpoint", "").rstrip("/"),
+                  "key": body.get("key", ""), "model": body.get("model", "")}
+            if not (ch["name"] and ch["endpoint"]):
+                return {"ok": False, "error": "渠道需要 name + endpoint"}
+            cfg["channels"] = [c for c in cfg["channels"] if c["name"] != ch["name"]]
+            cfg["channels"].append(ch)
+            if not cfg.get("active"):
+                cfg["active"] = ch["name"]
+        elif op == "del":
+            cfg["channels"] = [c for c in cfg["channels"]
+                               if c["name"] != body.get("name")]
+            if cfg.get("active") == body.get("name"):
+                cfg["active"] = cfg["channels"][0]["name"] if cfg["channels"] else ""
+        elif op == "activate":
+            cfg["active"] = body.get("name", "")
+        elif op == "system":
+            cfg["system"] = body.get("system", "")
+        else:
+            return {"ok": False, "error": f"unknown op: {op}"}
+        _store_write(_AI_CFG, cfg)
+    return api_ai_config_get({})
+
+
+def api_chat_list(_q: dict) -> dict:
+    with _STORE_LOCK:
+        chats = _store_read(_CHATS, {"chats": []})["chats"]
+    return {"ok": True, "chats": [{"id": c["id"], "title": c.get("title", ""),
+                                   "ts": c.get("ts", 0), "n": len(c.get("messages", []))}
+                                  for c in chats]}
+
+
+def api_chat_get(q: dict) -> dict:
+    with _STORE_LOCK:
+        chats = _store_read(_CHATS, {"chats": []})["chats"]
+    c = next((c for c in chats if c["id"] == q.get("id")), None)
+    return {"ok": bool(c), "chat": c} if c else {"ok": False, "error": "no such chat"}
+
+
+def api_chat_del(body: dict) -> dict:
+    with _STORE_LOCK:
+        store = _store_read(_CHATS, {"chats": []})
+        if body.get("all"):
+            store["chats"] = []
+        else:
+            store["chats"] = [c for c in store["chats"] if c["id"] != body.get("id")]
+        _store_write(_CHATS, store)
+    return {"ok": True, "n": len(store["chats"])}
+
+
+def _chat_append(chat_id: str, title_hint: str, msgs: list) -> str:
+    with _STORE_LOCK:
+        store = _store_read(_CHATS, {"chats": []})
+        c = next((c for c in store["chats"] if c["id"] == chat_id), None)
+        if c is None:
+            c = {"id": chat_id or uuid.uuid4().hex[:12],
+                 "title": title_hint[:40], "ts": int(time.time()), "messages": []}
+            store["chats"].append(c)
+        c["messages"] += msgs
+        c["ts"] = int(time.time())
+        store["chats"] = store["chats"][-100:]
+        _store_write(_CHATS, store)
+        return c["id"]
+
+
+_AI_SYSTEM = ("你是 DAO KiCad 归一面板的 AI 助手, 底层是 KiCad 原生引擎的 REST 桥。"
+              "可用动作: 全链路(auto)/erc/drc/route/build/netlist/fab, "
+              "用户说这些意图词时引擎已自动执行, 你负责其余的电子设计问答与指导。"
+              "回答用中文, 简洁专业。")
+
+
+def _llm_call(ch: dict, system: str, history: list, text: str) -> str:
+    import urllib.request
+    msgs = [{"role": "system", "content": system or _AI_SYSTEM}]
+    msgs += [{"role": m["role"], "content": m["content"]} for m in history[-20:]]
+    msgs.append({"role": "user", "content": text})
+    payload = json.dumps({"model": ch.get("model") or "gpt-4o-mini",
+                          "messages": msgs}, ensure_ascii=True).encode()
+    url = ch["endpoint"]
+    if not url.endswith("/chat/completions"):
+        url = url.rstrip("/") + "/chat/completions"
+    req = urllib.request.Request(url, data=payload, method="POST", headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + ch.get("key", "")})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        out = json.loads(r.read())
+    return out["choices"][0]["message"]["content"]
+
+
+def api_ai_chat(body: dict) -> dict:
+    """AI 对话归一入口: 意图词 → KiCad 引擎直达; 其余 → 第三方渠道 (Proxy Pro 式路由)。
+
+    对话全量沉淀到 ~/.dao/kicad_chats.json (对话数据管理)。
+    """
+    text = (body.get("text") or "").strip()
+    if not text:
+        return {"ok": False, "reply": "说点什么吧。"}
+    chat_id = body.get("chat_id") or ""
+    if next((a for a, rx in _INTENTS if rx.search(text)), None):
+        res = api_agent(body)
+        cid = _chat_append(chat_id, text,
+                           [{"role": "user", "content": text},
+                            {"role": "assistant", "content": res.get("reply", "")}])
+        return {**res, "chat_id": cid, "via": "kicad-engine"}
+    with _STORE_LOCK:
+        cfg = _store_read(_AI_CFG, {"channels": [], "active": "", "system": ""})
+    ch = next((c for c in cfg["channels"] if c["name"] == cfg.get("active")), None)
+    if ch is None:
+        res = api_agent(body)
+        cid = _chat_append(chat_id, text,
+                           [{"role": "user", "content": text},
+                            {"role": "assistant", "content": res.get("reply", "")}])
+        return {**res, "chat_id": cid, "via": "kicad-engine"}
+    with _STORE_LOCK:
+        chats = _store_read(_CHATS, {"chats": []})["chats"]
+    prev = next((c for c in chats if c["id"] == chat_id), None)
+    history = prev["messages"] if prev else []
+    try:
+        reply = _llm_call(ch, cfg.get("system", ""), history, text)
+    except Exception as e:
+        return {"ok": False, "reply": f"渠道 {ch['name']} 调用失败: {e}",
+                "via": "channel:" + ch["name"]}
+    cid = _chat_append(chat_id, text,
+                       [{"role": "user", "content": text},
+                        {"role": "assistant", "content": reply}])
+    return {"ok": True, "reply": reply, "chat_id": cid, "via": "channel:" + ch["name"]}
+
+
 def api_agent(body: dict) -> dict:
     """Copilot-style chat turn: natural language in, chain actions out.
 
@@ -371,7 +876,9 @@ def api_agent(body: dict) -> dict:
 
 _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
             "drc": api_drc, "erc": api_erc, "fab": api_fab, "auto": api_auto,
-            "agent": api_agent}
+            "agent": api_agent, "chat": api_ai_chat, "config": api_ai_config,
+            "del": api_chat_del, "convert": api_convert,
+            "install": api_pcm_install, "remove": api_pcm_remove}
 _SLOW = {"build", "route", "fab", "auto"}
 
 _CAPABILITIES = {
@@ -385,11 +892,47 @@ _CAPABILITIES = {
          "doc": "Service + KiCad availability/version."},
         {"method": "GET", "path": "/api/tree", "params": {"root": "dir"},
          "doc": "Discover KiCad projects (sch/pcb/net files) under root."},
+        {"method": "GET", "path": "/api/files", "params": {"root": "dir"},
+         "doc": "工程文件树 (对齐 KiCad 工程管理器左侧窗格)."},
+        {"method": "GET", "path": "/api/wks/list", "params": {"root": "dir"},
+         "doc": "图框 (.kicad_wks) 一览: 工程内 + KiCad 系统模板."},
+        {"method": "GET", "path": "/api/render/wks",
+         "params": {"path": ".kicad_wks"},
+         "doc": "图框编辑器视图: KiCad 本体渲染工作表为 SVG."},
+        {"method": "POST", "path": "/api/convert",
+         "params": {"image_b64": "png/jpg", "format": "fp|sym",
+                    "name": "...", "threshold": "0-255", "invert": "bool",
+                    "mm_per_px": "float=0.1", "layer": "F.SilkS",
+                    "out": "optional dir"},
+         "doc": "图片转换器: 位图 → KiCad 原生 .kicad_mod/.kicad_sym."},
+        {"method": "GET", "path": "/api/pcm/list", "params": {},
+         "doc": "扩展内容管理器: 官方仓库 + 已安装 3rdparty 包."},
+        {"method": "POST", "path": "/api/pcm/install",
+         "params": {"id": "package identifier"},
+         "doc": "从官方 PCM 仓库安装扩展包."},
+        {"method": "POST", "path": "/api/pcm/remove",
+         "params": {"id": "package identifier"},
+         "doc": "卸载已安装扩展包."},
         {"method": "GET", "path": "/api/render/sch",
          "params": {"path": ".kicad_sch"}, "doc": "Schematic as SVG."},
         {"method": "GET", "path": "/api/render/pcb",
          "params": {"path": ".kicad_pcb", "layers": "csv, optional"},
          "doc": "Board as SVG."},
+        {"method": "GET", "path": "/api/render/sym",
+         "params": {"lib": ".kicad_sym", "name": "symbol, optional"},
+         "doc": "Symbol (符号编辑器视图) as SVG."},
+        {"method": "GET", "path": "/api/render/fp",
+         "params": {"lib": ".pretty dir", "name": "footprint, optional"},
+         "doc": "Footprint (封装编辑器视图) as SVG."},
+        {"method": "GET", "path": "/api/sym/list",
+         "params": {"lib": ".kicad_sym"},
+         "doc": "List symbols inside a symbol library."},
+        {"method": "GET", "path": "/api/fp/list",
+         "params": {"lib": ".pretty dir"},
+         "doc": "List footprints inside a footprint library."},
+        {"method": "GET", "path": "/api/file",
+         "params": {"path": "gerber/drill/csv/net/report file"},
+         "doc": "Read a fabrication/text artifact (Gerber 查看器)."},
         {"method": "POST", "path": "/api/netlist",
          "params": {"sch": ".kicad_sch", "out": "optional .net"},
          "doc": "Schematic -> netlist."},
@@ -420,6 +963,23 @@ _CAPABILITIES = {
                 "slow actions return {job}."},
         {"method": "GET", "path": "/api/job", "params": {"id": "job id"},
          "doc": "Poll a job: {done, stage?, result?}."},
+        {"method": "POST", "path": "/api/ai/chat",
+         "params": {"text": "message", "chat_id": "optional", "root": "dir"},
+         "doc": "归一 AI 对话: 意图词直达 KiCad 引擎, 其余经激活的第三方渠道; "
+                "对话沉淀可管理."},
+        {"method": "GET", "path": "/api/ai/config", "params": {},
+         "doc": "AI 渠道配置 (key 脱敏)."},
+        {"method": "POST", "path": "/api/ai/config",
+         "params": {"op": "add|del|activate|system", "name": "...",
+                    "endpoint": "OpenAI 兼容 base", "key": "...", "model": "..."},
+         "doc": "渠道配置管理 (Proxy Pro 式)."},
+        {"method": "GET", "path": "/api/chat/list", "params": {},
+         "doc": "对话数据管理: 列出沉淀的对话."},
+        {"method": "GET", "path": "/api/chat/get", "params": {"id": "chat id"},
+         "doc": "读取一条对话全量消息."},
+        {"method": "POST", "path": "/api/chat/del",
+         "params": {"id": "chat id", "all": "bool"},
+         "doc": "删除一条/全部对话."},
     ],
 }
 
@@ -476,6 +1036,12 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
+            if u.path in ("/", "/index.html", "/webui.html"):
+                page = Path(__file__).with_name("webui.html")
+                if page.is_file():
+                    return self._send_raw(page.read_bytes(),
+                                          "text/html; charset=utf-8")
+                return self._send({"ok": False, "error": "webui missing"}, 404)
             if u.path == "/api/health":
                 e = _lk().env
                 return self._send({"ok": True, "kicad": e.version,
@@ -483,6 +1049,17 @@ class Handler(BaseHTTPRequestHandler):
                                    "service": "dao-kicad-ide"})
             if u.path == "/api/tree":
                 return self._send(api_tree(q.get("root", ".")))
+            if u.path == "/api/files":
+                return self._send(api_files(q.get("root", ".")))
+            if u.path == "/api/wks/list":
+                return self._send(api_wks_list(q.get("root", "")))
+            if u.path == "/api/render/wks":
+                r = api_render_wks(q.get("path", ""))
+                if isinstance(r, dict):
+                    return self._send(r, 400)
+                return self._send_raw(*r)
+            if u.path == "/api/pcm/list":
+                return self._send(api_pcm_list(q))
             if u.path == "/api/render/sch":
                 r = api_render_sch(q.get("path", ""))
                 if isinstance(r, dict):
@@ -495,6 +1072,25 @@ class Handler(BaseHTTPRequestHandler):
                 if isinstance(r, dict):
                     return self._send(r, 400)
                 return self._send_raw(*r)
+            if u.path == "/api/render/sym":
+                r = api_render_sym(q.get("lib", ""), q.get("name", ""))
+                if isinstance(r, dict):
+                    return self._send(r, 400)
+                return self._send_raw(*r)
+            if u.path == "/api/render/fp":
+                r = api_render_fp(q.get("lib", ""), q.get("name", ""))
+                if isinstance(r, dict):
+                    return self._send(r, 400)
+                return self._send_raw(*r)
+            if u.path == "/api/sym/list":
+                return self._send(api_sym_list(q.get("lib", "")))
+            if u.path == "/api/fp/list":
+                return self._send(api_fp_list(q.get("lib", "")))
+            if u.path == "/api/file":
+                r = api_file(q.get("path", ""))
+                if isinstance(r, dict):
+                    return self._send(r, 400)
+                return self._send_raw(*r)
             if u.path == "/api/capabilities":
                 return self._send(_CAPABILITIES)
             if u.path == "/api/doc":
@@ -503,6 +1099,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send_raw(doc.read_bytes(),
                                           "text/markdown; charset=utf-8")
                 return self._send({"ok": False, "error": "doc missing"}, 404)
+            if u.path == "/api/ai/config":
+                return self._send(api_ai_config_get(q))
+            if u.path == "/api/chat/list":
+                return self._send(api_chat_list(q))
+            if u.path == "/api/chat/get":
+                return self._send(api_chat_get(q))
             if u.path == "/api/job":
                 with _JOBS_LOCK:
                     j = _JOBS.get(q.get("id", ""))
