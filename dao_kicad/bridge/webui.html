@@ -209,7 +209,12 @@ function showBoard(k){
   for(const b of document.querySelectorAll(".board")) b.classList.toggle("on",b.dataset.b===k);
   localStorage.setItem("dao.board",k);
   if(k==="api") loadApiBoard();
-  if(k==="native"){natRefreshWins();natStart();} else natStop();
+  if(k==="native"){
+    natRefreshWins();
+    if(natHwnd) natStart();
+    else if(!natAutoDone){ const p=new URLSearchParams(location.search);
+      natAuto((p.get("tool")||"").toLowerCase(), p.get("path")||""); }
+  } else natStop();
 }
 $("#homeboards").textContent=BOARDS.map(b=>b[1]).join(" · ");
 
@@ -368,6 +373,22 @@ function finishTurn(action,res){
 }
 // ── 🖥 原生 KiCad 路由: 投屏真实窗口 + 鼠标/键盘反向注入 ──
 let natHwnd=null, natTimer=null, natBusy=false, natURL=null;
+let natAutoDone=false;
+async function natAuto(tool,path){
+  // 自动路由: 若已有原生 KiCad 窗口→直接投屏; 否则启动对应工具再投屏
+  natAutoDone=true;
+  $("#natState").textContent="自动路由中…";
+  try{
+    const j=await (await fetch("/api/native/windows")).json();
+    if(!j.native){$("#natState").textContent="本机非 Windows: 原生投屏在用户机上可用";return;}
+    let wins=j.windows||[];
+    if(tool){const m=wins.filter(w=>(w.exe||"").toLowerCase().includes(tool));if(m.length)wins=m;}
+    if(wins.length){ if(tool)$("#natTool").value=tool; natPick(wins[0].hwnd); return; }
+    if(tool)$("#natTool").value=tool;
+    if(path)$("#natPath").value=path;
+    await natLaunch();
+  }catch(e){$("#natState").textContent="自动路由失败: "+e;}
+}
 async function natRefreshWins(){
   try{
     const j=await (await fetch("/api/native/windows")).json();
@@ -450,7 +471,10 @@ async function natInput(ev){
   });
 })();
 
-showBoard(localStorage.getItem("dao.board")||"home");   // 恢复上次板块 (置于定义之后)
+// 初始板块: ?board=xxx / ?native=1 优先, 否则恢复上次
+(()=>{ const p=new URLSearchParams(location.search);
+  const b=p.get("board")||(p.has("native")||p.has("tool")?"native":null);
+  showBoard(b||localStorage.getItem("dao.board")||"home"); })();
 if($("#root").value) loadTree();
 </script>
 </body>
