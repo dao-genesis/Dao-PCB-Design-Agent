@@ -20,6 +20,7 @@ import re
 import shutil
 import tempfile
 import threading
+import time
 import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -404,6 +405,172 @@ def _agent_paths(text: str, root: str | None) -> dict[str, str]:
     return out
 
 
+# ── AI 管理 (对齐 devin-remote Proxy Pro 本源: 渠道配置 / 模型路由 / 对话数据) ──
+# 底层全部替换为 KiCad 板块路由: 意图词直达引擎, 其余经第三方 OpenAI 兼容渠道。
+
+_DAO_DIR = Path.home() / ".dao"
+_AI_CFG = _DAO_DIR / "kicad_ai.json"
+_CHATS = _DAO_DIR / "kicad_chats.json"
+_STORE_LOCK = threading.Lock()
+
+
+def _store_read(p: Path, default):
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def _store_write(p: Path, obj) -> None:
+    _DAO_DIR.mkdir(exist_ok=True)
+    p.write_text(json.dumps(obj, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _mask(key: str) -> str:
+    return key[:4] + "…" + key[-4:] if len(key) > 10 else "…"
+
+
+def api_ai_config_get(_q: dict) -> dict:
+    with _STORE_LOCK:
+        cfg = _store_read(_AI_CFG, {"channels": [], "active": "", "system": ""})
+    chans = [{**c, "key": _mask(c.get("key", ""))} for c in cfg.get("channels", [])]
+    return {"ok": True, "channels": chans, "active": cfg.get("active", ""),
+            "system": cfg.get("system", "")}
+
+
+def api_ai_config(body: dict) -> dict:
+    with _STORE_LOCK:
+        cfg = _store_read(_AI_CFG, {"channels": [], "active": "", "system": ""})
+        op = body.get("op", "")
+        if op == "add":
+            ch = {"name": body.get("name", "").strip(),
+                  "endpoint": body.get("endpoint", "").rstrip("/"),
+                  "key": body.get("key", ""), "model": body.get("model", "")}
+            if not (ch["name"] and ch["endpoint"]):
+                return {"ok": False, "error": "渠道需要 name + endpoint"}
+            cfg["channels"] = [c for c in cfg["channels"] if c["name"] != ch["name"]]
+            cfg["channels"].append(ch)
+            if not cfg.get("active"):
+                cfg["active"] = ch["name"]
+        elif op == "del":
+            cfg["channels"] = [c for c in cfg["channels"]
+                               if c["name"] != body.get("name")]
+            if cfg.get("active") == body.get("name"):
+                cfg["active"] = cfg["channels"][0]["name"] if cfg["channels"] else ""
+        elif op == "activate":
+            cfg["active"] = body.get("name", "")
+        elif op == "system":
+            cfg["system"] = body.get("system", "")
+        else:
+            return {"ok": False, "error": f"unknown op: {op}"}
+        _store_write(_AI_CFG, cfg)
+    return api_ai_config_get({})
+
+
+def api_chat_list(_q: dict) -> dict:
+    with _STORE_LOCK:
+        chats = _store_read(_CHATS, {"chats": []})["chats"]
+    return {"ok": True, "chats": [{"id": c["id"], "title": c.get("title", ""),
+                                   "ts": c.get("ts", 0), "n": len(c.get("messages", []))}
+                                  for c in chats]}
+
+
+def api_chat_get(q: dict) -> dict:
+    with _STORE_LOCK:
+        chats = _store_read(_CHATS, {"chats": []})["chats"]
+    c = next((c for c in chats if c["id"] == q.get("id")), None)
+    return {"ok": bool(c), "chat": c} if c else {"ok": False, "error": "no such chat"}
+
+
+def api_chat_del(body: dict) -> dict:
+    with _STORE_LOCK:
+        store = _store_read(_CHATS, {"chats": []})
+        if body.get("all"):
+            store["chats"] = []
+        else:
+            store["chats"] = [c for c in store["chats"] if c["id"] != body.get("id")]
+        _store_write(_CHATS, store)
+    return {"ok": True, "n": len(store["chats"])}
+
+
+def _chat_append(chat_id: str, title_hint: str, msgs: list) -> str:
+    with _STORE_LOCK:
+        store = _store_read(_CHATS, {"chats": []})
+        c = next((c for c in store["chats"] if c["id"] == chat_id), None)
+        if c is None:
+            c = {"id": chat_id or uuid.uuid4().hex[:12],
+                 "title": title_hint[:40], "ts": int(time.time()), "messages": []}
+            store["chats"].append(c)
+        c["messages"] += msgs
+        c["ts"] = int(time.time())
+        store["chats"] = store["chats"][-100:]
+        _store_write(_CHATS, store)
+        return c["id"]
+
+
+_AI_SYSTEM = ("你是 DAO KiCad 归一面板的 AI 助手, 底层是 KiCad 原生引擎的 REST 桥。"
+              "可用动作: 全链路(auto)/erc/drc/route/build/netlist/fab, "
+              "用户说这些意图词时引擎已自动执行, 你负责其余的电子设计问答与指导。"
+              "回答用中文, 简洁专业。")
+
+
+def _llm_call(ch: dict, system: str, history: list, text: str) -> str:
+    import urllib.request
+    msgs = [{"role": "system", "content": system or _AI_SYSTEM}]
+    msgs += [{"role": m["role"], "content": m["content"]} for m in history[-20:]]
+    msgs.append({"role": "user", "content": text})
+    payload = json.dumps({"model": ch.get("model") or "gpt-4o-mini",
+                          "messages": msgs}, ensure_ascii=True).encode()
+    url = ch["endpoint"]
+    if not url.endswith("/chat/completions"):
+        url = url.rstrip("/") + "/chat/completions"
+    req = urllib.request.Request(url, data=payload, method="POST", headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + ch.get("key", "")})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        out = json.loads(r.read())
+    return out["choices"][0]["message"]["content"]
+
+
+def api_ai_chat(body: dict) -> dict:
+    """AI 对话归一入口: 意图词 → KiCad 引擎直达; 其余 → 第三方渠道 (Proxy Pro 式路由)。
+
+    对话全量沉淀到 ~/.dao/kicad_chats.json (对话数据管理)。
+    """
+    text = (body.get("text") or "").strip()
+    if not text:
+        return {"ok": False, "reply": "说点什么吧。"}
+    chat_id = body.get("chat_id") or ""
+    if next((a for a, rx in _INTENTS if rx.search(text)), None):
+        res = api_agent(body)
+        cid = _chat_append(chat_id, text,
+                           [{"role": "user", "content": text},
+                            {"role": "assistant", "content": res.get("reply", "")}])
+        return {**res, "chat_id": cid, "via": "kicad-engine"}
+    with _STORE_LOCK:
+        cfg = _store_read(_AI_CFG, {"channels": [], "active": "", "system": ""})
+    ch = next((c for c in cfg["channels"] if c["name"] == cfg.get("active")), None)
+    if ch is None:
+        res = api_agent(body)
+        cid = _chat_append(chat_id, text,
+                           [{"role": "user", "content": text},
+                            {"role": "assistant", "content": res.get("reply", "")}])
+        return {**res, "chat_id": cid, "via": "kicad-engine"}
+    with _STORE_LOCK:
+        chats = _store_read(_CHATS, {"chats": []})["chats"]
+    prev = next((c for c in chats if c["id"] == chat_id), None)
+    history = prev["messages"] if prev else []
+    try:
+        reply = _llm_call(ch, cfg.get("system", ""), history, text)
+    except Exception as e:
+        return {"ok": False, "reply": f"渠道 {ch['name']} 调用失败: {e}",
+                "via": "channel:" + ch["name"]}
+    cid = _chat_append(chat_id, text,
+                       [{"role": "user", "content": text},
+                        {"role": "assistant", "content": reply}])
+    return {"ok": True, "reply": reply, "chat_id": cid, "via": "channel:" + ch["name"]}
+
+
 def api_agent(body: dict) -> dict:
     """Copilot-style chat turn: natural language in, chain actions out.
 
@@ -450,7 +617,8 @@ def api_agent(body: dict) -> dict:
 
 _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
             "drc": api_drc, "erc": api_erc, "fab": api_fab, "auto": api_auto,
-            "agent": api_agent}
+            "agent": api_agent, "chat": api_ai_chat, "config": api_ai_config,
+            "del": api_chat_del}
 _SLOW = {"build", "route", "fab", "auto"}
 
 _CAPABILITIES = {
@@ -514,6 +682,23 @@ _CAPABILITIES = {
                 "slow actions return {job}."},
         {"method": "GET", "path": "/api/job", "params": {"id": "job id"},
          "doc": "Poll a job: {done, stage?, result?}."},
+        {"method": "POST", "path": "/api/ai/chat",
+         "params": {"text": "message", "chat_id": "optional", "root": "dir"},
+         "doc": "归一 AI 对话: 意图词直达 KiCad 引擎, 其余经激活的第三方渠道; "
+                "对话沉淀可管理."},
+        {"method": "GET", "path": "/api/ai/config", "params": {},
+         "doc": "AI 渠道配置 (key 脱敏)."},
+        {"method": "POST", "path": "/api/ai/config",
+         "params": {"op": "add|del|activate|system", "name": "...",
+                    "endpoint": "OpenAI 兼容 base", "key": "...", "model": "..."},
+         "doc": "渠道配置管理 (Proxy Pro 式)."},
+        {"method": "GET", "path": "/api/chat/list", "params": {},
+         "doc": "对话数据管理: 列出沉淀的对话."},
+        {"method": "GET", "path": "/api/chat/get", "params": {"id": "chat id"},
+         "doc": "读取一条对话全量消息."},
+        {"method": "POST", "path": "/api/chat/del",
+         "params": {"id": "chat id", "all": "bool"},
+         "doc": "删除一条/全部对话."},
     ],
 }
 
@@ -622,6 +807,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send_raw(doc.read_bytes(),
                                           "text/markdown; charset=utf-8")
                 return self._send({"ok": False, "error": "doc missing"}, 404)
+            if u.path == "/api/ai/config":
+                return self._send(api_ai_config_get(q))
+            if u.path == "/api/chat/list":
+                return self._send(api_chat_list(q))
+            if u.path == "/api/chat/get":
+                return self._send(api_chat_get(q))
             if u.path == "/api/job":
                 with _JOBS_LOCK:
                     j = _JOBS.get(q.get("id", ""))

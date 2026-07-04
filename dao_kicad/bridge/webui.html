@@ -158,8 +158,24 @@ td,th{border:1px solid var(--line);padding:3px 8px}
         <div class="kv" id="gerberfiles">跑一次制造输出后, 产物文件列于此, 点击直读内容。</div>
         <pre id="gerberview" style="max-height:340px">尚无</pre></div>
     </div>
-    <!-- 🔌 接入 -->
+    <!-- 🔌 接入 / AI 管理 (对齐 Proxy Pro 三面板: 渠道配置 / 模型路由 / 对话数据) -->
     <div class="board pad" data-b="api">
+      <div class="card"><h3>② 渠道配置 · 第三方 API (Proxy Pro 式)</h3>
+        <div class="kv">接入任意 OpenAI 兼容渠道: 意图词(全链路/ERC/DRC/布线/制造…)直达 KiCad 引擎,
+        其余问答经激活渠道路由。key 落盘 ~/.dao/kicad_ai.json, 界面只显脱敏。</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <input id="chName" placeholder="渠道名" style="width:110px">
+          <input id="chEp" placeholder="Endpoint (https://…/v1)" style="flex:1;min-width:200px">
+          <input id="chKey" placeholder="API Key" type="password" style="width:160px">
+          <input id="chModel" placeholder="模型 (如 gpt-4o-mini)" style="width:150px">
+          <button class="primary" onclick="chAdd()">保存渠道</button>
+        </div>
+        <div id="chList" class="kv" style="margin-top:8px">载入中…</div></div>
+      <div class="card"><h3>💬 对话数据管理</h3>
+        <div class="kv">左侧 AI 面板的对话全量沉淀于服务端, 可回放 / 删除。
+          <button onclick="chatListLoad()" style="margin-left:8px">刷新</button>
+          <button onclick="chatDelAll()">清空全部</button></div>
+        <div id="chatList" class="kv" style="margin-top:8px">载入中…</div></div>
       <div class="card"><h3>🔌 两种后端接入 (对齐 devin-remote 本源)</h3>
         <div class="kv">① <b>外接 API</b>: 任何第三方程序按下方 capabilities 机读 schema 直连
         REST 端点 (/api/*), 原生接入 KiCad 底层。<br>
@@ -206,6 +222,7 @@ fetch("/api/health").then(r=>r.json()).then(j=>{
 // ── 🔌 接入板块: 外接 API + Agent MD (懒加载一次) ──
 let apiLoaded=false;
 async function loadApiBoard(){
+  chLoad(); chatListLoad();
   if(apiLoaded)return; apiLoaded=true;
   try{$("#agentmd").textContent=await (await fetch("/api/doc")).text();}
   catch(e){$("#agentmd").textContent="载入失败: "+e;}
@@ -329,11 +346,63 @@ function fillGerbers(res){
   }
 }
 
+// ── ② 渠道配置 + 💬 对话数据管理 (Proxy Pro 式) ──
+async function chLoad(){
+  try{
+    const j=await (await fetch("/api/ai/config")).json();
+    const box=$("#chList"); box.innerHTML="";
+    if(!(j.channels||[]).length){box.textContent="尚无渠道 — 未配时左侧对话仍由 KiCad 引擎意图路由兼管。";return;}
+    for(const c of j.channels){
+      const d=document.createElement("div"); d.style.margin="3px 0";
+      d.innerHTML=`<b style="color:${c.name===j.active?"var(--ok)":"var(--fg)"}">`+
+        `${c.name===j.active?"● ":""}${c.name}</b> · ${c.endpoint} · ${c.model||"(自动)"} · key ${c.key}`;
+      const on=document.createElement("button"); on.textContent="启用"; on.style.marginLeft="8px";
+      on.onclick=async()=>{await cfgPost({op:"activate",name:c.name});chLoad();};
+      const del=document.createElement("button"); del.textContent="删除"; del.style.marginLeft="4px";
+      del.onclick=async()=>{await cfgPost({op:"del",name:c.name});chLoad();};
+      d.appendChild(on); d.appendChild(del); box.appendChild(d);
+    }
+  }catch(e){$("#chList").textContent="载入失败: "+e;}
+}
+async function cfgPost(b){return (await fetch("/api/ai/config",{method:"POST",body:JSON.stringify(b)})).json();}
+async function chAdd(){
+  const j=await cfgPost({op:"add",name:$("#chName").value.trim(),endpoint:$("#chEp").value.trim(),
+    key:$("#chKey").value,model:$("#chModel").value.trim()});
+  if(!j.ok)alert(j.error||"保存失败");
+  $("#chKey").value=""; chLoad();
+}
+async function chatListLoad(){
+  try{
+    const j=await (await fetch("/api/chat/list")).json();
+    const box=$("#chatList"); box.innerHTML="";
+    if(!(j.chats||[]).length){box.textContent="尚无沉淀对话。";return;}
+    for(const c of j.chats.slice().reverse()){
+      const d=document.createElement("div"); d.style.margin="3px 0";
+      d.innerHTML=`<b>${c.title||"(无题)"}</b> · ${c.n} 条 · ${new Date(c.ts*1000).toLocaleString()}`;
+      const open=document.createElement("button"); open.textContent="回放"; open.style.marginLeft="8px";
+      open.onclick=()=>chatOpen(c.id);
+      const del=document.createElement("button"); del.textContent="删除"; del.style.marginLeft="4px";
+      del.onclick=async()=>{await fetch("/api/chat/del",{method:"POST",body:JSON.stringify({id:c.id})});chatListLoad();};
+      d.appendChild(open); d.appendChild(del); box.appendChild(d);
+    }
+  }catch(e){$("#chatList").textContent="载入失败: "+e;}
+}
+async function chatDelAll(){
+  await fetch("/api/chat/del",{method:"POST",body:JSON.stringify({all:true})});chatListLoad();
+}
+async function chatOpen(id){
+  const j=await (await fetch("/api/chat/get?id="+encodeURIComponent(id))).json();
+  if(!j.ok)return;
+  curChatId=id; $("#chatlog").innerHTML="";
+  for(const m of j.chat.messages) addMsg(m.role==="user"?"user":"bot",m.content,null,false);
+}
+
 // ── 左 AI 面板: 历史持久 / 斜杠命令 / job 轮询 / 板图内联 ──
 const LOG_KEY="dao.chat";
 function chatHistory(){try{return JSON.parse(localStorage.getItem(LOG_KEY))||[];}catch(e){return [];}}
 function pushHistory(m){const h=chatHistory();h.push(m);localStorage.setItem(LOG_KEY,JSON.stringify(h.slice(-200)));}
-function clearChat(){localStorage.removeItem(LOG_KEY);$("#chatlog").innerHTML="";}
+function clearChat(){localStorage.removeItem(LOG_KEY);localStorage.removeItem("dao.chatid");
+  curChatId="";$("#chatlog").innerHTML="";}
 function addMsg(role,text,pcb,save=true){
   const d=document.createElement("div"); d.className="msg "+role; d.textContent=text;
   if(pcb){const i=document.createElement("img");i.src=pcbUrl(pcb);d.appendChild(i);}
@@ -354,7 +423,7 @@ $("#chatin").addEventListener("input",e=>{
 });
 $("#chatin").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
 
-let lastAskedPcb=null;
+let lastAskedPcb=null, curChatId=localStorage.getItem("dao.chatid")||"";
 function sendText(t){$("#chatin").value=t;send();}
 async function send(){
   let text=$("#chatin").value.trim(); if(!text)return;
@@ -366,9 +435,10 @@ async function send(){
   const root=$("#root").value.trim()||null;
   let j;
   try{
-    j=await (await fetch("/api/agent",{method:"POST",
-        body:JSON.stringify({text,root})})).json();
+    j=await (await fetch("/api/ai/chat",{method:"POST",
+        body:JSON.stringify({text,root,chat_id:curChatId})})).json();
   }catch(e){addMsg("bot","桥不可达: "+e);return;}
+  if(j.chat_id){curChatId=j.chat_id;localStorage.setItem("dao.chatid",curChatId);}
   addMsg("bot",j.reply||JSON.stringify(j));
   if(j.job) pollJob(j.job,j.action);
   else if(j.result) finishTurn(j.action,j.result);
