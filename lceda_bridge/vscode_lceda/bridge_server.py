@@ -526,8 +526,19 @@ class Handler(BaseHTTPRequestHandler):
             # Copilot 式编排: 自然语言或显式计划 → 异步作业, 轮询取步骤流。
             A = _agent()
             if body.get("tool"):
+                if body["tool"] not in A.TOOLS:
+                    self._send(400, {"ok": False, "err": "unknown tool " + body["tool"]})
+                    return
                 plan = [(body["tool"], body.get("args") or {}, None)]
                 reply = "已直调工具 " + body["tool"]
+            elif body.get("plan"):
+                # 显式多步计划: [{tool, args?, label?}] — 外接 Agent 整体替换路由器的原生通道。
+                bad = [p.get("tool") for p in body["plan"] if p.get("tool") not in A.TOOLS]
+                if bad:
+                    self._send(400, {"ok": False, "err": "unknown tools %s" % bad})
+                    return
+                plan = [(p["tool"], p.get("args") or {}, p.get("label")) for p in body["plan"]]
+                reply = "已编排 %d 步显式计划" % len(plan)
             else:
                 reply, plan = A.route(body.get("text", ""))
             jid = A.JOBS.submit(plan, body.get("text", "")) if plan else None

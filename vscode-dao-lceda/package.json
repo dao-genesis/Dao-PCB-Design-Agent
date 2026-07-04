@@ -13,7 +13,8 @@
       { "command": "daoLceda.open", "title": "DAO LCEDA: 打开嘉立创EDA (Open LCEDA Panel)" },
       { "command": "daoLceda.restartBridge", "title": "DAO LCEDA: 重启桥接服务 (Restart Bridge)" },
       { "command": "daoLceda.refreshTree", "title": "DAO LCEDA: 刷新工程树 (Refresh Tree)", "icon": "$(refresh)" },
-      { "command": "daoLceda.clearChat", "title": "DAO LCEDA: 清空对话会话 (Clear Chat History)" }
+      { "command": "daoLceda.clearChat", "title": "DAO LCEDA: 清空对话会话 (Clear Chat History)" },
+      { "command": "daoLceda.screenshot", "title": "DAO LCEDA: 画布截图 (Canvas Screenshot)" }
     ],
     "views": {
       "explorer": [
