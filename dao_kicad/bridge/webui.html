@@ -41,6 +41,15 @@ input{background:var(--bg);border:1px solid var(--line);color:var(--fg);
 #slash.show{display:flex}
 #chatbar{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
 #chatbar input{flex:1;padding:7px 9px;font-size:13px}
+/* ── 🖥 原生 KiCad 路由 (投屏 + 反向控制) ── */
+#natbar{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);
+        font-size:12px;color:var(--dim);flex-wrap:wrap}
+#natbar select{background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:6px;
+               padding:4px 6px;font-size:12px}
+#natstage{flex:1;position:relative;overflow:auto;background:#0c0e13;display:flex;
+          align-items:flex-start;justify-content:center}
+#natframe{display:block;image-rendering:auto;cursor:crosshair;background:#1a1e27}
+#natstage .hint{position:absolute;top:40%;color:var(--dim)}
 /* ── 中: 板块子页 (导航栏 = 平级标签, 每板块一张子网页) ── */
 #center{flex:1;display:flex;flex-direction:column;min-width:0}
 nav#boards{display:flex;gap:2px;padding:4px 8px 0;border-bottom:1px solid var(--line);
@@ -109,6 +118,31 @@ td,th{border:1px solid var(--line);padding:3px 8px}
         3. 左侧 AI 面板说意图 (全链路 / ERC / DRC / 布线 / 制造) → 引擎自动闭环。</div></div>
       <div class="card"><h3>🧩 板块一览</h3><div class="kv" id="homeboards"></div></div>
     </div>
+    <!-- 🖥 原生 KiCad (投屏真实面板 + 反向控制) -->
+    <div class="board" data-b="native">
+      <div id="natbar">
+        <span>原生 KiCad 面板:</span>
+        <select id="natTool">
+          <option value="kicad">🏠 项目管理器</option>
+          <option value="pcbnew">🟩 板图 (pcbnew)</option>
+          <option value="eeschema">📐 原理图 (eeschema)</option>
+          <option value="gerbview">🏭 Gerber (gerbview)</option>
+        </select>
+        <input id="natPath" placeholder="可选: 工程/文件路径 (留空开空白)" style="flex:1;min-width:160px">
+        <button class="primary" onclick="natLaunch()">启动并路由</button>
+        <select id="natWin" onchange="natPick(this.value)" title="已在运行的原生 KiCad 窗口"></select>
+        <button onclick="natRefreshWins()">刷新窗口</button>
+        <label style="display:flex;align-items:center;gap:4px">清晰度
+          <select id="natScale"><option value="1">1.0</option><option value="0.75">0.75</option>
+            <option value="0.5" selected>0.5</option><option value="0.35">0.35</option></select></label>
+        <span id="natState">未连接</span>
+      </div>
+      <div id="natstage" tabindex="0">
+        <span class="hint">选工具「启动并路由」, 或从右上选择已运行的 KiCad 窗口 —
+          这里投屏的是你机器上<b>真实的原生 KiCad 面板</b>, 在此的鼠标/键盘操作与原生完全一致。</span>
+        <img id="natframe" style="display:none" alt="native kicad">
+      </div>
+    </div>
     <!-- 📁 工程 -->
     <div class="board" data-b="proj">
       <div id="rootbar">
@@ -160,8 +194,8 @@ const LAYERS=["F.Cu","In1.Cu","In2.Cu","B.Cu","F.SilkS","F.Mask","Edge.Cuts"];
 const DEFAULT_ON=new Set(["F.Cu","B.Cu","F.SilkS","Edge.Cuts"]);
 const SLASH=[["auto","全链路: 网表→建板→布线→DRC"],["drc","板子 DRC"],["erc","原理图 ERC"],
              ["route","自动布线"],["build","网表建板"],["netlist","导出网表"],["fab","Gerber/钻孔/贴片"]];
-const BOARDS=[["home","🏠 主页"],["proj","📁 工程"],["sch","📐 原理图"],["pcb","🟩 板图"],
-              ["check","🔬 检查"],["fab","🏭 制造"],["api","🔌 接入"]];
+const BOARDS=[["home","🏠 主页"],["native","🖥 原生KiCad"],["proj","📁 工程"],["sch","📐 原理图"],
+              ["pcb","🟩 板图"],["check","🔬 检查"],["fab","🏭 制造"],["api","🔌 接入"]];
 let curPcb=null;
 
 // ── 板块路由: 单网页下多张平级子网页, 标签即汉堡列表 ──
@@ -175,6 +209,7 @@ function showBoard(k){
   for(const b of document.querySelectorAll(".board")) b.classList.toggle("on",b.dataset.b===k);
   localStorage.setItem("dao.board",k);
   if(k==="api") loadApiBoard();
+  if(k==="native"){natRefreshWins();natStart();} else natStop();
 }
 $("#homeboards").textContent=BOARDS.map(b=>b[1]).join(" · ");
 
@@ -331,6 +366,90 @@ function finishTurn(action,res){
   if(action==="fab"||(res.steps&&res.steps.fab))
     $("#fabout").textContent=JSON.stringify(res.steps&&res.steps.fab||res,null,2);
 }
+// ── 🖥 原生 KiCad 路由: 投屏真实窗口 + 鼠标/键盘反向注入 ──
+let natHwnd=null, natTimer=null, natBusy=false, natURL=null;
+async function natRefreshWins(){
+  try{
+    const j=await (await fetch("/api/native/windows")).json();
+    const sel=$("#natWin"); sel.innerHTML="<option value=''>已运行窗口…</option>";
+    if(!j.native){$("#natState").textContent="本机非 Windows: 原生投屏在用户机上可用";}
+    for(const w of (j.windows||[])){
+      const o=document.createElement("option"); o.value=w.hwnd;
+      o.textContent=`${w.board||w.exe} · ${w.title.slice(0,28)}`;
+      if(w.hwnd===natHwnd)o.selected=true; sel.appendChild(o);
+    }
+  }catch(e){$("#natState").textContent="窗口列表失败: "+e;}
+}
+async function natLaunch(){
+  const tool=$("#natTool").value, path=$("#natPath").value.trim();
+  $("#natState").textContent="启动 "+tool+" …";
+  try{
+    const j=await (await fetch("/api/native/launch",{method:"POST",
+        body:JSON.stringify({tool,path})})).json();
+    if(!j.ok){$("#natState").textContent="启动失败: "+(j.error||"?");return;}
+    if(j.window&&j.window.hwnd){natPick(j.window.hwnd);}
+    else{$("#natState").textContent="已启动, 正在寻找窗口…";setTimeout(natRefreshWins,1500);}
+  }catch(e){$("#natState").textContent="启动异常: "+e;}
+}
+function natPick(hwnd){
+  hwnd=parseInt(hwnd); if(!hwnd){return;}
+  natHwnd=hwnd; $("#natState").textContent="已路由窗口 #"+hwnd;
+  natStart();
+}
+function natStart(){
+  natStop();
+  $("#natframe").style.display=natHwnd?"block":"none";
+  if(!natHwnd)return;
+  const loop=async()=>{
+    if(natBusy)return; natBusy=true;
+    const scale=$("#natScale").value;
+    try{
+      const r=await fetch(`/api/native/frame?hwnd=${natHwnd}&scale=${scale}&t=${Date.now()}`);
+      if(r.ok){
+        const blob=await r.blob();
+        if(natURL)URL.revokeObjectURL(natURL);
+        natURL=URL.createObjectURL(blob);
+        $("#natframe").src=natURL;
+      }else if(r.status===404){$("#natState").textContent="窗口已关闭";natStop();}
+    }catch(e){/* transient */}
+    natBusy=false;
+  };
+  natTimer=setInterval(loop,700); loop();
+}
+function natStop(){if(natTimer){clearInterval(natTimer);natTimer=null;}}
+function natCoords(ev){
+  const img=$("#natframe"); const rc=img.getBoundingClientRect();
+  return {nx:Math.min(1,Math.max(0,(ev.clientX-rc.left)/rc.width)),
+          ny:Math.min(1,Math.max(0,(ev.clientY-rc.top)/rc.height))};
+}
+async function natInput(ev){
+  if(!natHwnd)return;
+  try{await fetch("/api/native/input",{method:"POST",
+      body:JSON.stringify(Object.assign({hwnd:natHwnd},ev))});}catch(e){}
+}
+(function bindNative(){
+  const img=$("#natframe"), stage=$("#natstage");
+  const btn=b=>b===0?"left":b===2?"right":"middle";
+  img.addEventListener("mousedown",e=>{e.preventDefault();stage.focus();
+    natInput(Object.assign({type:"down",button:btn(e.button)},natCoords(e)));});
+  img.addEventListener("mouseup",e=>{e.preventDefault();
+    natInput(Object.assign({type:"up",button:btn(e.button)},natCoords(e)));});
+  let lastMove=0;
+  img.addEventListener("mousemove",e=>{const now=Date.now();if(now-lastMove<60)return;
+    lastMove=now;natInput(Object.assign({type:"move"},natCoords(e)));});
+  img.addEventListener("contextmenu",e=>e.preventDefault());
+  img.addEventListener("wheel",e=>{e.preventDefault();
+    natInput(Object.assign({type:"wheel",dy:e.deltaY},natCoords(e)));},{passive:false});
+  const MODS=e=>[e.ctrlKey&&"ctrl",e.shiftKey&&"shift",e.altKey&&"alt"].filter(Boolean);
+  stage.addEventListener("keydown",e=>{
+    if($("#natstage").parentElement&&document.querySelector(".board.on").dataset.b!=="native")return;
+    e.preventDefault();
+    const k=e.key;
+    if(k.length===1&&!e.ctrlKey&&!e.altKey){natInput({type:"text",text:k});}
+    else{natInput({type:"key",key:k.toLowerCase(),mods:MODS(e)});}
+  });
+})();
+
 showBoard(localStorage.getItem("dao.board")||"home");   // 恢复上次板块 (置于定义之后)
 if($("#root").value) loadTree();
 </script>
