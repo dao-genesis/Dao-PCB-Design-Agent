@@ -131,7 +131,7 @@ def api_render_fp(lib: str, name: str) -> tuple[bytes, str] | dict:
         return pick.read_bytes(), "image/svg+xml"
 
 
-_SYM_RE = re.compile(r'^\s{2}\(symbol\s+"([^"]+)"', re.M)
+_SYM_RE = re.compile(r'\(symbol\s+"([^"]+)"')
 _SYM_UNIT_RE = re.compile(r'_\d+_\d+$')
 
 
