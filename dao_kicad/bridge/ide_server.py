@@ -248,6 +248,28 @@ def api_auto(body: dict, jid: str | None = None) -> dict:
         cand = pcbp.with_name(pcbp.stem + ".retry.kicad_pcb")
         cand.unlink(missing_ok=True)
         cand.with_suffix(".drc.json").unlink(missing_ok=True)
+        # Tail stitcher: close the last few same-net gaps with clearance-checked
+        # direct/L tracks (the stubs a human closes by hand). Same DRC guard.
+        if d.get("unconnected", 0) > 0:
+            _set_stage(jid, "stitch")
+            cand = pcbp.with_name(pcbp.stem + ".stitch.kicad_pcb")
+            st = lk.stitch(pcbp, cand)
+            if st.get("ok") and st.get("added"):
+                cand_drc = api_drc({"pcb": str(cand)})
+                if (cand_drc.get("unconnected", 0) < d.get("unconnected", 0)
+                        and cand_drc.get("violations", 0)
+                        <= d.get("violations", 0)):
+                    shutil.move(str(cand), str(pcbp))
+                    rep = cand.with_suffix(".drc.json")
+                    if rep.is_file():
+                        shutil.move(str(rep), str(pcbp.with_suffix(".drc.json")))
+                    d = cand_drc
+                    d["report"] = str(pcbp.with_suffix(".drc.json"))
+                    steps["drc"] = d
+                    steps["route"] = {**steps["route"],
+                                      "stitched": st.get("added")}
+            cand.unlink(missing_ok=True)
+            cand.with_suffix(".drc.json").unlink(missing_ok=True)
     if body.get("fab"):
         _set_stage(jid, "fab")
         steps["fab"] = api_fab({"pcb": pcb,

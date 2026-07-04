@@ -593,6 +593,13 @@ class LiveKiCad:
                    out: str | Path) -> dict:
         return self._worker("ses", str(pcb), str(ses), str(out))
 
+    def stitch(self, pcb: str | Path, out: str | Path,
+               max_mm: float = 8.0, *, timeout: int = 300) -> dict:
+        """Close small same-net tails the autorouter left (clearance-checked
+        direct/L tracks). Guard with DRC: adopt only when strictly better."""
+        return self._worker("stitch", str(pcb), str(out), str(max_mm),
+                            timeout=timeout)
+
     def read_tracks(self, pcb: str | Path, *, timeout: int = 120) -> dict:
         """Serialize a board's tracks + vias (nm coords) — used to reflect a
         freerouting result back onto the live IPC board."""

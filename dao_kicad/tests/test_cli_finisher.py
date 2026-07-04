@@ -37,6 +37,9 @@ class _FakeLK:
             Path(out).with_suffix(".drc.json").write_text("{}")
         return {"ok": self.route_ok, "tracks": 100 + len(self.route_calls)}
 
+    def stitch(self, pcb, out, max_mm=8.0):
+        return {"ok": True, "added": 0, "path": str(out)}
+
     def drc(self, pcb):
         self.drc_calls.append(Path(pcb))
         d = self.drc_seq.pop(0)

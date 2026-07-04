@@ -85,6 +85,25 @@ def _finish_build(lk, pcb, out_dir, args, build) -> int:
                 cand.unlink(missing_ok=True)
         cand_report = pcb.with_name(pcb.stem + ".retry.drc.json")
         cand_report.unlink(missing_ok=True)
+        # Tail stitcher: close the last same-net gaps with clearance-checked
+        # direct/L tracks (the stubs a human closes by hand). Same DRC guard.
+        if drc.get("unconnected", 0) > 0:
+            cand = pcb.with_name(pcb.stem + ".stitch.kicad_pcb")
+            st = lk.stitch(pcb, cand)
+            if st.get("ok") and st.get("added"):
+                cand_drc = lk.drc(cand)
+                if (cand_drc.get("unconnected", 0) < drc.get("unconnected", 0)
+                        and cand_drc.get("violations", 0)
+                        <= drc.get("violations", 0)):
+                    _shutil.move(str(cand), str(pcb))
+                    rep = cand.with_suffix(".drc.json")
+                    if rep.is_file():
+                        _shutil.move(str(rep), str(pcb.with_suffix(".drc.json")))
+                    drc = cand_drc
+                    result["route"] = {**result["route"],
+                                       "stitched": st.get("added")}
+            cand.unlink(missing_ok=True)
+            cand.with_suffix(".drc.json").unlink(missing_ok=True)
 
     result["drc"] = {k: drc.get(k) for k in
                      ("violations", "warnings", "unconnected", "clean")}
