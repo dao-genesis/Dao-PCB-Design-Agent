@@ -86,6 +86,21 @@ async function openHome(context) {
     .replace(/__SERVER__/g, "http://127.0.0.1:" + port)
     .replace(/__ROOT__/g, root ? root.uri.fsPath.replace(/\\/g, "\\\\") : "");
   panel.webview.html = html;
+  watchHealth(panel, port);
+}
+
+// 宿主侧健康探测: webview 内 fetch http://127.0.0.1 会被混合内容策略拦截,
+// 因此由 Node 探测并 postMessage 通知面板显隐 iframe/提示。
+function watchHealth(panel, port) {
+  let last = null;
+  const timer = setInterval(async () => {
+    const up = await health(port);
+    if (up !== last) {
+      panel.webview.postMessage({ type: "daokicad.health", up, reload: up && last === false });
+      last = up;
+    }
+  }, 2000);
+  panel.onDidDispose(() => clearInterval(timer));
 }
 
 function chatHtml(context, port) {
@@ -126,6 +141,13 @@ function activate(context) {
       await ensureServer(context);
       vscode.window.showInformationMessage("DAO KiCad 桥接已重启");
     }));
+  // 右下角状态栏 ☯ 按钮: 一键打开归一工作台
+  const sb = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10000);
+  sb.text = "☯ DAO KiCad";
+  sb.tooltip = "打开 DAO KiCad 归一工作台";
+  sb.command = "daoKicad.openHome";
+  sb.show();
+  context.subscriptions.push(sb);
   // 启动即拉起桥接并打开归一工作台 (仅当工作区内有引擎时)
   if (findEngine()) openHome(context);
 }
