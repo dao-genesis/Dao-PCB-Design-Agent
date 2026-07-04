@@ -54,6 +54,17 @@ jobs:
               if (pr.draft) { core.info(`#${number}: draft, skip`); continue; }
               if (pr.mergeable === false) { core.info(`#${number}: has conflicts, leaving for manual resolution`); continue; }
               if (pr.mergeable !== true) { core.info(`#${number}: mergeability still unknown, skip this run`); continue; }
+              if (pr.mergeable_state === 'behind') {
+                // 分支落后于 base: 严格状态检查会以 405 拒绝合并。
+                // 先 update-branch → synchronize → CI 重跑 → 绿灯后由 dao-auto-merge 完成合并。
+                try {
+                  await github.rest.pulls.updateBranch({ owner, repo, pull_number: number });
+                  core.notice(`#${number}: behind base, branch updated — will auto-merge after CI reruns`);
+                } catch (e) {
+                  core.warning(`#${number}: update-branch failed (${e.status}) ${e.message}`);
+                }
+                continue;
+              }
               try {
                 await github.rest.pulls.merge({ owner, repo, pull_number: number, merge_method: 'merge' });
                 core.notice(`#${number}: merged`);

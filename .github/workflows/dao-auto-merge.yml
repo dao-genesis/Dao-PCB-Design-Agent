@@ -54,10 +54,21 @@ jobs:
                      --json isDraft,mergeable,mergeStateStatus,baseRefName 2>/dev/null || echo '{}')
             draft=$(echo "$info" | jq -r '.isDraft // false')
             mergeable=$(echo "$info" | jq -r '.mergeable // "UNKNOWN"')
+            mstate=$(echo "$info" | jq -r '.mergeStateStatus // "UNKNOWN"')
             base=$(echo "$info" | jq -r '.baseRefName // ""')
-            echo "draft=$draft mergeable=$mergeable base=$base"
+            echo "draft=$draft mergeable=$mergeable mergeState=$mstate base=$base"
             if [ "$draft" = "true" ]; then echo "draft,跳过"; echo "::endgroup::"; continue; fi
             if [ "$mergeable" = "CONFLICTING" ]; then echo "有冲突,跳过"; echo "::endgroup::"; continue; fi
+            # 分支落后(BEHIND)时, 严格状态检查会拒绝合并(405 "Required status check is expected")。
+            # 先 update-branch 把 base 合进来 → 触发 synchronize → CI 重跑 → 本流程再次被唤起完成合并。
+            if [ "$mstate" = "BEHIND" ]; then
+              if gh api -X PUT "repos/$REPO/pulls/$n/update-branch" >/dev/null 2>ub_err.txt; then
+                echo "PR #$n 落后于 base, 已自动 update-branch, 等待 CI 重跑后自动合并 ↻"
+              else
+                echo "::warning::PR #$n update-branch 失败: $(cat ub_err.txt)"
+              fi
+              echo "::endgroup::"; continue
+            fi
             # 直接调用合并 API (merge commit)。成功即自动删源分支。
             if gh api -X PUT "repos/$REPO/pulls/$n/merge" \
                  -f merge_method=merge >/dev/null 2>merge_err.txt; then
