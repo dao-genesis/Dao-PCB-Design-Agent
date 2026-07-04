@@ -61,6 +61,11 @@ def api_tree(root: str) -> dict:
         })
     syms = [str(p) for p in sorted(rootp.rglob("*.kicad_sym"))[:200]]
     fps = [str(p) for p in sorted(rootp.rglob("*.pretty"))[:200] if p.is_dir()]
+    env = _lk().env
+    if env.symbols and env.symbols.is_dir():
+        syms += [str(p) for p in sorted(env.symbols.glob("*.kicad_sym"))]
+    if env.footprints and env.footprints.is_dir():
+        fps += [str(p) for p in sorted(env.footprints.glob("*.pretty")) if p.is_dir()]
     return {"ok": True, "root": str(rootp), "projects": projects,
             "sym_libs": syms, "fp_libs": fps}
 
@@ -99,7 +104,7 @@ def api_render_sym(lib: str, name: str) -> tuple[bytes, str] | dict:
     if not src.is_file():
         return {"ok": False, "error": f"no such symbol lib: {lib}"}
     with tempfile.TemporaryDirectory() as td:
-        args = ["sym", "export", "svg", "--no-background-color", "-o", td]
+        args = ["sym", "export", "svg", "-o", td]
         if name:
             args += ["--symbol", name]
         r = _lk().cli(*args, str(src))
@@ -127,6 +132,7 @@ def api_render_fp(lib: str, name: str) -> tuple[bytes, str] | dict:
 
 
 _SYM_RE = re.compile(r'^\s{2}\(symbol\s+"([^"]+)"', re.M)
+_SYM_UNIT_RE = re.compile(r'_\d+_\d+$')
 
 
 def api_sym_list(lib: str) -> dict:
@@ -134,7 +140,7 @@ def api_sym_list(lib: str) -> dict:
     if not src.is_file():
         return {"ok": False, "error": f"no such symbol lib: {lib}"}
     names = [n for n in _SYM_RE.findall(src.read_text(errors="replace"))
-             if ":" not in n and "_" != n[:1]]
+             if ":" not in n and "_" != n[:1] and not _SYM_UNIT_RE.search(n)]
     return {"ok": True, "lib": str(src), "symbols": sorted(set(names))}
 
 
