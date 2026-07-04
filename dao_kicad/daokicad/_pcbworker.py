@@ -1158,6 +1158,172 @@ def import_ses(pcb_path, ses_path, out_path):
             "tracks": len(list(b.Tracks())) if ok else 0}
 
 
+def _copper_layers(board, item):
+    """Copper layers an item actually occupies (tracks: one; pads/vias: many)."""
+    out = []
+    for lid in board.GetEnabledLayers().CuStack():
+        if item.IsOnLayer(lid):
+            out.append(lid)
+    return out
+
+
+def _stitch_tails(board, max_mm=3.0):
+    """Close tiny same-net tails freerouting leaves behind (a pad and a track
+    of the same net sitting a fraction of a mm apart). For each net, cluster
+    copper items by geometric contact, then join cluster pairs whose gap on a
+    shared layer is under ``max_mm`` with a direct track between the nearest
+    anchors — exactly the stub a human closes by hand. Callers must guard the
+    result with DRC (adopt only when strictly better)."""
+    conn_added = 0
+    max_nm = int(max_mm * 1e6)
+    # plane nets connect through their zone fill, which this clustering can't
+    # see — stitching them would add pointless stubs; escape vias own that job.
+    zone_nets = {z.GetNetCode() for z in board.Zones()}
+    clearance = board.GetDesignSettings().GetSmallestClearanceValue()
+    obstacles: dict = {}
+    for fp in board.GetFootprints():
+        for p in fp.Pads():
+            for lid in _copper_layers(board, p):
+                obstacles.setdefault(lid, []).append(p)
+    for t in board.Tracks():
+        for lid in _copper_layers(board, t):
+            obstacles.setdefault(lid, []).append(t)
+
+    def _blocked(ax, ay, bx, by, lid, width, code):
+        seg = pcbnew.SHAPE_SEGMENT(pcbnew.VECTOR2I(int(ax), int(ay)),
+                                   pcbnew.VECTOR2I(int(bx), int(by)),
+                                   int(width))
+        for ob in obstacles.get(lid, ()):
+            if ob.GetNetCode() == code:
+                continue
+            if seg.Collide(ob.GetEffectiveShape(lid), clearance):
+                return True
+        return False
+    for code in board.GetNetsByNetcode():
+        if code == 0 or code in zone_nets:
+            continue
+        net = board.GetNetsByNetcode()[code]
+        items = []
+        for fp in board.GetFootprints():
+            for p in fp.Pads():
+                if p.GetNetCode() == code:
+                    items.append(p)
+        for t in board.Tracks():
+            if t.GetNetCode() == code:
+                items.append(t)
+        if len(items) < 2:
+            continue
+        # union-find over geometric contact on shared copper layers
+        parent = list(range(len(items)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        laysets = [set(_copper_layers(board, it)) for it in items]
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                shared = laysets[i] & laysets[j]
+                if not shared:
+                    continue
+                lid = next(iter(shared))
+                if items[i].GetEffectiveShape(lid).Collide(
+                        items[j].GetEffectiveShape(lid), 0):
+                    ri, rj = find(i), find(j)
+                    if ri != rj:
+                        parent[ri] = rj
+        clusters: dict = {}
+        for i in range(len(items)):
+            clusters.setdefault(find(i), []).append(i)
+        if len(clusters) < 2:
+            continue
+
+        def anchors(i):
+            it = items[i]
+            if isinstance(it, pcbnew.PCB_VIA) or isinstance(it, pcbnew.PAD):
+                return [(it.GetPosition().x, it.GetPosition().y)]
+            s, e = it.GetStart(), it.GetEnd()
+            return [(s.x, s.y), (e.x, e.y)]
+
+        def nearest_on(i, px, py):
+            """Closest point of item i to (px, py) — a dangling stub often ends
+            beside the *middle* of another track, so endpoints alone miss it."""
+            it = items[i]
+            if isinstance(it, pcbnew.PCB_VIA) or isinstance(it, pcbnew.PAD):
+                return (it.GetPosition().x, it.GetPosition().y)
+            s, e = it.GetStart(), it.GetEnd()
+            ax, ay, bx, by = s.x, s.y, e.x, e.y
+            vx, vy = bx - ax, by - ay
+            L2 = vx * vx + vy * vy
+            if L2 == 0:
+                return (ax, ay)
+            t = max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / L2))
+            return (int(ax + t * vx), int(ay + t * vy))
+
+        width = net.GetNetClassSlow().GetTrackWidth() if hasattr(
+            net, "GetNetClassSlow") else 200000
+        # repeatedly join the closest cluster pair until nothing is in reach
+        roots = list(clusters)
+        while len(roots) > 1:
+            best = None
+            for a in range(len(roots)):
+                for bkt in range(a + 1, len(roots)):
+                    for i in clusters[roots[a]]:
+                        for j in clusters[roots[bkt]]:
+                            shared = laysets[i] & laysets[j]
+                            if not shared:
+                                continue
+                            for src, dst in ((i, j), (j, i)):
+                                for ax, ay in anchors(src):
+                                    bx, by = nearest_on(dst, ax, ay)
+                                    d2 = (ax - bx) ** 2 + (ay - by) ** 2
+                                    if ((best is None or d2 < best[0])
+                                            and d2 <= max_nm * max_nm):
+                                        lid = next(iter(shared))
+                                        # straight shot, else L-bend both ways
+                                        for mid in (None, (ax, by), (bx, ay)):
+                                            legs = ([(ax, ay, bx, by)]
+                                                    if mid is None else
+                                                    [(ax, ay, *mid),
+                                                     (*mid, bx, by)])
+                                            if not any(_blocked(*leg, lid,
+                                                                width, code)
+                                                       for leg in legs):
+                                                best = (d2, a, bkt, legs, lid)
+                                                break
+            if best is None or best[0] > max_nm * max_nm:
+                break
+            _, a, bkt, legs, lid = best
+            for ax, ay, bx, by in legs:
+                if (ax, ay) == (bx, by):
+                    continue
+                tr = pcbnew.PCB_TRACK(board)
+                tr.SetStart(pcbnew.VECTOR2I(int(ax), int(ay)))
+                tr.SetEnd(pcbnew.VECTOR2I(int(bx), int(by)))
+                tr.SetLayer(lid)
+                tr.SetWidth(int(width))
+                tr.SetNetCode(code)
+                board.Add(tr)
+                obstacles.setdefault(lid, []).append(tr)
+            conn_added += 1
+            clusters[roots[a]].extend(clusters[roots[bkt]])
+            del clusters[roots[bkt]]
+            roots = list(clusters)
+    return conn_added
+
+
+def stitch(pcb_path, out_path, max_mm=3.0):
+    """Tail-stitch a routed board and save; returns the number of tracks added."""
+    board = pcbnew.LoadBoard(str(pcb_path))
+    added = _stitch_tails(board, float(max_mm))
+    if added and board.GetAreaCount():
+        _fill_zones(board)
+    pcbnew.SaveBoard(str(out_path), board)
+    return {"ok": True, "added": added, "path": str(out_path)}
+
+
 def harvest(pcb_path, pretty_dir):
     """Write every unique footprint embedded in a finished board out to
     ``pretty_dir`` as ``.kicad_mod`` files. Returns ``{original_fpid: name}``
@@ -1198,6 +1364,9 @@ def main(argv):
         result = import_ses(argv[2], argv[3], argv[4])
     elif cmd == "tracks":
         result = tracks(argv[2])
+    elif cmd == "stitch":
+        max_mm = float(argv[4]) if len(argv) > 4 else 3.0
+        result = stitch(argv[2], argv[3], max_mm)
     elif cmd == "harvest":
         result = harvest(argv[2], argv[3])
     elif cmd == "version":
