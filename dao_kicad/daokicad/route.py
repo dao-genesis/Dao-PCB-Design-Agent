@@ -43,6 +43,9 @@ _JAVA_GLOBS = (
     "/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java",
     # vendored alongside freerouting.jar (see tools/install_freerouting.py)
     str(_TOOLS / "jdk" / "bin" / "java"),
+    str(_TOOLS / "jdk" / "bin" / "java.exe"),
+    str(_TOOLS / "jdk" / "*" / "bin" / "java"),
+    str(_TOOLS / "jdk" / "*" / "bin" / "java.exe"),
 )
 
 
