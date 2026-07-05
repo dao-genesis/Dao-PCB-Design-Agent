@@ -151,13 +151,20 @@ function showBoard(k){
 const NATIVE_URL=()=>`http://${location.hostname||"127.0.0.1"}:9932/`;
 async function nativeRefresh(){
   let j; try{j=await (await fetch("/api/native/status")).json();}catch(e){$("#nativeStat").textContent="桥接不可达";return;}
-  const live=j.live&&j.html;
+  const desktop=j.mode==="desktop";
+  const live=j.live&&(j.html||desktop);
   $("#nativeStat").textContent=live
-    ?`● 本体运行中 · ${j.windows.length} 窗口 · IPC ${j.ipc?"已连":"未连"}`
-    :(j.xpra&&j.kicad?"○ 本体未启动":"✕ 缺 xpra/kicad (apt install xpra kicad)");
+    ?`● 本体运行中${desktop?" (本机桌面)":""} · ${j.windows.length} 窗口 · IPC ${j.ipc?"已连":"未连"}`
+    :(j.kicad&&(desktop||j.xpra)?"○ 本体未启动"
+      :(desktop?"✕ 缺 kicad (请安装 KiCad)":"✕ 缺 xpra/kicad (apt install xpra kicad)"));
   const f=$("#nativeFrame"), h=$("#nativeHint");
-  if(live){ if(!f.src) f.src=NATIVE_URL(); h.style.display="none"; }
-  else { f.removeAttribute("src"); h.style.display="flex"; }
+  if(live&&j.html){ if(!f.src) f.src=NATIVE_URL(); h.style.display="none"; }
+  else {
+    f.removeAttribute("src"); h.style.display="flex";
+    h.textContent=(live&&desktop)
+      ?"● 本体运行于本机桌面 — 真实窗口就在这台电脑屏幕上, 对话/IPC 操作实时落在其中。"
+      :"点「启动本体」— KiCad 软件本体 (工程管理器与全部编辑器) 的真实窗口将在此处直接出现并可完整操作。";
+  }
 }
 async function nativeStart(){
   $("#nativeStat").textContent="… 启动本体中";
