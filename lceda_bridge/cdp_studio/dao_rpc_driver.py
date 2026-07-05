@@ -92,8 +92,10 @@ def _dedup(seq):
 
 TOP, BOTTOM, MULTI, OUTLINE = 1, 2, 11, 11
 
-_FREEROUTING_JAR = os.path.expanduser(
-    "~/Dao-PCB-Design-Agent/dao_kicad/tools/freerouting.jar")
+_REPO_ROOT = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))
+_FREEROUTING_JAR = os.path.join(
+    _REPO_ROOT, "dao_kicad", "tools", "freerouting.jar")
 # freerouting 2.2.4 是 Java25 字节码（class file 69.0）→ 低版本 JRE 起不来。
 _MIN_JAVA = 25
 # 安装器把 Temurin JDK 装在 jar 同级的 jdk/ 下——这是首选且确定可用的运行时。
