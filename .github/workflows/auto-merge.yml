@@ -27,6 +27,10 @@ jobs:
       - name: Merge mergeable PR(s)
         uses: actions/github-script@v9
         with:
+          # 优先用 DAO_MERGE_TOKEN(PAT): 用 GITHUB_TOKEN 做 update-branch 生成的合并提交,
+          # 其 CI 会被 GitHub 判为 action_required 而永不运行 → DAO Auto-Merge 永不触发(死锁)。
+          # 改用 PAT 推送 → synchronize 事件的 CI 正常运行 → 绿灯后自动合并, 全程零人工。
+          github-token: ${{ secrets.DAO_MERGE_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
