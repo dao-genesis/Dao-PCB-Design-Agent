@@ -30,6 +30,10 @@ from urllib.parse import parse_qs, urlparse
 
 from daokicad.live import LiveKiCad
 
+from bridge.native import (api_ipc_board, api_ipc_run, api_ipc_status,
+                           api_native_open, api_native_start,
+                           api_native_status, api_native_stop)
+
 _LK: LiveKiCad | None = None
 _JOBS: dict[str, dict] = {}
 _JOBS_LOCK = threading.Lock()
@@ -881,6 +885,12 @@ _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
             "install": api_pcm_install, "remove": api_pcm_remove}
 _SLOW = {"build", "route", "fab", "auto"}
 
+# 全路径 POST 路由 (KiCad 软件本体承接 + IPC 底层直连)
+_POST_PATHS = {"/api/native/start": api_native_start,
+               "/api/native/open": api_native_open,
+               "/api/native/stop": api_native_stop,
+               "/api/ipc/run": api_ipc_run}
+
 _CAPABILITIES = {
     "service": "dao-kicad-ide",
     "description": "REST bridge to the DAO-KiCad engine: schematic/PCB "
@@ -980,6 +990,23 @@ _CAPABILITIES = {
         {"method": "POST", "path": "/api/chat/del",
          "params": {"id": "chat id", "all": "bool"},
          "doc": "删除一条/全部对话."},
+        {"method": "GET", "path": "/api/native/status", "params": {},
+         "doc": "KiCad 软件本体会话状态: xpra 窗口协议路由 + IPC socket + 窗口清单."},
+        {"method": "POST", "path": "/api/native/start",
+         "params": {"path": "optional .kicad_pro/.kicad_sch/.kicad_pcb"},
+         "doc": "启动 KiCad 本体(xpra 会话内), 窗口协议级路由到 HTML5 客户端; 同时开启 IPC API."},
+        {"method": "POST", "path": "/api/native/open",
+         "params": {"path": "file to open"},
+         "doc": "在运行中的 KiCad 本体里打开文件/工程."},
+        {"method": "POST", "path": "/api/native/stop", "params": {},
+         "doc": "停止 KiCad 本体会话."},
+        {"method": "GET", "path": "/api/ipc/status", "params": {},
+         "doc": "IPC 底层直连状态 (kicad-python ping/version)."},
+        {"method": "GET", "path": "/api/ipc/board", "params": {},
+         "doc": "活动 PCB 文档全息 (与 GUI 同一份内存文档): nets/footprints/tracks/vias."},
+        {"method": "POST", "path": "/api/ipc/run",
+         "params": {"op": "action|save|refill_zones", "name": "action name"},
+         "doc": "agent 直驱 KiCad 本体: 执行动作/保存/重灸铺铜 — 不经 GUI."},
     ],
 }
 
@@ -1105,6 +1132,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(api_chat_list(q))
             if u.path == "/api/chat/get":
                 return self._send(api_chat_get(q))
+            if u.path == "/api/native/status":
+                return self._send(api_native_status(q))
+            if u.path == "/api/ipc/status":
+                return self._send(api_ipc_status(q))
+            if u.path == "/api/ipc/board":
+                return self._send(api_ipc_board(q))
             if u.path == "/api/job":
                 with _JOBS_LOCK:
                     j = _JOBS.get(q.get("id", ""))
@@ -1117,7 +1150,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         name = u.path.rsplit("/", 1)[-1]
-        fn = _ACTIONS.get(name) if u.path.startswith("/api/") else None
+        fn = _POST_PATHS.get(u.path) or (
+            _ACTIONS.get(name) if u.path.startswith("/api/") else None)
         if fn is None:
             return self._send({"ok": False, "error": "not found"}, 404)
         try:
