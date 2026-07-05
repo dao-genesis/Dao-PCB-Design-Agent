@@ -713,11 +713,19 @@ html,body{margin:0;height:100%%;overflow:hidden;background:#1e1e1e;color:#ccc;
 #bar .tab{padding:0 14px;line-height:32px;cursor:pointer;white-space:nowrap;border-right:1px solid #333;}
 #bar .tab.on{background:#1e1e1e;color:#fff;border-bottom:2px solid #0a84ff;}
 #bar .plus{padding:0 12px;cursor:pointer;color:#888;}
-#frames{position:absolute;top:32px;left:0;right:0;bottom:0;}
+#frames{position:absolute;top:32px;left:0;right:0;bottom:22px;}
 #frames iframe{border:0;width:100%%;height:100%%;position:absolute;inset:0;display:none;background:#fff;}
 #frames iframe.on{display:block;}
+#ops{position:absolute;left:0;right:0;bottom:0;height:22px;line-height:22px;background:#252526;
+  border-top:1px solid #333;padding:0 10px;font-size:11px;color:#8c8;cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;}
+#ops .failed{color:#e77;} #ops .running{color:#dd8;}
+#opslog{display:none;position:absolute;left:0;right:0;bottom:22px;max-height:40%%;overflow-y:auto;
+  background:#1b1b1c;border-top:1px solid #333;font-size:11px;padding:4px 10px;}
+#opslog div{padding:1px 0;color:#9a9;} #opslog .failed{color:#e77;} #opslog .running{color:#dd8;}
 </style></head><body>
 <div id="bar"></div><div id="frames"></div>
+<div id="opslog"></div><div id="ops" title="道之痕 · AI 操作直播流(点击展开)">☷ 道之痕: 待命…</div>
 <script>
 var TABS = %s;
 var bar=document.getElementById('bar'), frames=document.getElementById('frames'), cur=null;
@@ -748,6 +756,27 @@ plus.onclick=function(){
 bar.appendChild(plus);
 TABS.forEach(addTab); bar.appendChild(plus);
 show(TABS[0].id);
+// 道之痕: 轮询 /api/ops 增量直播 AI 每一步操作 — 用户在前端看得见一切动作。
+var opsBar=document.getElementById('ops'), opsLog=document.getElementById('opslog'), opsSeq=0;
+opsBar.onclick=function(){ opsLog.style.display = opsLog.style.display==='block'?'none':'block'; };
+function fmtOp(o){
+  var mk=o.status==='done'?'\u2714':(o.status==='failed'?'\u2718':'\u23f3');
+  return mk+' ['+o.kind+'] '+o.name+(o.ms!=null?' ('+o.ms+'ms)':'')+(o.detail&&o.status==='failed'?' \u2014 '+o.detail:'');
+}
+function pollOps(){
+  fetch('/api/ops?since='+opsSeq).then(r=>r.json()).then(function(d){
+    if(!d.ok) return;
+    opsSeq=d.seq;
+    (d.ops||[]).forEach(function(o){
+      var el=document.createElement('div'); el.className=o.status; el.textContent=fmtOp(o);
+      opsLog.appendChild(el);
+      opsBar.textContent='\u2637 \u9053\u4e4b\u75d5: '+fmtOp(o); opsBar.className=o.status;
+    });
+    while(opsLog.children.length>300) opsLog.removeChild(opsLog.firstChild);
+    if(d.ops&&d.ops.length) opsLog.scrollTop=opsLog.scrollHeight;
+  }).catch(function(){});
+}
+setInterval(pollOps, 1500); pollOps();
 </script></body></html>"""
 
 _CONFIG_HTML = r"""<!DOCTYPE html>
@@ -948,6 +977,10 @@ class Handler(BaseHTTPRequestHandler):
                              "browser": up})
         elif path == "/api/shell/tabs":
             self._send(200, {"ok": True, "tabs": SHELL_TABS})
+        elif path == "/api/ops":
+            # 道之痕: AI 操作直播流(?since=序号 增量拉取)。
+            since = int((parse_qs(u.query).get("since") or ["0"])[0] or 0)
+            self._send(200, dict(_agent().OPS.since(since), ok=True))
         elif path == "/native" or path.startswith("/native/"):
             self._serve_native("GET")
         elif path == "/web" or path.startswith("/web/"):
@@ -1054,8 +1087,13 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(400, {"ok": False, "err": "bad kind"})
         elif path == "/api/verb":
-            self._send(200, SESSION.verb(body.get("ns", ""), body.get("args", []),
-                                         timeout=min(int(body.get("timeout", 20)), 120)))
+            t0 = time.time()
+            r = SESSION.verb(body.get("ns", ""), body.get("args", []),
+                             timeout=min(int(body.get("timeout", 20)), 120))
+            _agent().OPS.record("verb", body.get("ns", ""),
+                                "done" if r.get("ok") else "failed",
+                                r.get("err", ""), int((time.time() - t0) * 1000))
+            self._send(200, r)
         elif path == "/api/verbs/batch":
             # 批量动词编排: [{ns, args?}] 顺序直调, stopOnError 默认真 — 一次往返成链。
             calls = body.get("calls") or []
@@ -1096,8 +1134,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, web_login(body.get("account", ""), body.get("password", "")))
         elif path == "/api/eval":
             # 高阶通道(仅本机): 原样在 EDA 页求值 JS 表达式, 供编排/实战脚本使用。
+            t0 = time.time()
             val, err = SESSION.eval_js(body.get("expr", ""),
                                        timeout=min(int(body.get("timeout", 30)), 120))
+            _agent().OPS.record("eval", (body.get("expr", "") or "")[:60],
+                                "done" if err is None else "failed", err or "",
+                                int((time.time() - t0) * 1000))
             self._send(200, {"ok": err is None, "ret": val, "err": err})
         else:
             # 运行期原生透传(POST): 见 do_GET 同名分支说明(按 Referer 分流)。
