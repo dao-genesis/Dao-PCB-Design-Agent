@@ -922,9 +922,11 @@ class KiCadArm:
         r"D:\freerouting\freerouting.jar",
         r"C:\freerouting\freerouting.jar",
         str(Path(__file__).parent / "freerouting.jar"),
+        str(Path(__file__).parent.parent / "dao_kicad" / "tools" / "freerouting.jar"),
     ]
+    # latest/download/freerouting.jar 已 404 (上游改用带版本号资产名); v1.9.0 兼容 Java 17+
     FREEROUTING_DOWNLOAD_URL = (
-        "https://github.com/freerouting/freerouting/releases/latest/download/freerouting.jar"
+        "https://github.com/freerouting/freerouting/releases/download/v1.9.0/freerouting-1.9.0.jar"
     )
 
     def _find_freerouting_jar(self) -> Optional[str]:

@@ -18,6 +18,7 @@ import json
 import glob
 import math
 import logging
+import shutil
 import subprocess
 import tempfile
 import re
@@ -63,9 +64,29 @@ def _find_kicad_root() -> Path:
             return root
     return Path("D:/KICAD")  # 默认回退
 
+def _find_kicad_python(kicad_bin: Path) -> Path:
+    """定位能 import pcbnew 的 Python 解释器 (跨平台)。
+    Windows: <root>/bin/python.exe 内置 pcbnew;
+    Linux/macOS: pcbnew 装在系统 Python site-packages, 逐一探测。"""
+    win = kicad_bin / "python.exe"
+    if win.exists():
+        return win
+    for cand in ("/usr/bin/python3", shutil.which("python3") or "",
+                 sys.executable):
+        if not cand:
+            continue
+        try:
+            r = subprocess.run([cand, "-c", "import pcbnew"],
+                               capture_output=True, timeout=30)
+            if r.returncode == 0:
+                return Path(cand)
+        except Exception:
+            continue
+    return win  # 保持原语义: 不存在则 _run_bridge 报错
+
 KICAD_ROOT      = _find_kicad_root()
 KICAD_BIN       = KICAD_ROOT / "bin"
-KICAD_PYTHON    = KICAD_BIN / "python.exe"
+KICAD_PYTHON    = _find_kicad_python(KICAD_BIN)
 KICAD_SHARE     = KICAD_ROOT / "share" / "kicad"
 KICAD_FP_DIR    = KICAD_SHARE / "footprints"
 KICAD_SYM_DIR   = KICAD_SHARE / "symbols"
@@ -86,8 +107,9 @@ def _make_bridge_header() -> str:
     _fp = str(KICAD_FP_DIR).replace("\\", "/")
     return f"""\
 import os, sys, json, traceback
-os.add_dll_directory('{_bin}')
-sys.path.insert(0, '{_bin}/Lib/site-packages')
+if hasattr(os, 'add_dll_directory') and os.path.isdir('{_bin}'):
+    os.add_dll_directory('{_bin}')  # Windows: pcbnew DLL 随 KiCad 发行
+    sys.path.insert(0, '{_bin}/Lib/site-packages')
 import pcbnew
 
 KICAD_FP_DIR = r'{_fp}'  # 动态封装库根目录 (随已装版本变化)
