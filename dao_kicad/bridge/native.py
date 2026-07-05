@@ -12,6 +12,9 @@
   在 GUI 里点更底层、更快、更稳。
 
 GUI 与 IPC 指向**同一进程同一份内存文档**: 用户看到的与 agent 操作的是一体。
+
+平台适配: Linux 经 xpra 窗口协议路由 (mode=xpra); Windows/macOS 上用户就在机器前,
+KiCad 窗口直接落在本机桌面 (mode=desktop), IPC 直连两平台同法。
 """
 
 from __future__ import annotations
@@ -21,13 +24,32 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
-from typing import Any
+
+from daokicad import env as kicad_env
+
+IS_WINDOWS = os.name == "nt"
+IS_MAC = sys.platform == "darwin"
+DESKTOP_NATIVE = IS_WINDOWS or IS_MAC  # 窗口直落本机桌面, 无需 xpra 路由
 
 DISPLAY = os.environ.get("DAO_XPRA_DISPLAY", ":100")
 HTML_PORT = int(os.environ.get("DAO_XPRA_PORT", "9932"))
-API_SOCKET = os.environ.get("KICAD_API_SOCKET", "/tmp/kicad/api.sock")
+
+
+def _default_api_socket() -> str:
+    """KiCad IPC socket 默认路径 (与 kipy._default_socket_path 同源同法)."""
+    explicit = os.environ.get("KICAD_API_SOCKET")
+    if explicit:
+        return explicit.removeprefix("ipc://")
+    if IS_WINDOWS:
+        return str(Path(tempfile.gettempdir()) / "kicad" / "api.sock")
+    return "/tmp/kicad/api.sock"
+
+
+API_SOCKET = _default_api_socket()
 
 
 # ── xpra 会话 (窗口协议路由层) ─────────────────────────────────────────
@@ -37,8 +59,19 @@ def _xpra() -> str | None:
     return shutil.which("xpra")
 
 
-def _kicad_bin() -> str | None:
-    return shutil.which("kicad")
+def _kicad_bin(prog: str = "kicad") -> str | None:
+    """定位 KiCad 可执行 (kicad/eeschema/pcbnew): PATH → 安装根 bin/."""
+    found = shutil.which(prog)
+    if found:
+        return found
+    kenv = kicad_env.detect()
+    if kenv.root:
+        exe = prog + (".exe" if IS_WINDOWS else "")
+        for sub in ("bin", ""):
+            cand = kenv.root / sub / exe
+            if cand.is_file():
+                return str(cand)
+    return None
 
 
 def _html_up() -> bool:
@@ -50,6 +83,8 @@ def _html_up() -> bool:
 
 
 def _session_live() -> bool:
+    if DESKTOP_NATIVE:
+        return bool(_desktop_windows())
     x = _xpra()
     if not x:
         return False
@@ -57,10 +92,22 @@ def _session_live() -> bool:
     return f"LIVE session at {DISPLAY}" in r.stdout
 
 
+def _kicad_config_root() -> Path:
+    """KiCad 用户配置根 (各平台 kicad_common.json 所在)."""
+    if IS_WINDOWS:
+        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "kicad"
+    if IS_MAC:
+        return Path.home() / "Library" / "Preferences" / "kicad"
+    return Path.home() / ".config" / "kicad"
+
+
 def _enable_ipc_api() -> None:
     """确保 KiCad 配置开启 IPC API server (kicad_common.json)."""
-    cfg_dir = Path.home() / ".config" / "kicad"
-    dirs = sorted(cfg_dir.glob("[0-9]*.[0-9]*")) or [cfg_dir / "9.0"]
+    cfg_dir = _kicad_config_root()
+    dirs = sorted(cfg_dir.glob("[0-9]*.[0-9]*"))
+    if not dirs:
+        v = (kicad_env.detect().version or "9.0").split("-")[0]
+        dirs = [cfg_dir / (".".join(v.split(".")[:2]) or "9.0")]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
         p = d / "kicad_common.json"
@@ -78,21 +125,52 @@ def api_native_status(_q: dict) -> dict:
     live = _session_live()
     return {
         "ok": True,
+        "mode": "desktop" if DESKTOP_NATIVE else "xpra",
         "xpra": bool(_xpra()),
         "kicad": bool(_kicad_bin()),
         "live": live,
         "html": _html_up(),
-        "display": DISPLAY,
+        "display": None if DESKTOP_NATIVE else DISPLAY,
         "port": HTML_PORT,
-        "url": f"http://127.0.0.1:{HTML_PORT}/",
+        "url": None if DESKTOP_NATIVE else f"http://127.0.0.1:{HTML_PORT}/",
         "ipc": Path(API_SOCKET).exists(),
         "ipc_socket": API_SOCKET,
         "windows": _windows() if live else [],
     }
 
 
+def _desktop_windows() -> list[dict]:
+    """本机桌面上的 KiCad 顶层窗口 (Windows: EnumWindows)."""
+    if not IS_WINDOWS:
+        return []
+    import ctypes
+    import ctypes.wintypes as wt
+    user32 = ctypes.windll.user32
+    out: list[dict] = []
+    proto = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+
+    def cb(hwnd, _lp):
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        n = user32.GetWindowTextLengthW(hwnd)
+        if n <= 0:
+            return True
+        buf = ctypes.create_unicode_buffer(n + 1)
+        user32.GetWindowTextW(hwnd, buf, n + 1)
+        title = buf.value
+        low = title.lower()
+        if "kicad" in low or "pcb editor" in low or "schematic editor" in low:
+            out.append({"id": hex(hwnd), "title": title})
+        return True
+
+    user32.EnumWindows(proto(cb), 0)
+    return out
+
+
 def _windows() -> list[dict]:
-    """列出 xpra 会话里的 KiCad 真实窗口 (wmctrl)."""
+    """列出会话里的 KiCad 真实窗口 (Linux: wmctrl; Windows: EnumWindows)."""
+    if DESKTOP_NATIVE:
+        return _desktop_windows()
     wm = shutil.which("wmctrl")
     if not wm:
         return []
@@ -108,7 +186,21 @@ def _windows() -> list[dict]:
 
 
 def api_native_start(body: dict) -> dict:
-    """启动/接管 xpra 会话并在其中运行 KiCad 本体 (可带工程文件)."""
+    """启动 KiCad 本体 (Linux: xpra 会话路由; Windows/macOS: 直落本机桌面)."""
+    if DESKTOP_NATIVE:
+        k = _kicad_bin()
+        if not k:
+            return {"ok": False, "error": "kicad 未安装"}
+        _enable_ipc_api()
+        path = (body.get("path") or "").strip()
+        args = [k] + ([path] if path else [])
+        subprocess.Popen(args, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+        for _ in range(20):
+            if _desktop_windows():
+                break
+            time.sleep(0.5)
+        return api_native_status({})
     x, k = _xpra(), _kicad_bin()
     if not x:
         return {"ok": False, "error": "xpra 未安装 (apt install xpra)"}
@@ -136,11 +228,12 @@ def api_native_start(body: dict) -> dict:
 
 
 def api_native_open(body: dict) -> dict:
-    """在已运行的 KiCad 本体会话里打开文件/工程 (窗口在面板内直接出现)."""
-    x = _xpra()
+    """在 KiCad 本体里打开文件/工程 (Linux: 面板内出窗; Windows/macOS: 本机桌面出窗)."""
     path = (body.get("path") or "").strip()
-    if not x or not _session_live():
-        return api_native_start(body)
+    if not DESKTOP_NATIVE:
+        x = _xpra()
+        if not x or not _session_live():
+            return api_native_start(body)
     if not path:
         return {"ok": False, "error": "path required"}
     p = Path(path)
@@ -148,7 +241,12 @@ def api_native_open(body: dict) -> dict:
         return {"ok": False, "error": f"no such file: {path}"}
     prog = {"kicad_sch": "eeschema", "kicad_pcb": "pcbnew"}.get(
         p.suffix.lstrip("."), "kicad")
-    exe = shutil.which(prog) or prog
+    exe = _kicad_bin(prog) or prog
+    if DESKTOP_NATIVE:
+        _enable_ipc_api()
+        subprocess.Popen([exe, str(p)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"ok": True, "opened": path, "via": prog}
     # 直接在 xpra 显示上派生 (不经 xpra control, 避免非 ASCII 路径被转发层损坏)
     subprocess.Popen([exe, str(p)],
                      env={**os.environ, "DISPLAY": DISPLAY},
@@ -158,6 +256,9 @@ def api_native_open(body: dict) -> dict:
 
 
 def api_native_stop(_body: dict) -> dict:
+    if DESKTOP_NATIVE:
+        return {"ok": False,
+                "error": "desktop 模式不代关用户桌面的 KiCad 窗口 (请在本机关闭)"}
     x = _xpra()
     if not x:
         return {"ok": False, "error": "xpra 未安装"}

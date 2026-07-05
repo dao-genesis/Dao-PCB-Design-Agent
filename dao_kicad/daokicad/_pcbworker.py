@@ -63,7 +63,10 @@ _FP_IO = None
 def _footprint_load(libdir, name):
     global _FP_IO
     if _FP_IO is None:
-        _FP_IO = pcbnew.PCB_IO_MGR.PluginFind(pcbnew.PCB_IO_MGR.KICAD_SEXP)
+        # KiCad 10 renamed PluginFind -> FindPlugin
+        find = getattr(pcbnew.PCB_IO_MGR, "FindPlugin", None) \
+            or pcbnew.PCB_IO_MGR.PluginFind
+        _FP_IO = find(pcbnew.PCB_IO_MGR.KICAD_SEXP)
     return _FP_IO.FootprintLoad(libdir, name)
 
 
