@@ -117,6 +117,10 @@ def _tool_fab(args):
     return T.fab_outputs(args.get("prefix", "/tmp/fab"))
 
 
+def _tool_board_status(_args):
+    return T.board_status()
+
+
 def _tool_canvas_image(_args):
     # getCurrentRenderedAreaImage 返回 Blob, 经 verb 通道 JSON 序列化会变成 {} →
     # 页内转 dataURL 后回传。
@@ -164,6 +168,8 @@ TOOLS = {
     "pcb.pour":       {"fn": _tool_pour, "params": {"margin": "int?"},
                        "desc": "双面 GND 覆铜 + Shift+B 重建"},
     "pcb.drc":        {"fn": _tool_drc, "params": {}, "desc": "设计规则检查"},
+    "status.board":   {"fn": _tool_board_status, "params": {},
+                       "desc": "PCB 全量状态识别(图元清点/网络/阶段/进度%)"},
     "fab.outputs":    {"fn": _tool_fab, "params": {"prefix": "str?"},
                        "desc": "出产: Gerber/BOM/贴片坐标(blob→base64→落盘)"},
     "canvas.image":   {"fn": _tool_canvas_image, "params": {}, "desc": "画布渲染图",
@@ -174,6 +180,35 @@ TOOLS = {
 def catalog():
     return [{"tool": k, "params": v["params"], "desc": v["desc"]}
             for k, v in sorted(TOOLS.items())]
+
+
+# ---------------------------------------------------------------- 道之痕(操作流)
+class OpsFeed:
+    """AI 操作实时可见化: 每一步工具/动词执行都留痕,
+    前端(归一外壳/对话面板)轮询 /api/ops 即得直播流 — 用户看得见 AI 的一切动作。"""
+    LIMIT = 400
+
+    def __init__(self):
+        self._ops = []
+        self._seq = 0
+        self._lock = threading.Lock()
+
+    def record(self, kind, name, status="done", detail="", ms=None):
+        with self._lock:
+            self._seq += 1
+            self._ops.append({"seq": self._seq, "ts": time.time(),
+                              "kind": kind, "name": name, "status": status,
+                              "detail": str(detail)[:200], "ms": ms})
+            if len(self._ops) > self.LIMIT:
+                del self._ops[:len(self._ops) - self.LIMIT]
+
+    def since(self, seq):
+        with self._lock:
+            return {"seq": self._seq,
+                    "ops": [o for o in self._ops if o["seq"] > seq]}
+
+
+OPS = OpsFeed()
 
 
 # ---------------------------------------------------------------- 作业机
@@ -198,6 +233,7 @@ class JobStore:
             step = {"tool": tool, "label": label or TOOLS[tool]["desc"],
                     "status": "running", "startedAt": time.time()}
             job["steps"].append(step)
+            OPS.record("tool", tool, "running", step["label"])
             try:
                 ret = TOOLS[tool]["fn"](args or {})
                 step["status"] = "done"
@@ -207,9 +243,12 @@ class JobStore:
                 step["status"] = "failed"
                 step["error"] = str(e)[:400]
                 ok = False
-                break
             finally:
                 step["ms"] = int((time.time() - step["startedAt"]) * 1000)
+                OPS.record("tool", tool, step["status"],
+                           step.get("error", step["label"]), step["ms"])
+            if not ok:
+                break
         job["status"] = "done" if ok else "failed"
         job["endedAt"] = time.time()
 
@@ -268,6 +307,8 @@ def route(text):
         return ("正在 DRC。", [("pcb.drc", {}, None)])
     if has("出产", "gerber", "bom", "制造"):
         return ("正在导出 Gerber/BOM/贴片坐标。", [("fab.outputs", {}, None)])
+    if has("状态", "进度", "status", "board state"):
+        return ("正在全量识别 PCB 状态与进度。", [("status.board", {}, None)])
     if has("工程信息", "当前工程"):
         return ("正在读取当前工程信息。", [("project.info", {}, None)])
     if has("列出原理图", "原理图列表"):

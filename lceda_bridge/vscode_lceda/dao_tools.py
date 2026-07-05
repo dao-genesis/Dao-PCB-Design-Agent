@@ -10,6 +10,7 @@
 import base64
 import json
 import math
+import os
 import time
 import urllib.request
 
@@ -70,18 +71,53 @@ def click_text(texts, retries=3):
 
 
 # ---------------------------------------------------------------- 工程
+PROJECTS_DIR = os.path.expanduser("~/Documents/LCEDA-Pro/projects")
+
+
+def _rest_create_project(name):
+    """桌面客户端建工程本源通道: extapi createProject 在桌面端是空操作(返 null),
+    真正落盘走 renderer 内 REST `/api/client/createProject`(逆向结论,
+    同 dao_rpc_driver 五把钥匙之一)。"""
+    for cand in (name, "%s_%d" % (name, int(time.time()))):
+        js = ('(async function(){var b={path:%s,name:%s,content:"",public:false,'
+              'default_sheet:""};var r=await fetch("/api/client/createProject",'
+              '{method:"POST",headers:{"Content-Type":"application/json"},'
+              'body:JSON.stringify(b)});var j=await r.json();'
+              'return JSON.stringify({ok:j.success,uuid:Object.keys(j.result||{})[0]});})()'
+              % (json.dumps(PROJECTS_DIR), json.dumps(cand)))
+        o = json.loads(ev(js, 40))
+        if o.get("uuid"):
+            return o["uuid"]
+    raise RuntimeError("REST createProject: %r" % o)
+
+
 def create_project(name, desc=""):
-    """createProject 仅返回新 uuid 不切换当前工程(实战缺陷结论) → 必须显式 openProject。"""
-    uuid = verb("dmt_Project.createProject", name, desc, timeout=40)
+    """createProject 仅返回新 uuid 不切换当前工程(实战缺陷结论) → 必须显式 openProject;
+    桌面端 extapi 建工程是空操作 → 回退 REST 通道, 且需扫描注册(getAllProjectsUuid)
+    后才能 open(桌面层本源差异, 冷启动竞争以退避重试收敛)。"""
+    try:
+        uuid = verb("dmt_Project.createProject", name, desc, timeout=40, retries=0)
+    except Exception:
+        uuid = None
     if not isinstance(uuid, str):
-        raise RuntimeError("createProject ret: %r" % (uuid,))
+        uuid = _rest_create_project(name)
     time.sleep(2)
-    verb("dmt_Project.openProject", uuid, timeout=60)
-    time.sleep(5)
-    info = verb("dmt_Project.getCurrentProjectInfo", timeout=40)
-    if info.get("uuid") != uuid:
-        raise RuntimeError("open failed: current=%s" % info.get("friendlyName"))
-    return info
+    info = None
+    for attempt in range(8):
+        try:
+            verb("dmt_Project.getAllProjectsUuid", PROJECTS_DIR,
+                 timeout=20, retries=0)
+        except Exception:
+            pass
+        try:
+            verb("dmt_Project.openProject", uuid, timeout=60, retries=0)
+        except Exception:
+            pass
+        time.sleep(4 + min(attempt, 4))
+        info = verb("dmt_Project.getCurrentProjectInfo", timeout=40)
+        if info and info.get("uuid") == uuid:
+            return info
+    raise RuntimeError("open failed: current=%s" % (info or {}).get("friendlyName"))
 
 
 def project_uuids():
@@ -338,6 +374,53 @@ def pour_gnd(margin=20):
 
 def save_pcb():
     return verb("pcb_Document.save", timeout=60)
+
+
+def board_status():
+    """PCB 全量状态识别: 各类图元清点 + 网络清单 + 阶段/进度推断。
+
+    进度模型(与全链路编排同构): 放件→板框→布线→覆铜, 各占一档;
+    routedRatio 以「有铜线的网络 / 全部非GND网络」度量(GND 走覆铜)。
+    """
+    try:
+        comp_ids = verb("pcb_PrimitiveComponent.getAllPrimitiveId",
+                        retries=0) or []
+    except Exception as e:
+        # 当前无打开的 PCB 文档时, pcb_* 动词在引擎侧报空指针。
+        return {"stage": "no-pcb-doc", "progress": 0,
+                "hint": "先打开工程的 PCB 文档(doc.open)再识别状态",
+                "err": str(e)[:120]}
+    tracks = verb("pcb_PrimitiveLine.getAllPrimitiveId") or []
+    vias = verb("pcb_PrimitiveVia.getAllPrimitiveId") or []
+    pours = verb("pcb_PrimitivePour.getAllPrimitiveId") or []
+    outline = verb("pcb_PrimitivePolyline.getAllPrimitiveId") or []
+    nets, net_pins = set(), {}
+    for cid in comp_ids:
+        for p in (verb("pcb_PrimitiveComponent.getAllPinsByPrimitiveId", cid) or []):
+            n = p.get("net")
+            if n:
+                nets.add(n)
+                net_pins[n] = net_pins.get(n, 0) + 1
+    signal_nets = [n for n in nets if n != "GND"]
+    routed_nets = set()
+    try:
+        for t in (verb("pcb_PrimitiveLine.getAll", timeout=60) or [])[:5000]:
+            n = t.get("net") if isinstance(t, dict) else None
+            if n:
+                routed_nets.add(n)
+    except Exception:
+        pass  # 动词不可用则退化为只按铜线数推断
+    routed_ratio = (len(routed_nets & set(signal_nets)) / len(signal_nets)
+                    if signal_nets and routed_nets else (1.0 if tracks else 0.0))
+    stages = [("placed", bool(comp_ids)), ("outline", bool(outline)),
+              ("routed", bool(tracks)), ("poured", bool(pours))]
+    progress = sum(25 for _, done in stages if done)
+    stage = next((name for name, done in reversed(stages) if done), "empty")
+    return {"components": len(comp_ids), "tracks": len(tracks),
+            "vias": len(vias), "pours": len(pours),
+            "outline": bool(outline), "nets": sorted(nets),
+            "netPins": net_pins, "routedRatio": round(routed_ratio, 3),
+            "stage": stage, "progress": progress}
 
 
 def drc():
