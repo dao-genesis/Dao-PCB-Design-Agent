@@ -644,6 +644,91 @@ _INTENTS = [
 
 _PATH_RE = re.compile(r"[\w~./\\:-]+\.(?:kicad_sch|kicad_pcb|net)\b")
 
+# 对话直驱底层意图 — 全部落在 KiCad 原生板块的同一份内存文档上,
+# 用户在本体前端实时看到每一步变动 (不经 GUI 表层, 经官方 IPC)。
+_BRAIN_INTENTS = [
+    ("design", _kw("生成", "搭建工程", "design")),
+    ("guardian", _kw("守护", "风险", "guardian")),
+    ("wugan", _kw("五感", "wugan")),
+    ("bom", _kw("bom", "成本", "物料")),
+]
+_IPC_INTENTS = [
+    ("add_track", _kw("铜线", "track")),
+    ("add_via", _kw("过孔", "via")),
+    ("move_footprint", _kw("移件", "移动封装")),
+    ("refill_zones", _kw("铺铜", "refill")),
+    ("save", _kw("保存", "save")),
+]
+_ALL_INTENTS = _INTENTS + _IPC_INTENTS + _BRAIN_INTENTS
+_XY_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*[,\uff0c]\s*(-?\d+(?:\.\d+)?)")
+_REF_RE = re.compile(r"\b([A-Z]{1,4}\d{1,4})\b")
+
+
+def _native_show(pcb: str) -> dict:
+    """确保产物板在本体原生前端可见 (已开着则不重复开)."""
+    try:
+        st = api_native_status({})
+        name = Path(pcb).name
+        if any(name in (w.get("title") or "")
+               for w in st.get("windows", [])):
+            return {"ok": True, "already_open": True}
+        if not st.get("live"):
+            return api_native_start({"path": pcb})
+        return api_native_open({"path": pcb})
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def _agent_brain(op: str, text: str) -> dict:
+    """对话→智枢: 意图解析选模板→生成/守护/五感/BOM; 生成后自动在本体打开."""
+    r = api_brain_intent({"text": text})
+    tpl = r.get("template")
+    if not tpl:
+        return {"ok": False, "action": op,
+                "reply": "没识别到 DNA 模板 — 把需求说具体些 (如: 生成 无人机飞控)。"}
+    fn = {"design": api_brain_design, "guardian": api_brain_guardian,
+          "wugan": api_brain_wugan, "bom": api_brain_bom}[op]
+    res = fn({"template": tpl})
+    pcb = res.get("pcb_path") or res.get("pcb")
+    native = None
+    if op == "design" and pcb:
+        native = _native_show(pcb)
+    reply = f"{op}({tpl}) 完成。"
+    if pcb:
+        reply += f"\n已在本体原生板块打开: {pcb}"
+    return {"ok": bool(res.get("ok")), "action": op, "template": tpl,
+            "result": res, "pcb": pcb, "native": native, "reply": reply}
+
+
+def _agent_ipc(op: str, text: str) -> dict:
+    """对话→IPC 直驱: 落在本体活动文档上, 原生前端实时可见."""
+    body: dict = {"op": op}
+    m = _PATH_RE.search(text)
+    if m and m.group(0).endswith(".kicad_pcb"):
+        body["board"] = m.group(0)
+    xys = [(float(a), float(b)) for a, b in _XY_RE.findall(text)]
+    if op == "add_track":
+        if len(xys) < 2:
+            return {"ok": False, "action": op,
+                    "reply": "铜线要两个坐标, 如: 铜线 10,20 到 30,20"}
+        body["start"], body["end"] = list(xys[0]), list(xys[1])
+    elif op == "add_via":
+        if not xys:
+            return {"ok": False, "action": op,
+                    "reply": "过孔要一个坐标, 如: 过孔 25,30"}
+        body["at"] = list(xys[0])
+    elif op == "move_footprint":
+        ref = _REF_RE.search(text)
+        if not (ref and xys):
+            return {"ok": False, "action": op,
+                    "reply": "移件要位号和坐标, 如: 移件 C1 到 12,18"}
+        body["ref"], body["at"] = ref.group(1), list(xys[0])
+    res = api_ipc_run(body)
+    reply = (f"{op} 已经底层 IPC 落在本体活动文档上, 前端实时可见。"
+             if res.get("ok") else f"{op} 失败: {res.get('error')}")
+    return {"ok": bool(res.get("ok")), "action": op, "result": res,
+            "reply": reply}
+
 
 def _agent_paths(text: str, root: str | None) -> dict[str, str]:
     """Resolve schematic/board/netlist paths cited (or implied) by a chat turn.
@@ -807,7 +892,7 @@ def api_ai_chat(body: dict) -> dict:
     if not text:
         return {"ok": False, "reply": "说点什么吧。"}
     chat_id = body.get("chat_id") or ""
-    if next((a for a, rx in _INTENTS if rx.search(text)), None):
+    if next((a for a, rx in _ALL_INTENTS if rx.search(text)), None):
         res = api_agent(body)
         cid = _chat_append(chat_id, text,
                            [{"role": "user", "content": text},
@@ -849,7 +934,14 @@ def api_agent(body: dict) -> dict:
         return {"ok": False, "reply": "说点什么吧 — 例如“对这个工程跑全链路”、“ERC”、“布线”。"}
     action = next((a for a, rx in _INTENTS if rx.search(text)), None)
     if action is None:
-        tools = ", ".join(a for a, _ in _INTENTS)
+        ipc_op = next((a for a, rx in _IPC_INTENTS if rx.search(text)), None)
+        if ipc_op:
+            return _agent_ipc(ipc_op, text)
+        brain_op = next((a for a, rx in _BRAIN_INTENTS if rx.search(text)),
+                        None)
+        if brain_op:
+            return _agent_brain(brain_op, text)
+        tools = ", ".join(a for a, _ in _ALL_INTENTS)
         return {"ok": True, "reply": f"我能直接干的活: {tools}。"
                                      "把意图说出来(可带文件路径), 我路由到引擎。"}
     paths = _agent_paths(text, body.get("root"))
@@ -867,7 +959,15 @@ def api_agent(body: dict) -> dict:
         req["out"] = str(Path(req["netlist"]).with_suffix("")) + "_dao.kicad_pcb"
     if action == "auto":
         req["fab"] = bool(re.search(r"制造|gerber|fab", text, re.I))
-    fn = _ACTIONS[action]
+    raw = _ACTIONS[action]
+
+    def fn(r, _raw=raw):
+        res = _raw(r)
+        pcb = res.get("pcb") or (res.get("steps", {}).get("build") or {}).get("path") if isinstance(res, dict) else None
+        if pcb:
+            res["native"] = _native_show(pcb)
+        return res
+
     if action in _SLOW:
         jid = uuid.uuid4().hex[:12]
         with _JOBS_LOCK:
