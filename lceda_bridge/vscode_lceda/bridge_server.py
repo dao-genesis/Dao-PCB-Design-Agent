@@ -29,8 +29,10 @@ import json
 import os
 import socket
 import struct
+import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -527,6 +529,219 @@ def _agent():
 SESSION = EdaSession(CDP_PORTS)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# ---------------------------------------------------------------------------
+# 一体两用·第二数据面: 官网网页版(云端数据) — 独立无头浏览器 + 持久登录态目录。
+# 与本地客户端(SESSION)并行而不相悖: 操作逻辑一致, 底层数据一云一本地。
+# ---------------------------------------------------------------------------
+WEB_CDP_PORT = int(os.environ.get("DAO_WEB_CDP_PORT", "9223"))
+WEB_URL = os.environ.get("DAO_WEB_URL", "https://pro.lceda.cn/editor")
+WEB_PROFILE = os.path.join(os.path.expanduser("~"), ".dao-lceda-web")
+WEB_SESSION = EdaSession([WEB_CDP_PORT])
+WEB_SESSION._local_tried = True  # 第二数据面不唤起本地客户端
+_WEB_PROC = None
+_WEB_LOCK = threading.Lock()
+
+
+def _chrome_exe():
+    env = os.environ.get("DAO_WEB_CHROME")
+    if env and os.path.isfile(env):
+        return env
+    cands = ["/opt/google/chrome/chrome", "/usr/bin/google-chrome",
+             "/usr/bin/google-chrome-stable", "/usr/bin/chromium",
+             "/usr/bin/chromium-browser"]
+    pw = os.path.join(os.path.expanduser("~"), ".cache", "ms-playwright")
+    try:
+        for d in sorted(os.listdir(pw), reverse=True):
+            if d.startswith("chromium"):
+                cands.append(os.path.join(pw, d, "chrome-linux", "chrome"))
+    except OSError:
+        pass
+    for p in cands:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
+
+def ensure_web_browser():
+    """保证官网数据面的无头浏览器存活(CDP 可达); 登录态落在持久 profile, 重启不丢。"""
+    global _WEB_PROC
+    with _WEB_LOCK:
+        try:
+            _http_get("http://127.0.0.1:%d/json/version" % WEB_CDP_PORT, timeout=2)
+            return True
+        except Exception:
+            pass
+        exe = _chrome_exe()
+        if not exe:
+            return False
+        _WEB_PROC = subprocess.Popen(
+            [exe, "--headless=new", "--remote-debugging-port=%d" % WEB_CDP_PORT,
+             "--remote-allow-origins=*", "--no-first-run", "--no-default-browser-check",
+             "--user-data-dir=" + WEB_PROFILE, "--window-size=1600,900", WEB_URL],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(30):
+            time.sleep(0.5)
+            try:
+                _http_get("http://127.0.0.1:%d/json/version" % WEB_CDP_PORT, timeout=2)
+                return True
+            except Exception:
+                continue
+        return False
+
+
+# 登录(底层 DOM 直连, 非 GUI): 在登录页上下文里填表单+提交, 回传结果状态。
+_LOGIN_JS_TPL = r"""(async function(){
+  function setVal(el, v){
+    var pd = Object.getOwnPropertyDescriptor(el.__proto__, 'value') ||
+             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    pd.set.call(el, v);
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  }
+  try{
+    var q = %s;
+    var tabs = [].filter.call(document.querySelectorAll('button,div,span,a,li'),
+      function(e){ var t=(e.textContent||'').trim();
+        return (t==='账号登录'||t==='密码登录') && e.offsetParent; });
+    if (tabs.length) tabs[tabs.length-1].click();
+    var user=null, pass=null;
+    for (var w=0; w<20 && !(user&&pass); w++){
+      await new Promise(function(r){ setTimeout(r, 400); });
+      user = document.querySelector("input[type=text],input[type=tel],input[placeholder*='手机'],input[placeholder*='账号']");
+      pass = document.querySelector("input[type=password]");
+    }
+    if(!user || !pass) return JSON.stringify({ok:false, err:'NO_FORM', url:location.href});
+    setVal(user, q.account); setVal(pass, q.password);
+    var chk = document.querySelector("input[type=checkbox]");
+    if (chk && !chk.checked) chk.click();
+    var btns = [].filter.call(document.querySelectorAll('button'),
+      function(b){ return /登\s*录/.test(b.textContent||'') && !/扫码/.test(b.textContent||'') && b.offsetParent; });
+    if(!btns.length) return JSON.stringify({ok:false, err:'NO_SUBMIT', url:location.href});
+    btns[0].click();
+    await new Promise(function(r){ setTimeout(r, 5000); });
+    var captcha = !!document.querySelector("[class*=captcha],[id*=captcha],iframe[src*=captcha]");
+    return JSON.stringify({ok:true, url:location.href, captcha:captcha,
+      body:(document.body.innerText||'').slice(0,180)});
+  }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e)}); }
+})()"""
+
+PASSPORT_URL = ("https://passport.jlc.com/login?appId=JLC_EDA_STD"
+                "&redirectUrl=https%3A%2F%2Fpro.lceda.cn%2Feditor&backCode=1")
+
+
+def web_login(account, password):
+    """官网数据面登录: CDP 导航到 passport → 页内 DOM 填表提交(零 GUI)。"""
+    if not ensure_web_browser() or not WEB_SESSION.ensure():
+        return {"ok": False, "err": "WEB_BROWSER_UNAVAILABLE"}
+    cur = (WEB_SESSION.target or {}).get("url", "")
+    if "passport" not in cur:
+        WEB_SESSION.cdp.cmd("Page.navigate", {"url": PASSPORT_URL}, timeout=15)
+        time.sleep(4)
+    val, err = WEB_SESSION.eval_js(
+        _LOGIN_JS_TPL % json.dumps({"account": account, "password": password}),
+        timeout=40)
+    if err:
+        return {"ok": False, "err": err}
+    try:
+        return json.loads(val)
+    except Exception:
+        return {"ok": False, "err": "PARSE", "raw": str(val)[:200]}
+
+
+# ---------------------------------------------------------------------------
+# 归一外壳 /shell — 网页套网页(取自 devin-remote dao-vsix 本源架构):
+# 外壳是一个带标签栏的迷你浏览器, 每个板块一张平级 iframe 子网页, 可无限延伸。
+# ---------------------------------------------------------------------------
+SHELL_TABS = [
+    {"id": "native", "label": "♡ 本地EDA", "src": "/native",
+     "desc": "本地客户端数据面(无头引擎·用户本机数据)"},
+    {"id": "web", "label": "☁ 官网网页版", "src": "/web",
+     "desc": "官网云端数据面(pro.lceda.cn 反代)"},
+    {"id": "config", "label": "⚙ 配置", "src": "/config",
+     "desc": "桥状态·登录·数据面切换"},
+]
+
+_SHELL_HTML = r"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>嘉立创EDA · 归一面板</title><style>
+html,body{margin:0;height:100%%;overflow:hidden;background:#1e1e1e;color:#ccc;
+  font:13px/1.4 -apple-system,'Segoe UI','Noto Sans CJK SC',sans-serif;}
+#bar{display:flex;align-items:center;height:32px;background:#252526;border-bottom:1px solid #333;user-select:none;}
+#bar .tab{padding:0 14px;line-height:32px;cursor:pointer;white-space:nowrap;border-right:1px solid #333;}
+#bar .tab.on{background:#1e1e1e;color:#fff;border-bottom:2px solid #0a84ff;}
+#bar .plus{padding:0 12px;cursor:pointer;color:#888;}
+#frames{position:absolute;top:32px;left:0;right:0;bottom:0;}
+#frames iframe{border:0;width:100%%;height:100%%;position:absolute;inset:0;display:none;background:#fff;}
+#frames iframe.on{display:block;}
+</style></head><body>
+<div id="bar"></div><div id="frames"></div>
+<script>
+var TABS = %s;
+var bar=document.getElementById('bar'), frames=document.getElementById('frames'), cur=null;
+function addTab(t){
+  var el=document.createElement('div'); el.className='tab'; el.textContent=t.label; el.title=t.desc||t.src;
+  el.onclick=function(){ show(t.id); };
+  bar.insertBefore(el, bar.lastChild);
+  t._el=el;
+}
+function show(id){
+  TABS.forEach(function(t){
+    var on = t.id===id;
+    t._el.classList.toggle('on', on);
+    if(on && !t._if){ t._if=document.createElement('iframe'); t._if.src=t.src;
+      t._if.allow='clipboard-read; clipboard-write'; frames.appendChild(t._if); }
+    if(t._if) t._if.classList.toggle('on', on);
+  });
+  cur=id;
+}
+var plus=document.createElement('div'); plus.className='plus'; plus.textContent='+';
+plus.title='新建子页(输入本桥相对路径, 可无限延伸)';
+plus.onclick=function(){
+  var p=prompt('子页路径(如 /native 或 /web 或 /config):','/native');
+  if(!p) return;
+  var t={id:'t'+Date.now(), label:p, src:p};
+  TABS.push(t); addTab(t); bar.appendChild(plus); show(t.id);
+};
+bar.appendChild(plus);
+TABS.forEach(addTab); bar.appendChild(plus);
+show(TABS[0].id);
+</script></body></html>"""
+
+_CONFIG_HTML = r"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{background:#1e1e1e;color:#ccc;font:13px/1.6 -apple-system,'Segoe UI','Noto Sans CJK SC',sans-serif;padding:20px;max-width:720px;margin:auto;}
+h2{color:#fff;font-size:16px;} .card{background:#252526;border:1px solid #333;border-radius:6px;padding:14px;margin:12px 0;}
+input{background:#3c3c3c;border:1px solid #555;color:#eee;padding:5px 8px;margin:3px 6px 3px 0;border-radius:3px;}
+button{background:#0a84ff;border:0;color:#fff;padding:6px 14px;border-radius:3px;cursor:pointer;}
+pre{white-space:pre-wrap;word-break:break-all;color:#9d9;} .bad{color:#e77;}
+</style></head><body>
+<h2>⚙ 归一面板 · 配置</h2>
+<div class="card"><b>数据面状态</b><pre id="st">…</pre></div>
+<div class="card"><b>官网账号登录(底层直连·零GUI)</b><br>
+<input id="u" placeholder="手机号/账号"><input id="p" type="password" placeholder="密码">
+<button onclick="login()">登录</button><pre id="lg"></pre>
+<span style="color:#888">若提示 captcha, 需在本机浏览器完成一次滑块; 登录态落在持久 profile, 重启不丢。</span></div>
+<div class="card"><b>延伸</b><br>外壳标签栏的 + 可新建任意子页(同一逻辑无限延伸); 本页也是其中一张子网页。</div>
+<script>
+function refresh(){
+  Promise.all([fetch('/api/health').then(r=>r.json()).catch(()=>null),
+               fetch('/api/web/health').then(r=>r.json()).catch(()=>null)])
+  .then(function(v){
+    document.getElementById('st').textContent =
+      '本地EDA: ' + JSON.stringify(v[0]) + '\n官网面:  ' + JSON.stringify(v[1]);
+  });
+}
+function login(){
+  var el=document.getElementById('lg'); el.textContent='登录中…';
+  fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({account:document.getElementById('u').value,
+                         password:document.getElementById('p').value})})
+  .then(r=>r.json()).then(function(r){
+    el.textContent=JSON.stringify(r,null,1); el.className=r.ok&&!r.captcha?'':'bad'; refresh();
+  }).catch(function(e){ el.textContent=String(e); el.className='bad'; });
+}
+refresh(); setInterval(refresh, 10000);
+</script></body></html>"""
+
 # /native 上游取数: 直连(绕过系统代理)、不自动跟随跳转(由代理层改写 Location)。
 _NATIVE_OPENER = urllib.request.build_opener(
     urllib.request.ProxyHandler({}),
@@ -640,33 +855,56 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, "job": job})
             else:
                 self._send(404, {"ok": False, "err": "no such job"})
+        elif path == "/api/web/health":
+            up = ensure_web_browser()
+            ok = up and WEB_SESSION.ensure()
+            self._send(200, {"ok": bool(ok), "cdpPort": WEB_CDP_PORT,
+                             "target": (WEB_SESSION.target or {}).get("url"),
+                             "browser": up})
+        elif path == "/api/shell/tabs":
+            self._send(200, {"ok": True, "tabs": SHELL_TABS})
         elif path == "/native" or path.startswith("/native/"):
             self._serve_native("GET")
+        elif path == "/web" or path.startswith("/web/"):
+            self._serve_native("GET", session=WEB_SESSION, prefix="/web")
+        elif path == "/shell":
+            self._send(200, _SHELL_HTML % json.dumps(SHELL_TABS, ensure_ascii=False),
+                       ctype="text/html; charset=utf-8")
+        elif path == "/config":
+            self._send(200, _CONFIG_HTML, ctype="text/html; charset=utf-8")
         elif path in ("/", "/panel", "/index.html"):
             self._serve_file("panel.html", "text/html; charset=utf-8")
         elif path == "/panel.js":
             self._serve_file("panel.js", "application/javascript; charset=utf-8")
         else:
             # 原生嵌入运行期: 编辑器加载后以绝对路径(/api /page /a ...)向源发请求,
-            # 浏览器按代理源解析 → 这些请求落到本桥。透传回 EDA 本体(经 CDP 页内 fetch),
-            # 使 /native 内的真实编辑器与本地数据面全链路闭环。
-            self._serve_native("GET")
+            # 浏览器按代理源解析 → 这些请求落到本桥。按 Referer 分流到对应数据面
+            # (/web/ → 官网面, 否则本地面), 使两张子网页的绝对路径请求各归其源。
+            ref = self.headers.get("Referer", "") or ""
+            if "/web/" in ref or ref.endswith("/web"):
+                self._serve_native("GET", session=WEB_SESSION, prefix="/web")
+            else:
+                self._serve_native("GET")
 
-    def _serve_native(self, method, prebody=_UNSET):
+    def _serve_native(self, method, prebody=_UNSET, session=None, prefix="/native"):
         """本源级原生嵌入(非投屏): 反代 EDA 真实页面进 IDE 面板。
 
         prebody 非哨兵时用其作为请求体(调用方已从 rfile 读走), 否则本方法自读。
+        session/prefix: 同一反代逻辑服务多个数据面(/native 本地 · /web 官网)。
         """
-        origin = SESSION.native_origin()
+        session = session or SESSION
+        if session is WEB_SESSION:
+            ensure_web_browser()
+        origin = session.native_origin()
         if not origin:
-            self._send(503, {"ok": False, "err": "NO_TARGET — EDA 未就绪(需带 CDP 启动)"})
+            self._send(503, {"ok": False, "err": "NO_TARGET — 数据面未就绪(需带 CDP 启动)"})
             return
         raw_path = self.path
-        tgt = SESSION.native_target_path()
-        if raw_path == "/native" and tgt not in ("", "/"):
+        tgt = session.native_target_path()
+        if raw_path == prefix and tgt not in ("", "/"):
             # 首跳: 302 到 EDA 本体文档路径, 之后一切相对/绝对引用都被代理层归一。
             self.send_response(302)
-            self.send_header("Location", "/native" + tgt)
+            self.send_header("Location", prefix + tgt)
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -675,12 +913,16 @@ class Handler(BaseHTTPRequestHandler):
         else:
             n = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(n) if n else None
-        fetch_fn = _native_fetch if _host_resolvable(origin) else _cdp_page_fetch
+        if _host_resolvable(origin):
+            fetch_fn = _native_fetch
+        else:
+            def fetch_fn(url, method, headers, body, _s=session):
+                return _s.cdp_fetch(url, method=method, headers=headers, body=body)
         try:
             status, hdrs, out = native_proxy.proxy(
                 fetch_fn, origin, raw_path, method=method,
                 headers=dict(self.headers.items()), body=body,
-                cookie=SESSION.cookie_header(origin), prefix="/native")
+                cookie=session.cookie_header(origin), prefix=prefix)
         except Exception as e:
             self._send(502, {"ok": False, "err": "UPSTREAM " + str(e)[:300]})
             return
@@ -707,6 +949,10 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(n) if n else b""
         if path == "/native" or path.startswith("/native/"):
             self._serve_native("POST", prebody=(raw or None))
+            return
+        if path == "/web" or path.startswith("/web/"):
+            self._serve_native("POST", prebody=(raw or None),
+                               session=WEB_SESSION, prefix="/web")
             return
         try:
             body = json.loads(raw.decode("utf-8")) if raw else {}
@@ -748,14 +994,21 @@ class Handler(BaseHTTPRequestHandler):
                 reply, plan = A.route(body.get("text", ""))
             jid = A.JOBS.submit(plan, body.get("text", "")) if plan else None
             self._send(200, {"ok": True, "reply": reply, "job": jid})
+        elif path == "/api/login":
+            self._send(200, web_login(body.get("account", ""), body.get("password", "")))
         elif path == "/api/eval":
             # 高阶通道(仅本机): 原样在 EDA 页求值 JS 表达式, 供编排/实战脚本使用。
             val, err = SESSION.eval_js(body.get("expr", ""),
                                        timeout=min(int(body.get("timeout", 30)), 120))
             self._send(200, {"ok": err is None, "ret": val, "err": err})
         else:
-            # 运行期原生透传(POST): 见 do_GET 同名分支说明。
-            self._serve_native("POST", prebody=(raw or None))
+            # 运行期原生透传(POST): 见 do_GET 同名分支说明(按 Referer 分流)。
+            ref = self.headers.get("Referer", "") or ""
+            if "/web/" in ref or ref.endswith("/web"):
+                self._serve_native("POST", prebody=(raw or None),
+                                   session=WEB_SESSION, prefix="/web")
+            else:
+                self._serve_native("POST", prebody=(raw or None))
 
 
 def main():
