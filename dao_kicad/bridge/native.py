@@ -224,12 +224,64 @@ def api_ipc_board(_q: dict) -> dict:
     return {"ok": False, "error": err}
 
 
+_IPC_OPS = ("action", "save", "refill_zones", "add_track", "add_via",
+            "move_footprint")
+
+
+def _mm(v: float):
+    from kipy.util.units import from_mm
+    return from_mm(float(v))
+
+
+def _vec(xy):
+    from kipy.geometry import Vector2
+    return Vector2.from_xy(_mm(xy[0]), _mm(xy[1]))
+
+
+def _op_add_track(b, body: dict) -> dict:
+    """agent 直驱布线: 在活动 board 内存文档里落一段铜线."""
+    from kipy.board_types import BoardLayer, Track
+    t = Track()
+    t.start = _vec(body["start"])
+    t.end = _vec(body["end"])
+    t.width = _mm(body.get("width_mm") or 0.25)
+    t.layer = getattr(BoardLayer, body.get("layer") or "BL_F_Cu")
+    created = b.create_items(t)
+    return {"created": len(created), "kind": "track"}
+
+
+def _op_add_via(b, body: dict) -> dict:
+    from kipy.board_types import Via
+    v = Via()
+    v.position = _vec(body["at"])
+    v.diameter = _mm(body.get("size_mm") or 0.8)
+    v.drill_diameter = _mm(body.get("drill_mm") or 0.4)
+    created = b.create_items(v)
+    return {"created": len(created), "kind": "via"}
+
+
+def _op_move_footprint(b, body: dict) -> dict:
+    ref = body.get("ref") or ""
+    for f in b.get_footprints():
+        if f.reference_field.text.value == ref:
+            f.position = _vec(body["at"])
+            if body.get("rot") is not None:
+                from kipy.geometry import Angle
+                f.orientation = Angle.from_degrees(float(body["rot"]))
+            b.update_items(f)
+            return {"moved": ref}
+    raise ValueError(f"footprint not found: {ref}")
+
+
 def api_ipc_run(body: dict) -> dict:
-    """在 KiCad 本体内执行动作 (run_action) / 保存 — agent 直驱通道."""
+    """在 KiCad 本体内执行动作/编辑 — agent 直驱通道 (不经 GUI 表层).
+
+    op: action|save|refill_zones|add_track|add_via|move_footprint
+    """
     op = (body.get("op") or "").strip()
-    if op not in ("action", "save", "refill_zones"):
+    if op not in _IPC_OPS:
         return {"ok": False, "error": f"unknown op: {op} "
-                                      "(action|save|refill_zones)"}
+                                      f"({'|'.join(_IPC_OPS)})"}
     err = "no IPC socket"
     for sock, k in _each_ipc():
         try:
@@ -240,11 +292,16 @@ def api_ipc_run(body: dict) -> dict:
                 r = k.run_action(name)
                 return {"ok": True, "action": name, "socket": sock,
                         "result": str(r)}
+            b = k.get_board()
             if op == "save":
-                k.get_board().save()
+                b.save()
                 return {"ok": True, "saved": True, "socket": sock}
-            k.get_board().refill_zones()
-            return {"ok": True, "refilled": True, "socket": sock}
+            if op == "refill_zones":
+                b.refill_zones()
+                return {"ok": True, "refilled": True, "socket": sock}
+            fn = {"add_track": _op_add_track, "add_via": _op_add_via,
+                  "move_footprint": _op_move_footprint}[op]
+            return {"ok": True, "socket": sock, **fn(b, body)}
         except Exception as e:
             err = f"{type(e).__name__}: {e}"
     return {"ok": False, "error": err}

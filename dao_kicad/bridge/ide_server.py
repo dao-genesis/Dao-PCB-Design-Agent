@@ -30,6 +30,9 @@ from urllib.parse import parse_qs, urlparse
 
 from daokicad.live import LiveKiCad
 
+from bridge.brain import (api_brain_bom, api_brain_design, api_brain_guardian,
+                          api_brain_intent, api_brain_pipeline,
+                          api_brain_templates, api_brain_wugan)
 from bridge.native import (api_ipc_board, api_ipc_run, api_ipc_status,
                            api_native_open, api_native_start,
                            api_native_status, api_native_stop)
@@ -889,7 +892,13 @@ _SLOW = {"build", "route", "fab", "auto"}
 _POST_PATHS = {"/api/native/start": api_native_start,
                "/api/native/open": api_native_open,
                "/api/native/stop": api_native_stop,
-               "/api/ipc/run": api_ipc_run}
+               "/api/ipc/run": api_ipc_run,
+               "/api/brain/intent": api_brain_intent,
+               "/api/brain/design": api_brain_design,
+               "/api/brain/guardian": api_brain_guardian,
+               "/api/brain/wugan": api_brain_wugan,
+               "/api/brain/bom": api_brain_bom,
+               "/api/brain/pipeline": api_brain_pipeline}
 
 _CAPABILITIES = {
     "service": "dao-kicad-ide",
@@ -1136,6 +1145,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(api_native_status(q))
             if u.path == "/api/ipc/status":
                 return self._send(api_ipc_status(q))
+            if u.path == "/api/brain/templates":
+                return self._send(api_brain_templates(q))
             if u.path == "/api/ipc/board":
                 return self._send(api_ipc_board(q))
             if u.path == "/api/job":

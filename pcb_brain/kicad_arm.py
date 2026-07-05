@@ -182,7 +182,10 @@ class KiCadArm:
             net_map = {}
             for net_name in dna.nets:
                 net_item = pcbnew.NETINFO_ITEM(board, net_name)
-                net_info.AppendNet(net_item)
+                if hasattr(net_info, "AppendNet"):
+                    net_info.AppendNet(net_item)
+                else:  # KiCad 9+: 网络经 BOARD.Add 注册
+                    board.Add(net_item)
                 net_map[net_name] = net_item
 
             # 添加元器件封装

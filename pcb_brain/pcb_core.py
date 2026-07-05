@@ -123,7 +123,11 @@ class PCB:
         arm = KiCadArm()
 
         try:
-            pcb_path = arm.create_pcb_from_dna(dna, str(out))
+            out.mkdir(parents=True, exist_ok=True)
+            pcb_path = str(out / f"{dna.name}.kicad_pcb")
+            if not arm.create_pcb_from_dna(dna, pcb_path):
+                return {"status": "error",
+                        "error": "create_pcb_from_dna failed"}
             route_result = arm.auto_route(pcb_path)
             drc_result = arm.run_drc(pcb_path)
 
