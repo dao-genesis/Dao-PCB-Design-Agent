@@ -203,12 +203,25 @@ def api_ipc_status(_q: dict) -> dict:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-def api_ipc_board(_q: dict) -> dict:
+def _board_match(b, want: str) -> bool:
+    """多实例时按板名定向: want 可为文件名/路径片段, 空则不限."""
+    if not want:
+        return True
+    name = (b.name or "").lower()
+    w = Path(want).name.lower()
+    return bool(name) and (w in name or name in want.lower())
+
+
+def api_ipc_board(q: dict) -> dict:
     """活动 PCB 文档全息: 与 GUI 同一份内存文档 (agent 之眼)."""
+    want = (q.get("board") or "").strip()
     err = "no IPC socket"
     for sock, k in _each_ipc():
         try:
             b = k.get_board()
+            if not _board_match(b, want):
+                err = f"no board matching: {want}"
+                continue
             nets = b.get_nets()
             fps = b.get_footprints()
             tracks = b.get_tracks()
@@ -277,6 +290,7 @@ def api_ipc_run(body: dict) -> dict:
     """在 KiCad 本体内执行动作/编辑 — agent 直驱通道 (不经 GUI 表层).
 
     op: action|save|refill_zones|add_track|add_via|move_footprint
+    body.board (可选): 多实例时按板名/路径片段定向目标文档, 避免误落到其它板.
     """
     op = (body.get("op") or "").strip()
     if op not in _IPC_OPS:
@@ -293,6 +307,9 @@ def api_ipc_run(body: dict) -> dict:
                 return {"ok": True, "action": name, "socket": sock,
                         "result": str(r)}
             b = k.get_board()
+            if not _board_match(b, (body.get("board") or "").strip()):
+                err = f"no board matching: {body.get('board')}"
+                continue
             if op == "save":
                 b.save()
                 return {"ok": True, "saved": True, "socket": sock}
