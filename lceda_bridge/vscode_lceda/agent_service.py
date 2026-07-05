@@ -31,9 +31,8 @@ def _tool_create_project(args):
 
 
 def _tool_open_project(args):
-    T.verb("dmt_Project.openProject", args["uuid"], timeout=60)
-    time.sleep(4)
-    return T.verb("dmt_Project.getCurrentProjectInfo", timeout=40)
+    key = args.get("name") or args.get("uuid")
+    return T.open_project(key)
 
 
 def _tool_open_doc(args):
@@ -63,13 +62,16 @@ def _tool_verb_call(args):
 
 
 def _tool_search_device(args):
-    kw = args.get("keyword", "")
     # 实战缺陷结论: search 只收关键字一个参数, 追加分页参数会命中另一重载并返回空。
-    items = T.verb("lib_Device.search", kw, timeout=90) or []
-    if isinstance(items, dict):
-        items = items.get("data") or items.get("list") or []
-    return [{"name": it.get("name"), "uuid": it.get("uuid"),
-             "libraryUuid": it.get("libraryUuid")} for it in items[:10]]
+    # 关键字支持 "|" 分隔候选链, 逐个回退(STM32 实战: 型号未命中需通用词兜底)。
+    for kw in [k.strip() for k in args.get("keyword", "").split("|") if k.strip()] or [""]:
+        items = T.verb("lib_Device.search", kw, timeout=90) or []
+        if isinstance(items, dict):
+            items = items.get("data") or items.get("list") or []
+        if items:
+            return [{"name": it.get("name"), "uuid": it.get("uuid"),
+                     "libraryUuid": it.get("libraryUuid")} for it in items[:10]]
+    return []
 
 
 def _tool_place(args):
@@ -137,8 +139,8 @@ TOOLS = {
                        "desc": "读取当前工程信息(名称/uuid/图页/PCB)"},
     "project.create": {"fn": _tool_create_project, "params": {"name": "str?", "desc": "str?"},
                        "desc": "新建并切换到工程(含 openProject 上下文修正)"},
-    "project.open":   {"fn": _tool_open_project, "params": {"uuid": "str"},
-                       "desc": "切换到指定 uuid 的工程"},
+    "project.open":   {"fn": _tool_open_project, "params": {"name": "str?", "uuid": "str?"},
+                       "desc": "按名或 uuid 切换工程(含目录扫描注册)"},
     "doc.open":       {"fn": _tool_open_doc, "params": {"uuid": "str"},
                        "desc": "在 EDA 打开指定文档(原理图页/PCB)"},
     "sch.list":       {"fn": _tool_sch_list, "params": {},
@@ -286,6 +288,12 @@ def route(text):
                  ("pcb.layout", {}, None), ("pcb.outline", {}, None),
                  ("pcb.autoroute", {}, None), ("pcb.pour", {}, None),
                  ("pcb.drc", {}, None), ("fab.outputs", {}, None)])
+    if has("打开工程", "切换工程", "open project"):
+        name = t.split()[-1] if " " in t else None
+        if name and "工程" not in name:
+            return ("正在打开工程 %s。" % name,
+                    [("project.open", {"name": name}, None)])
+        return ("请指定工程名: 打开工程 <名称>。", [])
     if has("建工程", "新建工程", "创建工程", "create project"):
         name = t.split()[-1] if " " in t else None
         args = {"name": name} if name and "工程" not in name else {}
