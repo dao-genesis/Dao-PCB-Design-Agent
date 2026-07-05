@@ -120,10 +120,11 @@ async function openPanel(context) {
   const port = await ensureServer(context);
   if (!port) return;
   const base = "http://127.0.0.1:" + port;
-  // 本源: 默认「原生嵌入」— 面板直接承载 EDA 本体真实页面(经本桥反代中转),
-  // 真实 DOM / 真实登录态 / 原生交互, 非投屏。screencast 仅作显式兜底。
-  const mode = cfg().get("panelMode") || "native";
-  const framePath = mode === "screencast" ? "/panel" : "/native";
+  // 归一外壳(本源, 取自 devin-remote dao-vsix「网页套网页」架构):
+  // 标签栏平级承载 本地EDA(/native) · 官网网页版(/web) · 配置(/config), 可无限延伸。
+  const mode = cfg().get("panelMode") || "shell";
+  const framePath = mode === "screencast" ? "/panel"
+    : (mode === "native" ? "/native" : "/shell");
   const panel = vscode.window.createWebviewPanel(
     "daoLcedaPanel", "嘉立创EDA (道之面板)", vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true });
