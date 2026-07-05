@@ -134,6 +134,20 @@ td,th{border:1px solid var(--line);padding:3px 8px}
           点「启动本体」— KiCad 软件本体的真实窗口将在此处直接出现并可完整操作。</div>
       </div>
     </div>
+    <!-- 🧠 智枢 — PCBBrain 既有 AI-KiCad 成果全量融入: 意图→DNA模板→生成→守护→五感→BOM 制造 -->
+    <div class="board" data-b="brain">
+      <div class="libbar">
+        <input id="brainIntent" placeholder="用自然语言描述需求, 如: 四层板 STM32 主控 带 USB 和 LoRa" style="flex:1;min-width:220px">
+        <button class="primary" onclick="brainIntent()">意图解析</button>
+        <select id="brainTpl" style="min-width:200px"></select>
+        <button onclick="brainAct('design')">生成工程</button>
+        <button onclick="brainAct('guardian')">风险守护</button>
+        <button onclick="brainAct('wugan')">五感</button>
+        <button onclick="brainAct('bom')">BOM/成本</button>
+        <button onclick="brainOpenNative()">在本体打开生成板</button>
+      </div>
+      <pre id="brainOut" style="flex:1;overflow:auto;margin:0;padding:12px;font-size:12px;white-space:pre-wrap">… PCBBrain 智枢: 21+ DNA 模板 · 意图解析 · 一键生成 · 风险守护 · 五感 · BOM 制造</pre>
+    </div>
     <!-- 📁 工程 -->
     <div class="board" data-b="proj">
       <div id="projects"><div style="padding:8px;color:var(--dim);font-size:12px">
@@ -279,13 +293,14 @@ const LAYERS=["F.Cu","In1.Cu","In2.Cu","B.Cu","F.SilkS","F.Mask","Edge.Cuts"];
 const DEFAULT_ON=new Set(["F.Cu","B.Cu","F.SilkS","Edge.Cuts"]);
 const SLASH=[["auto","全链路: 网表→建板→布线→DRC"],["drc","板子 DRC"],["erc","原理图 ERC"],
              ["route","自动布线"],["build","网表建板"],["netlist","导出网表"],["fab","Gerber/钻孔/贴片"]];
-const BOARDS=[["home","🏠 工程管理器"],["native","☯ 本体"],["proj","📁 工程"],["sch","📐 原理图"],["sym","🧩 符号"],
+const BOARDS=[["home","🏠 工程管理器"],["native","☯ 本体"],["brain","🧠 智枢"],["proj","📁 工程"],["sch","📐 原理图"],["sym","🧩 符号"],
               ["pcb","🟩 PCB"],["fp","📦 封装"],["gerber","🔍 Gerber"],["img","🖼 图片转换"],
               ["calc","🧮 计算"],["wks","📄 图框"],["pcm","🧭 扩展"],["check","🔬 检查"],
               ["fab","🏭 制造"],["api","🔌 接入"]];
 // KiCad 启动器九大编辑器 — 与 KiCad 工程管理器右侧入口同构, 点击直达本面板内对应板块
 const EDITORS=[
   ["native","☯","KiCad 本体","软件本体窗口直接承接进本面板，所见所操即 KiCad 本尊"],
+  ["brain","🧠","PCBBrain 智枢","意图解析·DNA模板·一键生成·风险守护·五感·BOM制造 — agent 底层直驱"],
   ["sch","📐","原理图编辑器","编辑工程原理图"],
   ["sym","🧩","符号编辑器","编辑全局/工程原理符号库"],
   ["pcb","🟩","PCB 编辑器","编辑 PCB 设计图"],
@@ -392,6 +407,38 @@ async function nativeStop(){
 }
 setInterval(()=>{const b=document.querySelector('.board[data-b="native"]');
   if(b&&b.classList.contains("on")) nativeRefresh();},5000);
+
+/* ── 🧠 智枢 (PCBBrain 融合层) ── */
+let brainPcb="";
+async function brainTpls(){
+  const s=$("#brainTpl"); if(s.options.length) return;
+  try{const j=await (await fetch("/api/brain/templates")).json();
+    (j.templates||[]).forEach(t=>{const o=document.createElement("option");
+      o.value=t.name||t; o.textContent=(t.name||t)+(t.description?" · "+t.description.slice(0,30):"");
+      s.appendChild(o);});}catch(e){}
+}
+function brainShow(j){$("#brainOut").textContent=JSON.stringify(j,null,2);}
+async function brainIntent(){
+  const text=$("#brainIntent").value.trim(); if(!text) return;
+  const j=await (await fetch("/api/brain/intent",{method:"POST",body:JSON.stringify({text})})).json();
+  brainShow(j); if(j.template){await brainTpls(); $("#brainTpl").value=j.template;}
+}
+async function brainAct(op){
+  const template=$("#brainTpl").value; if(!template) return;
+  brainShow({"…":op+" 运行中 ("+template+")"});
+  const j=await (await fetch("/api/brain/"+op,{method:"POST",body:JSON.stringify({template})})).json();
+  brainShow(j);
+  const p=j.pcb||j.pcb_path||(j.files&&j.files.pcb);
+  if(p) brainPcb=p;
+}
+function brainOpenNative(){
+  if(!brainPcb){brainShow({hint:"先「生成工程」得到 .kicad_pcb 再在本体打开"});return;}
+  fetch("/api/native/open",{method:"POST",body:JSON.stringify({path:brainPcb})});
+  showBoard("native");
+}
+document.addEventListener("click",e=>{const b=e.target.closest('[data-goto="brain"]'); if(b) brainTpls();});
+setInterval(()=>{const b=document.querySelector('.board[data-b="brain"]');
+  if(b&&b.classList.contains("on")) brainTpls();},3000);
 
 async function gerberScan(){
   const root=$("#root").value.trim(); if(!root){$("#gbrList").textContent="先在工程管理器载入根目录";return;}
