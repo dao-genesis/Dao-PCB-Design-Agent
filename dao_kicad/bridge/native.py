@@ -133,21 +133,39 @@ def api_native_status(_q: dict) -> dict:
         "display": None if DESKTOP_NATIVE else DISPLAY,
         "port": HTML_PORT,
         "url": None if DESKTOP_NATIVE else f"http://127.0.0.1:{HTML_PORT}/",
-        "ipc": Path(API_SOCKET).exists(),
+        "ipc": bool(_sockets()),
         "ipc_socket": API_SOCKET,
         "windows": _windows() if live else [],
     }
 
 
+_KICAD_EXES = {"kicad", "pcbnew", "eeschema", "kicad-cli"}
+
+
 def _desktop_windows() -> list[dict]:
-    """本机桌面上的 KiCad 顶层窗口 (Windows: EnumWindows)."""
+    """本机桌面上的 KiCad 顶层窗口 (Windows: EnumWindows, 按属主进程判定)."""
     if not IS_WINDOWS:
         return []
     import ctypes
     import ctypes.wintypes as wt
     user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
     out: list[dict] = []
     proto = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+    exe_cache: dict[int, str] = {}
+
+    def _exe(pid: int) -> str:
+        if pid not in exe_cache:
+            name = ""
+            h = kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFO
+            if h:
+                buf = ctypes.create_unicode_buffer(1024)
+                size = wt.DWORD(1024)
+                if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                    name = Path(buf.value).stem.lower()
+                kernel32.CloseHandle(h)
+            exe_cache[pid] = name
+        return exe_cache[pid]
 
     def cb(hwnd, _lp):
         if not user32.IsWindowVisible(hwnd):
@@ -155,12 +173,13 @@ def _desktop_windows() -> list[dict]:
         n = user32.GetWindowTextLengthW(hwnd)
         if n <= 0:
             return True
+        pid = wt.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if _exe(pid.value) not in _KICAD_EXES:
+            return True
         buf = ctypes.create_unicode_buffer(n + 1)
         user32.GetWindowTextW(hwnd, buf, n + 1)
-        title = buf.value
-        low = title.lower()
-        if "kicad" in low or "pcb editor" in low or "schematic editor" in low:
-            out.append({"id": hex(hwnd), "title": title})
+        out.append({"id": hex(hwnd), "title": buf.value})
         return True
 
     user32.EnumWindows(proto(cb), 0)
@@ -271,8 +290,16 @@ def api_native_stop(_body: dict) -> dict:
 
 
 def _sockets() -> list[str]:
-    """全部存活 IPC socket (主进程 api.sock + 独立编辑器 api-<pid>.sock)."""
+    """全部存活 IPC 端点 (Unix: socket 文件; Windows: 命名管道 — 非文件系统路径)."""
     d = Path(API_SOCKET).parent
+    if IS_WINDOWS:
+        try:
+            names = os.listdir("\\\\.\\pipe\\")
+        except OSError:
+            return []
+        pre = (str(d) + "\\api").lower()
+        return [n for n in names
+                if n.lower().startswith(pre) and n.lower().endswith(".sock")]
     socks = sorted(d.glob("api*.sock"), key=lambda p: p.stat().st_mtime,
                    reverse=True) if d.is_dir() else []
     return [str(p) for p in socks]
@@ -292,16 +319,20 @@ def _each_ipc():
 
 
 def api_ipc_status(_q: dict) -> dict:
-    if not Path(API_SOCKET).exists():
+    socks = _sockets()
+    if not socks:
         return {"ok": False, "error": f"IPC socket 不存在: {API_SOCKET} "
                                       "(先 POST /api/native/start)"}
-    try:
-        k = _kicad_ipc()
-        k.ping()
-        v = k.get_version()
-        return {"ok": True, "version": str(v), "socket": API_SOCKET}
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    err = "no IPC socket"
+    for s in socks:
+        try:
+            k = _kicad_ipc(s)
+            k.ping()
+            v = k.get_version()
+            return {"ok": True, "version": str(v), "socket": s}
+        except Exception as e:
+            err = f"{type(e).__name__}: {e}"
+    return {"ok": False, "error": err}
 
 
 def _board_match(b, want: str) -> bool:
