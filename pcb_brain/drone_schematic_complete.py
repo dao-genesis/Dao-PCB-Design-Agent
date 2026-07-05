@@ -156,7 +156,7 @@ try:
     
     # 复位按钮
     sw_reset = Part('Device', 'R', value='SW_RESET',  # 用电阻代替开关
-                    footprint='Button_Switch_SMD:SW_SPST_PTS645')
+                    footprint='Button_Switch_SMD:SW_SPST_PTS647_Sx50')
     sw_reset.ref = 'SW1'
     component_count += 1
     
