@@ -764,6 +764,14 @@ pre{white-space:pre-wrap;word-break:break-all;color:#9d9;} .bad{color:#e77;}
 <input id="u" placeholder="手机号/账号"><input id="p" type="password" placeholder="密码">
 <button onclick="login()">登录</button><pre id="lg"></pre>
 <span style="color:#888">若提示 captcha, 需在本机浏览器完成一次滑块; 登录态落在持久 profile, 重启不丢。</span></div>
+<div class="card"><b>底层能力自省(本地面·官方 EXTAPI 全景)</b>
+<span id="capsum" style="color:#888"></span><br>
+<select id="ns" onchange="loadNs()"><option value="">选命名空间…</option></select>
+<select id="mtd" style="min-width:220px"><option value="">方法…</option></select>
+<input id="args" placeholder='参数 JSON 数组, 如 []' value="[]" style="min-width:160px">
+<button onclick="callVerb()">直调</button>
+<pre id="vout"></pre>
+<span style="color:#888">动词 = 命名空间.方法(如 dmt_Project.getCurrentProjectInfo), 经 /api/verb 底层直调, 零 GUI。</span></div>
 <div class="card"><b>延伸</b><br>外壳标签栏的 + 可新建任意子页(同一逻辑无限延伸); 本页也是其中一张子网页。</div>
 <script>
 function refresh(){
@@ -774,6 +782,35 @@ function refresh(){
       '本地EDA: ' + JSON.stringify(v[0]) + '\n官网面:  ' + JSON.stringify(v[1]);
   });
 }
+function loadCaps(){
+  fetch('/api/verbs').then(r=>r.json()).then(function(d){
+    if(!d.ok) return;
+    var ns=document.getElementById('ns'), names=Object.keys(d.namespaces).sort();
+    document.getElementById('capsum').textContent=' — '+names.length+' 命名空间 / '+d.total+' 方法';
+    names.forEach(function(k){ var o=document.createElement('option');
+      o.value=k; o.textContent=k+' ('+d.namespaces[k]+')'; ns.appendChild(o); });
+  }).catch(function(){});
+}
+function loadNs(){
+  var k=document.getElementById('ns').value, mtd=document.getElementById('mtd');
+  mtd.innerHTML='<option value="">方法…</option>'; if(!k) return;
+  fetch('/api/verbs?ns='+encodeURIComponent(k)).then(r=>r.json()).then(function(d){
+    (d.namespaces[k]||[]).forEach(function(m){ var o=document.createElement('option');
+      o.value=k+'.'+m; o.textContent=m; mtd.appendChild(o); });
+  }).catch(function(){});
+}
+function callVerb(){
+  var ns=document.getElementById('mtd').value||document.getElementById('ns').value;
+  var el=document.getElementById('vout'); if(!ns){ el.textContent='先选方法'; return; }
+  var args; try{ args=JSON.parse(document.getElementById('args').value||'[]'); }
+  catch(e){ el.textContent='参数需为合法 JSON 数组'; el.className='bad'; return; }
+  el.textContent='调用中…'; el.className='';
+  fetch('/api/verb',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ns:ns,args:args})}).then(r=>r.json()).then(function(r){
+    el.textContent=JSON.stringify(r,null,1); el.className=r.ok?'':'bad';
+  }).catch(function(e){ el.textContent=String(e); el.className='bad'; });
+}
+loadCaps();
 function login(){
   var el=document.getElementById('lg'); el.textContent='登录中…';
   fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
