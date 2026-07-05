@@ -120,6 +120,26 @@ def create_project(name, desc=""):
     raise RuntimeError("open failed: current=%s" % (info or {}).get("friendlyName"))
 
 
+def open_project(name_or_uuid):
+    """按名或 uuid 切换工程(STM32 实战暴露: 对话面板只能建不能切)。
+    getAllProjectsUuid 触发目录扫描并返回全部注册 uuid, 逐一比对 friendlyName。"""
+    uuids = verb("dmt_Project.getAllProjectsUuid", PROJECTS_DIR,
+                 timeout=30) or []
+    target = name_or_uuid if name_or_uuid in uuids else None
+    if not target:
+        for u in uuids:
+            info = verb("dmt_Project.getProjectInfo", u, timeout=20)
+            if info and name_or_uuid in (info.get("friendlyName"),
+                                         info.get("name")):
+                target = u
+                break
+    if not target:
+        raise RuntimeError("project not found: %s" % name_or_uuid)
+    verb("dmt_Project.openProject", target, timeout=60)
+    time.sleep(3)
+    return verb("dmt_Project.getCurrentProjectInfo", timeout=40)
+
+
 def project_uuids():
     info = verb("dmt_Project.getCurrentProjectInfo")
     board = info["data"][0]
