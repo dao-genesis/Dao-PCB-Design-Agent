@@ -432,6 +432,71 @@ class EdaSession:
         except Exception:
             return {"ok": False, "err": "PARSE", "namespaces": {}}
 
+    def verbs_health(self):
+        """底层能力体检: 对全部命名空间的零参只读方法(get/is/has/list)实调一遍,
+        逐方法记 ok:<类型>/err:<原因>/skip(带参或写方法不碰), 汇总通过率 —— 让
+        「一切模块」的可用性随时可观测, 上游缺陷(文档态依赖/客户端 bug)即时暴露。"""
+        self.ensure_extapi()
+        val, err = self.eval_js(_SWEEP_START_JS, timeout=30)
+        if err or not val:
+            return {"ok": False, "err": err or "NO_START"}
+        # 后台页签的定时器会被 Chromium 限速, 页内同步等待会卡死 eval —— 故扫描脱钩启动,
+        # 这边轮询 window.__daoSweep.done 收割。
+        d = None
+        deadline = time.time() + 600
+        while time.time() < deadline:
+            time.sleep(3)
+            v2, e2 = self.eval_js(_SWEEP_POLL_JS, timeout=15)
+            if e2 or not v2:
+                continue
+            st = json.loads(v2)
+            if st.get("done"):
+                d = st.get("out") or {}
+                break
+        if d is None:
+            return {"ok": False, "err": "SWEEP_TIMEOUT"}
+        ok = bad = skip = 0
+        errs = {}
+        for ns, ms in d.items():
+            for m, v in ms.items():
+                if v == "skip":
+                    skip += 1
+                elif v.startswith("ok"):
+                    ok += 1
+                else:
+                    bad += 1
+                    errs.setdefault(ns, {})[m] = v
+        return {"ok": True, "called": ok, "errors": bad, "skipped": skip,
+                "failing": errs, "detail": d}
+
+
+# JS: 全命名空间零参只读方法实调体检, 脱钩后台跑(2.5s/方法超时保护),
+# 结果落 window.__daoSweep, 由服务端轮询收割。
+_SWEEP_START_JS = r"""(function(){var R=window._EXTAPI_ROOT_;
+var S=window.__daoSweep={done:false,out:{}};
+var safe=/^(get|is|has|list)/;var skipRe=/^(getState|getDeviceData)/;
+function tmo(p,t){return Promise.race([p,new Promise(function(_,rej){
+  setTimeout(function(){rej(new Error('TIMEOUT'))},t)})]);}
+(async function(){
+ var names=Object.keys(R).filter(function(k){return typeof R[k]==='object'&&R[k];});
+ for(var i=0;i<names.length;i++){var ns=names[i];var o=R[ns];var ms={};
+  var proto=o;var seen={};
+  while(proto&&proto!==Object.prototype){Object.getOwnPropertyNames(proto).forEach(function(m){
+    if(m!=='constructor'&&typeof o[m]==='function')seen[m]=1;});proto=Object.getPrototypeOf(proto);}
+  var methods=Object.keys(seen);
+  for(var j=0;j<methods.length;j++){var m=methods[j];
+   if(!safe.test(m)||skipRe.test(m)||o[m].length>0){ms[m]='skip';continue;}
+   try{var v=await tmo(Promise.resolve(o[m]()),2500);
+     var t=(v===null||v===undefined)?'nil':(Array.isArray(v)?('arr:'+v.length):typeof v);
+     ms[m]='ok:'+t;}
+   catch(e){ms[m]='err:'+String(e&&e.message||e).slice(0,60);}}
+  S.out[ns]=ms;}
+ S.done=true;})();
+return 'started';})()"""
+
+_SWEEP_POLL_JS = r"""(function(){var S=window.__daoSweep||{};
+return JSON.stringify({done:!!S.done,out:S.out||{}});})()"""
+
 
 # JS: 按需重建 _EXTAPI_ROOT_ 门面。门面已在则秒回; 缺失则拉取页面已加载的官方
 # pro-api(api.js), 就地把门面根类实例挂到 window._EXTAPI_ROOT_(其方法经
@@ -1055,6 +1120,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, "components": comps, "nets": nets})
             except Exception as e:
                 self._send(200, {"ok": False, "err": str(e)[:200]})
+        elif path == "/api/verbs/health":
+            # 底层能力体检: 全命名空间零参只读方法实调, 可用性/上游缺陷即时可观测。
+            self._send(200, SESSION.verbs_health())
         elif path == "/api/verbs":
             # 底层能力自省: 官方 EXTAPI 全景(93 命名空间/700+ 方法), ?ns= 取单命名空间方法清单。
             ns = (parse_qs(u.query).get("ns") or [None])[0]
