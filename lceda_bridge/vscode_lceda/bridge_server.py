@@ -379,8 +379,28 @@ class EdaSession:
             return None, json.dumps(res["exceptionDetails"])[:500]
         return (res.get("result") or {}).get("value"), None
 
+    def ensure_extapi(self, timeout=30):
+        """确保 window._EXTAPI_ROOT_ 门面就位。
+
+        pro.lceda.cn 版本默认不在页面挂 _EXTAPI_ROOT_(它只在扩展沙箱内生成),
+        但官方 pro-api(api.js)已随页面加载, 其门面根类构造后即以 _MSG_BUS2_EXTAPI_
+        消息总线为传输接官方服务。本方法在门面缺失时按需拉取 api.js、就地重建门面根
+        并挂到 window._EXTAPI_ROOT_ — 门面存在则近乎零开销直接返回, 幂等可反复调。"""
+        val, err = self.eval_js(_EXTAPI_BOOTSTRAP_JS, timeout=timeout)
+        if err:
+            return {"ok": False, "err": err}
+        try:
+            return json.loads(val) if isinstance(val, str) else {"ok": False, "err": "PARSE"}
+        except Exception:
+            return {"ok": False, "err": "PARSE"}
+
     def verb(self, ns_method, args, timeout=20):
-        expr = _CALL_TPL % {"key": json.dumps(ns_method), "args": json.dumps(args or [])}
+        self.ensure_extapi()
+        if ns_method in ("dmt_Project.getCurrentProjectInfo",
+                         "dmt_Project_getCurrentProjectInfo"):
+            expr = _PROJECT_INFO_JS
+        else:
+            expr = _CALL_TPL % {"key": json.dumps(ns_method), "args": json.dumps(args or [])}
         val, err = self.eval_js(expr, timeout=timeout)
         if err:
             return {"ok": False, "err": err}
@@ -390,6 +410,7 @@ class EdaSession:
             return {"ok": True, "ret": val}
 
     def project_tree(self):
+        self.ensure_extapi()
         val, err = self.eval_js(_TREE_JS)
         if err:
             return {"ok": False, "err": err, "projects": []}
@@ -402,6 +423,7 @@ class EdaSession:
         """底层能力自省: 枚举官方 EXTAPI 全部命名空间及其方法(含原型链)。
         不传 ns → 各命名空间方法数汇总; 传 ns → 该命名空间方法名清单。
         使本地面「一切模块」可发现、可经 /api/verb 直调, 零硬编码。"""
+        self.ensure_extapi()
         val, err = self.eval_js(_CAPS_JS % json.dumps(ns or ""))
         if err:
             return {"ok": False, "err": err, "namespaces": {}}
@@ -410,6 +432,32 @@ class EdaSession:
         except Exception:
             return {"ok": False, "err": "PARSE", "namespaces": {}}
 
+
+# JS: 按需重建 _EXTAPI_ROOT_ 门面。门面已在则秒回; 缺失则拉取页面已加载的官方
+# pro-api(api.js), 就地把门面根类实例挂到 window._EXTAPI_ROOT_(其方法经
+# _MSG_BUS2_EXTAPI_ 总线接官方服务)。幂等 — 每次动词调用前跑一次开销可忽略。
+_EXTAPI_BOOTSTRAP_JS = r"""(async function(){
+  try{
+    var R = window._EXTAPI_ROOT_;
+    if(R && Object.keys(R).length > 0) return JSON.stringify({ok:true, ns:Object.keys(R).length, cached:true});
+    var urls = performance.getEntriesByType('resource').map(function(e){return e.name;})
+      .filter(function(n){ return /\/pro-api\/[^/]+\/api\.js(\?|$)/.test(n); });
+    if(!urls.length) return JSON.stringify({ok:false, err:'NO_PRO_API_URL'});
+    var src = await (await fetch(urls[0])).text();
+    var tgt = 'Z=new bt("eda",!0)';
+    if(src.indexOf(tgt) < 0) return JSON.stringify({ok:false, err:'ANCHOR_MISS'});
+    src = src.replace(tgt, 'Z=(window._EXTAPI_ROOT_=new bt("eda",!0))');
+    var s = document.createElement('script');
+    s.textContent = src;
+    document.documentElement.appendChild(s);
+    for(var i=0;i<40 && !(window._EXTAPI_ROOT_ && Object.keys(window._EXTAPI_ROOT_).length>0);i++){
+      await new Promise(function(r){ setTimeout(r, 25); });
+    }
+    var R2 = window._EXTAPI_ROOT_;
+    if(R2 && Object.keys(R2).length > 0) return JSON.stringify({ok:true, ns:Object.keys(R2).length, injected:true});
+    return JSON.stringify({ok:false, err:'INJECT_NO_ROOT'});
+  }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e)}); }
+})()"""
 
 # JS: 经 _EXTAPI_ROOT_ 调官方 API, 永远字符串回传。
 _CALL_TPL = r"""(async function(){
@@ -477,6 +525,32 @@ _CAPS_JS = r"""(function(){
   }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e), namespaces:{}}); }
 })()"""
 
+# JS: 稳健读取当前工程信息。官方 dmt_Project.getCurrentProjectInfo 在某些工程上
+# 会因标题栏属性缺失而抛 keyVisible(EDA 宿主侧数据依赖缺陷); 故失败即回退到
+# dmt_Board.getAllBoardsInfo 合成同形 {uuid,data:[boards]} 结果 —— 上层
+# project_uuids 等一切消费者的 info["data"][0]/info["uuid"] 契约不变。
+_PROJECT_INFO_JS = r"""(async function(){
+  try{
+    var R = window._EXTAPI_ROOT_;
+    if(!R) return JSON.stringify({ok:false, err:'NO_EXTAPI_ROOT'});
+    var info=null, primaryErr=null;
+    try{ info = await R.dmt_Project.getCurrentProjectInfo(); }
+    catch(e){ primaryErr = String(e&&e.message||e); }
+    if(info && info.data && info.data.length) return JSON.stringify({ok:true, ret:info});
+    var boards = await R.dmt_Board.getAllBoardsInfo();
+    var arr = Array.isArray(boards) ? boards
+      : (boards ? Object.keys(boards).map(function(k){ return boards[k]; }) : []);
+    if(!arr.length) return JSON.stringify({ok:false, err:'NO_BOARDS', primaryErr:primaryErr});
+    var b0 = arr[0];
+    var uuid = b0.parentProjectUuid || (b0.pcb && b0.pcb.parentProjectUuid)
+      || (b0.schematic && b0.schematic.parentProjectUuid) || null;
+    var ws=null; try{ ws = await R.dmt_Workspace.getCurrentWorkspaceInfo(); }catch(e){}
+    var name = (ws && ws.name) || b0.name || null;
+    return JSON.stringify({ok:true, ret:{uuid:uuid, name:name, friendlyName:name,
+      data:arr, workspace:ws, fallback:true, primaryErr:primaryErr}});
+  }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e)}); }
+})()"""
+
 # JS: 取当前工程/文档树(编辑器层, 尽力而为)。
 _TREE_JS = r"""(async function(){
   try{
@@ -485,8 +559,16 @@ _TREE_JS = r"""(async function(){
     var out={ok:true, projects:[]};
     try{
       var info = await R.dmt_Project.getCurrentProjectInfo();
-      if(info){ out.current = info; }
-    }catch(e){}
+      if(info && info.data && info.data.length){ out.current = info; }
+      else { throw new Error('no-data'); }
+    }catch(e0){
+      try{
+        var bs = await R.dmt_Board.getAllBoardsInfo();
+        var arr = Array.isArray(bs) ? bs : (bs ? Object.keys(bs).map(function(k){return bs[k];}) : []);
+        if(arr.length){ var b0=arr[0];
+          out.current = {uuid:(b0.parentProjectUuid||null), name:b0.name, data:arr, fallback:true}; }
+      }catch(e1){}
+    }
     try{
       var uuids = await R.dmt_Project.getAllProjectsUuid();
       out.projectUuids = uuids;
@@ -593,6 +675,13 @@ def _chrome_exe():
     cands = ["/opt/google/chrome/chrome", "/usr/bin/google-chrome",
              "/usr/bin/google-chrome-stable", "/usr/bin/chromium",
              "/usr/bin/chromium-browser"]
+    if sys.platform.startswith("win"):
+        for base in (os.environ.get("ProgramFiles", r"C:\Program Files"),
+                     os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+                     os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs")):
+            cands += [os.path.join(base, r"Google\Chrome\Application\chrome.exe"),
+                      os.path.join(base, r"Microsoft\Edge\Application\msedge.exe"),
+                      os.path.join(base, r"Chromium\Application\chrome.exe")]
     pw = os.path.join(os.path.expanduser("~"), ".cache", "ms-playwright")
     try:
         for d in sorted(os.listdir(pw), reverse=True):
@@ -956,6 +1045,16 @@ class Handler(BaseHTTPRequestHandler):
             tree = SESSION.project_tree()
             tree["localProjects"] = _local_projects()
             self._send(200, tree)
+        elif path == "/api/tree/pcb":
+            # 工程树下沉: 器件/网络级(供 IDE 树懒加载)。
+            A = _agent()
+            try:
+                comps = A.TOOLS["pcb.components"]["fn"](
+                    {"limit": (parse_qs(u.query).get("limit") or ["200"])[0]})
+                nets = A.TOOLS["pcb.nets"]["fn"]({})
+                self._send(200, {"ok": True, "components": comps, "nets": nets})
+            except Exception as e:
+                self._send(200, {"ok": False, "err": str(e)[:200]})
         elif path == "/api/verbs":
             # 底层能力自省: 官方 EXTAPI 全景(93 命名空间/700+ 方法), ?ns= 取单命名空间方法清单。
             ns = (parse_qs(u.query).get("ns") or [None])[0]
@@ -1109,6 +1208,9 @@ class Handler(BaseHTTPRequestHandler):
                              "count": len(results), "results": results})
         elif path == "/api/chat":
             self._send(200, chat_agent(SESSION, body.get("text", "")))
+        elif path.startswith("/api/agent/") and path.endswith("/cancel"):
+            # 作业取消/中断通道: 在下一步边界处停止。
+            self._send(200, _agent().JOBS.cancel(path.split("/")[3]))
         elif path == "/api/agent":
             # Copilot 式编排: 自然语言或显式计划 → 异步作业, 轮询取步骤流。
             A = _agent()

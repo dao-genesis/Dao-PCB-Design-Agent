@@ -116,7 +116,15 @@ def _tool_drc(_args):
 
 
 def _tool_fab(args):
-    return T.fab_outputs(args.get("prefix", "/tmp/fab"))
+    return T.fab_outputs(args.get("prefix"))
+
+
+def _tool_pcb_components(args):
+    return T.components_detail(int(args.get("limit", 200)))
+
+
+def _tool_pcb_nets(_args):
+    return T.net_list()
 
 
 def _tool_board_status(_args):
@@ -172,6 +180,10 @@ TOOLS = {
     "pcb.drc":        {"fn": _tool_drc, "params": {}, "desc": "设计规则检查"},
     "status.board":   {"fn": _tool_board_status, "params": {},
                        "desc": "PCB 全量状态识别(图元清点/网络/阶段/进度%)"},
+    "pcb.components": {"fn": _tool_pcb_components, "params": {"limit": "int?"},
+                       "desc": "器件级下沉: 位号/坐标/引脚/网络清单"},
+    "pcb.nets":       {"fn": _tool_pcb_nets, "params": {},
+                       "desc": "网络级下沉: 全部网络及引脚数"},
     "fab.outputs":    {"fn": _tool_fab, "params": {"prefix": "str?"},
                        "desc": "出产: Gerber/BOM/贴片坐标(blob→base64→落盘)"},
     "canvas.image":   {"fn": _tool_canvas_image, "params": {}, "desc": "画布渲染图",
@@ -229,9 +241,25 @@ class JobStore:
         threading.Thread(target=self._run, args=(job, plan), daemon=True).start()
         return jid
 
+    def cancel(self, jid):
+        with self._lock:
+            job = self._jobs.get(jid)
+        if not job:
+            return {"ok": False, "err": "no such job"}
+        if job["status"] != "running":
+            return {"ok": False, "err": "job already " + job["status"]}
+        job["cancelRequested"] = True
+        OPS.record("job", jid, "running", "cancel requested")
+        return {"ok": True, "job": jid}
+
     def _run(self, job, plan):
         ok = True
         for tool, args, label in plan:
+            if job.get("cancelRequested"):
+                job["status"] = "cancelled"
+                job["endedAt"] = time.time()
+                OPS.record("job", job["id"], "failed", "cancelled by user")
+                return
             step = {"tool": tool, "label": label or TOOLS[tool]["desc"],
                     "status": "running", "startedAt": time.time()}
             job["steps"].append(step)

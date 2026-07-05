@@ -50,22 +50,19 @@ def ev(expr, timeout=60):
 
 
 def click_text(texts, retries=3):
-    """按可见文案定位按钮 → 经 /api/input 派发真实点击(GUI 兜底通道)。"""
+    """按可见文案定位按钮并派发 DOM 事件序列点击(pointer/mouse/click)。
+    坐标派发在缩放/多屏下会偏移(实战结论), DOM 直点最可靠; 命中最后一个匹配
+    元素(弹窗按钮总在 DOM 末尾, 避免误点被遮挡的同名底层按钮)。"""
     js = ("(function(){var all=[].slice.call(document.querySelectorAll('button,span,div,a'));"
           "var t=%s;for(var i=0;i<t.length;i++){var h=all.filter(function(b){"
-          "return (b.innerText||'').trim()===t[i];});if(h.length){var r=h[0].getBoundingClientRect();"
-          "return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2,t:t[i],"
-          "w:window.innerWidth,h:window.innerHeight});}}return null;})()" % json.dumps(texts))
+          "return (b.innerText||'').trim()===t[i];});if(h.length){var el=h[h.length-1];"
+          "['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(k){"
+          "el.dispatchEvent(new MouseEvent(k,{bubbles:true,cancelable:true,view:window}));});"
+          "return JSON.stringify({t:t[i]});}}return null;})()" % json.dumps(texts))
     for i in range(retries):
         v = ev(js)
         if v:
-            o = json.loads(v)
-            nx, ny = o["x"] / o["w"], o["y"] / o["h"]
-            for t, cc in (("mouseMoved", 0), ("mousePressed", 1), ("mouseReleased", 1)):
-                api("/api/input", {"kind": "mouse", "type": t, "nx": nx, "ny": ny,
-                                   "button": "left" if cc else "none", "clickCount": cc})
-                time.sleep(0.15)
-            return o["t"]
+            return json.loads(v)["t"]
         time.sleep(1.5)
     raise RuntimeError("button not found: %s" % texts)
 
@@ -155,28 +152,33 @@ def open_doc(uuid):
 
 # ---------------------------------------------------------------- 原理图
 def place(device, x, y, designator=None):
-    """确定性放件: device 需为检索命中对象{uuid,libraryUuid,name}, create 真实签名
-    (dev,x,y,'',0,false,true,true) + getState_PrimitiveId(逆向所得, 100%可靠)。"""
+    """确定性放件: pro-api 门面 sch_PrimitiveComponent.create 真实签名为位置参数
+    (componentUuid, subLibraryId, x, y, rotation, mirror, systematicUuid,
+    addIntoBom, addIntoPcb) —— 早期版本误传整个 device 对象会触发"数据不符合规范"。
+    create 返回图元实例, getState_PrimitiveId() 取其 id(逆向所得, 100%可靠)。"""
     if isinstance(device, dict):
-        device = {"uuid": device["uuid"], "libraryUuid": device["libraryUuid"],
-                  "name": device.get("name")}
+        uuid = device["uuid"]
+        lib = device.get("libraryUuid") or ""
+    else:
+        uuid, lib = device, ""
     js = ("(async()=>{try{var R=window._EXTAPI_ROOT_;"
-          "var r=await R.sch_PrimitiveComponent.create(%s,%d,%d,'',0,false,true,true);"
+          "var r=await R.sch_PrimitiveComponent.create(%(uuid)s,%(lib)s,"
+          "%(x)d,%(y)d,0,false,undefined,true,true);"
           "if(!r)return JSON.stringify({err:'null create'});"
           "var id=r.getState_PrimitiveId?r.getState_PrimitiveId():(r.primitiveId||null);"
+          # 官方 api.js 缺陷: ①create 的 rpc 载荷把 y 写成 x(y:this.x) → 落点 y 恒等 x,
+          # 故 create 后必须 modify 矫正真实 y(顺带写位号); ②modify 需传 create 返回的图元
+          # 实例(按 id 取回的是数组), 且其返回值后处理会抛错但修改已生效 → 吞掉该异常。
+          "try{await R.sch_PrimitiveComponent.modify(r,%(x)d,%(y)d,0,false,true,true,"
+          "%(des)s||undefined);}catch(_e){}"
           "return JSON.stringify({id:id});}catch(e){return JSON.stringify("
-          "{err:String(e).slice(0,120)})}})()" % (json.dumps(device), x, y))
+          "{err:String(e).slice(0,120)})}})()"
+          % {"uuid": json.dumps(uuid), "lib": json.dumps(lib), "x": x, "y": y,
+             "des": json.dumps(designator)})
     for i in range(3):
         o = json.loads(ev(js, 40))
         if o.get("id"):
-            cid = o["id"]
-            if designator:
-                try:
-                    verb("sch_PrimitiveComponent.modify", cid,
-                         {"designator": designator}, timeout=20)
-                except Exception:
-                    pass
-            return cid
+            return o["id"]
         time.sleep(2)
     raise RuntimeError("place %s: %s" % (device, o))
 
@@ -250,10 +252,11 @@ def grid_layout(comp_ids, pitch=300, cols=None):
 def affinity_layout(comp_ids, pitch=600):
     """网络亲和布局(工具进化·第二轮实战): 连通度最高者居中, 其余贪心放到
     已放邻居质心最近的空格 → 缩短飞线, 降低布线难度。"""
+    snap = _pcb_snapshot()
     nets = {}
     for cid in comp_ids:
         s = set()
-        for p in (verb("pcb_PrimitiveComponent.getAllPinsByPrimitiveId", cid) or []):
+        for p in component_pads(cid, snap):
             n = p.get("net")
             if n and n != "GND":  # GND 走覆铜, 不参与亲和
                 s.add(n)
@@ -286,10 +289,9 @@ def affinity_layout(comp_ids, pitch=600):
 
 def pins_bbox(margin=100):
     xs, ys = [], []
-    for cid in (verb("pcb_PrimitiveComponent.getAllPrimitiveId") or []):
-        for p in (verb("pcb_PrimitiveComponent.getAllPinsByPrimitiveId", cid) or []):
-            if "x" in p and "y" in p:
-                xs.append(p["x"]); ys.append(p["y"])
+    for p in _pcb_snapshot()["pads"]:
+        if p.get("x") is not None and p.get("y") is not None:
+            xs.append(p["x"]); ys.append(p["y"])
     return (min(xs) - margin, max(ys) + margin,
             (max(xs) - min(xs)) + 2 * margin, (max(ys) - min(ys)) + 2 * margin)
 
@@ -396,6 +398,14 @@ def save_pcb():
     return verb("pcb_Document.save", timeout=60)
 
 
+def _ids_or_empty(ns):
+    """部分图元命名空间随 pro-api 版本增减(如 pcb_PrimitivePour), 缺失时记为空。"""
+    try:
+        return verb(ns + ".getAllPrimitiveId", retries=0) or []
+    except Exception:
+        return []
+
+
 def board_status():
     """PCB 全量状态识别: 各类图元清点 + 网络清单 + 阶段/进度推断。
 
@@ -410,17 +420,16 @@ def board_status():
         return {"stage": "no-pcb-doc", "progress": 0,
                 "hint": "先打开工程的 PCB 文档(doc.open)再识别状态",
                 "err": str(e)[:120]}
-    tracks = verb("pcb_PrimitiveLine.getAllPrimitiveId") or []
-    vias = verb("pcb_PrimitiveVia.getAllPrimitiveId") or []
-    pours = verb("pcb_PrimitivePour.getAllPrimitiveId") or []
-    outline = verb("pcb_PrimitivePolyline.getAllPrimitiveId") or []
+    tracks = _ids_or_empty("pcb_PrimitiveLine")
+    vias = _ids_or_empty("pcb_PrimitiveVia")
+    pours = _ids_or_empty("pcb_PrimitivePour")
+    outline = _ids_or_empty("pcb_PrimitivePolyline")
     nets, net_pins = set(), {}
-    for cid in comp_ids:
-        for p in (verb("pcb_PrimitiveComponent.getAllPinsByPrimitiveId", cid) or []):
-            n = p.get("net")
-            if n:
-                nets.add(n)
-                net_pins[n] = net_pins.get(n, 0) + 1
+    for p in _pcb_snapshot()["pads"]:
+        n = p.get("net")
+        if n:
+            nets.add(n)
+            net_pins[n] = net_pins.get(n, 0) + 1
     signal_nets = [n for n in nets if n != "GND"]
     routed_nets = set()
     try:
@@ -447,6 +456,56 @@ def drc():
     return verb("pcb_Drc.check", True, False, True, timeout=120)
 
 
+def _pcb_snapshot():
+    """一次取回全部器件+焊盘(本 pro-api 门面无 getAllPinsByPrimitiveId,
+    引脚归属按焊盘 primitiveId 前缀 <compId>e 判定, 如 e0 的焊盘为 e0e14)。"""
+    js = ("(async()=>{var R=window._EXTAPI_ROOT_;"
+          "var cs=await R.pcb_PrimitiveComponent.getAll()||[];"
+          "var ps=await R.pcb_PrimitivePad.getAll()||[];"
+          "return JSON.stringify({components:cs.map(function(c){return {"
+          "id:c.primitiveId,designator:c.designator,"
+          "name:c.name||c.manufacturerId,x:c.x,y:c.y};}),"
+          "pads:ps.map(function(p){return {id:p.primitiveId,"
+          "net:p.net||'',pad:p.padNumber,x:p.x,y:p.y};})});})()")
+    return json.loads(ev(js, 60))
+
+
+def component_pads(comp_id, snapshot=None):
+    snap = snapshot or _pcb_snapshot()
+    pre = comp_id + "e"
+    return [p for p in snap["pads"] if p["id"].startswith(pre)]
+
+
+def components_detail(limit=200):
+    """PCB 器件级下沉: 每个器件的位号/坐标/引脚数/所属网络。"""
+    try:
+        snap = _pcb_snapshot()
+    except Exception as e:
+        return {"err": str(e)[:120], "components": []}
+    out = []
+    for c in snap["components"][:limit]:
+        pins = component_pads(c["id"], snap)
+        out.append({"id": c["id"], "designator": c.get("designator"),
+                    "name": c.get("name"), "x": c.get("x"), "y": c.get("y"),
+                    "pins": len(pins),
+                    "nets": sorted({p["net"] for p in pins if p["net"]})})
+    return {"count": len(snap["components"]), "components": out}
+
+
+def net_list():
+    """PCB 网络级下沉: 全部网络及其引脚数。"""
+    try:
+        snap = _pcb_snapshot()
+    except Exception as e:
+        return {"err": str(e)[:120], "nets": {}}
+    nets = {}
+    for p in snap["pads"]:
+        n = p.get("net")
+        if n:
+            nets[n] = nets.get(n, 0) + 1
+    return {"count": len(nets), "nets": nets}
+
+
 # ---------------------------------------------------------------- 出产
 def export_file(method_call, out_path):
     js = ("(async()=>{try{var R=window._EXTAPI_ROOT_;var f=await R.%s;"
@@ -462,7 +521,10 @@ def export_file(method_call, out_path):
     return {"name": o.get("name"), "size": o.get("size"), "path": out_path}
 
 
-def fab_outputs(prefix="/tmp/fab"):
+def fab_outputs(prefix=None):
+    if not prefix:
+        import tempfile
+        prefix = os.path.join(tempfile.gettempdir(), "fab")
     out = {}
     for call, suffix in (("getBomFile()", "_bom.xlsx"),
                          ("getPickAndPlaceFile()", "_xy.csv"),
