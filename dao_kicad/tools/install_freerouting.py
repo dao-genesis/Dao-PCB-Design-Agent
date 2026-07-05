@@ -22,6 +22,7 @@ import platform
 import shutil
 import sys
 import tarfile
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -36,15 +37,32 @@ def _log(msg: str) -> None:
     print(f"[install-freerouting] {msg}", flush=True)
 
 
+_DOWNLOAD_ATTEMPTS = 4
+
+
 def _download(url: str, dest: Path) -> None:
-    _log(f"download {url}")
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(url, headers={"User-Agent": "dao-kicad"})
-    with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
-        shutil.copyfileobj(r, f)
-    tmp.replace(dest)
-    _log(f"  -> {dest} ({dest.stat().st_size} bytes)")
+    last: Exception | None = None
+    for attempt in range(1, _DOWNLOAD_ATTEMPTS + 1):
+        _log(f"download {url} (attempt {attempt}/{_DOWNLOAD_ATTEMPTS})")
+        req = urllib.request.Request(url, headers={"User-Agent": "dao-kicad"})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r, \
+                    open(tmp, "wb") as f:
+                shutil.copyfileobj(r, f)
+            tmp.replace(dest)
+            _log(f"  -> {dest} ({dest.stat().st_size} bytes)")
+            return
+        except Exception as ex:  # ConnectionResetError / URLError / timeout
+            last = ex
+            tmp.unlink(missing_ok=True)
+            if attempt < _DOWNLOAD_ATTEMPTS:
+                wait = 2 ** attempt
+                _log(f"  failed ({ex}); retrying in {wait}s")
+                time.sleep(wait)
+    raise RuntimeError(f"download failed after {_DOWNLOAD_ATTEMPTS} "
+                       f"attempts: {url}") from last
 
 
 def install_freerouting(version: str) -> Path:
