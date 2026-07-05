@@ -36,7 +36,7 @@ import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import local_lceda
 import native_proxy
@@ -398,6 +398,18 @@ class EdaSession:
         except Exception:
             return {"ok": False, "err": "PARSE", "projects": []}
 
+    def capabilities(self, ns=None):
+        """底层能力自省: 枚举官方 EXTAPI 全部命名空间及其方法(含原型链)。
+        不传 ns → 各命名空间方法数汇总; 传 ns → 该命名空间方法名清单。
+        使本地面「一切模块」可发现、可经 /api/verb 直调, 零硬编码。"""
+        val, err = self.eval_js(_CAPS_JS % json.dumps(ns or ""))
+        if err:
+            return {"ok": False, "err": err, "namespaces": {}}
+        try:
+            return json.loads(val)
+        except Exception:
+            return {"ok": False, "err": "PARSE", "namespaces": {}}
+
 
 # JS: 经 _EXTAPI_ROOT_ 调官方 API, 永远字符串回传。
 _CALL_TPL = r"""(async function(){
@@ -431,6 +443,38 @@ _CDP_FETCH_TPL = r"""(async function(){
     var hs=[]; resp.headers.forEach(function(v,k){ hs.push([k,v]); });
     return JSON.stringify({ok:true, status:resp.status||200, headers:hs, b64:btoa(s)});
   }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e)}); }
+})()"""
+
+# JS: 底层能力自省 — 遍历 _EXTAPI_ROOT_ 命名空间与方法(含原型链, 非只可枚举键)。
+_CAPS_JS = r"""(function(){
+  try{
+    var R = window._EXTAPI_ROOT_;
+    if(!R) return JSON.stringify({ok:false, err:'NO_EXTAPI_ROOT', namespaces:{}});
+    function methods(v){
+      var ms = {}, o = v;
+      while(o && o !== Object.prototype){
+        Object.getOwnPropertyNames(o).forEach(function(m){
+          if(m !== 'constructor' && typeof v[m] === 'function') ms[m] = 1;
+        });
+        o = Object.getPrototypeOf(o);
+      }
+      return Object.keys(ms).sort();
+    }
+    var want = %s;
+    if(want){
+      var v = R[want];
+      if(!v || typeof v !== 'object')
+        return JSON.stringify({ok:false, err:'NO_NS '+want, namespaces:{}});
+      var obj = {}; obj[want] = methods(v);
+      return JSON.stringify({ok:true, namespaces:obj});
+    }
+    var out = {}, total = 0;
+    Object.keys(R).forEach(function(k){
+      var v = R[k];
+      if(v && typeof v === 'object'){ var n = methods(v).length; out[k] = n; total += n; }
+    });
+    return JSON.stringify({ok:true, namespaces:out, total:total});
+  }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e), namespaces:{}}); }
 })()"""
 
 # JS: 取当前工程/文档树(编辑器层, 尽力而为)。
@@ -846,6 +890,10 @@ class Handler(BaseHTTPRequestHandler):
             tree = SESSION.project_tree()
             tree["localProjects"] = _local_projects()
             self._send(200, tree)
+        elif path == "/api/verbs":
+            # 底层能力自省: 官方 EXTAPI 全景(93 命名空间/700+ 方法), ?ns= 取单命名空间方法清单。
+            ns = (parse_qs(u.query).get("ns") or [None])[0]
+            self._send(200, SESSION.capabilities(ns))
         elif path == "/api/tools":
             # 原生第三方接入: 机器可读工具目录(dao_tools 全链路能力)。
             self._send(200, {"ok": True, "tools": _agent().catalog()})
@@ -971,6 +1019,19 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/verb":
             self._send(200, SESSION.verb(body.get("ns", ""), body.get("args", []),
                                          timeout=min(int(body.get("timeout", 20)), 120)))
+        elif path == "/api/verbs/batch":
+            # 批量动词编排: [{ns, args?}] 顺序直调, stopOnError 默认真 — 一次往返成链。
+            calls = body.get("calls") or []
+            stop = body.get("stopOnError", True)
+            results = []
+            for c in calls[:64]:
+                r = SESSION.verb(c.get("ns", ""), c.get("args", []),
+                                 timeout=min(int(c.get("timeout", 20)), 120))
+                results.append({"ns": c.get("ns"), "result": r})
+                if stop and not r.get("ok"):
+                    break
+            self._send(200, {"ok": all(x["result"].get("ok") for x in results),
+                             "count": len(results), "results": results})
         elif path == "/api/chat":
             self._send(200, chat_agent(SESSION, body.get("text", "")))
         elif path == "/api/agent":
