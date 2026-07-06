@@ -19,8 +19,28 @@ from pathlib import Path
 from typing import Optional
 
 # Self-contained runtime mounted by tools/install_kicad.py — checked before
-# any system install so the vendored engine wins wherever it exists.
-_MOUNT_ROOT = Path(__file__).resolve().parent.parent / "tools" / "kicad"
+# any system install so the vendored engine wins wherever it exists. The
+# default lives under tools/kicad; on Windows the provisioner may relocate
+# it off the system drive and record the real path in tools/kicad.mount.
+_TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
+_MOUNT_ROOT = _TOOLS_DIR / "kicad"
+_MOUNT_POINTER = _TOOLS_DIR / "kicad.mount"
+
+
+def _mount_roots() -> list[Path]:
+    roots: list[Path] = []
+    override = os.environ.get("DAOKICAD_MOUNT")
+    if override:
+        roots.append(Path(override))
+    try:
+        if _MOUNT_POINTER.is_file():
+            p = _MOUNT_POINTER.read_text(encoding="utf-8").strip()
+            if p:
+                roots.append(Path(p))
+    except OSError:
+        pass
+    roots.append(_MOUNT_ROOT)
+    return roots
 
 # Common install roots across platforms. Newer versions first.
 _WINDOWS_ROOTS = [
@@ -159,7 +179,7 @@ def _candidate_roots() -> list[Path]:
     env_root = os.environ.get("KICAD_ROOT") or os.environ.get("DAOKICAD_ROOT")
     if env_root:
         roots.append(Path(env_root))
-    roots.append(_MOUNT_ROOT)
+    roots.extend(_mount_roots())
     raw = _WINDOWS_ROOTS if os.name == "nt" else _POSIX_ROOTS
     roots.extend(Path(r) for r in raw)
     roots.extend(_windows_registry_roots())

@@ -35,11 +35,65 @@ import urllib.request
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
-MOUNT = TOOLS / "kicad"
 DEFAULT_VERSION = "10.0.3"    # verified: full pipeline green on 10.0.3
 _MIRROR = "https://kicad-downloads.s3.cern.ch"
 _FLATPAK_APP = "org.kicad.KiCad"
 _DOWNLOAD_ATTEMPTS = 4
+_MOUNT_POINTER = TOOLS / "kicad.mount"    # records a relocated mount root
+_MIN_FREE_BYTES = 8 * 1024**3             # engine + libs need ~6 GB headroom
+
+
+def _windows_best_drive() -> Path | None:
+    """Fixed non-system drive with the most free space (the engine is large
+    and the system drive is usually the scarcest)."""
+    system_drive = os.environ.get("SystemDrive", "C:")[0].upper()
+    best: tuple[int, Path] | None = None
+    for letter in "DEFGHIJKLMNOPQRSTUVWXYZABC":
+        root = Path(f"{letter}:\\")
+        if letter == system_drive or not root.exists():
+            continue
+        try:
+            free = shutil.disk_usage(root).free
+        except OSError:
+            continue
+        if free >= _MIN_FREE_BYTES and (best is None or free > best[0]):
+            best = (free, root)
+    return best[1] if best else None
+
+
+def _resolve_mount() -> Path:
+    """Where the engine lives. Precedence: DAOKICAD_MOUNT env > recorded
+    pointer (tools/kicad.mount) > off-system-drive pick on Windows >
+    tools/kicad default. Never picks a path with spaces on Windows (NSIS /D
+    cannot take one)."""
+    override = os.environ.get("DAOKICAD_MOUNT")
+    if override:
+        return Path(override)
+    try:
+        if _MOUNT_POINTER.is_file():
+            p = _MOUNT_POINTER.read_text(encoding="utf-8").strip()
+            if p:
+                return Path(p)
+    except OSError:
+        pass
+    default = TOOLS / "kicad"
+    if platform.system() == "Windows":
+        on_system = str(default)[:2].upper() == \
+            os.environ.get("SystemDrive", "C:").upper()
+        if on_system or " " in str(default):
+            drive = _windows_best_drive()
+            if drive:
+                return drive / "DaoKiCad" / "kicad"
+    return default
+
+
+MOUNT = _resolve_mount()
+
+
+def _record_mount() -> None:
+    """Persist a relocated mount root so env discovery finds it later."""
+    if MOUNT != TOOLS / "kicad":
+        _MOUNT_POINTER.write_text(str(MOUNT), encoding="utf-8")
 
 
 def _log(msg: str) -> None:
@@ -88,14 +142,16 @@ def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
 
 
 def _mount_windows(version: str) -> None:
-    installer = TOOLS / f"kicad-{version}-x86_64.exe"
+    dl_dir = MOUNT.parent if MOUNT.parent != TOOLS else TOOLS
+    dl_dir.mkdir(parents=True, exist_ok=True)
+    installer = dl_dir / f"kicad-{version}-x86_64.exe"
     url = f"{_MIRROR}/windows/stable/kicad-{version}-x86_64.exe"
     if not installer.is_file():
         _download(url, installer)
     if " " in str(MOUNT):
         raise RuntimeError(
             f"mount dir contains spaces ({MOUNT}); the NSIS /D switch cannot "
-            "handle that — move the repo or install KiCad manually")
+            "handle that — set DAOKICAD_MOUNT to a space-free path")
     # NSIS silent install; /D must be the last, unquoted argument.
     r = _run([str(installer), "/S", f"/D={MOUNT}"], timeout=3600)
     if r.returncode != 0:
@@ -199,12 +255,38 @@ def _mount_macos() -> None:
 # ── entry ─────────────────────────────────────────────────────────────
 
 
+def _healthy(env) -> bool:
+    """An engine is usable when kicad-cli both exists and answers `version`.
+    A half-deleted mount or broken wrapper leaves a cli path with no life —
+    detect() records version=None for those."""
+    return bool(env.available and env.version)
+
+
+def _clear_mount() -> None:
+    """Drop wrappers/links from a broken mount so it can be rebuilt. Only
+    ever touches the mount dir — never a system install."""
+    if MOUNT.is_dir():
+        _log(f"clearing broken mount {MOUNT}")
+        shutil.rmtree(MOUNT, ignore_errors=True)
+
+
 def ensure_kicad(version: str = DEFAULT_VERSION, force: bool = False) -> dict:
-    """Make a KiCad runtime available; return the resolved env as a dict."""
+    """Make a KiCad runtime available; return the resolved env as a dict.
+
+    Two modes, self-healing:
+    * an existing healthy KiCad (system or previous mount) is used as-is;
+    * otherwise (missing, or discovered but dead — e.g. a half-deleted
+      mount) the broken mount is cleared and a fresh engine is mounted.
+    """
     env = _detect()
-    if env.available and not force:
+    if _healthy(env) and not force:
+        mounted_root = env.root and str(MOUNT) in str(env.root)
         _log(f"KiCad already available: {env.cli} ({env.version})")
-        return {"ok": True, "mounted": False, **env.as_dict()}
+        return {"ok": True, "mounted": False,
+                "mode": "mounted" if mounted_root else "system",
+                **env.as_dict()}
+    if env.available and not _healthy(env):
+        _clear_mount()
     system = platform.system()
     _log(f"KiCad not found — mounting under {MOUNT} ({system})")
     if system == "Windows":
@@ -215,12 +297,13 @@ def ensure_kicad(version: str = DEFAULT_VERSION, force: bool = False) -> dict:
         _mount_macos()
     else:
         raise RuntimeError(f"unsupported platform: {system}")
+    _record_mount()
     env = _detect()
-    if not env.available:
-        raise RuntimeError("mount finished but kicad-cli still undiscovered; "
-                           "check tools/kicad/ contents")
+    if not _healthy(env):
+        raise RuntimeError("mount finished but kicad-cli still unusable; "
+                           f"check {MOUNT} contents")
     _log(f"mounted: {env.cli} ({env.version})")
-    return {"ok": True, "mounted": True, **env.as_dict()}
+    return {"ok": True, "mounted": True, "mode": "mounted", **env.as_dict()}
 
 
 def main(argv: list[str] | None = None) -> int:

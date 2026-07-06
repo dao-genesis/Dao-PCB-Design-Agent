@@ -56,4 +56,5 @@ pcb_brain/output/_demos_practice/
 dao_kicad/tools/jdk/
 dao_kicad/tools/kicad/
 dao_kicad/tools/kicad-*.exe
+dao_kicad/tools/kicad.mount
 out/
