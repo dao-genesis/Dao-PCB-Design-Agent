@@ -221,6 +221,7 @@ class EdaSession:
         self._connect_lock = threading.Lock()
         self._local_tried = False
         self.local_eda = {"alive": False, "exe": None}
+        self.fallback_launcher = None
 
     def ensure(self):
         with self._connect_lock:
@@ -236,6 +237,15 @@ class EdaSession:
                 except Exception:
                     self.local_eda = {"alive": False, "exe": None}
             port, target = discover_target(self.ports)
+            if not target and self.fallback_launcher is not None:
+                # 半挂载: 本机客户端不在则自带宿主拉起 pro.lceda.cn 网页版,
+                # 不依赖用户安装EDA/系统/版本。
+                try:
+                    if self.fallback_launcher():
+                        time.sleep(1)
+                        port, target = discover_target(self.ports)
+                except Exception:
+                    pass
             if not target:
                 return False
             try:
@@ -760,31 +770,66 @@ def _chrome_exe():
     return None
 
 
+def _devtools_alive(port):
+    """严格校验 DevTools 端点: 端口被别的进程(如 svchost portproxy)占坑时,
+    TCP 能连但永不回包 —— 必须拿到含 Browser 字段的 JSON 才算活。"""
+    try:
+        info = _http_get("http://127.0.0.1:%d/json/version" % port, timeout=2)
+        return bool(info.get("Browser") or info.get("webSocketDebuggerUrl"))
+    except Exception:
+        return False
+
+
+def _free_port(start, tries=20):
+    for p in range(start, start + tries):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", p))
+            return p
+        except OSError:
+            continue
+        finally:
+            s.close()
+    return None
+
+
 def ensure_web_browser():
     """保证官网数据面的无头浏览器存活(CDP 可达); 登录态落在持久 profile, 重启不丢。"""
-    global _WEB_PROC
+    global _WEB_PROC, WEB_CDP_PORT
     with _WEB_LOCK:
-        try:
-            _http_get("http://127.0.0.1:%d/json/version" % WEB_CDP_PORT, timeout=2)
+        if _devtools_alive(WEB_CDP_PORT):
             return True
-        except Exception:
-            pass
         exe = _chrome_exe()
         if not exe:
             return False
-        _WEB_PROC = subprocess.Popen(
-            [exe, "--headless=new", "--remote-debugging-port=%d" % WEB_CDP_PORT,
-             "--remote-allow-origins=*", "--no-first-run", "--no-default-browser-check",
-             "--user-data-dir=" + WEB_PROFILE, "--window-size=1600,900", WEB_URL],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(30):
-            time.sleep(0.5)
-            try:
-                _http_get("http://127.0.0.1:%d/json/version" % WEB_CDP_PORT, timeout=2)
-                return True
-            except Exception:
-                continue
+        # 旧 profile 损坏/被锁会让 chrome 立即退出 —— 逐个候选 profile 试起。
+        for profile in (WEB_PROFILE, WEB_PROFILE + "-alt"):
+            port = _free_port(WEB_CDP_PORT)
+            if port is None:
+                return False
+            WEB_CDP_PORT = port
+            WEB_SESSION.ports = [port]
+            if port not in SESSION.ports:
+                SESSION.ports = list(SESSION.ports) + [port]
+            _WEB_PROC = subprocess.Popen(
+                [exe, "--headless=new", "--remote-debugging-port=%d" % WEB_CDP_PORT,
+                 "--remote-allow-origins=*", "--no-first-run", "--no-default-browser-check",
+                 "--user-data-dir=" + profile, "--window-size=1600,900", WEB_URL],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(30):
+                time.sleep(0.5)
+                if _devtools_alive(WEB_CDP_PORT):
+                    return True
+                if _WEB_PROC.poll() is not None:
+                    break
         return False
+
+
+# 半挂载: 主会话找不到本机EDA客户端时, 自带宿主拉起网页版并纳入探测端口 ——
+# 插件自身即是EDA宿主, 不依赖用户安装/系统/客户端版本。
+SESSION.fallback_launcher = ensure_web_browser
+if WEB_CDP_PORT not in SESSION.ports:
+    SESSION.ports = list(SESSION.ports) + [WEB_CDP_PORT]
 
 
 # 登录(底层 DOM 直连, 非 GUI): 在登录页上下文里填表单+提交, 回传结果状态。
