@@ -18,6 +18,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+# Self-contained runtime mounted by tools/install_kicad.py — checked before
+# any system install so the vendored engine wins wherever it exists.
+_MOUNT_ROOT = Path(__file__).resolve().parent.parent / "tools" / "kicad"
+
 # Common install roots across platforms. Newer versions first.
 _WINDOWS_ROOTS = [
     r"C:\Program Files\KiCad\10.0",
@@ -103,7 +107,10 @@ def _posix_extra_roots() -> list[Path]:
                 "/Applications/KiCad*.app/Contents",
                 "/opt/kicad*",
                 "/snap/kicad/current/usr",
-                "/var/lib/flatpak/app/org.kicad.KiCad/current/active/files"):
+                "/var/lib/flatpak/app/org.kicad.KiCad/current/active/files",
+                os.path.expanduser(
+                    "~/.local/share/flatpak/app/org.kicad.KiCad"
+                    "/current/active/files")):
         roots.extend(Path(p) for p in sorted(glob.glob(pat), reverse=True))
     return roots
 
@@ -152,6 +159,7 @@ def _candidate_roots() -> list[Path]:
     env_root = os.environ.get("KICAD_ROOT") or os.environ.get("DAOKICAD_ROOT")
     if env_root:
         roots.append(Path(env_root))
+    roots.append(_MOUNT_ROOT)
     raw = _WINDOWS_ROOTS if os.name == "nt" else _POSIX_ROOTS
     roots.extend(Path(r) for r in raw)
     roots.extend(_windows_registry_roots())

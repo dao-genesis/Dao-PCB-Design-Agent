@@ -39,6 +39,62 @@ function findPython() {
   return candidates[0];
 }
 
+function apiJson(method, port, apiPath, body) {
+  return new Promise((resolve) => {
+    const data = body ? Buffer.from(JSON.stringify(body)) : null;
+    const req = http.request({
+      host: "127.0.0.1", port, path: apiPath, method,
+      headers: data ? { "Content-Type": "application/json",
+                        "Content-Length": data.length } : {},
+    }, (res) => {
+      let buf = "";
+      res.on("data", (c) => (buf += c));
+      res.on("end", () => { try { resolve(JSON.parse(buf)); } catch (e) { resolve(null); } });
+    });
+    req.on("error", () => resolve(null));
+    if (data) req.write(data);
+    req.end();
+  });
+}
+
+// 底层突破: 缺 KiCad 时由插件一键挂载自带引擎 (tools/kicad), 用户零预装。
+async function mountEngine(context, silent) {
+  const port = await ensureServer(context);
+  if (!port) return;
+  const st = await apiJson("GET", port, "/api/engine/status");
+  if (st && st.available) {
+    if (!silent) vscode.window.showInformationMessage(
+      "DAO KiCad: 引擎已就绪 — " + (st.version || st.cli));
+    return;
+  }
+  const pick = await vscode.window.showInformationMessage(
+    "DAO KiCad: 未发现 KiCad 引擎。一键挂载自带底座 (无需预装 KiCad)?",
+    "挂载", "取消");
+  if (pick !== "挂载") return;
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification,
+      title: "DAO KiCad: 正在挂载 KiCad 底座 (首次需下载, 可能较久)…" },
+    async () => {
+      const start = await apiJson("POST", port, "/api/engine/mount", {});
+      if (!start || !start.job) {
+        vscode.window.showErrorMessage("DAO KiCad: 挂载启动失败");
+        return;
+      }
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const j = await apiJson("GET", port, "/api/job?id=" + start.job);
+        if (j && j.done) {
+          const res = j.result || {};
+          if (res.ok) vscode.window.showInformationMessage(
+            "DAO KiCad: 引擎挂载完成 — " + (res.version || res.cli));
+          else vscode.window.showErrorMessage(
+            "DAO KiCad: 挂载失败 — " + (res.error || JSON.stringify(res)));
+          return;
+        }
+      }
+    });
+}
+
 function health(port) {
   return new Promise((resolve) => {
     const req = http.get({ host: "127.0.0.1", port, path: "/api/health", timeout: 2000 },
@@ -135,6 +191,7 @@ function activate(context) {
       new ChatViewProvider(context), { webviewOptions: { retainContextWhenHidden: true } }),
     vscode.commands.registerCommand("daoKicad.openChat", () => openChat(context)),
     vscode.commands.registerCommand("daoKicad.openHome", () => openHome(context)),
+    vscode.commands.registerCommand("daoKicad.mountEngine", () => mountEngine(context, false)),
     vscode.commands.registerCommand("daoKicad.restartBridge", async () => {
       if (serverProc) serverProc.kill();
       serverProc = null;
@@ -148,8 +205,16 @@ function activate(context) {
   sb.command = "daoKicad.openHome";
   sb.show();
   context.subscriptions.push(sb);
-  // 启动即拉起桥接并打开归一工作台 (仅当工作区内有引擎时)
-  if (findEngine()) openHome(context);
+  // 启动即拉起桥接并打开归一工作台 (仅当工作区内有引擎时);
+  // 若机器上没有 KiCad, 自动提示一键挂载自带底座。
+  if (findEngine()) {
+    openHome(context);
+    ensureServer(context).then(async (port) => {
+      if (!port) return;
+      const st = await apiJson("GET", port, "/api/engine/status");
+      if (st && st.available === false) mountEngine(context, true);
+    });
+  }
 }
 
 function deactivate() {
