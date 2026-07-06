@@ -2,7 +2,7 @@
   "name": "dao-kicad",
   "displayName": "DAO KiCad — 归一 PCB 工作台",
   "description": "KiCad in your IDE: schematic/PCB viewing, netlist→board build, freerouting autoroute, DRC/ERC and fab outputs — all bridged to the daokicad engine, no KiCad GUI needed.",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "publisher": "dao",
   "license": "MIT",
   "engines": { "vscode": "^1.80.0" },
@@ -13,7 +13,8 @@
     "commands": [
       { "command": "daoKicad.openHome", "title": "DAO KiCad: 打开归一主页 (Open Home)" },
       { "command": "daoKicad.openChat", "title": "DAO KiCad: 打开 Copilot 对话 (Open Chat)" },
-      { "command": "daoKicad.restartBridge", "title": "DAO KiCad: 重启桥接服务 (Restart Bridge)" }
+      { "command": "daoKicad.restartBridge", "title": "DAO KiCad: 重启桥接服务 (Restart Bridge)" },
+      { "command": "daoKicad.mountEngine", "title": "DAO KiCad: 挂载 KiCad 底座引擎 (Mount Engine)" }
     ],
     "viewsContainers": {
       "activitybar": [

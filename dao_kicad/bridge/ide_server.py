@@ -981,12 +981,42 @@ def api_agent(body: dict) -> dict:
             "reply": f"{action} 完成。"}
 
 
+# 底层突破: KiCad 底座本身也可由桥自行挂载 (tools/install_kicad.py) ——
+# 用户只装插件, 缺引擎时一键落地, 无需预装任何版本的 KiCad。
+
+
+def _install_kicad_module():
+    import importlib.util
+    path = Path(__file__).resolve().parents[1] / "tools" / "install_kicad.py"
+    spec = importlib.util.spec_from_file_location("install_kicad", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def api_engine_status(q: dict | None = None) -> dict:
+    from daokicad import env as kenv
+    kenv.detect.cache_clear()
+    e = kenv.detect()
+    return {"ok": True, **e.as_dict()}
+
+
+def api_engine_mount(body: dict) -> dict:
+    global _LK
+    mod = _install_kicad_module()
+    res = mod.ensure_kicad(body.get("version") or mod.DEFAULT_VERSION,
+                           bool(body.get("force")))
+    _LK = None  # rebuild LiveKiCad against the freshly mounted engine
+    return res
+
+
 _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
             "drc": api_drc, "erc": api_erc, "fab": api_fab, "auto": api_auto,
             "agent": api_agent, "chat": api_ai_chat, "config": api_ai_config,
             "del": api_chat_del, "convert": api_convert,
-            "install": api_pcm_install, "remove": api_pcm_remove}
-_SLOW = {"build", "route", "fab", "auto"}
+            "install": api_pcm_install, "remove": api_pcm_remove,
+            "mount": api_engine_mount}
+_SLOW = {"build", "route", "fab", "auto", "mount"}
 
 # 全路径 POST 路由 (KiCad 软件本体承接 + IPC 底层直连)
 _POST_PATHS = {"/api/native/start": api_native_start,
@@ -1007,6 +1037,12 @@ _CAPABILITIES = {
                    "DRC/ERC, fabrication outputs, one-shot auto pipeline.",
     "doc": "/api/doc",
     "tools": [
+        {"method": "GET", "path": "/api/engine/status", "params": {},
+         "desc": "resolved KiCad engine locations (cli/python/libs)"},
+        {"method": "POST", "path": "/api/engine/mount", "job": True,
+         "params": {"version": "KiCad version (Windows installer)",
+                    "force": "remount even if already available"},
+         "desc": "mount a self-contained KiCad runtime under tools/kicad"},
         {"method": "GET", "path": "/api/health", "params": {},
          "doc": "Service + KiCad availability/version."},
         {"method": "GET", "path": "/api/tree", "params": {"root": "dir"},
@@ -1183,6 +1219,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"ok": True, "kicad": e.version,
                                    "cli": str(e.cli) if e.cli else None,
                                    "service": "dao-kicad-ide"})
+            if u.path == "/api/engine/status":
+                return self._send(api_engine_status(q))
             if u.path == "/api/tree":
                 return self._send(api_tree(q.get("root", ".")))
             if u.path == "/api/files":
