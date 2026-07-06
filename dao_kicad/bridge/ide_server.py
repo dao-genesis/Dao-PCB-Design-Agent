@@ -998,7 +998,14 @@ def api_engine_status(q: dict | None = None) -> dict:
     from daokicad import env as kenv
     kenv.detect.cache_clear()
     e = kenv.detect()
-    return {"ok": True, **e.as_dict()}
+    mode = "absent"
+    if e.available:
+        mounted = any(str(m) in str(e.root or "")
+                      for m in kenv._mount_roots())
+        mode = "mounted" if mounted else "system"
+        if not e.version:
+            mode = "broken"    # cli found but not answering — remount to heal
+    return {"ok": True, "mode": mode, **e.as_dict()}
 
 
 def api_engine_mount(body: dict) -> dict:

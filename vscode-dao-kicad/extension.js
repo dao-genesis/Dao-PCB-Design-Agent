@@ -62,13 +62,16 @@ async function mountEngine(context, silent) {
   const port = await ensureServer(context);
   if (!port) return;
   const st = await apiJson("GET", port, "/api/engine/status");
-  if (st && st.available) {
+  const mode = st && st.mode;
+  if (mode === "system" || mode === "mounted") {
     if (!silent) vscode.window.showInformationMessage(
-      "DAO KiCad: 引擎已就绪 — " + (st.version || st.cli));
+      "DAO KiCad: 引擎已就绪 (" + mode + ") — " + (st.version || st.cli));
     return;
   }
   const pick = await vscode.window.showInformationMessage(
-    "DAO KiCad: 未发现 KiCad 引擎。一键挂载自带底座 (无需预装 KiCad)?",
+    mode === "broken"
+      ? "DAO KiCad: 检测到引擎已损坏。一键自愈重挂底座?"
+      : "DAO KiCad: 未发现 KiCad 引擎。一键挂载自带底座 (无需预装 KiCad)?",
     "挂载", "取消");
   if (pick !== "挂载") return;
   await vscode.window.withProgress(
@@ -212,7 +215,8 @@ function activate(context) {
     ensureServer(context).then(async (port) => {
       if (!port) return;
       const st = await apiJson("GET", port, "/api/engine/status");
-      if (st && st.available === false) mountEngine(context, true);
+      if (st && (st.mode === "absent" || st.mode === "broken"))
+        mountEngine(context, true);
     });
   }
 }
