@@ -79,6 +79,15 @@ def _fp_dir(lib):
         # derive from this interpreter's install root
         root = os.path.dirname(os.path.dirname(sys.executable))
         base = os.path.join(root, "share", "kicad", "footprints")
+    if not os.path.isdir(base):
+        # flatpak-mounted engine: the host passes its own view of the library
+        # path, which the sandbox hides — the Library extension carries the
+        # same footprints at a fixed in-sandbox mount point.
+        for alt in ("/app/extensions/Library/footprints",
+                    "/app/share/kicad/footprints"):
+            if os.path.isdir(alt):
+                base = alt
+                break
     return os.path.join(base, lib + ".pretty")
 
 
