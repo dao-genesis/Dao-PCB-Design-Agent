@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!-- DAO KiCad Copilot — 对照 Devin Desktop / Proxy Pro 的 AI 交互面板:
+     五页签: 对话(chat) / 渠道(channels·Proxy Pro 式多渠道配置) /
+     记录(chats·对话数据管理) / 工具(tools·function-calling 清单) /
+     搜索(search·PCB 领域网络搜索)。全部数据经桥接 REST (ide_server)。 -->
 <html lang="zh">
 <head>
 <meta charset="utf-8">
@@ -8,7 +12,12 @@
          display:flex; flex-direction:column; height:100vh;
          background: var(--vscode-sideBar-background, #1e1e1e);
          color: var(--vscode-foreground, #ddd); }
-  #log { flex:1; overflow-y:auto; padding:10px; }
+  #tabs { display:flex; border-bottom:1px solid var(--vscode-input-border,#333); }
+  .tab { padding:6px 12px; cursor:pointer; opacity:.65; font-size:12px; }
+  .tab.on { opacity:1; border-bottom:2px solid var(--vscode-button-background,#0e639c); }
+  .page { flex:1; display:none; flex-direction:column; min-height:0; }
+  .page.on { display:flex; }
+  #log, .scroll { flex:1; overflow-y:auto; padding:10px; }
   .msg { margin:6px 0; padding:8px 10px; border-radius:8px; white-space:pre-wrap;
          word-break:break-all; max-width:92%; }
   .me  { background: var(--vscode-button-background,#0e639c); color:#fff;
@@ -16,33 +25,111 @@
   .bot { background: var(--vscode-editorWidget-background,#2d2d2d); }
   .bot.err { border-left: 3px solid #d9534f; }
   .stage { opacity:.7; font-style:italic; }
+  .tools-used { font-size:11px; opacity:.7; margin:2px 0 6px; }
   #chips { display:flex; flex-wrap:wrap; gap:6px; padding:6px 10px; }
   .chip { border:1px solid var(--vscode-button-background,#0e639c);
           border-radius:12px; padding:2px 10px; cursor:pointer; font-size:12px; }
   .chip:hover { background: var(--vscode-button-background,#0e639c); color:#fff; }
-  #bar { display:flex; gap:6px; padding:8px 10px 10px; }
-  #in { flex:1; padding:6px 8px; border-radius:6px;
+  .bar { display:flex; gap:6px; padding:8px 10px 10px; }
+  input, textarea, select {
+        padding:6px 8px; border-radius:6px;
         border:1px solid var(--vscode-input-border,#444);
         background: var(--vscode-input-background,#252525);
         color: var(--vscode-input-foreground,#eee); }
-  #send { border:0; border-radius:6px; padding:6px 14px; cursor:pointer;
+  .bar input { flex:1; }
+  button { border:0; border-radius:6px; padding:6px 14px; cursor:pointer;
           background: var(--vscode-button-background,#0e639c); color:#fff; }
+  button.mini { padding:2px 8px; font-size:11px; }
+  button.warn { background:#8a3b3b; }
+  .card { background: var(--vscode-editorWidget-background,#2d2d2d);
+          border-radius:8px; padding:8px 10px; margin:6px 0; }
+  .card .t { font-weight:600; }
+  .card .d { opacity:.8; font-size:12px; }
+  .card a { color:#4da3ff; word-break:break-all; }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .grid { display:grid; grid-template-columns: 72px 1fr; gap:6px; padding:10px;
+          align-items:center; }
+  .badge { display:inline-block; border-radius:8px; padding:0 8px; font-size:11px;
+           background:#2f6b2f; color:#fff; }
+  .hint { opacity:.6; font-size:12px; padding:0 10px 6px; }
 </style>
 </head>
 <body>
-<div id="log"><div class="msg bot">☯ DAO KiCad Copilot — 说出意图即可: “跑全链路”、“ERC”、“布线”、“DRC”、“出制造文件”。可直接贴 .kicad_sch/.kicad_pcb 路径。</div></div>
-<div id="chips">
-  <span class="chip">全链路闭环</span><span class="chip">ERC</span>
-  <span class="chip">建板</span><span class="chip">布线</span>
-  <span class="chip">DRC</span><span class="chip">制造文件</span>
+<div id="tabs">
+  <span class="tab on" data-p="chat">对话</span>
+  <span class="tab" data-p="channels">渠道</span>
+  <span class="tab" data-p="chats">记录</span>
+  <span class="tab" data-p="tools">工具</span>
+  <span class="tab" data-p="search">搜索</span>
 </div>
-<div id="bar">
-  <input id="in" placeholder="对板子说点什么… (Enter 发送)">
-  <button id="send">发送</button>
+
+<div class="page on" id="p-chat">
+  <div id="log"><div class="msg bot">☯ DAO KiCad Copilot — 说出意图即可: “跑全链路”、“ERC”、“布线”、“DRC”、“出制造文件”。配置渠道后, AI 可自主调用 36 个 KiCad 工具 (function-calling) 与 PCB 领域搜索。</div></div>
+  <div id="chips">
+    <span class="chip">全链路闭环</span><span class="chip">ERC</span>
+    <span class="chip">建板</span><span class="chip">布线</span>
+    <span class="chip">DRC</span><span class="chip">制造文件</span>
+  </div>
+  <div class="bar">
+    <input id="in" placeholder="对板子说点什么… (Enter 发送)">
+    <button id="send">发送</button>
+  </div>
 </div>
+
+<div class="page" id="p-channels">
+  <div class="hint">Proxy Pro 式多渠道: 任意 OpenAI 兼容端点 (支持 function-calling 时 AI 可直驱引擎)。</div>
+  <div class="scroll" id="chList"></div>
+  <div class="grid">
+    <label>名称</label><input id="chName" placeholder="如: deepseek">
+    <label>端点</label><input id="chEp" placeholder="https://api.deepseek.com/v1">
+    <label>Key</label><input id="chKey" type="password" placeholder="sk-…">
+    <label>模型</label><input id="chModel" placeholder="deepseek-chat">
+    <label>系统词</label><textarea id="chSys" rows="2" placeholder="自定义系统提示词 (留空用内置)"></textarea>
+  </div>
+  <div class="bar"><button id="chAdd">保存渠道</button><button id="chSysSave" class="mini">保存系统词</button></div>
+</div>
+
+<div class="page" id="p-chats">
+  <div class="hint">对话数据管理: 全量沉淀在桥接端, 可回看/删除。</div>
+  <div class="scroll" id="chatList"></div>
+  <div class="bar"><button id="chatRefresh" class="mini">刷新</button>
+    <button id="chatClear" class="mini warn">清空全部</button></div>
+</div>
+
+<div class="page" id="p-tools">
+  <div class="hint">工具体系 (1:1 对照 Devin Desktop): AI 经 function-calling 自主调用, 也可在此手动点用。</div>
+  <div class="scroll" id="toolList"></div>
+</div>
+
+<div class="page" id="p-search">
+  <div class="bar">
+    <input id="sq" placeholder="搜 PCB 资源: 元器件 / datasheet / 封装 / 参考设计…">
+    <button id="sgo">搜索</button>
+  </div>
+  <div class="scroll" id="sres"></div>
+</div>
+
 <script>
   const SERVER = "__SERVER__", ROOT = "__ROOT__";
-  const log = document.getElementById("log"), inp = document.getElementById("in");
+  const $ = (id) => document.getElementById(id);
+  let chatId = "";
+
+  // ── tabs ──
+  for (const t of document.querySelectorAll(".tab")) t.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+    document.querySelectorAll(".page").forEach(x => x.classList.remove("on"));
+    t.classList.add("on"); $("p-" + t.dataset.p).classList.add("on");
+    if (t.dataset.p === "channels") loadChannels();
+    if (t.dataset.p === "chats") loadChats();
+    if (t.dataset.p === "tools") loadTools();
+  };
+
+  const jget = (p) => fetch(SERVER + p).then(r => r.json());
+  const jpost = (p, b) => fetch(SERVER + p, { method: "POST",
+    body: JSON.stringify(b) }).then(r => r.json());
+
+  // ── chat ──
+  const log = $("log"), inp = $("in");
   function add(cls, text) {
     const d = document.createElement("div");
     d.className = "msg " + cls; d.textContent = text;
@@ -62,8 +149,7 @@
   async function poll(job, node) {
     for (;;) {
       await new Promise(r => setTimeout(r, 4000));
-      const s = await fetch(SERVER + "/api/job?id=" + job).then(r => r.json())
-        .catch(() => null);
+      const s = await jget("/api/job?id=" + job).catch(() => null);
       if (!s) continue;
       if (s.done) {
         node.classList.remove("stage");
@@ -78,21 +164,144 @@
     add("me", text); inp.value = "";
     const wait = add("bot stage", "…");
     try {
-      const r = await fetch(SERVER + "/api/agent", { method: "POST",
-        body: JSON.stringify({ text, root: ROOT }) }).then(r => r.json());
+      const r = await jpost("/api/ai/chat", { text, root: ROOT, chat_id: chatId });
+      if (r.chat_id) chatId = r.chat_id;
       wait.textContent = r.reply || brief(r);
       wait.classList.remove("stage");
       wait.classList.toggle("err", r.ok === false);
+      if (r.tools && r.tools.length) {
+        const u = document.createElement("div");
+        u.className = "tools-used";
+        u.textContent = "🔧 " + r.tools.map(t => t.tool + (t.ok ? "✓" : "✗")).join(" · ");
+        log.appendChild(u);
+      }
       if (r.result) add("bot", brief(r.result));
       if (r.job) poll(r.job, add("bot stage", "⏳ 排队中 …"));
     } catch (e) {
       wait.textContent = "桥接不可达: " + e; wait.className = "msg bot err";
     }
   }
-  document.getElementById("send").onclick = () => send(inp.value);
+  $("send").onclick = () => send(inp.value);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") send(inp.value); });
   for (const c of document.querySelectorAll(".chip"))
     c.onclick = () => send(c.textContent);
+
+  // ── channels (Proxy Pro 式) ──
+  async function loadChannels() {
+    const c = await jget("/api/ai/config").catch(() => null);
+    const el = $("chList"); el.innerHTML = "";
+    if (!c) { el.textContent = "桥接不可达"; return; }
+    $("chSys").value = c.system || "";
+    for (const ch of c.channels || []) {
+      const d = document.createElement("div"); d.className = "card row";
+      const active = ch.name === c.active;
+      d.innerHTML = `<span class="t">${ch.name}</span>
+        <span class="d">${ch.model || ""} · ${ch.endpoint}</span>
+        ${active ? '<span class="badge">激活</span>' : ""}`;
+      const bA = document.createElement("button"); bA.className = "mini";
+      bA.textContent = active ? "已激活" : "激活";
+      bA.onclick = async () => { await jpost("/api/ai/config",
+        { op: "activate", name: ch.name }); loadChannels(); };
+      const bD = document.createElement("button"); bD.className = "mini warn";
+      bD.textContent = "删";
+      bD.onclick = async () => { await jpost("/api/ai/config",
+        { op: "del", name: ch.name }); loadChannels(); };
+      d.append(bA, bD); el.appendChild(d);
+    }
+    if (!(c.channels || []).length)
+      el.innerHTML = '<div class="hint">尚无渠道 — 填下方表单保存即可。意图词 (全链路/ERC/布线…) 无渠道也直达引擎。</div>';
+  }
+  $("chAdd").onclick = async () => {
+    const r = await jpost("/api/ai/config", { op: "add",
+      name: $("chName").value.trim(), endpoint: $("chEp").value.trim(),
+      key: $("chKey").value, model: $("chModel").value.trim() });
+    if (r.ok === false) { alert(r.error || "保存失败"); return; }
+    $("chKey").value = ""; loadChannels();
+  };
+  $("chSysSave").onclick = async () => {
+    await jpost("/api/ai/config", { op: "system", system: $("chSys").value });
+    loadChannels();
+  };
+
+  // ── chats (对话数据管理) ──
+  async function loadChats() {
+    const c = await jget("/api/chat/list").catch(() => null);
+    const el = $("chatList"); el.innerHTML = "";
+    if (!c) { el.textContent = "桥接不可达"; return; }
+    for (const ch of (c.chats || []).slice().reverse()) {
+      const d = document.createElement("div"); d.className = "card row";
+      d.innerHTML = `<span class="t">${ch.title || "(无题)"}</span>
+        <span class="d">${ch.n} 条 · ${new Date(ch.ts * 1000).toLocaleString()}</span>`;
+      const bO = document.createElement("button"); bO.className = "mini";
+      bO.textContent = "续聊";
+      bO.onclick = () => { chatId = ch.id;
+        document.querySelector('.tab[data-p="chat"]').click();
+        add("bot", "已切到对话: " + (ch.title || ch.id)); };
+      const bD = document.createElement("button"); bD.className = "mini warn";
+      bD.textContent = "删";
+      bD.onclick = async () => { await jpost("/api/chat/del", { id: ch.id });
+        loadChats(); };
+      d.append(bO, bD); el.appendChild(d);
+    }
+    if (!(c.chats || []).length)
+      el.innerHTML = '<div class="hint">还没有沉淀的对话。</div>';
+  }
+  $("chatRefresh").onclick = loadChats;
+  $("chatClear").onclick = async () => {
+    await jpost("/api/chat/del", { all: true }); loadChats();
+  };
+
+  // ── tools (工具体系) ──
+  async function loadTools() {
+    const c = await jget("/api/tools/catalog").catch(() => null);
+    const el = $("toolList"); el.innerHTML = "";
+    if (!c) { el.textContent = "桥接不可达"; return; }
+    for (const t of c.tools || []) {
+      const f = t.function, req = (f.parameters.required || []);
+      const d = document.createElement("div"); d.className = "card";
+      d.innerHTML = `<div class="t">${f.name}</div>
+        <div class="d">${f.description}</div>
+        <div class="d">参数: ${Object.keys(f.parameters.properties).map(
+          k => req.includes(k) ? k + "*" : k).join(", ") || "无"}</div>`;
+      if (!req.length) {
+        const b = document.createElement("button"); b.className = "mini";
+        b.textContent = "调用";
+        b.onclick = async () => {
+          const r = await jpost("/api/tools/call", { name: f.name, args: {} });
+          const o = document.createElement("pre"); o.className = "d";
+          o.textContent = JSON.stringify(r, null, 1).slice(0, 1500);
+          d.appendChild(o);
+        };
+        d.appendChild(b);
+      }
+      el.appendChild(d);
+    }
+  }
+
+  // ── search (PCB 领域搜索) ──
+  async function doSearch() {
+    const q = $("sq").value.trim();
+    if (!q) return;
+    const el = $("sres"); el.innerHTML = '<div class="hint">搜索中…</div>';
+    const r = await jpost("/api/search", { query: q, max_results: 10 })
+      .catch(() => null);
+    el.innerHTML = "";
+    if (!r || r.ok === false) {
+      el.innerHTML = '<div class="hint">' + ((r && r.error) || "搜索失败") + "</div>";
+      return;
+    }
+    for (const it of r.results || []) {
+      const d = document.createElement("div"); d.className = "card";
+      d.innerHTML = `<div class="t">${it.pcb_domain ? "⚡ " : ""}${it.title}</div>
+        <a href="${it.url}">${it.url}</a>
+        <div class="d">${it.snippet || ""}</div>`;
+      el.appendChild(d);
+    }
+    if (!(r.results || []).length)
+      el.innerHTML = '<div class="hint">没有结果。</div>';
+  }
+  $("sgo").onclick = doSearch;
+  $("sq").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
 </script>
 </body>
 </html>
