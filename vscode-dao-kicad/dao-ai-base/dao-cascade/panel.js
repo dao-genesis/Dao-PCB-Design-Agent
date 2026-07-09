@@ -24,6 +24,22 @@ try { ({ hostState } = require("../windsurf-shim")); } catch (_) {}
 
 const VIEW_ID = "dao.cascade";
 
+// 领域提示词塑形器(Proxy Pro 同源的隔离/替换层) —— 领域插件可注册一个 shaper:
+//   { wrap(text, {agent, epoch}), status() -> {mode,label,spChars,…}, toggle() }
+// 三模式(Cascade / Devin Local / Devin Cloud)发送前统一经 wrap 塑形;
+// 未注册或 native 模式时字节级直通, 不碰原文(道并行而不相惖)。
+let _promptShaper = null;
+function setPromptShaper(s) { _promptShaper = s; }
+function _shapeText(text, ctx) {
+  if (!_promptShaper) return text;
+  try {
+    const fn = typeof _promptShaper === "function" ? _promptShaper : _promptShaper.wrap;
+    if (typeof fn !== "function") return text;
+    const out = fn.call(_promptShaper, text, ctx || {});
+    return typeof out === "string" ? out : text;
+  } catch (_) { return text; }
+}
+
 // 三 agent —— 与官方 agent 切换器对齐(id / 标签 / 传输轨 / 是否 Preview)。
 const AGENTS = [
   { id: "cascade", label: "Cascade", transport: "language_server", preview: false,
@@ -49,6 +65,7 @@ class CascadePanelProvider {
     this._view = null;
     this._acp = null;       // Devin Local 的 ACP 客户端(懒启动)
     this._acpReady = false;
+    this._sessionEpoch = 0;  // 会话代际(供 shaper 判首条注入)
   }
 
   resolveWebviewView(webviewView) {
@@ -128,6 +145,16 @@ class CascadePanelProvider {
         if (msg.type === "memory-delete") return this._handleMemoryDelete(msg.id);
         if (msg.type === "memory-edit") return this._handleMemoryEdit(msg.memory);
         if (msg.type === "history-open") return this.showHistory();
+        if (msg.type === "mode-status" || msg.type === "mode-toggle") {
+          if (msg.type === "mode-toggle" && _promptShaper && typeof _promptShaper.toggle === "function") {
+            try { _promptShaper.toggle(); } catch (_) {}
+          }
+          let st = null;
+          if (_promptShaper && typeof _promptShaper.status === "function") {
+            try { st = _promptShaper.status(); } catch (_) {}
+          }
+          return this._post(Object.assign({ type: "mode-status" }, st || { mode: "native", label: "" }));
+        }
         if (msg.type === "permission-reply") {
           const r = this._permPending && this._permPending.get(msg.reqId);
           if (r) { this._permPending.delete(msg.reqId); r(msg.optionId || null); }
@@ -1129,6 +1156,7 @@ class CascadePanelProvider {
   }
 
   async _handleSessionNew() {
+    this._sessionEpoch++;
     this._cascadeLsId = null;
     this._cascadeSeen = 0;
     // 官方式: 新建会话回到 New session 首页(居中 logo + Recent sessions)
@@ -1182,6 +1210,7 @@ class CascadePanelProvider {
 
   async _handleChat(msg) {
     const agent = msg.agent || "devin-local";
+    msg = Object.assign({}, msg, { text: _shapeText(msg.text, { agent, epoch: this._sessionEpoch }) });
     if (agent === "devin-local") {
       const bin = this._bin();
       if (!bin) {
@@ -1552,6 +1581,7 @@ class CascadePanelProvider {
         <span class="pill" id="modelWrap" title="Model"><select id="modelSel"></select></span>
         <span class="spacer"></span>
         <span id="tokCount" title="输入 token / 上限 (GetMessageTokenCount)" style="font-size:10.5px;color:var(--dim);"></span>
+        <span class="pill" id="daoModePill" title="领域模式切换(提示词隔离/替换)" style="display:none"></span>
         <span class="pill" title="切换 agent (Ctrl+')"><span id="agentIcon">⬡</span><select id="agent"></select><span class="badge" id="badge"></span></span>
         <button class="send" id="send" title="发送 (Enter)">↑</button>
       </div>
@@ -1875,6 +1905,10 @@ class CascadePanelProvider {
       if(m.state==="url"){ authmsg.textContent="已打开登录页,登录后把 code 粘贴到这里 →"; authcode.style.display=""; authsubmit.style.display=""; }
       else if(m.state==="ok"){ authmsg.textContent="登录成功"; authcode.style.display="none"; authsubmit.style.display="none"; }
       else { authmsg.textContent="登录失败: "+(m.text||""); }
+    }
+    else if(m.type==="mode-status"){
+      const mp=document.getElementById("daoModePill");
+      if(mp){ if(m.label){ mp.style.display="inline-flex"; mp.textContent=m.label; mp.title=(m.hint||"领域模式切换")+(m.spChars?" · SP "+m.spChars+"字":""); } else { mp.style.display="none"; } }
     }
     else if(m.type==="config-options"){
       // 按 agent 分组存配置(cascade=LS 本地轨 133 模型; acp=Devin Local/Cloud 云端轨)。
@@ -2268,7 +2302,9 @@ class CascadePanelProvider {
     } else if(m.type==="error"){ addMsg("assistant","⚠ "+m.text); setBusy(false); }
   });
 
-  renderAgents(); vscode.postMessage({type:"ready"}); vscode.postMessage({type:"sessions-list"});
+  const daoModePill=document.getElementById("daoModePill");
+  if(daoModePill) daoModePill.onclick=()=>vscode.postMessage({type:"mode-toggle"});
+  renderAgents(); vscode.postMessage({type:"ready"}); vscode.postMessage({type:"sessions-list"}); vscode.postMessage({type:"mode-status"});
 </script></body></html>`;
   }
 }
@@ -2296,4 +2332,4 @@ function register(context, log, opts) {
   return provider;
 }
 
-module.exports = { register, VIEW_ID, AGENTS };
+module.exports = { register, setPromptShaper, VIEW_ID, AGENTS };

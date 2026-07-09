@@ -215,10 +215,33 @@ async function openChat(context) {
 
 function activate(context) {
   // AI 交互基底(dao-ai-base · Devin Desktop 同源): Cascade 三模式面板, 命名空间 daoKicad.cascade*。
+  // 深度融合: 在基底上注册 KiCad 模式塑形器(提示词隔离/替换) —— kicad 态把三模式
+  // 整体塑形为 PCB 设计代理(领域 SP + 36 工具目录), native 态字节级直通原生编程体验。
+  let kicadShaper = null;
   try {
     const daoAiBase = require("./dao-ai-base");
     daoAiBase.activateDaoAiBase(context, { ns: "daoKicad", log: (m) => console.log("[dao-ai-base] " + m) });
+    const kicadMode = require("./kicad-mode");
+    kicadShaper = kicadMode.createShaper({ port: 9931, log: (m) => console.log("[kicad-mode] " + m) });
+    daoAiBase.setPromptShaper(kicadShaper);
   } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
+  // 状态栏模式开关 + 命令: 一键在 KiCad 模式 / 原生模式间切换。
+  const modeSb = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10001);
+  const renderModeSb = () => {
+    const st = kicadShaper ? kicadShaper.status() : { label: "—", hint: "" };
+    modeSb.text = st.label;
+    modeSb.tooltip = st.hint;
+  };
+  modeSb.command = "daoKicad.modeToggle";
+  renderModeSb(); modeSb.show();
+  context.subscriptions.push(modeSb,
+    vscode.commands.registerCommand("daoKicad.modeToggle", () => {
+      if (!kicadShaper) return;
+      const m = kicadShaper.toggle();
+      renderModeSb();
+      vscode.window.setStatusBarMessage(m === "kicad" ? "☯ 已切入 KiCad 模式" : "⌨ 已切回原生模式", 3000);
+    }));
+  if (kicadShaper) kicadShaper.onChange(renderModeSb);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("daoKicad.chatView",
       new ChatViewProvider(context), { webviewOptions: { retainContextWhenHidden: true } }),
