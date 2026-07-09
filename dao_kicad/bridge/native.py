@@ -204,14 +204,21 @@ def _windows() -> list[dict]:
     return out
 
 
+def _prog_for(path: str) -> str:
+    """按文件后缀选 KiCad 入口: .kicad_sch→eeschema, .kicad_pcb→pcbnew, 其余→kicad."""
+    return {"kicad_sch": "eeschema", "kicad_pcb": "pcbnew"}.get(
+        Path(path).suffix.lstrip("."), "kicad") if path else "kicad"
+
+
 def api_native_start(body: dict) -> dict:
     """启动 KiCad 本体 (Linux: xpra 会话路由; Windows/macOS: 直落本机桌面)."""
     if DESKTOP_NATIVE:
-        k = _kicad_bin()
+        path = (body.get("path") or "").strip()
+        prog = _prog_for(path)
+        k = _kicad_bin(prog) or (_kicad_bin() if prog != "kicad" else None)
         if not k:
             return {"ok": False, "error": "kicad 未安装"}
         _enable_ipc_api()
-        path = (body.get("path") or "").strip()
         args = [k] + ([path] if path else [])
         subprocess.Popen(args, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
@@ -220,14 +227,15 @@ def api_native_start(body: dict) -> dict:
                 break
             time.sleep(0.5)
         return api_native_status({})
-    x, k = _xpra(), _kicad_bin()
+    path = (body.get("path") or "").strip()
+    prog = _prog_for(path)
+    x, k = _xpra(), _kicad_bin(prog) or _kicad_bin()
     if not x:
         return {"ok": False, "error": "xpra 未安装 (apt install xpra)"}
     if not k:
         return {"ok": False, "error": "kicad 未安装"}
     _enable_ipc_api()
-    path = (body.get("path") or "").strip()
-    child = f"kicad {path}" if path else "kicad"
+    child = f'{prog} "{path}"' if path else "kicad"
     if not _session_live():
         cmd = [x, "start", DISPLAY,
                f"--bind-tcp=0.0.0.0:{HTML_PORT}", "--html=on",
@@ -258,8 +266,7 @@ def api_native_open(body: dict) -> dict:
     p = Path(path)
     if not p.exists():
         return {"ok": False, "error": f"no such file: {path}"}
-    prog = {"kicad_sch": "eeschema", "kicad_pcb": "pcbnew"}.get(
-        p.suffix.lstrip("."), "kicad")
+    prog = _prog_for(str(p))
     exe = _kicad_bin(prog) or prog
     if DESKTOP_NATIVE:
         _enable_ipc_api()
