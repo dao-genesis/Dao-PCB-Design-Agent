@@ -1531,11 +1531,33 @@ class Handler(BaseHTTPRequestHandler):
                                "error": f"{type(e).__name__}: {e}"}, 500)
 
 
+_SUBPLUGIN_DIR = _DAO_DIR / "subplugins"
+
+
+def _write_subplugin_descriptor(host: str, port: int) -> None:
+    """向归一插件 Windows 总控注册 @kicad 子板块 (~/.dao/subplugins/kicad.json)."""
+    try:
+        _SUBPLUGIN_DIR.mkdir(parents=True, exist_ok=True)
+        spec = {
+            "app_id": "kicad",
+            "name": "KiCad · PCB 设计",
+            "mention": "kicad",
+            "description": _CAPABILITIES["description"],
+            "endpoint": f"http://{host}:{port}",
+            "verbs": [t["path"] for t in _CAPABILITIES["tools"]],
+        }
+        (_SUBPLUGIN_DIR / "kicad.json").write_text(
+            json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=9931)
     a = ap.parse_args(argv)
+    _write_subplugin_descriptor(a.host, a.port)
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     print(f"dao-kicad-ide bridge on http://{a.host}:{a.port}", flush=True)
     srv.serve_forever()
