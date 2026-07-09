@@ -24,7 +24,7 @@
       },
       {
         "command": "daoKicad.openChat",
-        "title": "DAO KiCad: 打开 Copilot 对话 (Open Chat)"
+        "title": "DAO KiCad: 打开道之对话 (Open Chat)"
       },
       {
         "command": "daoKicad.restartBridge",
@@ -72,7 +72,7 @@
         {
           "type": "webview",
           "id": "daoKicad.chatView",
-          "name": "Copilot 对话"
+          "name": "道之对话"
         }
       ],
       "daoKicad-cascade": [

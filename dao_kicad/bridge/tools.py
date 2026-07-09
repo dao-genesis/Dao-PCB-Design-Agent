@@ -15,6 +15,7 @@ ide_server 启动时注册 handler 到 ``IMPL``), 工具永远返回 JSON-able d
 """
 from __future__ import annotations
 
+import base64
 import html
 import json
 import re
@@ -166,6 +167,11 @@ _RESULT_RE = re.compile(
 _SNIPPET_RE = re.compile(
     r"""<td[^>]*class=['"]result-snippet['"][^>]*>(.*?)</td>""", re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
+_BING = "https://www.bing.com/search?q="
+_BING_RESULT_RE = re.compile(
+    r"""<li class="b_algo".*?<h2[^>]*><a[^>]+href="([^"]+)"[^>]*>(.*?)</a>""",
+    re.S)
+_BING_SNIPPET_RE = re.compile(r"""<p class="b_lineclamp[^"]*"[^>]*>(.*?)</p>""", re.S)
 
 # PCB 领域优先站点 (排序加权, 不过滤)
 _PCB_SITES = ("kicad.org", "digikey", "mouser", "lcsc", "jlcpcb", "octopart",
@@ -182,26 +188,56 @@ def _ddg_unwrap(href: str) -> str:
     return href
 
 
+def _bing_unwrap(href: str) -> str:
+    if "bing.com/ck/" in href:
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(href).query)
+        u = (q.get("u") or [""])[0]
+        if u.startswith("a1"):
+            try:
+                pad = u[2:] + "=" * (-len(u[2:]) % 4)
+                return base64.urlsafe_b64decode(pad).decode("utf-8", "replace")
+            except Exception:
+                pass
+    return href
+
+
+def _fetch(url: str, timeout: int = 15) -> str:
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) dao-kicad/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
 def api_search(body: dict) -> dict:
-    """PCB 领域网络搜索: DuckDuckGo lite 端点, 零 key 零依赖."""
+    """PCB 领域网络搜索: DDG lite 主端点 + Bing 兜底, 零 key 零依赖."""
     query = (body.get("query") or body.get("q") or "").strip()
     if not query:
         return {"ok": False, "error": "query 不能为空"}
     n = int(body.get("max_results") or 8)
-    url = _DDG + urllib.parse.quote(query)
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) dao-kicad/1.0"})
+    q = urllib.parse.quote(query)
+    links: list = []
+    snips: list = []
+    errors = []
     try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            page = r.read().decode("utf-8", "replace")
+        page = _fetch(_DDG + q)
+        links = _RESULT_RE.findall(page)
+        snips = [html.unescape(_TAG_RE.sub("", s)).strip()
+                 for s in _SNIPPET_RE.findall(page)]
     except Exception as e:
-        return {"ok": False, "error": f"搜索失败: {type(e).__name__}: {e}"}
-    links = _RESULT_RE.findall(page)
-    snips = [html.unescape(_TAG_RE.sub("", s)).strip()
-             for s in _SNIPPET_RE.findall(page)]
+        errors.append(f"ddg: {type(e).__name__}: {e}")
+    if not links:
+        try:
+            page = _fetch(_BING + q)
+            links = _BING_RESULT_RE.findall(page)
+            snips = [html.unescape(_TAG_RE.sub("", s)).strip()
+                     for s in _BING_SNIPPET_RE.findall(page)]
+        except Exception as e:
+            errors.append(f"bing: {type(e).__name__}: {e}")
+    if not links and errors:
+        return {"ok": False, "error": "搜索失败: " + "; ".join(errors)}
     results = []
     for i, (href, title) in enumerate(links):
-        u = _ddg_unwrap(html.unescape(href))
+        u = _bing_unwrap(_ddg_unwrap(html.unescape(href)))
         results.append({"title": html.unescape(_TAG_RE.sub("", title)).strip(),
                         "url": u,
                         "snippet": snips[i] if i < len(snips) else "",

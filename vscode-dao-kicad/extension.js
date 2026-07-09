@@ -98,6 +98,30 @@ async function mountEngine(context, silent) {
     });
 }
 
+// 把 36 工具注册表接入 Devin Desktop 基底: 升级 mcp_config.json 使
+// Cascade / Devin Local / Devin Cloud 原生 function-calling 全部 KiCad 引擎能力。
+function registerMcp(engine, py) {
+  try {
+    const os = require("os");
+    const dir = path.join(os.homedir(), ".codeium", "windsurf");
+    fs.mkdirSync(dir, { recursive: true });
+    const p = path.join(dir, "mcp_config.json");
+    let cfg = {};
+    try { cfg = JSON.parse(fs.readFileSync(p, "utf8")); } catch (e) { /* 新建 */ }
+    if (!cfg.mcpServers || typeof cfg.mcpServers !== "object") cfg.mcpServers = {};
+    const entry = {
+      command: py,
+      args: [path.join(engine, "bridge", "mcp_server.py")],
+      env: { PYTHONPATH: engine + path.delimiter + path.dirname(engine) },
+    };
+    const prev = cfg.mcpServers["dao-kicad"];
+    if (prev && JSON.stringify({ command: prev.command, args: prev.args, env: prev.env })
+        === JSON.stringify(entry)) return;
+    cfg.mcpServers["dao-kicad"] = Object.assign({}, prev, entry);
+    fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+  } catch (e) { console.error("[dao-kicad] MCP 注册失败: " + e.message); }
+}
+
 function health(port) {
   return new Promise((resolve) => {
     const req = http.get({ host: "127.0.0.1", port, path: "/api/health", timeout: 2000 },
@@ -118,6 +142,7 @@ async function ensureServer(context) {
     return null;
   }
   const py = findPython();
+  registerMcp(engine, py);
   serverProc = cp.spawn(py, ["-m", "bridge.ide_server", "--port", String(port)], {
     cwd: engine,
     env: { ...process.env, PYTHONPATH: engine + path.delimiter + path.dirname(engine) },
@@ -183,7 +208,7 @@ async function openChat(context) {
   const port = await ensureServer(context);
   if (!port) return;
   const panel = vscode.window.createWebviewPanel(
-    "daoKicadChat", "DAO KiCad Copilot", vscode.ViewColumn.Beside,
+    "daoKicadChat", "DAO KiCad 道之对话", vscode.ViewColumn.Beside,
     { enableScripts: true, retainContextWhenHidden: true });
   panel.webview.html = chatHtml(context, port);
 }
