@@ -35,8 +35,9 @@ from bridge.brain import (api_brain_bom, api_brain_design, api_brain_guardian,
                           api_brain_intent, api_brain_pipeline,
                           api_brain_templates, api_brain_wugan)
 from bridge.native import (api_ipc_board, api_ipc_run, api_ipc_status,
-                           api_native_open, api_native_start,
-                           api_native_status, api_native_stop)
+                           api_native_module, api_native_open,
+                           api_native_start, api_native_status,
+                           api_native_stop)
 
 _LK: LiveKiCad | None = None
 _JOBS: dict[str, dict] = {}
@@ -802,7 +803,10 @@ def api_ai_config_get(_q: dict) -> dict:
     with _STORE_LOCK:
         cfg = _store_read(_AI_CFG, {"channels": [], "active": "", "system": ""})
     chans = [{**c, "key": _mask(c.get("key", ""))} for c in cfg.get("channels", [])]
+    accts = [{**a, "token": _mask(a.get("token", ""))}
+             for a in cfg.get("accounts", [])]
     return {"ok": True, "channels": chans, "active": cfg.get("active", ""),
+            "accounts": accts, "active_account": cfg.get("active_account", ""),
             "system": cfg.get("system", "")}
 
 
@@ -829,6 +833,25 @@ def api_ai_config(body: dict) -> dict:
             cfg["active"] = body.get("name", "")
         elif op == "system":
             cfg["system"] = body.get("system", "")
+        elif op == "acct_add":
+            a = {"name": body.get("name", "").strip(),
+                 "email": body.get("email", "").strip(),
+                 "token": body.get("token", "")}
+            if not a["name"]:
+                return {"ok": False, "error": "账号需要 name"}
+            cfg["accounts"] = [x for x in cfg.get("accounts", [])
+                               if x["name"] != a["name"]]
+            cfg["accounts"].append(a)
+            if not cfg.get("active_account"):
+                cfg["active_account"] = a["name"]
+        elif op == "acct_del":
+            cfg["accounts"] = [x for x in cfg.get("accounts", [])
+                               if x["name"] != body.get("name")]
+            if cfg.get("active_account") == body.get("name"):
+                accts = cfg.get("accounts", [])
+                cfg["active_account"] = accts[0]["name"] if accts else ""
+        elif op == "acct_use":
+            cfg["active_account"] = body.get("name", "")
         else:
             return {"ok": False, "error": f"unknown op: {op}"}
         _store_write(_AI_CFG, cfg)
@@ -1126,6 +1149,7 @@ def _register_tools() -> None:
     reg("native_status", api_native_status)
     reg("native_start", api_native_start)
     reg("native_open", api_native_open)
+    reg("native_module", api_native_module)
     reg("native_stop", api_native_stop)
     reg("ipc_status", api_ipc_status)
     reg("ipc_board", api_ipc_board)
@@ -1162,6 +1186,7 @@ _POST_PATHS = {"/api/tools/call": api_tools_call,
                "/api/search": daotools.api_search,
                "/api/native/start": api_native_start,
                "/api/native/open": api_native_open,
+               "/api/native/module": api_native_module,
                "/api/native/stop": api_native_stop,
                "/api/ipc/run": api_ipc_run,
                "/api/brain/intent": api_brain_intent,
@@ -1284,6 +1309,11 @@ _CAPABILITIES = {
         {"method": "POST", "path": "/api/native/open",
          "params": {"path": "file to open"},
          "doc": "在运行中的 KiCad 本体里打开文件/工程."},
+        {"method": "POST", "path": "/api/native/module",
+         "params": {"module": "kicad|eeschema|pcbnew|gerbview|pcb_calculator|"
+                              "bitmap2component|pl_editor",
+                    "path": "optional file"},
+         "doc": "拉起指定 KiCad 原生模块 (归一面板标签直达)."},
         {"method": "POST", "path": "/api/native/stop", "params": {},
          "doc": "停止 KiCad 本体会话."},
         {"method": "GET", "path": "/api/tools/catalog", "params": {},
