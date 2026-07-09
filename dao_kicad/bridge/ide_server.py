@@ -467,6 +467,22 @@ def api_route(body: dict) -> dict:
     return _lk().autoroute(body["pcb"], body.get("out") or body["pcb"], **kw)
 
 
+def _alias_path(body) -> None:
+    """路径字段互通: path ↔ pcb/sch (按后缀), 外部调用者不必背每个端点的字段名."""
+    if not isinstance(body, dict):
+        return
+    p = body.get("path")
+    if isinstance(p, str) and p:
+        key = {"kicad_pcb": "pcb", "kicad_sch": "sch"}.get(
+            Path(p).suffix.lstrip("."))
+        if key and not body.get(key):
+            body[key] = p
+    if not body.get("path"):
+        alt = body.get("pcb") or body.get("sch")
+        if isinstance(alt, str) and alt:
+            body["path"] = alt
+
+
 def api_drc(body: dict) -> dict:
     r = _lk().drc(body["pcb"])
     r.pop("detail", None)
@@ -1445,6 +1461,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw or b"{}")
         except Exception as e:
             return self._send({"ok": False, "error": f"bad json: {e}"}, 400)
+        _alias_path(body)
         try:
             if name in _SLOW:
                 jid = uuid.uuid4().hex[:12]
