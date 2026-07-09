@@ -392,6 +392,11 @@ vscodeApi.postMessage({type:'init'});
 }
 
 function activate(context) {
+  // AI 交互基底(dao-ai-base · Devin Desktop 同源): Cascade 三模式面板, 命名空间 daoLceda.cascade*。
+  try {
+    const daoAiBase = require("./dao-ai-base");
+    daoAiBase.activateDaoAiBase(context, { ns: "daoLceda", log: (m) => console.log("[dao-ai-base] " + m) });
+  } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
   const treeProvider = new ProjectTreeProvider(context);
   const chatProvider = new ChatViewProvider(context);
   // 右下角状态栏按钮: 一键弹出 EDA 面板。
