@@ -799,9 +799,32 @@ def _mask(key: str) -> str:
     return key[:4] + "…" + key[-4:] if len(key) > 10 else "…"
 
 
+_DAO_AUTH = _DAO_DIR / "dao-accounts-auth.json"
+
+
+def _seed_accounts_from_dao(cfg: dict) -> bool:
+    """账号池与归一插件融合: 空池时从 ~/.dao/dao-accounts-auth.json 引入已登账号."""
+    if cfg.get("accounts"):
+        return False
+    pool = _store_read(_DAO_AUTH, {})
+    if not isinstance(pool, dict) or not pool:
+        return False
+    for email, rec in pool.items():
+        if not isinstance(rec, dict):
+            continue
+        cfg.setdefault("accounts", []).append(
+            {"name": email.split("@")[0], "email": email,
+             "token": rec.get("auth1", "")})
+    if cfg.get("accounts") and not cfg.get("active_account"):
+        cfg["active_account"] = cfg["accounts"][0]["name"]
+    return bool(cfg.get("accounts"))
+
+
 def api_ai_config_get(_q: dict) -> dict:
     with _STORE_LOCK:
         cfg = _store_read(_AI_CFG, {"channels": [], "active": "", "system": ""})
+        if _seed_accounts_from_dao(cfg):
+            _store_write(_AI_CFG, cfg)
     chans = [{**c, "key": _mask(c.get("key", ""))} for c in cfg.get("channels", [])]
     accts = [{**a, "token": _mask(a.get("token", ""))}
              for a in cfg.get("accounts", [])]
