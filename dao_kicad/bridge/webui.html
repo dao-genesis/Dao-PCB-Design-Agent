@@ -86,6 +86,7 @@ pre{background:#0c0e13;border:1px solid var(--line);border-radius:8px;padding:10
         <button class="primary" onclick="nativeStart()">启动本体</button>
         <input id="nativePath" placeholder="可带 .kicad_pro/.kicad_sch/.kicad_pcb 路径在本体打开" style="flex:1;min-width:200px">
         <button onclick="nativeOpenSel()">在本体打开</button>
+        <button onclick="nativeReconnect()">重连</button>
         <button onclick="nativeStop()">停止</button>
       </div>
       <div style="flex:1;min-height:0;position:relative">
@@ -228,6 +229,12 @@ async function nativeRefresh(){
       ?"● 本体运行于本机桌面 — 真实窗口就在这台电脑屏幕上, 对话/IPC 操作实时落在其中。"
       :"点「启动本体」— KiCad 软件本体 (工程管理器与全部编辑器) 的真实窗口将在此处直接出现并可完整操作。";
   }
+}
+function nativeReconnect(){
+  const f=$("#nativeFrame");
+  f.removeAttribute("src"); requestAnimationFrame(()=>{f.src=NATIVE_URL();});
+  $("#nativeStat").textContent="… 重连本体画面";
+  setTimeout(nativeRefresh,1500);
 }
 async function nativeStart(){
   $("#nativeStat").textContent="… 启动本体中";

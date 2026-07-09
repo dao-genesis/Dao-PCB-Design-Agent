@@ -51,6 +51,36 @@ def _default_api_socket() -> str:
 
 API_SOCKET = _default_api_socket()
 
+# 最近打开的工程 (.kicad_pro): 模块标签免带路径直达当前工程
+_LAST_PROJECT: Path | None = None
+
+
+def _remember_project(path: str) -> None:
+    global _LAST_PROJECT
+    if not path:
+        return
+    p = Path(path)
+    pro = p if p.suffix == ".kicad_pro" else p.with_suffix(".kicad_pro")
+    if pro.is_file():
+        _LAST_PROJECT = pro
+
+
+def _module_default_path(prog: str) -> str:
+    """模块无显式路径时, 复用最近工程的对应文件 (原理图/板图跟随当前工程)."""
+    if _LAST_PROJECT is None:
+        return ""
+    ext = {"eeschema": ".kicad_sch", "pcbnew": ".kicad_pcb",
+           "kicad": ".kicad_pro"}.get(prog)
+    if not ext:
+        return ""
+    f = _LAST_PROJECT.with_suffix(ext)
+    if f.is_file():
+        return str(f)
+    stem = _LAST_PROJECT.stem
+    sibs = sorted(_LAST_PROJECT.parent.glob(f"*{ext}"),
+                  key=lambda s: (not stem.startswith(s.stem), s.name))
+    return str(sibs[0]) if sibs else ""
+
 
 # ── xpra 会话 (窗口协议路由层) ─────────────────────────────────────────
 
@@ -128,8 +158,10 @@ def _enable_ipc_api() -> None:
         except Exception:
             cfg = {}
         api = cfg.setdefault("api", {})
-        if not api.get("enable_server"):
+        dns = cfg.setdefault("do_not_show_again", {})
+        if not api.get("enable_server") or not dns.get("update_check_prompt"):
             api["enable_server"] = True
+            dns["update_check_prompt"] = True  # 免首启更新弹窗遮挡内嵌视图
             p.write_text(json.dumps(cfg, indent=2))
 
 
@@ -240,6 +272,7 @@ def api_native_start(body: dict) -> dict:
     """启动 KiCad 本体 (Linux: xpra 会话路由; Windows/macOS: 直落本机桌面)."""
     if DESKTOP_NATIVE:
         path = (body.get("path") or "").strip()
+        _remember_project(path)
         prog = body.get("module") or _prog_for(path)
         k = _kicad_bin(prog) or (_kicad_bin() if prog != "kicad" else None)
         if not k:
@@ -254,6 +287,7 @@ def api_native_start(body: dict) -> dict:
             time.sleep(0.5)
         return api_native_status({})
     path = (body.get("path") or "").strip()
+    _remember_project(path)
     prog = body.get("module") or _prog_for(path)
     x, k = _xpra(), _kicad_bin(prog) or _kicad_bin()
     if not x:
@@ -292,8 +326,14 @@ def api_native_open(body: dict) -> dict:
     p = Path(path)
     if not p.exists():
         return {"ok": False, "error": f"no such file: {path}"}
+    _remember_project(str(p))
     prog = _prog_for(str(p))
     exe = _kicad_bin(prog) or prog
+    if not DESKTOP_NATIVE:
+        hit = [w for w in _windows() if p.stem in w["title"]]
+        if hit:  # 已开同名窗口: 免重复派生 (KiCad 会弹 File Open Warning)
+            return {"ok": True, "opened": path, "via": prog,
+                    "already": True, "windows": hit}
     if DESKTOP_NATIVE:
         _enable_ipc_api()
         subprocess.Popen([exe, str(p)],
@@ -313,13 +353,21 @@ def api_native_module(body: dict) -> dict:
     if prog not in MODULES:
         return {"ok": False,
                 "error": f"unknown module '{prog}' (可选: {', '.join(MODULES)})"}
-    path = (body.get("path") or "").strip()
+    path = (body.get("path") or "").strip() or _module_default_path(prog)
     exe = _kicad_bin(prog)
     if not exe:
         return {"ok": False, "error": f"{prog} 未安装"}
     if DESKTOP_NATIVE or not _session_live():
         return api_native_start({"module": prog, "path": path})
-    titles = {w["title"] for w in _windows()}
+    marks = {"eeschema": "Schematic Editor", "pcbnew": "PCB Editor",
+             "gerbview": "Gerber Viewer", "pcb_calculator": "Calculator",
+             "bitmap2component": "Image Converter", "pl_editor": "Drawing Sheet"}
+    mark = marks.get(prog)
+    wins = _windows()
+    if mark and any(mark in w["title"] for w in wins):
+        return {"ok": True, "module": prog, "label": MODULES[prog],
+                "already": True, "windows": wins}
+    titles = {w["title"] for w in wins}
     subprocess.Popen([exe] + ([path] if path else []),
                      env={**os.environ, "DISPLAY": DISPLAY},
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
