@@ -101,8 +101,19 @@ def _kicad_config_root() -> Path:
     return Path.home() / ".config" / "kicad"
 
 
+def _seed_lib_tables(d: Path) -> None:
+    """铺默认全局库表, 免首启 "Configure Global Library Table" 向导挡住自动化."""
+    tpl = kicad_env._find_share(kicad_env.detect().root, "template")
+    if not tpl:
+        return
+    for name in ("sym-lib-table", "fp-lib-table", "design-block-lib-table"):
+        src, dst = tpl / name, d / name
+        if src.is_file() and not dst.exists():
+            shutil.copyfile(src, dst)
+
+
 def _enable_ipc_api() -> None:
-    """确保 KiCad 配置开启 IPC API server (kicad_common.json)."""
+    """确保 KiCad 配置开启 IPC API server (kicad_common.json) 且全局库表就位."""
     cfg_dir = _kicad_config_root()
     dirs = sorted(cfg_dir.glob("[0-9]*.[0-9]*"))
     if not dirs:
@@ -110,6 +121,7 @@ def _enable_ipc_api() -> None:
         dirs = [cfg_dir / (".".join(v.split(".")[:2]) or "9.0")]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
+        _seed_lib_tables(d)
         p = d / "kicad_common.json"
         try:
             cfg = json.loads(p.read_text()) if p.is_file() else {}
