@@ -1410,6 +1410,19 @@ def harvest(pcb_path, pretty_dir):
     return {"ok": True, "pretty": str(pretty_dir), "mapping": mapping}
 
 
+def _drop_locks(argv):
+    """批处理进程无 GUI 会话, 遗留的 KiCad 锁文件只会误伤后续本体打开."""
+    import pathlib
+    for a in argv[2:]:
+        p = pathlib.Path(a)
+        if p.suffix == ".kicad_pcb":
+            lck = p.with_name("~" + p.name + ".lck")
+            try:
+                lck.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 def main(argv):
     cmd = argv[1]
     if cmd == "build":
@@ -1433,6 +1446,7 @@ def main(argv):
         result = {"ok": True, "pcbnew": pcbnew.Version(), "full": pcbnew.FullVersion()}
     else:
         result = {"ok": False, "error": f"unknown command {cmd}"}
+    _drop_locks(argv)
     sys.stdout.write(json.dumps(result, ensure_ascii=False))
 
 

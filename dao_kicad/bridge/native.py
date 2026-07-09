@@ -402,12 +402,21 @@ def _vec(xy):
     return Vector2.from_xy(_mm(xy[0]), _mm(xy[1]))
 
 
+def _pt(body: dict, key: str) -> list:
+    """取坐标: 支持 key=[x,y] 或散写 x/y 字段; 缺失时报可读错误."""
+    if body.get(key) is not None:
+        return body[key]
+    if key == "at" and body.get("x") is not None and body.get("y") is not None:
+        return [body["x"], body["y"]]
+    raise ValueError(f"missing '{key}': [x,y] mm")
+
+
 def _op_add_track(b, body: dict) -> dict:
     """agent 直驱布线: 在活动 board 内存文档里落一段铜线."""
     from kipy.board_types import BoardLayer, Track
     t = Track()
-    t.start = _vec(body["start"])
-    t.end = _vec(body["end"])
+    t.start = _vec(_pt(body, "start"))
+    t.end = _vec(_pt(body, "end"))
     t.width = _mm(body.get("width_mm") or 0.25)
     t.layer = getattr(BoardLayer, body.get("layer") or "BL_F_Cu")
     created = b.create_items(t)
@@ -417,7 +426,7 @@ def _op_add_track(b, body: dict) -> dict:
 def _op_add_via(b, body: dict) -> dict:
     from kipy.board_types import Via
     v = Via()
-    v.position = _vec(body["at"])
+    v.position = _vec(_pt(body, "at"))
     v.diameter = _mm(body.get("size_mm") or 0.8)
     v.drill_diameter = _mm(body.get("drill_mm") or 0.4)
     created = b.create_items(v)
@@ -428,7 +437,7 @@ def _op_move_footprint(b, body: dict) -> dict:
     ref = body.get("ref") or ""
     for f in b.get_footprints():
         if f.reference_field.text.value == ref:
-            f.position = _vec(body["at"])
+            f.position = _vec(_pt(body, "at"))
             if body.get("rot") is not None:
                 from kipy.geometry import Angle
                 f.orientation = Angle.from_degrees(float(body["rot"]))
