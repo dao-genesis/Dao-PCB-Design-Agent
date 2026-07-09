@@ -114,7 +114,12 @@ pre{background:#0c0e13;border:1px solid var(--line);border-radius:8px;padding:10
         <div id="chatList" class="kv" style="margin-top:8px">载入中…</div></div>
       <div class="card"><h3>🔌 外接 API / Agent 直连</h3>
         <div class="kv">① 外接 API: 第三方程序按 /api/capabilities 机读 schema 直连 REST 端点。<br>
-        ② Agent MD 直连: 把 GET /api/doc 文档整体发给任意成熟 Agent, 它即可全方位接管引擎。</div></div>
+        ② Agent MD 直连: 把 GET /api/doc 文档整体发给任意成熟 Agent, 它即可全方位接管引擎。<br>
+        ③ 核心模块面直达: <a href="/api/health">/api/health</a> ·
+        <a href="/api/tree">/api/tree</a> ·
+        <a href="/api/render/sch">/api/render/sch</a> ·
+        <a href="/api/render/pcb">/api/render/pcb</a> ·
+        /api/agent (POST) · /api/job?id=…</div></div>
       <div class="card"><h3>📜 Agent 桥接文档 (/api/doc)</h3><pre id="agentmd">载入中…</pre></div>
       <div class="card"><h3>🧰 外接 API capabilities (/api/capabilities)</h3><pre id="caps">载入中…</pre></div>
     </div>
