@@ -30,6 +30,7 @@ from urllib.parse import parse_qs, urlparse
 
 from daokicad.live import LiveKiCad
 
+from bridge import tools as daotools
 from bridge.brain import (api_brain_bom, api_brain_design, api_brain_guardian,
                           api_brain_intent, api_brain_pipeline,
                           api_brain_templates, api_brain_wugan)
@@ -860,27 +861,69 @@ def _chat_append(chat_id: str, title_hint: str, msgs: list) -> str:
 
 
 _AI_SYSTEM = ("你是 DAO KiCad 归一面板的 AI 助手, 底层是 KiCad 原生引擎的 REST 桥。"
-              "可用动作: 全链路(auto)/erc/drc/route/build/netlist/fab, "
-              "用户说这些意图词时引擎已自动执行, 你负责其余的电子设计问答与指导。"
-              "回答用中文, 简洁专业。")
+              "你拥有一套 function-calling 工具 (对照 Devin Desktop 工具体系): "
+              "渲染/网表/建板/布线/DRC/ERC/制造/全链路/本体 IPC 直驱/DNA 生成/"
+              "扩展管理/PCB 领域网络搜索。需要动引擎或查资料时直接调用工具; "
+              "慢操作会返回 {job}, 用 job_status 轮询。回答用中文, 简洁专业。")
+
+_TOOL_ROUNDS = 6  # function-calling 循环上限 (对照 Devin Desktop agent loop)
 
 
-def _llm_call(ch: dict, system: str, history: list, text: str) -> str:
-    import urllib.request
-    msgs = [{"role": "system", "content": system or _AI_SYSTEM}]
-    msgs += [{"role": m["role"], "content": m["content"]} for m in history[-20:]]
-    msgs.append({"role": "user", "content": text})
-    payload = json.dumps({"model": ch.get("model") or "gpt-4o-mini",
-                          "messages": msgs}, ensure_ascii=True).encode()
+def _chat_endpoint(ch: dict) -> str:
     url = ch["endpoint"]
     if not url.endswith("/chat/completions"):
         url = url.rstrip("/") + "/chat/completions"
-    req = urllib.request.Request(url, data=payload, method="POST", headers={
+    return url
+
+
+def _llm_post(ch: dict, msgs: list, with_tools: bool) -> dict:
+    import urllib.request
+    body: dict = {"model": ch.get("model") or "gpt-4o-mini", "messages": msgs}
+    if with_tools:
+        body["tools"] = daotools.tools_payload()
+    payload = json.dumps(body, ensure_ascii=True).encode()
+    req = urllib.request.Request(_chat_endpoint(ch), data=payload,
+                                 method="POST", headers={
         "Content-Type": "application/json",
         "Authorization": "Bearer " + ch.get("key", "")})
     with urllib.request.urlopen(req, timeout=120) as r:
-        out = json.loads(r.read())
-    return out["choices"][0]["message"]["content"]
+        return json.loads(r.read())
+
+
+def _llm_call(ch: dict, system: str, history: list, text: str,
+              trace: list | None = None) -> str:
+    """对话补全 + 工具调用循环: 模型可自主调 KiCad 工具驱动引擎.
+
+    渠道不支持 tools 时自动回退纯对话 (400/422 → 无工具重发)。
+    """
+    msgs = [{"role": "system", "content": system or _AI_SYSTEM}]
+    msgs += [{"role": m["role"], "content": m["content"]} for m in history[-20:]]
+    msgs.append({"role": "user", "content": text})
+    with_tools = True
+    for _ in range(_TOOL_ROUNDS):
+        try:
+            out = _llm_post(ch, msgs, with_tools)
+        except Exception:
+            if not with_tools:
+                raise
+            with_tools = False  # 渠道不支持 function-calling → 纯对话回退
+            out = _llm_post(ch, msgs, False)
+        m = out["choices"][0]["message"]
+        calls = m.get("tool_calls") or []
+        if not calls:
+            return m.get("content") or ""
+        msgs.append(m)
+        for tc in calls:
+            name, args = daotools.parse_tool_call(tc)
+            res = daotools.call(name, args)
+            if trace is not None:
+                trace.append({"tool": name, "args": args,
+                              "ok": bool(isinstance(res, dict)
+                                         and res.get("ok"))})
+            msgs.append({"role": "tool",
+                         "tool_call_id": tc.get("id", ""),
+                         "content": json.dumps(res, ensure_ascii=False)[:8000]})
+    return "(工具循环达到上限, 已停止)"
 
 
 def api_ai_chat(body: dict) -> dict:
@@ -911,15 +954,17 @@ def api_ai_chat(body: dict) -> dict:
         chats = _store_read(_CHATS, {"chats": []})["chats"]
     prev = next((c for c in chats if c["id"] == chat_id), None)
     history = prev["messages"] if prev else []
+    trace: list = []
     try:
-        reply = _llm_call(ch, cfg.get("system", ""), history, text)
+        reply = _llm_call(ch, cfg.get("system", ""), history, text, trace)
     except Exception as e:
         return {"ok": False, "reply": f"渠道 {ch['name']} 调用失败: {e}",
                 "via": "channel:" + ch["name"]}
     cid = _chat_append(chat_id, text,
                        [{"role": "user", "content": text},
                         {"role": "assistant", "content": reply}])
-    return {"ok": True, "reply": reply, "chat_id": cid, "via": "channel:" + ch["name"]}
+    return {"ok": True, "reply": reply, "chat_id": cid,
+            "tools": trace, "via": "channel:" + ch["name"]}
 
 
 def api_agent(body: dict) -> dict:
@@ -1017,6 +1062,77 @@ def api_engine_mount(body: dict) -> dict:
     return res
 
 
+def _tool_job(fn) -> Any:
+    """慢工具 → 后台 job (与 POST 慢端点同一套 _JOBS 机制)."""
+    def run(body: dict) -> dict:
+        jid = uuid.uuid4().hex[:12]
+        with _JOBS_LOCK:
+            _JOBS[jid] = {"done": False}
+        threading.Thread(target=_run_job, args=(jid, fn, body),
+                         daemon=True).start()
+        return {"ok": True, "job": jid,
+                "note": "慢操作已后台启动, 用 job_status 轮询"}
+    return run
+
+
+def _tool_job_status(a: dict) -> dict:
+    with _JOBS_LOCK:
+        j = _JOBS.get(a.get("id", ""))
+    return j or {"done": False, "unknown": True}
+
+
+def _register_tools() -> None:
+    """工具名 → handler 注入 (对照 Devin Desktop 工具注册表)."""
+    reg = daotools.register
+    reg("engine_status", api_engine_status)
+    reg("engine_mount", _tool_job(api_engine_mount))
+    reg("project_tree", lambda a: api_tree(a.get("root", ".")))
+    reg("project_files", lambda a: api_files(a.get("root", ".")))
+    reg("read_artifact", lambda a: api_file(a.get("path", "")))
+    reg("render_schematic", lambda a: api_render_sch(a.get("path", "")))
+    reg("render_pcb", lambda a: api_render_pcb(
+        a.get("path", ""),
+        a.get("layers") or "F.Cu,B.Cu,F.SilkS,Edge.Cuts,F.Mask"))
+    reg("render_symbol", lambda a: api_render_sym(a.get("lib", ""),
+                                                  a.get("name", "")))
+    reg("render_footprint", lambda a: api_render_fp(a.get("lib", ""),
+                                                    a.get("name", "")))
+    reg("list_symbols", lambda a: api_sym_list(a.get("lib", "")))
+    reg("list_footprints", lambda a: api_fp_list(a.get("lib", "")))
+    reg("netlist", api_netlist)
+    reg("build_board", _tool_job(api_build))
+    reg("autoroute", _tool_job(api_route))
+    reg("drc", api_drc)
+    reg("erc", api_erc)
+    reg("fabricate", _tool_job(api_fab))
+    reg("auto_pipeline", _tool_job(api_auto))
+    reg("job_status", _tool_job_status)
+    reg("native_status", api_native_status)
+    reg("native_start", api_native_start)
+    reg("native_open", api_native_open)
+    reg("native_stop", api_native_stop)
+    reg("ipc_status", api_ipc_status)
+    reg("ipc_board", api_ipc_board)
+    reg("ipc_run", api_ipc_run)
+    reg("brain_templates", api_brain_templates)
+    reg("brain_design", api_brain_design)
+    reg("brain_guardian", api_brain_guardian)
+    reg("brain_wugan", api_brain_wugan)
+    reg("brain_bom", api_brain_bom)
+    reg("pcm_list", api_pcm_list)
+    reg("pcm_install", api_pcm_install)
+    reg("pcm_remove", api_pcm_remove)
+    reg("image_convert", api_convert)
+    reg("web_search", daotools.api_search)
+
+
+_register_tools()
+
+
+def api_tools_call(body: dict) -> dict:
+    return daotools.call(body.get("name", ""), body.get("args") or {})
+
+
 _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
             "drc": api_drc, "erc": api_erc, "fab": api_fab, "auto": api_auto,
             "agent": api_agent, "chat": api_ai_chat, "config": api_ai_config,
@@ -1026,7 +1142,9 @@ _ACTIONS = {"netlist": api_netlist, "build": api_build, "route": api_route,
 _SLOW = {"build", "route", "fab", "auto", "mount"}
 
 # 全路径 POST 路由 (KiCad 软件本体承接 + IPC 底层直连)
-_POST_PATHS = {"/api/native/start": api_native_start,
+_POST_PATHS = {"/api/tools/call": api_tools_call,
+               "/api/search": daotools.api_search,
+               "/api/native/start": api_native_start,
                "/api/native/open": api_native_open,
                "/api/native/stop": api_native_stop,
                "/api/ipc/run": api_ipc_run,
@@ -1152,6 +1270,14 @@ _CAPABILITIES = {
          "doc": "在运行中的 KiCad 本体里打开文件/工程."},
         {"method": "POST", "path": "/api/native/stop", "params": {},
          "doc": "停止 KiCad 本体会话."},
+        {"method": "GET", "path": "/api/tools/catalog", "params": {},
+         "doc": "工具清单 (OpenAI function-calling 格式, 1:1 对照 Devin Desktop 工具体系)."},
+        {"method": "POST", "path": "/api/tools/call",
+         "params": {"name": "工具名 (含别名)", "args": "工具参数 object"},
+         "doc": "按名直调任意工具; 慢工具返回 {job}."},
+        {"method": "GET", "path": "/api/search",
+         "params": {"query": "搜索词", "max_results": "int=8"},
+         "doc": "PCB 领域网络搜索 (元器件/datasheet/封装/参考设计)."},
         {"method": "GET", "path": "/api/ipc/status", "params": {},
          "doc": "IPC 底层直连状态 (kicad-python ping/version)."},
         {"method": "GET", "path": "/api/ipc/board", "params": {},
@@ -1272,6 +1398,10 @@ class Handler(BaseHTTPRequestHandler):
                 if isinstance(r, dict):
                     return self._send(r, 400)
                 return self._send_raw(*r)
+            if u.path == "/api/tools/catalog":
+                return self._send(daotools.catalog())
+            if u.path == "/api/search":
+                return self._send(daotools.api_search(q))
             if u.path == "/api/capabilities":
                 return self._send(_CAPABILITIES)
             if u.path == "/api/doc":
