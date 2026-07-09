@@ -249,6 +249,16 @@ def _windows() -> list[dict]:
     return out
 
 
+def _raise_window(win_id: str) -> None:
+    """把既有窗口提至前台 (标签重点/免重复派生时同显直达)."""
+    wm = shutil.which("wmctrl")
+    if not wm or DESKTOP_NATIVE:
+        return
+    subprocess.run([wm, "-i", "-a", win_id],
+                   env={**os.environ, "DISPLAY": DISPLAY},
+                   capture_output=True, timeout=10)
+
+
 # 本体模块注册: 归一面板每个标签直达一个 KiCad 原生编辑器 (符号/封装编辑器
 # 无独立可执行, 从工程管理器/原理图/PCB 窗口内直达)
 MODULES = {
@@ -332,6 +342,7 @@ def api_native_open(body: dict) -> dict:
     if not DESKTOP_NATIVE:
         hit = [w for w in _windows() if p.stem in w["title"]]
         if hit:  # 已开同名窗口: 免重复派生 (KiCad 会弹 File Open Warning)
+            _raise_window(hit[0]["id"])
             return {"ok": True, "opened": path, "via": prog,
                     "already": True, "windows": hit}
     if DESKTOP_NATIVE:
@@ -364,7 +375,9 @@ def api_native_module(body: dict) -> dict:
              "bitmap2component": "Image Converter", "pl_editor": "Drawing Sheet"}
     mark = marks.get(prog)
     wins = _windows()
-    if mark and any(mark in w["title"] for w in wins):
+    hit = [w for w in wins if mark and mark in w["title"]]
+    if hit:
+        _raise_window(hit[0]["id"])
         return {"ok": True, "module": prog, "label": MODULES[prog],
                 "already": True, "windows": wins}
     titles = {w["title"] for w in wins}
