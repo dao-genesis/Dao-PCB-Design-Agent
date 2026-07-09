@@ -173,7 +173,7 @@ function showBoard(k,mod){
   localStorage.setItem("dao.board",k);
   if(k==="cfg") loadCfgBoard();
   if(k==="acct") acLoad();
-  if(k==="native"){ if(mod&&mod!=="kicad") moduleOpen(mod); nativeRefresh(); }
+  if(k==="native"){ if(mod) moduleOpen(mod); nativeRefresh(); }
 }
 async function moduleOpen(mod){
   $("#nativeStat").textContent="… 拉起模块 "+mod;

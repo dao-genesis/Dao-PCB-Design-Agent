@@ -163,6 +163,16 @@ def _enable_ipc_api() -> None:
             api["enable_server"] = True
             dns["update_check_prompt"] = True  # 免首启更新弹窗遮挡内嵌视图
             p.write_text(json.dumps(cfg, indent=2))
+        # 工程管理器的 Check for Updates 弹窗由 kicad.json pcm.check_for_updates 驱动
+        kj = d / "kicad.json"
+        try:
+            kc = json.loads(kj.read_text()) if kj.is_file() else {}
+        except Exception:
+            kc = {}
+        pcm = kc.setdefault("pcm", {})
+        if pcm.get("check_for_updates") is not False:
+            pcm["check_for_updates"] = False
+            kj.write_text(json.dumps(kc, indent=2))
 
 
 def api_native_status(_q: dict) -> dict:
@@ -370,7 +380,8 @@ def api_native_module(body: dict) -> dict:
         return {"ok": False, "error": f"{prog} 未安装"}
     if DESKTOP_NATIVE or not _session_live():
         return api_native_start({"module": prog, "path": path})
-    marks = {"eeschema": "Schematic Editor", "pcbnew": "PCB Editor",
+    marks = {"kicad": "\u2014 KiCad",
+             "eeschema": "Schematic Editor", "pcbnew": "PCB Editor",
              "gerbview": "Gerber Viewer", "pcb_calculator": "Calculator",
              "bitmap2component": "Image Converter", "pl_editor": "Drawing Sheet"}
     mark = marks.get(prog)
