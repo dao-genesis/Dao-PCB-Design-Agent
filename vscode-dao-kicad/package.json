@@ -35,6 +35,10 @@
         "title": "DAO KiCad: 挂载 KiCad 底座引擎 (Mount Engine)"
       },
       {
+        "command": "daoKicad.modeToggle",
+        "title": "DAO KiCad: 切换 KiCad 模式 / 原生模式 (Toggle Mode)"
+      },
+      {
         "command": "daoKicad.cascade.open",
         "title": "KiCad · AI: 聚焦 Cascade 三模式面板"
       },
