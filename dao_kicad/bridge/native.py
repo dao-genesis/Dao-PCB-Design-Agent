@@ -148,6 +148,7 @@ def api_native_status(_q: dict) -> dict:
         "ipc": bool(_sockets()),
         "ipc_socket": API_SOCKET,
         "windows": _windows() if live else [],
+        "modules": MODULES,
     }
 
 
@@ -216,6 +217,19 @@ def _windows() -> list[dict]:
     return out
 
 
+# 本体模块注册: 归一面板每个标签直达一个 KiCad 原生编辑器 (符号/封装编辑器
+# 无独立可执行, 从工程管理器/原理图/PCB 窗口内直达)
+MODULES = {
+    "kicad": "工程管理器",
+    "eeschema": "原理图编辑器",
+    "pcbnew": "PCB 编辑器",
+    "gerbview": "Gerber 查看器",
+    "pcb_calculator": "计算工具",
+    "bitmap2component": "图片转换器",
+    "pl_editor": "图框编辑器",
+}
+
+
 def _prog_for(path: str) -> str:
     """按文件后缀选 KiCad 入口: .kicad_sch→eeschema, .kicad_pcb→pcbnew, 其余→kicad."""
     return {"kicad_sch": "eeschema", "kicad_pcb": "pcbnew"}.get(
@@ -226,7 +240,7 @@ def api_native_start(body: dict) -> dict:
     """启动 KiCad 本体 (Linux: xpra 会话路由; Windows/macOS: 直落本机桌面)."""
     if DESKTOP_NATIVE:
         path = (body.get("path") or "").strip()
-        prog = _prog_for(path)
+        prog = body.get("module") or _prog_for(path)
         k = _kicad_bin(prog) or (_kicad_bin() if prog != "kicad" else None)
         if not k:
             return {"ok": False, "error": "kicad 未安装"}
@@ -240,14 +254,14 @@ def api_native_start(body: dict) -> dict:
             time.sleep(0.5)
         return api_native_status({})
     path = (body.get("path") or "").strip()
-    prog = _prog_for(path)
+    prog = body.get("module") or _prog_for(path)
     x, k = _xpra(), _kicad_bin(prog) or _kicad_bin()
     if not x:
         return {"ok": False, "error": "xpra 未安装 (apt install xpra)"}
     if not k:
         return {"ok": False, "error": "kicad 未安装"}
     _enable_ipc_api()
-    child = f'{prog} "{path}"' if path else "kicad"
+    child = f'{prog} "{path}"' if path else prog
     if not _session_live():
         cmd = [x, "start", DISPLAY,
                f"--bind-tcp=0.0.0.0:{HTML_PORT}", "--html=on",
@@ -291,6 +305,31 @@ def api_native_open(body: dict) -> dict:
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
     return {"ok": True, "opened": path, "via": prog}
+
+
+def api_native_module(body: dict) -> dict:
+    """拉起指定 KiCad 原生模块 (归一面板标签直达): 会话已活则同显派生, 否则以其为根启会话."""
+    prog = (body.get("module") or "kicad").strip()
+    if prog not in MODULES:
+        return {"ok": False,
+                "error": f"unknown module '{prog}' (可选: {', '.join(MODULES)})"}
+    path = (body.get("path") or "").strip()
+    exe = _kicad_bin(prog)
+    if not exe:
+        return {"ok": False, "error": f"{prog} 未安装"}
+    if DESKTOP_NATIVE or not _session_live():
+        return api_native_start({"module": prog, "path": path})
+    titles = {w["title"] for w in _windows()}
+    subprocess.Popen([exe] + ([path] if path else []),
+                     env={**os.environ, "DISPLAY": DISPLAY},
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    for _ in range(20):
+        if {w["title"] for w in _windows()} - titles:
+            break
+        time.sleep(0.5)
+    return {"ok": True, "module": prog, "label": MODULES[prog],
+            "windows": _windows()}
 
 
 def api_native_stop(_body: dict) -> dict:
