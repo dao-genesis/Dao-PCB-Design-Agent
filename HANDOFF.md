@@ -63,6 +63,18 @@ python -m schematic_dao build warehouse_logistics_vehicle
 
 ---
 
+## 归一插件 (双线合一 · IDE 交付本体)
+
+| 插件 | 定位 |
+|------|------|
+| **`vscode-dao-pcb/`** | **归一交付本体**: Devin Desktop 基底 + Proxy Pro 同源四态(原生/道/KiCad/嘉立创EDA) + 双桥(9931 KiCad · 9940 LCEDA) + 双 MCP(dao-kicad · lceda-dao) + 网页套网页归一主页 |
+| `vscode-dao-kicad/` | KiCad 单线形态 (归一插件的 KiCad 位面事实源) |
+| `vscode-dao-lceda/` | 嘉立创EDA 单线形态 (归一插件的 LCEDA 位面事实源) |
+
+详见 [`vscode-dao-pcb/README.md`](./vscode-dao-pcb/README.md)。
+
+---
+
 ## 六层架构
 
 ```
