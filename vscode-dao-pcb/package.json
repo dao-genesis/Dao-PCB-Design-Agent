@@ -1,0 +1,155 @@
+{
+  "name": "dao-pcb",
+  "displayName": "DAO PCB — 归一工作台 (KiCad + 嘉立创EDA)",
+  "description": "KiCad and LCEDA (嘉立创EDA) unified in your IDE on the Devin Desktop base: dual bridges, Proxy Pro style four-mode prompt shaping (native/dao/kicad/lceda), domain tools natively injected alongside official tools via MCP.",
+  "version": "0.1.0",
+  "publisher": "dao",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "daoPcb.openHome",
+        "title": "DAO PCB: 打开归一工作台 (Open Home)"
+      },
+      {
+        "command": "daoPcb.restartBridges",
+        "title": "DAO PCB: 重启双桥 (Restart Bridges)"
+      },
+      {
+        "command": "daoPcb.mountEngine",
+        "title": "DAO PCB: 挂载 KiCad 底座引擎 (Mount Engine)"
+      },
+      {
+        "command": "daoPcb.modeToggle",
+        "title": "DAO PCB: 循环切换四态 原生/道/KiCad/嘉立创EDA (Toggle Mode)"
+      },
+      {
+        "command": "daoPcb.modePick",
+        "title": "DAO PCB: 选择模式 (Pick Mode)"
+      },
+      {
+        "command": "daoPcb.cascade.open",
+        "title": "PCB · AI: 聚焦 Cascade 三模式面板"
+      },
+      {
+        "command": "daoPcb.cascade.newSession",
+        "title": "PCB · AI: 新建 Cascade 会话",
+        "icon": "$(add)"
+      },
+      {
+        "command": "daoPcb.cascade.history",
+        "title": "PCB · AI: Cascade 历史会话",
+        "icon": "$(history)"
+      },
+      {
+        "command": "daoPcb.cascade.deepwiki",
+        "title": "PCB · AI: DeepWiki 解释选中符号"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "daoPcb",
+          "title": "DAO PCB",
+          "icon": "media/dao.svg"
+        },
+        {
+          "id": "daoPcb-cascade",
+          "title": "PCB · AI",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "daoPcb": [
+        {
+          "type": "webview",
+          "id": "daoPcb.chatView",
+          "name": "道之对话"
+        }
+      ],
+      "daoPcb-cascade": [
+        {
+          "id": "daoPcb.cascade",
+          "name": "Cascade · 三模式",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DAO PCB",
+      "properties": {
+        "daoPcb.kicadEnginePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the dao_kicad engine folder (contains daokicad/ and bridge/). Empty = auto-detect in workspace."
+        },
+        "daoPcb.lcedaBridgePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the folder containing lceda bridge_server.py. Empty = auto-detect lceda_bridge/vscode_lceda in workspace."
+        },
+        "daoPcb.python": {
+          "type": "string",
+          "default": "python3",
+          "description": "Python interpreter used to run both bridge servers."
+        },
+        "daoPcb.kicadPort": {
+          "type": "number",
+          "default": 9931,
+          "description": "Localhost port for the KiCad bridge REST service."
+        },
+        "daoPcb.lcedaPort": {
+          "type": "number",
+          "default": 9940,
+          "description": "Localhost port for the LCEDA bridge REST service."
+        },
+        "daoPcb.cdpPorts": {
+          "type": "string",
+          "default": "9222,29229,29230",
+          "description": "Candidate CDP ports probed to attach the LCEDA client/browser."
+        },
+        "daoPcb.preferLocalEda": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prefer the locally installed LCEDA client over the web version."
+        },
+        "daoPcb.lcedaPanelMode": {
+          "type": "string",
+          "default": "shell",
+          "enum": ["shell", "native", "screencast"],
+          "description": "LCEDA tab content: shell (unified tabs), native (local EDA screencast), screencast (canvas panel)."
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "daoPcb.cascade.newSession",
+          "when": "view == daoPcb.cascade",
+          "group": "navigation@1"
+        },
+        {
+          "command": "daoPcb.cascade.history",
+          "when": "view == daoPcb.cascade",
+          "group": "navigation@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node test/pcb-mode.test.js",
+    "package": "npx --yes @vscode/vsce package --allow-missing-repository"
+  }
+}

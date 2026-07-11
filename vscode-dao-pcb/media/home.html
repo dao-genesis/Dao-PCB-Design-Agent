@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<!-- DAO PCB · VS Code 中间面板 = 归一工作台 (网页套网页 · devin-remote dao-vsix /shell 同构).
+     顶部标签栏平级承载: ☯ KiCad(9931 webui) · ⚡ 嘉立创EDA(9940 shell) · ⚙ 模式(Proxy Pro 四态).
+     唯一事实源是两路桥接服务的 webui, 此处仅作标签外壳 iframe 承载。
+     注意: webview 内 fetch http://127.0.0.1 会被混合内容策略拦截,
+     所以健康探测由插件宿主 (extension.js, Node http) 完成并 postMessage 通知本页。 -->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<title>DAO PCB · 归一工作台</title>
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100vh;overflow:hidden;background:#12141a;
+    font:13px/1.6 -apple-system,"Segoe UI",sans-serif;color:#d8dce6}
+  #bar{display:flex;align-items:center;height:34px;background:#1a1d26;border-bottom:1px solid #262a36;user-select:none}
+  #bar .tab{padding:0 16px;height:100%;display:flex;align-items:center;cursor:pointer;color:#8b93a7;
+    border-right:1px solid #262a36;white-space:nowrap}
+  #bar .tab.on{color:#e8ecf6;background:#12141a;box-shadow:inset 0 -2px 0 #4da3ff}
+  #bar .tab .dot{width:7px;height:7px;border-radius:50%;background:#666;margin-left:8px}
+  #bar .tab .dot.up{background:#3fc46a}
+  #stage{position:absolute;top:34px;left:0;right:0;bottom:0}
+  .pane{position:absolute;inset:0;display:none}
+  .pane.on{display:block}
+  iframe{border:0;width:100%;height:100%}
+  .fail{display:none;padding:20px}
+  .fail code{color:#4da3ff}
+  /* 模式面板 */
+  #modes{padding:26px;max-width:720px}
+  #modes h2{font-size:16px;margin:0 0 4px}
+  #modes .sub{color:#8b93a7;margin-bottom:18px}
+  .mode{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:10px;
+    border:1px solid #262a36;border-radius:10px;cursor:pointer;background:#171a22}
+  .mode:hover{border-color:#3a415a}
+  .mode.on{border-color:#4da3ff;background:#182234}
+  .mode .name{font-size:14px;font-weight:600;min-width:120px}
+  .mode .desc{color:#8b93a7}
+  #spinfo{color:#5d6478;margin-top:14px}
+</style>
+</head>
+<body>
+<div id="bar">
+  <div class="tab on" data-pane="kicad">☯ KiCad<span class="dot" id="dot-kicad"></span></div>
+  <div class="tab" data-pane="lceda">⚡ 嘉立创EDA<span class="dot" id="dot-lceda"></span></div>
+  <div class="tab" data-pane="modes">⚙ 模式<span id="mode-now" style="margin-left:8px;color:#4da3ff"></span></div>
+</div>
+<div id="stage">
+  <div class="pane on" id="pane-kicad">
+    <iframe id="f-kicad" allow="clipboard-read; clipboard-write"></iframe>
+    <div class="fail" id="fail-kicad">
+      ☯ KiCad 桥接服务未就绪 (<code>__KICAD__</code>)。<br>
+      请执行命令 <code>DAO PCB: 重启双桥</code>, 或检查设置 <code>daoPcb.kicadEnginePath</code>。
+    </div>
+  </div>
+  <div class="pane" id="pane-lceda">
+    <iframe id="f-lceda" allow="clipboard-read; clipboard-write"></iframe>
+    <div class="fail" id="fail-lceda">
+      ⚡ 嘉立创EDA 桥接服务未就绪 (<code>__LCEDA_BASE__</code>)。<br>
+      请确认嘉立创EDA已带 CDP 启动, 或执行命令 <code>DAO PCB: 重启双桥</code>,
+      或检查设置 <code>daoPcb.lcedaBridgePath</code>。
+    </div>
+  </div>
+  <div class="pane" id="pane-modes">
+    <div id="modes">
+      <h2>☯ PCB 四态 (Proxy Pro 同源提示词隔离/替换)</h2>
+      <div class="sub">道并行而不相悖 —— 四态一体, 官方工具体系之下并列原生注入领域工具。</div>
+      <div class="mode" data-mode="native"><span class="name">⌨ 原生</span>
+        <span class="desc">提示词字节级直通, 原生 Devin Desktop 编程体验分毫不动</span></div>
+      <div class="mode" data-mode="dao"><span class="name">☯ 道</span>
+        <span class="desc">帛书《老子》+《阴符经》道魂整体隔离/替换</span></div>
+      <div class="mode" data-mode="kicad"><span class="name">☯ KiCad</span>
+        <span class="desc">道魂 + KiCad 领域 SP + 36 工具目录 (MCP dao-kicad 原生并列)</span></div>
+      <div class="mode" data-mode="lceda"><span class="name">☯ 嘉立创EDA</span>
+        <span class="desc">道魂 + EDA 领域 SP + CDP 桥工具目录 (MCP lceda-dao 原生并列)</span></div>
+      <div id="spinfo"></div>
+    </div>
+  </div>
+</div>
+<script>
+  const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
+  const root = "__ROOT__";
+  const srcKicad = "__KICAD__/?embed=1" + (root ? "&root=" + encodeURIComponent(root) : "");
+  const srcLceda = "__LCEDA__";
+  const fk = document.getElementById("f-kicad");
+  const fl = document.getElementById("f-lceda");
+  fk.src = srcKicad;                  // iframe 直挂 (frame-src 放行, 不受混合内容限制)
+  fl.src = srcLceda;
+
+  // 标签切换
+  for (const t of document.querySelectorAll("#bar .tab")) {
+    t.addEventListener("click", () => {
+      document.querySelectorAll("#bar .tab").forEach((x) => x.classList.remove("on"));
+      document.querySelectorAll(".pane").forEach((x) => x.classList.remove("on"));
+      t.classList.add("on");
+      document.getElementById("pane-" + t.dataset.pane).classList.add("on");
+    });
+  }
+
+  // 模式面板 ↔ 宿主 shaper
+  const label = { native: "⌨ 原生", dao: "☯ 道", kicad: "☯ KiCad", lceda: "☯ 嘉立创EDA" };
+  for (const m of document.querySelectorAll(".mode")) {
+    m.addEventListener("click", () => {
+      if (vscode) vscode.postMessage({ type: "daopcb.modeSet", mode: m.dataset.mode });
+    });
+  }
+  if (vscode) vscode.postMessage({ type: "daopcb.modeGet" });
+
+  function show(pane, up, reload, src) {
+    const f = document.getElementById("f-" + pane);
+    const fail = document.getElementById("fail-" + pane);
+    const dot = document.getElementById("dot-" + pane);
+    dot.classList.toggle("up", !!up);
+    if (up) {
+      fail.style.display = "none"; f.style.display = "block";
+      if (!f.src) f.src = src;
+      if (reload) f.src = src;        // 服务从挂到活: 重载 iframe
+    } else {
+      f.style.display = "none"; fail.style.display = "block";
+    }
+  }
+
+  window.addEventListener("message", (e) => {
+    const m = e.data || {};
+    if (m.type === "daopcb.health") {
+      show("kicad", m.kicad, m.reloadKicad, srcKicad);
+      show("lceda", m.lceda, m.reloadLceda, srcLceda);
+    }
+    if (m.type === "daopcb.mode") {
+      document.getElementById("mode-now").textContent = m.label || "";
+      document.querySelectorAll(".mode").forEach((x) =>
+        x.classList.toggle("on", x.dataset.mode === m.mode));
+      document.getElementById("spinfo").textContent =
+        m.mode === "native" ? "字节级直通: 0 字注入"
+          : "当前注入 SP " + (m.spChars || 0) + " 字 (每会话首条注入, 其后轻量标记)";
+    }
+  });
+</script>
+</body>
+</html>
