@@ -1,0 +1,49 @@
+(session rt
+  (base_design rt)
+  (placement
+    (resolution um 10)
+    (component R_0805_2012Metric
+      (place R2 140000 -100000 front 0)
+      (place R1 60000 -100000 front 0)
+    )
+  )
+  (was_is
+  )
+  (routes 
+    (resolution um 10)
+    (parser
+      (host_cad "KiCad's Pcbnew")
+      (host_version "9.0.9-9.0.9~ubuntu22.04.1")
+    )
+    (library_out 
+      (padstack "Via[0-1]_600:300_um"
+        (shape
+          (circle F.Cu 6000 0 0)
+        )
+        (shape
+          (circle B.Cu 6000 0 0)
+        )
+        (attach off)
+      )
+      (padstack "Via[0-1]_600:300_um"
+        (shape
+          (circle F.Cu 6000 0 0)
+        )
+        (shape
+          (circle B.Cu 6000 0 0)
+        )
+        (attach off)
+      )
+    )
+    (network_out 
+      (net SIG
+        (wire
+          (path F.Cu 2000
+            69125 -100000
+            130875 -100000
+          )
+        )
+      )
+    )
+  )
+)

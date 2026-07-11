@@ -1,4 +1,4 @@
-"""Real-demo full-chain scoreboard — 道法自然·持续推演的度量基座.
+r"""Real-demo full-chain scoreboard — 道法自然·持续推演的度量基座.
 
 Drive the whole chain (export netlist -> place real footprints -> freerouting
 autoroute -> DRC) on *real* KiCad projects and report honest metrics, so each

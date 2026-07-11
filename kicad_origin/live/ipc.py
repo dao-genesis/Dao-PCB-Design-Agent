@@ -45,6 +45,16 @@ except Exception as _e:  # pragma: no cover
 # ─────────────────────────────────────────────────────────────────────
 # 通道
 # ─────────────────────────────────────────────────────────────────────
+def _doc_name(d: Any) -> str:
+    """从 kipy DocumentSpecifier 提取可读名 (PCB/原理图文件名)。"""
+    for attr in ("board_filename", "schematic_filename", "project_name"):
+        v = getattr(d, attr, "")
+        if v:
+            return str(v)
+    s = str(d).strip()
+    return s or "<doc>"
+
+
 @dataclass
 class IPCStatus:
     available:     bool
@@ -118,8 +128,8 @@ class IPCChannel:
             except Exception:
                 pass
             try:
-                docs = k.get_open_documents()
-                st.open_docs = [str(getattr(d, "board_filename", d)) for d in docs] if docs else []
+                docs = self.open_documents()
+                st.open_docs = [_doc_name(d) for d in docs]
             except Exception:
                 pass
             st.available = True
@@ -136,10 +146,29 @@ class IPCChannel:
         except Exception:
             return ""
 
-    def open_documents(self) -> List[Any]:
+    def open_documents(self, doc_type: Optional[int] = None) -> List[Any]:
+        """列出运行中 KiCad 已打开的文档。
+
+        kipy 的 get_open_documents 必须带 DocumentType (此前漏传 → 一直空表);
+        doc_type=None 时聚合 PCB + 原理图两类。
+        """
+        if not _KIPY_OK:
+            return []
         try:
-            return list(self._connect().get_open_documents() or [])
-        except Exception:
+            k = self._connect()
+            if doc_type is not None:
+                return list(k.get_open_documents(doc_type) or [])
+            from kipy.proto.common.types import base_types_pb2 as _bt
+            docs: List[Any] = []
+            for dt in (_bt.DocumentType.DOCTYPE_PCB,
+                       _bt.DocumentType.DOCTYPE_SCHEMATIC):
+                try:
+                    docs.extend(k.get_open_documents(dt) or [])
+                except Exception:
+                    pass
+            return docs
+        except Exception as e:
+            self._err = f"{type(e).__name__}: {e}"
             return []
 
     # ── 操作 ────────────────────────────────────────────────────────
@@ -217,6 +246,55 @@ class IPCChannel:
     def pcb_zoom_fit(self) -> bool:
         # 内置 action_id (KiCad 9 通用)
         return self.run_action("common.Control.zoomFitScreen")
+
+    # ── PCB 无头改板 (官方 IPC, 零 GUI 输入) ───────────────────────────
+    def pcb_footprint_refs(self) -> List[str]:
+        """当前板全部 footprint 的 reference 列表。"""
+        b = self.get_board()
+        if b is None:
+            return []
+        try:
+            return [f.reference_field.text.value for f in b.get_footprints()]
+        except Exception as e:
+            self._err = f"footprint_refs: {e}"
+            return []
+
+    def move_footprint(self, ref: str, x_mm: float, y_mm: float) -> bool:
+        """按 reference 把 footprint 移到绝对坐标 (mm), 经官方 IPC 写回。"""
+        b = self.get_board()
+        if b is None:
+            return False
+        try:
+            from kipy.geometry import Vector2
+            for f in b.get_footprints():
+                if f.reference_field.text.value == ref:
+                    f.position = Vector2.from_xy(int(round(x_mm * 1e6)),
+                                                 int(round(y_mm * 1e6)))
+                    b.update_items([f])
+                    return True
+            self._err = f"move_footprint: ref {ref!r} not found"
+            return False
+        except Exception as e:
+            self._err = f"move_footprint: {e}"
+            return False
+
+    def rotate_footprint(self, ref: str, angle_deg: float) -> bool:
+        """按 reference 设置 footprint 朝向 (deg), 经官方 IPC 写回。"""
+        b = self.get_board()
+        if b is None:
+            return False
+        try:
+            from kipy.geometry import Angle
+            for f in b.get_footprints():
+                if f.reference_field.text.value == ref:
+                    f.orientation = Angle.from_degrees(angle_deg)
+                    b.update_items([f])
+                    return True
+            self._err = f"rotate_footprint: ref {ref!r} not found"
+            return False
+        except Exception as e:
+            self._err = f"rotate_footprint: {e}"
+            return False
 
 
 # ─────────────────────────────────────────────────────────────────────

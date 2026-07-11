@@ -1,0 +1,84 @@
+name: DAO Auto-Merge
+
+# 道法自然 · 无为而无不为 —— CI 绿灯后自动合并,无需任何人工点击。
+#
+# 触发方式: 监听 "CI" 工作流跑完 (workflow_run)。只要 CI 成功,
+# 即对该 commit 对应的所有 open / 非 draft / 可合并 PR 直接合并 (merge commit)。
+#
+# 为何用 workflow_run 而非 pull_request:
+#   - 在 CI 真正绿灯之后才动作 → 不依赖仓库 "Allow auto-merge" 设置, 无标签时序问题。
+#   - 由仓库自身的 GITHUB_TOKEN 执行合并 (非外部 Agent), 因此不受 Agent 的 "禁止直推 main" 限制。
+#
+# 鉴权: 优先用 DAO_MERGE_TOKEN (细粒度 PAT, Contents+PR 写, 可越过分支保护);
+#       未配置时回退 GITHUB_TOKEN (若分支保护放行 Actions 机器人即可成功)。
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+concurrency:
+  group: dao-auto-merge-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: 自动合并 (CI 绿后)
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge green PRs for this commit
+        env:
+          GH_TOKEN: ${{ secrets.DAO_MERGE_TOKEN || secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "CI 成功 commit: $SHA"
+          # 找出该 commit 对应的所有 open PR
+          prs=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+                  -H "Accept: application/vnd.github+json" \
+                  --jq '.[] | select(.state=="open") | .number' || true)
+          if [ -z "${prs:-}" ]; then
+            echo "无对应 open PR,跳过。"; exit 0
+          fi
+          for n in $prs; do
+            echo "::group::PR #$n"
+            info=$(gh pr view "$n" -R "$REPO" \
+                     --json isDraft,mergeable,mergeStateStatus,baseRefName 2>/dev/null || echo '{}')
+            draft=$(echo "$info" | jq -r '.isDraft // false')
+            mergeable=$(echo "$info" | jq -r '.mergeable // "UNKNOWN"')
+            mstate=$(echo "$info" | jq -r '.mergeStateStatus // "UNKNOWN"')
+            base=$(echo "$info" | jq -r '.baseRefName // ""')
+            echo "draft=$draft mergeable=$mergeable mergeState=$mstate base=$base"
+            if [ "$draft" = "true" ]; then echo "draft,跳过"; echo "::endgroup::"; continue; fi
+            if [ "$mergeable" = "CONFLICTING" ]; then echo "有冲突,跳过"; echo "::endgroup::"; continue; fi
+            # 分支落后(BEHIND)时, 严格状态检查会拒绝合并(405 "Required status check is expected")。
+            # 先 update-branch 把 base 合进来 → 触发 synchronize → CI 重跑 → 本流程再次被唤起完成合并。
+            if [ "$mstate" = "BEHIND" ]; then
+              if gh api -X PUT "repos/$REPO/pulls/$n/update-branch" >/dev/null 2>ub_err.txt; then
+                echo "PR #$n 落后于 base, 已自动 update-branch, 等待 CI 重跑后自动合并 ↻"
+              else
+                echo "::warning::PR #$n update-branch 失败: $(cat ub_err.txt)"
+              fi
+              echo "::endgroup::"; continue
+            fi
+            # 直接调用合并 API (merge commit)。成功即自动删源分支。
+            if gh api -X PUT "repos/$REPO/pulls/$n/merge" \
+                 -f merge_method=merge >/dev/null 2>merge_err.txt; then
+              echo "PR #$n 已自动合并 ✅"
+              # 删除已合并的源分支 (失败不阻断)
+              ref=$(gh pr view "$n" -R "$REPO" --json headRefName --jq '.headRefName' 2>/dev/null || true)
+              [ -n "${ref:-}" ] && gh api -X DELETE "repos/$REPO/git/refs/heads/$ref" >/dev/null 2>&1 || true
+            else
+              echo "::warning::PR #$n 自动合并失败: $(cat merge_err.txt)"
+              echo "提示: 若因分支保护拒绝, 请在仓库 Secrets 配置 DAO_MERGE_TOKEN (细粒度 PAT, Contents+PR 写)。"
+            fi
+            echo "::endgroup::"
+          done

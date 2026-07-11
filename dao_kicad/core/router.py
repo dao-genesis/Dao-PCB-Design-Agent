@@ -1,0 +1,1341 @@
+"""
+Autorouting Engine — Connect the Unconnected
+
+Exposed by Practice 1 & 2: tracks placed manually point-to-point with no
+intelligence. A living system must understand connectivity and route traces
+that respect design rules.
+
+Strategies (progressive complexity):
+1. Direct: straight line between pad centers (simplest)
+2. Manhattan: L-shaped or Z-shaped routes (cleaner, fewer angles)
+3. Escape: route pad to nearest grid point, then connect
+4. DSN export: hand off to freerouting for complex boards
+
+WISDOM: routing is constraint satisfaction —
+  clearance, width, layer, via count, trace length matching.
+  Start simple, evolve with practice.
+"""
+
+from __future__ import annotations
+
+import math
+import subprocess
+import tempfile
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+import pcbnew
+
+
+@dataclass
+class RoutePair:
+    """A pair of pads that need connecting."""
+    net_name: str
+    ref_a: str
+    pad_a: str
+    x_a: float  # mm
+    y_a: float
+    ref_b: str
+    pad_b: str
+    x_b: float
+    y_b: float
+    distance: float = 0.0  # mm
+
+    def __post_init__(self):
+        dx = self.x_b - self.x_a
+        dy = self.y_b - self.y_a
+        self.distance = math.hypot(dx, dy)
+
+
+@dataclass
+class DiffPair:
+    """Two nets that form a differential pair (e.g. ``USB_DP``/``USB_DN``)."""
+    base: str
+    p_net: str
+    n_net: str
+
+
+@dataclass
+class DiffPairReport:
+    """Measured quality of one routed differential pair.
+
+    ``length_skew_pct`` is the intra-pair length mismatch as a percentage of
+    the longer half — the constraint that matters for phase alignment. The
+    coupled router produces 0% by construction (mirror geometry), so a nonzero
+    value flags a layer transition or a fan-in that broke the mirror.
+    """
+    base: str
+    p_net: str
+    n_net: str
+    p_len_mm: float
+    n_len_mm: float
+    routed: bool
+
+    @property
+    def length_skew_pct(self) -> float:
+        hi = max(self.p_len_mm, self.n_len_mm)
+        return abs(self.p_len_mm - self.n_len_mm) / hi * 100 if hi else 0.0
+
+
+@dataclass
+class RouteResult:
+    """Result of routing attempt."""
+    routed: int = 0
+    failed: int = 0
+    total: int = 0
+    tracks_added: int = 0
+    vias_added: int = 0
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def success_rate(self) -> float:
+        return self.routed / self.total if self.total else 0
+
+    def summary(self) -> str:
+        pct = self.success_rate * 100
+        return (f"Routed {self.routed}/{self.total} ({pct:.0f}%), "
+                f"{self.tracks_added} tracks, {self.vias_added} vias, "
+                f"{self.failed} failed")
+
+
+class _SpatialIndex:
+    """Grid-based spatial index for collision detection.
+
+    Tracks occupied cells in a 2D grid to detect clearance violations
+    BEFORE adding tracks. Resolution = cell_mm.
+    """
+
+    def __init__(self, width_mm: float, height_mm: float, cell_mm: float = 0.5,
+                 mark_clearance_mm: float = 0.1):
+        self.cell = cell_mm
+        # Edge margin baked in when MARKING occupied copper. Reserving close to
+        # the real DRC clearance (instead of a flat 0.1) means a freshly routed
+        # track keeps its full keep-out from later nets, cutting clearance /
+        # shorting / solder_mask_bridge violations on dense boards.
+        self.mark_clearance = mark_clearance_mm
+        self.cols = max(1, int(math.ceil(width_mm / cell_mm)) + 1)
+        self.rows = max(1, int(math.ceil(height_mm / cell_mm)) + 1)
+        # Per-layer occupancy: layer id -> {cell: net_name}. A track only
+        # collides with copper on its own layer, so keeping grids per layer
+        # lets F_Cu and B_Cu route independently (an SMD pad on the front
+        # must not block a trace on the back).
+        self.grids: dict[int, dict[tuple[int, int], str]] = {}
+
+    def _grid(self, layer: int) -> dict[tuple[int, int], str]:
+        g = self.grids.get(layer)
+        if g is None:
+            g = {}
+            self.grids[layer] = g
+        return g
+
+    def _cells_for_segment(self, x1: float, y1: float, x2: float, y2: float,
+                           half_w: float) -> list[tuple[int, int]]:
+        """Return grid cells occupied by a track segment with width."""
+        cells = []
+        dist = math.hypot(x2 - x1, y2 - y1)
+        steps = max(1, int(dist / (self.cell * 0.5)))
+        for s in range(steps + 1):
+            t = s / steps
+            cx = x1 + (x2 - x1) * t
+            cy = y1 + (y2 - y1) * t
+            c0 = int((cx - half_w) / self.cell)
+            c1 = int((cx + half_w) / self.cell) + 1
+            r0 = int((cy - half_w) / self.cell)
+            r1 = int((cy + half_w) / self.cell) + 1
+            for r in range(max(0, r0), min(self.rows, r1 + 1)):
+                for c in range(max(0, c0), min(self.cols, c1 + 1)):
+                    cells.append((r, c))
+        return cells
+
+    def mark(self, x1: float, y1: float, x2: float, y2: float,
+             width_mm: float, net_name: str, layer: int = pcbnew.F_Cu):
+        """Mark cells on ``layer`` as occupied by a track segment."""
+        hw = width_mm / 2 + self.mark_clearance  # include clearance
+        grid = self._grid(layer)
+        for cell in self._cells_for_segment(x1, y1, x2, y2, hw):
+            if cell not in grid:
+                grid[cell] = net_name
+
+    def mark_box(self, cx: float, cy: float, half_mm: float, net_name: str,
+                 layers):
+        """Mark a square region (a pad footprint) on each layer in ``layers``.
+
+        Routes of a DIFFERENT net that pass over these cells are then rejected
+        by check_clear — preventing tracks from crossing other components'
+        pads, the dominant source of ``shorting_items`` DRC errors. SMD pads
+        pass a single layer; through-hole pads pass every copper layer.
+        """
+        cells = self._cells_for_segment(cx, cy, cx, cy, half_mm)
+        for layer in layers:
+            grid = self._grid(layer)
+            for cell in cells:
+                grid.setdefault(cell, net_name)
+
+    def check_clear(self, x1: float, y1: float, x2: float, y2: float,
+                    width_mm: float, net_name: str, clearance_mm: float = 0.15,
+                    layer: int = pcbnew.F_Cu) -> bool:
+        """Check if a segment can be routed on ``layer`` without violations."""
+        hw = width_mm / 2 + clearance_mm
+        grid = self._grid(layer)
+        for cell in self._cells_for_segment(x1, y1, x2, y2, hw):
+            occ = grid.get(cell)
+            if occ is not None and occ != net_name:
+                return False
+        return True
+
+
+class Router:
+    """Connectivity-aware PCB router with collision detection.
+
+    Usage:
+        router = Router(board)
+        pairs = router.get_unrouted()
+        result = router.route_all()
+    """
+
+    def __init__(self, board: pcbnew.BOARD, min_clearance_mm: float = 0.2,
+                 pad_clearance_margin_mm: float = 0.2):
+        self.board = board
+        self.clearance = pcbnew.FromMM(min_clearance_mm)
+        self.clearance_mm = min_clearance_mm
+        # Foreign pads get a wider keep-out than track-to-track clearance.
+        # A track's final stub must reach its OWN pad, so it unavoidably runs
+        # past that pad's fine-pitch neighbours; reserving extra room around
+        # every other-net pad pushes through-routes further out, cutting
+        # clearance/shorting violations around dense parts (QFP/BGA).
+        self.pad_clearance_mm = min_clearance_mm + pad_clearance_margin_mm
+        self._spatial: _SpatialIndex | None = None
+        self._rebuild_connectivity()
+
+    def _rebuild_connectivity(self):
+        """Refresh the board's connectivity data."""
+        self.board.BuildConnectivity()
+        self.conn = self.board.GetConnectivity()
+
+    def _pad_dims(self) -> dict:
+        """Cache (ref, pad_name) -> min pad dimension in mm."""
+        if getattr(self, "_pad_dim_cache", None) is not None:
+            return self._pad_dim_cache
+        d = {}
+        for fp in self.board.GetFootprints():
+            ref = fp.GetReference()
+            for pad in fp.Pads():
+                sz = pad.GetSize()
+                d[(ref, pad.GetPadName())] = min(
+                    pcbnew.ToMM(sz.x), pcbnew.ToMM(sz.y))
+        self._pad_dim_cache = d
+        return d
+
+    def _clamp_width_to_pads(self, pair: RoutePair, w: float) -> float:
+        """Neck a track down to the smaller pad it terminates on.
+
+        A 1.5mm power trace cannot enter a 0.6mm decoupling-cap pad without
+        spilling onto that part's neighbouring (GND) pad — the dominant
+        remaining short. A trace is physically meaningless wider than the pad
+        it lands on, so clamp to the smaller endpoint pad. The fat trunk width
+        is still honoured between large pads (connectors, regulators).
+        """
+        dims = self._pad_dims()
+        cands = [dims.get((pair.ref_a, pair.pad_a)),
+                 dims.get((pair.ref_b, pair.pad_b))]
+        cands = [c for c in cands if c]
+        if not cands:
+            return w
+        return min(w, max(min(cands), self.clearance_mm))
+
+    def _seed_pads(self, clearance_mm: Optional[float] = None,
+                   plane_nets: Optional[set[str]] = None):
+        """Mark every pad's footprint into the spatial index under its net.
+
+        WISDOM (shorting_items = #1 DRC error class): the router previously only
+        avoided existing tracks, so Manhattan/Z paths happily crossed straight
+        over other components' pads — each crossing a short. Seeding pads makes
+        ``check_clear`` reject any path that would cross a different net's pad.
+        Same-net pads (including the route's own endpoints) stay routable.
+
+        plane_nets: nets delivered by a poured plane (e.g. GND). Their pads sit
+        *inside* their own copper pour, so a foreign track only needs the normal
+        track-to-pad clearance to clear them — not the wider foreign-pad margin.
+        Using the wide margin here walls off a dense board: on a 2-layer design
+        whose back is a GND plane, every signal lives on the front amid dozens
+        of GND pads, and the inflated keep-out leaves no routable corridor.
+        """
+        if not self._spatial:
+            return
+        cl = self.pad_clearance_mm if clearance_mm is None else clearance_mm
+        plane_nets = plane_nets or set()
+        nc_idx = 0
+        for fp in self.board.GetFootprints():
+            for pad in fp.Pads():
+                net = pad.GetNet()
+                nn = net.GetNetname() if (net and net.GetNetname()) else None
+                if nn is None:
+                    # Unconnected pad: unique sentinel so every net is blocked.
+                    nn = f"__NC_{nc_idx}"
+                    nc_idx += 1
+                pad_cl = self.clearance_mm if nn in plane_nets else cl
+                pos = pad.GetPosition()
+                sz = pad.GetSize()
+                half = max(pcbnew.ToMM(sz.x), pcbnew.ToMM(sz.y)) / 2 + pad_cl
+                # Through-hole pads short on every copper layer; an SMD pad
+                # only blocks the single layer it lives on.
+                attr = pad.GetAttribute()
+                if attr in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH):
+                    layers = (pcbnew.F_Cu, pcbnew.B_Cu)
+                elif pad.IsOnLayer(pcbnew.B_Cu) and not pad.IsOnLayer(pcbnew.F_Cu):
+                    layers = (pcbnew.B_Cu,)
+                else:
+                    layers = (pcbnew.F_Cu,)
+                self._spatial.mark_box(
+                    pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y), half, nn, layers)
+
+    def get_unrouted(self) -> list[RoutePair]:
+        """Find all pad pairs that share a net but have no copper path.
+
+        This reads the ratsnest — the list of connections that SHOULD exist
+        but DON'T have traces yet.
+        """
+        self._rebuild_connectivity()
+        pairs = []
+
+        # Group pads by net
+        net_pads: dict[str, list[tuple[str, str, float, float]]] = {}
+        for fp in self.board.GetFootprints():
+            ref = fp.GetReference()
+            for pad in fp.Pads():
+                net = pad.GetNet()
+                if not net or not net.GetNetname():
+                    continue
+                net_name = net.GetNetname()
+                pos = pad.GetPosition()
+                x = pcbnew.ToMM(pos.x)
+                y = pcbnew.ToMM(pos.y)
+                if net_name not in net_pads:
+                    net_pads[net_name] = []
+                net_pads[net_name].append((ref, pad.GetNumber(), x, y))
+
+        # For each net with multiple pads, find minimum spanning tree pairs
+        for net_name, pads in net_pads.items():
+            if len(pads) < 2:
+                continue
+
+            # Simple MST: greedy nearest-neighbor
+            connected = {0}
+            remaining = set(range(1, len(pads)))
+
+            while remaining:
+                best_dist = float('inf')
+                best_from = -1
+                best_to = -1
+
+                for i in connected:
+                    for j in remaining:
+                        dx = pads[j][2] - pads[i][2]
+                        dy = pads[j][3] - pads[i][3]
+                        dist = math.hypot(dx, dy)
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_from = i
+                            best_to = j
+
+                if best_to >= 0:
+                    a = pads[best_from]
+                    b = pads[best_to]
+                    pairs.append(RoutePair(
+                        net_name=net_name,
+                        ref_a=a[0], pad_a=a[1], x_a=a[2], y_a=a[3],
+                        ref_b=b[0], pad_b=b[1], x_b=b[2], y_b=b[3],
+                    ))
+                    connected.add(best_to)
+                    remaining.discard(best_to)
+
+        # Sort by distance (route short ones first)
+        pairs.sort(key=lambda p: p.distance)
+        return pairs
+
+    def route_direct(self, pair: RoutePair, width_mm: float = 0.25,
+                     layer: int = pcbnew.F_Cu) -> bool:
+        """Route with a straight track between two pads."""
+        net = self.board.FindNet(pair.net_name)
+        if not net:
+            return False
+
+        track = pcbnew.PCB_TRACK(self.board)
+        track.SetStart(pcbnew.VECTOR2I(
+            pcbnew.FromMM(pair.x_a), pcbnew.FromMM(pair.y_a)))
+        track.SetEnd(pcbnew.VECTOR2I(
+            pcbnew.FromMM(pair.x_b), pcbnew.FromMM(pair.y_b)))
+        track.SetWidth(pcbnew.FromMM(width_mm))
+        track.SetLayer(layer)
+        track.SetNet(net)
+        self.board.Add(track)
+        return True
+
+    def _add_track_seg(self, x1: float, y1: float, x2: float, y2: float,
+                       width_mm: float, layer: int, net) -> bool:
+        """Add a single track segment and mark it in spatial index."""
+        if abs(x1 - x2) < 0.01 and abs(y1 - y2) < 0.01:
+            return True  # zero-length, skip
+        t = pcbnew.PCB_TRACK(self.board)
+        t.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(x1), pcbnew.FromMM(y1)))
+        t.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(x2), pcbnew.FromMM(y2)))
+        t.SetWidth(pcbnew.FromMM(width_mm))
+        t.SetLayer(layer)
+        t.SetNet(net)
+        self.board.Add(t)
+        if self._spatial:
+            self._spatial.mark(x1, y1, x2, y2, width_mm, net.GetNetname(), layer)
+        return True
+
+    def _gen_L_path(self, pair: RoutePair, horiz_first: bool):
+        """Generate L-shaped waypoints."""
+        if horiz_first:
+            return [(pair.x_a, pair.y_a), (pair.x_b, pair.y_a), (pair.x_b, pair.y_b)]
+        return [(pair.x_a, pair.y_a), (pair.x_a, pair.y_b), (pair.x_b, pair.y_b)]
+
+    def _gen_approach_paths(self, pair: RoutePair, d: float = 0.8):
+        """Paths that enter the destination pad from each cardinal side.
+
+        A power stub to a 2-pad passive (cap/resistor) often has to arrive
+        right beside that part's other-net pad (e.g. 3V3 pad sits ~0.5mm from
+        the cap's GND pad). A straight L-approach grazes the neighbour and is
+        flagged as a short. By offering a pre-approach point on all four sides
+        of the target, the collision check rejects the side facing the
+        neighbouring pad and accepts the outer side automatically.
+        """
+        ax, ay, bx, by = pair.x_a, pair.y_a, pair.x_b, pair.y_b
+        paths = []
+        for ox, oy in ((d, 0), (-d, 0), (0, d), (0, -d)):
+            px, py = bx + ox, by + oy
+            # L from source to the pre-approach point, then a short straight
+            # segment into the pad from the chosen side.
+            paths.append([(ax, ay), (px, ay), (px, py), (bx, by)])
+            paths.append([(ax, ay), (ax, py), (px, py), (bx, by)])
+        return paths
+
+    def _gen_Z_path(self, pair: RoutePair, horiz_first: bool, offset: float):
+        """Generate Z-shaped waypoints with midpoint offset."""
+        dx = pair.x_b - pair.x_a
+        dy = pair.y_b - pair.y_a
+        if horiz_first:
+            mx = pair.x_a + dx * 0.5 + offset
+            return [(pair.x_a, pair.y_a), (mx, pair.y_a), (mx, pair.y_b), (pair.x_b, pair.y_b)]
+        my = pair.y_a + dy * 0.5 + offset
+        return [(pair.x_a, pair.y_a), (pair.x_a, my), (pair.x_b, my), (pair.x_b, pair.y_b)]
+
+    def _path_clear(self, path: list[tuple[float, float]],
+                    width_mm: float, net_name: str,
+                    layer: int = pcbnew.F_Cu) -> bool:
+        """Check if entire path is clear of collisions on ``layer``."""
+        if not self._spatial:
+            return True
+        for i in range(len(path) - 1):
+            if not self._spatial.check_clear(
+                path[i][0], path[i][1], path[i+1][0], path[i+1][1],
+                width_mm, net_name, self.clearance_mm, layer,
+            ):
+                return False
+        return True
+
+    def _path_cost(self, path: list[tuple[float, float]],
+                   width_mm: float, net_name: str,
+                   layer: int = pcbnew.F_Cu) -> int:
+        """Count foreign-occupied grid cells along ``path`` on ``layer``.
+
+        0 means fully clear. Used to pick the least-colliding candidate when
+        no fully-clear route exists, instead of blindly forcing a path that
+        ploughs through other nets (the old fall-back, the dominant source of
+        clearance/shorting/tracks_crossing on congested multi-IC boards).
+        """
+        if not self._spatial:
+            return 0
+        sp = self._spatial
+        hw = width_mm / 2 + self.clearance_mm
+        grid = sp._grid(layer)
+        cost = 0
+        for i in range(len(path) - 1):
+            for cell in sp._cells_for_segment(
+                    path[i][0], path[i][1], path[i+1][0], path[i+1][1], hw):
+                occ = grid.get(cell)
+                if occ is not None and occ != net_name:
+                    cost += 1
+        return cost
+
+    @staticmethod
+    def _seg_point_dist_mm(ax: float, ay: float, bx: float, by: float,
+                           px: float, py: float) -> float:
+        """Shortest distance (mm) from point (px,py) to segment a→b."""
+        dx, dy = bx - ax, by - ay
+        seg2 = dx * dx + dy * dy
+        if seg2 <= 1e-12:
+            return math.hypot(px - ax, py - ay)
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / seg2))
+        return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+    def _pad_obstructed(self, poly: list[tuple[float, float]],
+                        width_mm: float, net_name: str, layer: int) -> bool:
+        """True if ``poly`` violates DRC clearance to a foreign pad on ``layer``.
+
+        Used to veto a differential-pair route that would short to (or clear by
+        less than ``clearance_mm`` of) another net's pad. Unlike the grid cost,
+        this uses the real pad copper extent + true clearance — no inflated
+        routing keep-out — so it never rejects a pair that DRC would pass.
+        """
+        margin = width_mm / 2.0 + self.clearance_mm
+        for fp in self.board.GetFootprints():
+            for pad in fp.Pads():
+                net = pad.GetNet()
+                nn = net.GetNetname() if (net and net.GetNetname()) else None
+                if nn == net_name:
+                    continue
+                attr = pad.GetAttribute()
+                through = attr in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH)
+                if not (through or pad.IsOnLayer(layer)):
+                    continue
+                pos = pad.GetPosition()
+                px, py = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
+                sz = pad.GetSize()
+                reach = max(pcbnew.ToMM(sz.x), pcbnew.ToMM(sz.y)) / 2.0 + margin
+                for i in range(len(poly) - 1):
+                    if self._seg_point_dist_mm(
+                            poly[i][0], poly[i][1], poly[i + 1][0],
+                            poly[i + 1][1], px, py) < reach:
+                        return True
+        return False
+
+    def _clear_via_spot(self, x: float, y: float, net_name: str,
+                        via_mm: float, extra_layer: Optional[int] = None):
+        """Find a via location near (x, y) clear of foreign copper, trying the
+        centre then small offsets — so layer-transition vias stop landing on a
+        neighbour's pad/hole (the hole_clearance class). A through via spans
+        every layer, so we check the primary outer layer, the back layer, and
+        (when routing onto an inner layer) that inner layer's copper too."""
+        if not self._spatial:
+            return (x, y)
+        check_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
+        if extra_layer is not None and extra_layer not in check_layers:
+            check_layers.append(extra_layer)
+        for ox, oy in ((0, 0), (0.3, 0.3), (-0.3, 0.3), (0.3, -0.3),
+                       (-0.3, -0.3), (0.5, 0), (-0.5, 0), (0, 0.5), (0, -0.5)):
+            vx, vy = x + ox, y + oy
+            if all(self._spatial.check_clear(vx, vy, vx, vy, via_mm, net_name,
+                                             self.clearance_mm, ly)
+                   for ly in check_layers):
+                return (vx, vy)
+        return (x, y)
+
+    def route_manhattan(self, pair: RoutePair, width_mm: float = 0.25,
+                        layer: int = pcbnew.F_Cu) -> bool:
+        """Route with collision-aware L/Z paths.
+
+        Tries multiple path candidates in order:
+        1. L-path (longer axis first)
+        2. L-path (shorter axis first)
+        3. Z-path with increasing offsets
+        Falls back to direct if all fail.
+        """
+        net = self.board.FindNet(pair.net_name)
+        if not net:
+            return False
+
+        dx = abs(pair.x_b - pair.x_a)
+        dy = abs(pair.y_b - pair.y_a)
+        horiz_first = dx >= dy
+
+        candidates = [
+            self._gen_L_path(pair, horiz_first),
+            self._gen_L_path(pair, not horiz_first),
+        ]
+        for off in [1.0, -1.0, 2.0, -2.0, 3.0]:
+            candidates.append(self._gen_Z_path(pair, horiz_first, off))
+            candidates.append(self._gen_Z_path(pair, not horiz_first, off))
+        # Approach-doglegs: enter the destination pad from each cardinal side
+        # so a stub to a passive's power pad doesn't graze its GND sibling.
+        candidates.extend(self._gen_approach_paths(pair))
+
+        chosen = candidates[0]  # default
+        for path in candidates:
+            if self._path_clear(path, width_mm, pair.net_name, layer):
+                chosen = path
+                break
+
+        for i in range(len(chosen) - 1):
+            self._add_track_seg(
+                chosen[i][0], chosen[i][1],
+                chosen[i+1][0], chosen[i+1][1],
+                width_mm, layer, net,
+            )
+        return True
+
+    def route_offset_manhattan(self, pair: RoutePair, width_mm: float = 0.25,
+                               layer: int = pcbnew.F_Cu, offset_mm: float = 0.0) -> bool:
+        """Route manhattan with an offset bend to avoid congestion.
+
+        Instead of bending at (xB, yA) or (xA, yB), offset the bend point
+        to create a Z-shaped route that avoids existing tracks.
+        """
+        net = self.board.FindNet(pair.net_name)
+        if not net:
+            return False
+
+        dx = pair.x_b - pair.x_a
+        dy = pair.y_b - pair.y_a
+
+        if abs(dx) < 0.01 or abs(dy) < 0.01:
+            return self.route_direct(pair, width_mm, layer)
+
+        # Choose midpoint with offset: Z-shape instead of L-shape
+        mid_frac = 0.5  # bend at halfway point along longer axis
+        if abs(dx) >= abs(dy):
+            mid_x = pair.x_a + dx * mid_frac
+            # 3-segment Z-route: horizontal → vertical → horizontal
+            pts = [
+                (pair.x_a, pair.y_a),
+                (mid_x + offset_mm, pair.y_a),
+                (mid_x + offset_mm, pair.y_b),
+                (pair.x_b, pair.y_b),
+            ]
+        else:
+            mid_y = pair.y_a + dy * mid_frac
+            pts = [
+                (pair.x_a, pair.y_a),
+                (pair.x_a, mid_y + offset_mm),
+                (pair.x_b, mid_y + offset_mm),
+                (pair.x_b, pair.y_b),
+            ]
+
+        # Add track segments, skip zero-length
+        for i in range(len(pts) - 1):
+            if abs(pts[i][0] - pts[i+1][0]) < 0.01 and abs(pts[i][1] - pts[i+1][1]) < 0.01:
+                continue
+            t = pcbnew.PCB_TRACK(self.board)
+            t.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(pts[i][0]), pcbnew.FromMM(pts[i][1])))
+            t.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(pts[i+1][0]), pcbnew.FromMM(pts[i+1][1])))
+            t.SetWidth(pcbnew.FromMM(width_mm))
+            t.SetLayer(layer)
+            t.SetNet(net)
+            self.board.Add(t)
+
+        return True
+
+    def route_all(self, strategy: str = "manhattan",
+                  width_mm: float = 0.25,
+                  power_width_mm: float = 0.5,
+                  power_nets: Optional[set[str]] = None,
+                  net_widths: Optional[dict[str, float]] = None,
+                  skip_nets: Optional[set[str]] = None,
+                  layer: int = pcbnew.F_Cu) -> RouteResult:
+        """Route all unconnected pairs.
+
+        Args:
+            strategy: "direct" or "manhattan"
+            width_mm: default trace width
+            power_width_mm: width for power/ground nets
+            power_nets: set of net names that are power (wider traces)
+            net_widths: per-net width overrides (takes precedence)
+            skip_nets: nets NOT routed as tracks (delivered by copper pour
+                instead, e.g. a GND plane) — the dominant source of
+                shorting/clearance/mask-bridge errors is a high-fanout net
+                like GND threaded as dozens of point-to-point stubs.
+            layer: copper layer to route on
+        """
+        if power_nets is None:
+            power_nets = {"GND", "VCC", "3V3", "5V", "VBUS", "3.3V", "5.0V"}
+        if net_widths is None:
+            net_widths = {}
+
+        pairs = self.get_unrouted()
+        if skip_nets:
+            pairs = [p for p in pairs if p.net_name not in skip_nets]
+        result = RouteResult(total=len(pairs))
+
+        # Initialize spatial index from board outline
+        bbox = self.board.GetBoardEdgesBoundingBox()
+        bw = pcbnew.ToMM(bbox.GetWidth()) + 10
+        bh = pcbnew.ToMM(bbox.GetHeight()) + 10
+        self._spatial = _SpatialIndex(bw, bh, cell_mm=0.2,
+                                     mark_clearance_mm=self.clearance_mm)
+
+        # Pre-populate with existing tracks
+        for track in self.board.GetTracks():
+            s = track.GetStart()
+            e = track.GetEnd()
+            n = track.GetNet()
+            nn = n.GetNetname() if n else ""
+            self._spatial.mark(
+                pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
+                pcbnew.ToMM(e.x), pcbnew.ToMM(e.y),
+                pcbnew.ToMM(track.GetWidth()), nn, track.GetLayer(),
+            )
+        # Pad-collision awareness: never route across another net's pad.
+        self._seed_pads(plane_nets=skip_nets)
+
+        if strategy == "manhattan":
+            route_fn = self.route_manhattan
+        elif strategy == "z-route":
+            route_fn = self.route_offset_manhattan
+        else:
+            route_fn = self.route_direct
+
+        for pair in pairs:
+            # Per-net width override → power width → default
+            if pair.net_name in net_widths:
+                w = net_widths[pair.net_name]
+            elif pair.net_name in power_nets:
+                w = power_width_mm
+            else:
+                w = width_mm
+            w = self._clamp_width_to_pads(pair, w)
+            try:
+                ok = route_fn(pair, width_mm=w, layer=layer)
+                if ok:
+                    result.routed += 1
+                    # Count tracks (manhattan adds 1-2, direct adds 1)
+                    result.tracks_added += 2 if strategy == "manhattan" else 1
+                else:
+                    result.failed += 1
+                    result.errors.append(f"Failed: {pair.net_name} ({pair.ref_a}.{pair.pad_a} → {pair.ref_b}.{pair.pad_b})")
+            except Exception as e:
+                result.failed += 1
+                result.errors.append(f"{pair.net_name}: {e}")
+
+        return result
+
+    def route_multilayer(
+        self,
+        width_mm: float = 0.15,
+        power_width_mm: float = 0.4,
+        power_nets: Optional[set[str]] = None,
+        net_widths: Optional[dict[str, float]] = None,
+        skip_nets: Optional[set[str]] = None,
+        via_size_mm: float = 0.45,
+        via_drill_mm: float = 0.2,
+        signal_layers: Optional[list[int]] = None,
+        via_penalty: float = 2,
+    ) -> RouteResult:
+        """Route on front first, overflow to back with via transitions.
+
+        For each pair:
+        1. Try manhattan on F_Cu
+        2. If collision detected, add via → route on B_Cu → add via back
+        This distributes traces across layers to reduce DRC violations.
+
+        Via size 0.45mm / drill 0.2mm = 0.125mm annular ring.
+        Eliminates drill_out_of_range + annular_width DRC errors (was 44% of all DRC).
+        """
+        if power_nets is None:
+            power_nets = {"GND", "VCC", "3V3", "5V", "VBUS", "3.3V", "5.0V"}
+        if net_widths is None:
+            net_widths = {}
+        # Signals may route on any of these copper layers. The first is the
+        # "primary" layer where the SMD pads live (F_Cu) — routing there is
+        # via-free; every other layer is reached through two transition vias.
+        # Defaulting to [F_Cu, B_Cu] preserves the classic front/overflow-back
+        # behaviour; passing inner layers too turns this into a true N-layer
+        # autorouter that spreads congested buses across free inner copper.
+        if signal_layers is None:
+            signal_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
+        primary_layer = signal_layers[0]
+
+        pairs = self.get_unrouted()
+        if skip_nets:
+            pairs = [p for p in pairs if p.net_name not in skip_nets]
+        result = RouteResult(total=len(pairs))
+
+        bbox = self.board.GetBoardEdgesBoundingBox()
+        bw = pcbnew.ToMM(bbox.GetWidth()) + 10
+        bh = pcbnew.ToMM(bbox.GetHeight()) + 10
+        self._spatial = _SpatialIndex(bw, bh, cell_mm=0.2,
+                                     mark_clearance_mm=self.clearance_mm)
+
+        for track in self.board.GetTracks():
+            s = track.GetStart()
+            e = track.GetEnd()
+            n = track.GetNet()
+            nn = n.GetNetname() if n else ""
+            self._spatial.mark(
+                pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
+                pcbnew.ToMM(e.x), pcbnew.ToMM(e.y),
+                pcbnew.ToMM(track.GetWidth()), nn, track.GetLayer(),
+            )
+        # Pad-collision awareness: never route across another net's pad.
+        self._seed_pads(plane_nets=skip_nets)
+
+        for pair in pairs:
+            if pair.net_name in net_widths:
+                w = net_widths[pair.net_name]
+            elif pair.net_name in power_nets:
+                w = power_width_mm
+            else:
+                w = width_mm
+            w = self._clamp_width_to_pads(pair, w)
+
+            net = self.board.FindNet(pair.net_name)
+            if not net:
+                result.failed += 1
+                continue
+
+            # Candidate waypoint sets — geometry is layer-independent, so the
+            # same L/Z/approach paths are scored on every routable layer.
+            dx = abs(pair.x_b - pair.x_a)
+            dy = abs(pair.y_b - pair.y_a)
+            horiz_first = dx >= dy
+
+            cand_paths = [
+                self._gen_L_path(pair, horiz_first),
+                self._gen_L_path(pair, not horiz_first),
+            ]
+            for off in [1.0, -1.0, 2.0, -2.0]:
+                cand_paths.append(self._gen_Z_path(pair, horiz_first, off))
+            cand_paths.extend(self._gen_approach_paths(pair))
+
+            # Score every candidate on every signal layer and keep the global
+            # minimum of (collision_cost + via_cost). The primary layer is
+            # via-free; any other layer costs ``via_penalty`` (two transition
+            # vias, each a hole_clearance risk in dense copper). A congested
+            # primary layer therefore spills a bus onto a free inner/back layer
+            # only when doing so removes more collisions than the vias add —
+            # never forcing a path that ploughs through other nets when a
+            # cleaner layer exists.
+            best = None  # (total_cost, layer, path)
+            for ly in signal_layers:
+                via_cost = 0 if ly == primary_layer else via_penalty
+                for path in cand_paths:
+                    c = self._path_cost(path, w, pair.net_name, ly) + via_cost
+                    if best is None or c < best[0]:
+                        best = (c, ly, path)
+                    if via_cost == 0 and c == 0:
+                        break  # fully clear on a via-less layer — unbeatable
+                if best is not None and best[0] == 0:
+                    break
+
+            _, chosen_layer, chosen_path = best
+
+            if chosen_layer == primary_layer:
+                path = chosen_path
+                for i in range(len(path) - 1):
+                    self._add_track_seg(
+                        path[i][0], path[i][1], path[i+1][0], path[i+1][1],
+                        w, primary_layer, net,
+                    )
+                result.tracks_added += len(path) - 1
+            else:
+                # Place layer-transition vias clear of foreign pads/holes.
+                va_x, va_y = self._clear_via_spot(
+                    pair.x_a, pair.y_a, pair.net_name, via_size_mm,
+                    extra_layer=chosen_layer)
+                vb_x, vb_y = self._clear_via_spot(
+                    pair.x_b, pair.y_b, pair.net_name, via_size_mm,
+                    extra_layer=chosen_layer)
+                for vx, vy in ((va_x, va_y), (vb_x, vb_y)):
+                    via = pcbnew.PCB_VIA(self.board)
+                    via.SetPosition(pcbnew.VECTOR2I(
+                        pcbnew.FromMM(vx), pcbnew.FromMM(vy)))
+                    via.SetWidth(pcbnew.FromMM(via_size_mm))
+                    via.SetDrill(pcbnew.FromMM(via_drill_mm))
+                    via.SetNet(net)
+                    self.board.Add(via)
+                    if self._spatial:  # reserve via on primary + chosen layer
+                        for ly in (primary_layer, chosen_layer):
+                            self._spatial.mark(vx, vy, vx, vy, via_size_mm,
+                                               pair.net_name, ly)
+                # Routed body runs on the chosen layer between the two vias.
+                body = [(va_x, va_y)] + list(chosen_path[1:-1]) + [(vb_x, vb_y)]
+                for i in range(len(body) - 1):
+                    self._add_track_seg(
+                        body[i][0], body[i][1], body[i+1][0], body[i+1][1],
+                        w, chosen_layer, net,
+                    )
+                # Primary-layer stubs from each pad to its via.
+                self._add_track_seg(pair.x_a, pair.y_a, va_x, va_y,
+                                    w, primary_layer, net)
+                self._add_track_seg(vb_x, vb_y, pair.x_b, pair.y_b,
+                                    w, primary_layer, net)
+                result.tracks_added += len(body) - 1 + 2
+                result.vias_added += 2
+
+            result.routed += 1
+
+        return result
+
+    # -- Differential-pair routing ---------------------------------------
+    # High-speed buses (USB, HDMI, MIPI, Ethernet, LVDS …) carry their signal
+    # as two nets driven in anti-phase. They must be routed as a *coupled*
+    # pair: the two traces run parallel at a constant edge-to-edge gap (which
+    # sets the differential impedance) and are length-matched so the two
+    # halves arrive in phase. The generic point-to-point router treats them as
+    # two unrelated nets and will happily route them far apart with different
+    # lengths — destroying the differential behaviour. This routes them
+    # together instead.
+
+    # Longest / most specific conventions first so ``USB_DP`` matches ``_DP``
+    # before the bare ``P`` rule could mis-fire.
+    _DIFF_SUFFIXES = (("_DP", "_DN"), ("_DP", "_DM"), ("_P", "_N"),
+                      ("_p", "_n"), ("+", "-"), ("P", "N"))
+
+    def find_diff_pairs(
+        self, only_nets: Optional[set[str]] = None
+    ) -> list["DiffPair"]:
+        """Detect differential pairs by net-name convention.
+
+        A pair is two routable nets whose names share a base and differ only
+        by a positive/negative suffix (``CLK_P``/``CLK_N``, ``D0+``/``D0-`` …).
+        """
+        names = set()
+        for fp in self.board.GetFootprints():
+            for pad in fp.Pads():
+                n = pad.GetNet()
+                if n and n.GetNetname():
+                    names.add(n.GetNetname())
+        if only_nets is not None:
+            names &= only_nets
+
+        seen: set[str] = set()
+        out: list[DiffPair] = []
+        for name in sorted(names):
+            if name in seen:
+                continue
+            for sp, sn in self._DIFF_SUFFIXES:
+                if sp == sn or not name.endswith(sp):
+                    continue
+                # Guard the bare ``P``/``N`` case so ``GND``-style names that
+                # merely end in ``N`` are not mistaken for a pair member.
+                if sp in ("P", "N") and len(name) <= len(sp):
+                    continue
+                base = name[: -len(sp)]
+                mate = base + sn
+                if mate in names and mate != name:
+                    out.append(DiffPair(base=base, p_net=name, n_net=mate))
+                    seen.add(name)
+                    seen.add(mate)
+                    break
+        return out
+
+    def route_diff_pairs(
+        self,
+        diff_pairs: Optional[list["DiffPair"]] = None,
+        width_mm: float = 0.2,
+        gap_mm: float = 0.2,
+        signal_layers: Optional[list[int]] = None,
+        via_penalty: float = 4,
+        via_size_mm: float = 0.45,
+        via_drill_mm: float = 0.2,
+    ) -> RouteResult:
+        """Route differential pairs as coupled, length-matched parallel traces.
+
+        For each pair the two driver pads define one end and the two receiver
+        pads the other. We run a shared centreline between the endpoint
+        midpoints and offset it by ``±(gap+width)/2`` perpendicular to give two
+        parallel polylines — P on one side, N on the other — then fan each
+        polyline end back into its own pad. By construction the two traces keep
+        a constant ``gap`` and have equal length (mirror images about the
+        centreline), which is exactly the differential constraint.
+
+        The coupled pair is layer-aware: the same offset geometry is scored on
+        every routable layer (``signal_layers``, default ``[F_Cu, B_Cu]``) and
+        the pair drops to a cleaner layer *as a unit* — both halves transition
+        together through symmetric vias so they stay coupled and length-matched
+        — only when that removes more collisions than the via pairs add
+        (``via_penalty`` per half). The primary layer is via-free.
+        """
+        if diff_pairs is None:
+            diff_pairs = self.find_diff_pairs()
+        result = RouteResult(total=len(diff_pairs))
+        if not diff_pairs:
+            return result
+        if signal_layers is None:
+            signal_layers = [pcbnew.F_Cu, pcbnew.B_Cu]
+        primary_layer = signal_layers[0]
+
+        if self._spatial is None:
+            bbox = self.board.GetBoardEdgesBoundingBox()
+            bw = pcbnew.ToMM(bbox.GetWidth()) + 10
+            bh = pcbnew.ToMM(bbox.GetHeight()) + 10
+            self._spatial = _SpatialIndex(bw, bh, cell_mm=0.2,
+                                          mark_clearance_mm=self.clearance_mm)
+            for track in self.board.GetTracks():
+                s, e = track.GetStart(), track.GetEnd()
+                n = track.GetNet()
+                self._spatial.mark(
+                    pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
+                    pcbnew.ToMM(e.x), pcbnew.ToMM(e.y),
+                    pcbnew.ToMM(track.GetWidth()),
+                    n.GetNetname() if n else "", track.GetLayer())
+            self._seed_pads()
+
+        # Centre-to-centre offset: half the gap plus half a trace on each side.
+        off = (gap_mm + width_mm) / 2.0
+        for dp in diff_pairs:
+            unrouted = {p.net_name: p for p in self.get_unrouted()}
+            pp = unrouted.get(dp.p_net)
+            pn = unrouted.get(dp.n_net)
+            net_p = self.board.FindNet(dp.p_net)
+            net_n = self.board.FindNet(dp.n_net)
+            if not (pp and pn and net_p and net_n):
+                result.failed += 1
+                continue
+
+            # Endpoint midpoints define the shared centreline. Pad A of each
+            # net is the "near" end; pads were ordered by get_unrouted's MST.
+            ax = (pp.x_a + pn.x_a) / 2.0
+            ay = (pp.y_a + pn.y_a) / 2.0
+            bx = (pp.x_b + pn.x_b) / 2.0
+            by = (pp.y_b + pn.y_b) / 2.0
+            dx, dy = bx - ax, by - ay
+            length = math.hypot(dx, dy)
+            if length < 1e-6:
+                result.failed += 1
+                continue
+            # Unit perpendicular to the centreline.
+            ux, uy = -dy / length, dx / length
+
+            # P sits on the side its near pad already lies; keep N opposite so
+            # the traces never cross over the centreline.
+            side = 1.0
+            if ((pp.x_a - ax) * ux + (pp.y_a - ay) * uy) < 0:
+                side = -1.0
+
+            def _offsets(sgn):
+                return ((ax + ux * off * sgn, ay + uy * off * sgn),
+                        (bx + ux * off * sgn, by + uy * off * sgn))
+
+            # The coupled body is the perpendicular-offset segment between the
+            # two endpoint midpoints; score it on every layer for both halves.
+            a_p, b_p = _offsets(side)
+            a_n, b_n = _offsets(-side)
+            best = None  # (cost, layer)
+            for ly in signal_layers:
+                via_cost = 0 if ly == primary_layer else via_penalty
+                c = (self._path_cost([a_p, b_p], width_mm, dp.p_net, ly)
+                     + self._path_cost([a_n, b_n], width_mm, dp.n_net, ly)
+                     + via_cost)
+                if best is None or c < best[0]:
+                    best = (c, ly)
+                if c == 0:
+                    break
+            chosen_layer = best[1]
+            # Real-clearance short guard. The emitted geometry is the whole
+            # fan-in→body→fan-in polyline of each half. When the pair's two pads
+            # lie along the route axis the constant-gap body sweeps straight
+            # over the opposite net's pad — a short — yet the body-only cost
+            # above (and the old code) never saw it. Re-check each half's full
+            # polyline against foreign pads at the *true* DRC clearance (not the
+            # inflated routing keep-out, which would also veto clean pairs). If
+            # it would collide, decline the pair and leave it to the collision-
+            # aware generic router. 知止不殆.
+            poly_p = [(pp.x_a, pp.y_a), a_p, b_p, (pp.x_b, pp.y_b)]
+            poly_n = [(pn.x_a, pn.y_a), a_n, b_n, (pn.x_b, pn.y_b)]
+            if (self._pad_obstructed(poly_p, width_mm, dp.p_net, primary_layer)
+                    or self._pad_obstructed(
+                        poly_n, width_mm, dp.n_net, primary_layer)):
+                result.failed += 1
+                continue
+
+            def _emit(pair, net, sgn):
+                a_off, b_off = _offsets(sgn)
+                if chosen_layer == primary_layer:
+                    poly = [(pair.x_a, pair.y_a), a_off, b_off,
+                            (pair.x_b, pair.y_b)]
+                    for i in range(len(poly) - 1):
+                        self._add_track_seg(poly[i][0], poly[i][1],
+                                            poly[i + 1][0], poly[i + 1][1],
+                                            width_mm, primary_layer, net)
+                    return len(poly) - 1, 0
+                # Drop to the chosen layer through a symmetric via at each end.
+                va = self._clear_via_spot(*a_off, net.GetNetname(), via_size_mm,
+                                          extra_layer=chosen_layer)
+                vb = self._clear_via_spot(*b_off, net.GetNetname(), via_size_mm,
+                                          extra_layer=chosen_layer)
+                for vx, vy in (va, vb):
+                    via = pcbnew.PCB_VIA(self.board)
+                    via.SetPosition(pcbnew.VECTOR2I(
+                        pcbnew.FromMM(vx), pcbnew.FromMM(vy)))
+                    via.SetWidth(pcbnew.FromMM(via_size_mm))
+                    via.SetDrill(pcbnew.FromMM(via_drill_mm))
+                    via.SetNet(net)
+                    self.board.Add(via)
+                    for mly in (primary_layer, chosen_layer):
+                        self._spatial.mark(vx, vy, vx, vy, via_size_mm,
+                                           net.GetNetname(), mly)
+                self._add_track_seg(pair.x_a, pair.y_a, va[0], va[1],
+                                    width_mm, primary_layer, net)
+                self._add_track_seg(va[0], va[1], vb[0], vb[1],
+                                    width_mm, chosen_layer, net)
+                self._add_track_seg(vb[0], vb[1], pair.x_b, pair.y_b,
+                                    width_mm, primary_layer, net)
+                return 3, 2
+
+            t_p, v_p = _emit(pp, net_p, side)
+            t_n, v_n = _emit(pn, net_n, -side)
+            result.tracks_added += t_p + t_n
+            result.vias_added += v_p + v_n
+            result.routed += 1
+
+        return result
+
+    def validate_diff_pairs(
+        self, diff_pairs: Optional[list["DiffPair"]] = None
+    ) -> list["DiffPairReport"]:
+        """Measure the routed quality of each differential pair (read-only).
+
+        Sums the routed track length of each half from the board and reports
+        the intra-pair length skew. Pure analysis — it never mutates the board,
+        so it cannot regress routing; it just surfaces whether the high-speed
+        constraint actually held after routing.
+        """
+        if diff_pairs is None:
+            diff_pairs = self.find_diff_pairs()
+
+        lengths: dict[str, float] = {}
+        for track in self.board.GetTracks():
+            # PCB_ARC is a track item too; counting only PCB_TRACK and measuring
+            # the straight chord drops arc segments entirely (freerouting emits
+            # arcs), badly under-reporting length and skew. GetLength() is the
+            # true routed length of straight *and* arc segments.
+            if track.GetClass() not in ("PCB_TRACK", "PCB_ARC"):
+                continue
+            n = track.GetNet()
+            name = n.GetNetname() if n else ""
+            if not name:
+                continue
+            lengths[name] = lengths.get(name, 0.0) + pcbnew.ToMM(
+                track.GetLength())
+
+        out: list[DiffPairReport] = []
+        for dp in diff_pairs:
+            pl = lengths.get(dp.p_net, 0.0)
+            nl = lengths.get(dp.n_net, 0.0)
+            out.append(DiffPairReport(
+                base=dp.base, p_net=dp.p_net, n_net=dp.n_net,
+                p_len_mm=pl, n_len_mm=nl, routed=(pl > 0 and nl > 0)))
+        return out
+
+    def _net_lengths(self, nets: set[str]) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for track in self.board.GetTracks():
+            # Include arcs and use the true routed length (see
+            # validate_diff_pairs): chord-only over PCB_TRACK drops arcs.
+            if track.GetClass() not in ("PCB_TRACK", "PCB_ARC"):
+                continue
+            n = track.GetNet()
+            name = n.GetNetname() if n else ""
+            if name not in nets:
+                continue
+            out[name] = out.get(name, 0.0) + pcbnew.ToMM(track.GetLength())
+        return out
+
+    def tune_length_group(
+        self, nets: list[str], target_len_mm: Optional[float] = None,
+        amplitude_mm: float = 1.0, tolerance_mm: float = 0.1,
+    ) -> dict[str, float]:
+        """Equalize routed length across a group of nets (opt-in).
+
+        For each net shorter than the group's longest (or an explicit
+        ``target_len_mm``), the net's longest straight track is replaced with a
+        square-wave serpentine that adds exactly the length deficit: ``k``
+        perpendicular excursions of amplitude ``A`` add ``2*A*k`` (the along-
+        baseline travel is preserved), so the added length is exact by
+        construction. Returns ``{net: final_length_mm}``.
+
+        Read-only of any default path — :func:`auto_design` never calls this, so
+        it cannot move the DRC benchmarks. It is the natural follow-on to
+        :meth:`validate_diff_pairs`: that *measures* skew, this *removes* it for
+        a matched bus/group.
+        """
+        want = set(nets)
+        lengths = self._net_lengths(want)
+        target = target_len_mm if target_len_mm is not None else max(
+            lengths.values(), default=0.0)
+
+        for net in nets:
+            cur = lengths.get(net, 0.0)
+            delta = target - cur
+            if delta <= tolerance_mm or cur <= 0:
+                continue
+            longest = None
+            for track in self.board.GetTracks():
+                if track.GetClass() != "PCB_TRACK":
+                    continue
+                tn = track.GetNet()
+                if not tn or tn.GetNetname() != net:
+                    continue
+                s, e = track.GetStart(), track.GetEnd()
+                ln = math.hypot(pcbnew.ToMM(e.x - s.x), pcbnew.ToMM(e.y - s.y))
+                if longest is None or ln > longest[0]:
+                    longest = (ln, track)
+            if longest is None:
+                continue
+            _, track = longest
+            s, e = track.GetStart(), track.GetEnd()
+            x0, y0 = pcbnew.ToMM(s.x), pcbnew.ToMM(s.y)
+            x1, y1 = pcbnew.ToMM(e.x), pcbnew.ToMM(e.y)
+            width_mm = pcbnew.ToMM(track.GetWidth())
+            layer = track.GetLayer()
+            net_obj = track.GetNet()
+            pts = self._square_meander(
+                x0, y0, x1, y1, delta, amplitude_mm, width_mm)
+            self.board.Remove(track)
+            for i in range(len(pts) - 1):
+                self._add_track_seg(pts[i][0], pts[i][1], pts[i + 1][0],
+                                    pts[i + 1][1], width_mm, layer, net_obj)
+
+        return self._net_lengths(want)
+
+    @staticmethod
+    def _square_meander(x0, y0, x1, y1, add_mm, amplitude_mm, width_mm):
+        """Square-wave detour from (x0,y0)->(x1,y1) that adds ``add_mm`` length.
+
+        ``k`` bumps each add ``2*A`` (two perpendicular legs); amplitude is
+        recomputed to ``add_mm/(2k)`` so the total is exact. Bumps alternate
+        sides and are spaced by their own width so they never overlap.
+        """
+        baseline = math.hypot(x1 - x0, y1 - y0)
+        if baseline <= 0 or add_mm <= 0:
+            return [(x0, y0), (x1, y1)]
+        ux, uy = (x1 - x0) / baseline, (y1 - y0) / baseline
+        nx, ny = -uy, ux  # perpendicular unit
+        k = max(1, round(add_mm / (2.0 * amplitude_mm)))
+        amp = add_mm / (2.0 * k)  # exact added length = 2*amp*k = add_mm
+        bump_w = max(2.0 * width_mm, baseline / (k + 1))
+        if k * bump_w > baseline:  # keep bumps inside the baseline
+            bump_w = baseline / k
+        span = k * bump_w
+        start = (baseline - span) / 2.0
+
+        def at(dist, off):
+            return (x0 + ux * dist + nx * off, y0 + uy * dist + ny * off)
+
+        pts = [(x0, y0), at(start, 0.0)]
+        for i in range(k):
+            side = amp if i % 2 == 0 else -amp
+            p = start + i * bump_w
+            pts.append(at(p, side))
+            pts.append(at(p + bump_w, side))
+            pts.append(at(p + bump_w, 0.0))
+        pts.append((x1, y1))
+        return pts
+
+    def export_dsn(self, output_path: str | Path) -> bool:
+        """Export board to Specctra DSN format for external routing.
+
+        Use with freerouting: java -jar freerouting.jar -de board.dsn
+        Then import the .ses file back.
+        """
+        output_path = Path(output_path)
+        try:
+            # Save board first
+            with tempfile.NamedTemporaryFile(suffix=".kicad_pcb", delete=False) as f:
+                temp_pcb = Path(f.name)
+
+            pcbnew.SaveBoard(str(temp_pcb), self.board)
+
+            # Use kicad-cli to export DSN
+            proc = subprocess.run(
+                ["kicad-cli", "pcb", "export", "specctra_dsn",
+                 "--output", str(output_path), str(temp_pcb)],
+                capture_output=True, text=True, timeout=60,
+            )
+
+            temp_pcb.unlink(missing_ok=True)
+            return proc.returncode == 0 and output_path.exists()
+
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+
+    def import_ses(self, ses_path: str | Path) -> bool:
+        """Import Specctra SES (routed) file back into board.
+
+        After freerouting processes the DSN, it produces a .ses file
+        with the routing solution.
+        """
+        ses_path = Path(ses_path)
+        if not ses_path.exists():
+            return False
+
+        try:
+            # kicad-cli can import SES
+            with tempfile.NamedTemporaryFile(suffix=".kicad_pcb", delete=False) as f:
+                temp_pcb = Path(f.name)
+
+            pcbnew.SaveBoard(str(temp_pcb), self.board)
+
+            proc = subprocess.run(
+                ["kicad-cli", "pcb", "import", "specctra_ses",
+                 "--output", str(temp_pcb), str(ses_path)],
+                capture_output=True, text=True, timeout=60,
+            )
+
+            if proc.returncode == 0:
+                # Reload the board with routing
+                routed = pcbnew.LoadBoard(str(temp_pcb))
+                if routed:
+                    # Copy tracks from routed board
+                    for track in routed.GetTracks():
+                        self.board.Add(track.Duplicate())
+                    return True
+
+            temp_pcb.unlink(missing_ok=True)
+            return False
+
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Net-Class Aware Routing — WISDOM: different nets need different treatment
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def classify_nets(board: pcbnew.BOARD) -> dict[str, str]:
+    """Classify all nets into categories for routing decisions.
+
+    Categories: power, ground, signal, high_speed, differential
+    This is WISDOM — knowing HOW to route, not just WHERE.
+    """
+    classifications = {}
+    net_count = board.GetNetCount()
+
+    for i in range(net_count):
+        net = board.FindNet(i)
+        if not net:
+            continue
+        name = net.GetNetname()
+        if not name:
+            continue
+
+        upper = name.upper()
+        if any(g in upper for g in ["GND", "VSS", "AGND", "DGND", "PGND"]):
+            classifications[name] = "ground"
+        elif any(p in upper for p in ["VCC", "VDD", "3V3", "5V", "VBUS",
+                                       "3.3V", "5.0V", "12V", "VBAT"]):
+            classifications[name] = "power"
+        elif any(d in upper for d in ["USB_D+", "USB_D-", "D+", "D-",
+                                       "LVDS", "HDMI"]):
+            classifications[name] = "differential"
+        elif any(h in upper for h in ["CLK", "CLOCK", "MCLK", "SCK",
+                                       "SDIO", "RMII", "RGMII"]):
+            classifications[name] = "high_speed"
+        else:
+            classifications[name] = "signal"
+
+    return classifications
+
+
+def recommended_width(net_class: str) -> float:
+    """Recommended trace width for a net class (mm).
+
+    WISDOM from PCB design practice:
+    - Power: wider for current capacity
+    - Ground: wide, prefer planes
+    - Signal: minimum viable width
+    - High-speed: impedance controlled
+    - Differential: impedance matched pair
+    """
+    widths = {
+        "power": 0.5,
+        "ground": 0.5,
+        "signal": 0.2,
+        "high_speed": 0.15,
+        "differential": 0.1,
+    }
+    return widths.get(net_class, 0.25)

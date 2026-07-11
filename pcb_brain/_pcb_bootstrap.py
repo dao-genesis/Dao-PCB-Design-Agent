@@ -119,6 +119,7 @@ _KICAD_CLI_CANDIDATES = _glob_kicad_clis() + [
 # freerouting 搜索路径
 _FREEROUTING_CANDIDATES = [
     PCB_ROOT / "freerouting.jar",
+    PROJECT_ROOT / "dao_kicad" / "tools" / "freerouting.jar",
     Path(r"D:\freerouting\freerouting.jar"),
     Path.home() / "freerouting" / "freerouting.jar",
 ]
@@ -141,6 +142,7 @@ def _glob_javas() -> List[str]:
 _JAVA_CANDIDATES = [
     PCB_ROOT / "jre" / "bin" / "java.exe",
     PCB_ROOT / "jre" / "bin" / "java",
+    PROJECT_ROOT / "dao_kicad" / "tools" / "jdk" / "bin" / "java",
 ] + _glob_javas()
 
 

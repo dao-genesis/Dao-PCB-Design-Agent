@@ -1,0 +1,1995 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""DAO 纯 RPC 底层驱动 —— 嘉立创 EDA 专业版桌面客户端（零 GUI）。
+
+道法自然：本驱动**完全不依赖任何屏幕点击 / 合成鼠键 / DOM 抓取**。所有 PCB
+构建动作均直达官方 `window._EXTAPI_ROOT_`（94 命名空间 / 752 方法），经 Chrome
+远程调试协议（CDP）在渲染层内执行——「用户能做的我都能，且更快更准；用户做不了
+的我也能」。
+
+逆向落定的「五把钥匙」（本会话硬验证，全程零 GUI）：
+
+1. 建工程：renderer 内 `fetch('/api/client/createProject', …)` → openProject。
+2. 放封装：`pcb_PrimitiveComponent.create(component, layer, x, y, rot, lock)`
+   直接把社区器件封装落在 PCB 上（**绕开原理图→同步对话框**这一 GUI 死结）。
+3. 连网络（本会话突破）：器件焊盘 `setState_Net(net)` + `done()` 直接给焊盘绑网，
+   官方 d.ts 明示焊盘其它属性「不支持修改」**唯独 net 不在禁改之列**且 `done()`
+   标注「将更改应用到画布」→ 实测 nets 立刻出现、焊盘 net 落定。这是**纯 RPC 连通性
+   的本源**，取代「Apply Changes」GUI 点击与无效的 setNetlist。
+4. 覆铜（本会话突破）：`pcb_PrimitivePour.create(...)` 造覆铜边框，再在**同一活对象**
+   上 `rebuildCopperRegion()`（官方 alpha 方法）算出实铜 → 取代 GUI 快捷键 Shift+B。
+5. 布线 / 板框 / DRC / 导出：`pcb_PrimitiveLine.create(net, layer, …)` 画带网铜线、
+   `pcb_PrimitivePolyline.create('',11,poly,…)` 画板框、`pcb_Drc.check(...)` 取结构化
+   违规、`pcb_ManufactureData.get{Gerber,Bom,PickAndPlace}File` 读 Blob 导出。
+
+用法：
+    drv = DaoRpc(port=29230)
+    res = drv.build_board(SPEC)        # 见 examples/ 下的板谱
+"""
+import base64
+import difflib
+import glob
+import json
+import os
+import subprocess
+import time
+
+import dao_eda_cdp_driver as _d
+import dao_platform as _plat
+import eda_api
+
+EXT = "window._EXTAPI_ROOT_"
+
+# 全量逆流目录（extract_extapi_dts.py 产出）：95 命名空间 / 749 方法 + 词汇。
+# 仅用于「NO_API 错误路径」上给出最接近的真实方法名建议（成功路径零负担）。
+_FULL_CATALOG = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "extapi_full_catalog.json")
+_CAT_INDEX = None  # {namespace: [method_names]} 惰性加载
+
+
+def _catalog_index():
+    global _CAT_INDEX
+    if _CAT_INDEX is None:
+        idx = {}
+        try:
+            with open(_FULL_CATALOG, encoding="utf-8") as f:
+                cat = json.load(f)
+            for ns, v in cat.get("namespaces", {}).items():
+                idx[ns] = [m["name"] for m in v.get("methods", [])]
+        except Exception:
+            pass
+        _CAT_INDEX = idx
+    return _CAT_INDEX
+
+
+def _suggest_api(ns_api):
+    """对 `namespace.method` 给出基于全量目录的最接近建议（教训固化：名必取自目录）。"""
+    idx = _catalog_index()
+    if not idx or "." not in ns_api:
+        return ""
+    ns, _, meth = ns_api.partition(".")
+    if ns not in idx:
+        near_ns = _dedup(difflib.get_close_matches(ns, list(idx), n=4, cutoff=0.6))
+        return ("未知命名空间 %r；相近：%s" % (ns, ", ".join(near_ns))) if near_ns \
+            else ("未知命名空间 %r（全量目录共 %d 个命名空间）" % (ns, len(idx)))
+    if meth in idx[ns]:
+        return ("`%s.%s` 已在声明中但运行期不可达（declared-not-live）——"
+                "可能需特定文档/上下文已打开，或本版本未暴露。" % (ns, meth))
+    near = _dedup(difflib.get_close_matches(meth, idx[ns], n=6, cutoff=0.5))
+    if near:
+        return "`%s` 无此方法；是否想用：%s" % (ns, ", ".join(near))
+    return "`%s` 无 %r；该命名空间共 %d 个方法（见 EXTAPI_REFERENCE.md）" % (
+        ns, meth, len(idx[ns]))
+
+
+def _dedup(seq):
+    seen, out = set(), []
+    for x in seq:
+        if x not in seen:
+            seen.add(x); out.append(x)
+    return out
+
+
+TOP, BOTTOM, MULTI, OUTLINE = 1, 2, 11, 11
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))
+_FREEROUTING_JAR = os.path.join(
+    _REPO_ROOT, "dao_kicad", "tools", "freerouting.jar")
+# freerouting 2.2.4 是 Java25 字节码（class file 69.0）→ 低版本 JRE 起不来。
+_MIN_JAVA = 25
+# 安装器把 Temurin JDK 装在 jar 同级的 jdk/ 下——这是首选且确定可用的运行时。
+_BUNDLED_JAVA = os.path.join(os.path.dirname(_FREEROUTING_JAR), "jdk", "bin",
+                             "java")
+
+
+def _java_major(p):
+    try:
+        out = subprocess.run([p, "-version"], capture_output=True,
+                             text=True).stderr
+        return int(out.split('"')[1].split(".")[0])
+    except Exception:
+        return 0
+
+
+def _find_java():
+    """挑**能真正跑 freerouting** 的 JDK（≥Java25）。
+
+    本源教训：旧实现的 glob 只扫 `/home/*/jdk*`、`/usr/lib/jvm/*`、`/opt/*`，
+    **够不到仓库自带的 `dao_kicad/tools/jdk/bin/java`**，于是悄悄退回系统 Java17
+    → freerouting 抛 `UnsupportedClassVersionError` 不产 SES，链路却拿旧 SES 续命
+    （见 freeroute 的新鲜度校验）→ 假性「布线回归」。故此处：①优先自带 JDK；
+    ②候选必须 major≥25；③一个都不达标就**显式报错**，绝不静默退回低版本。
+    """
+    env = os.environ.get("FREEROUTING_JAVA")
+    if env and os.path.isfile(env) and _java_major(env) >= _MIN_JAVA:
+        return env
+    if os.path.isfile(_BUNDLED_JAVA) and _java_major(_BUNDLED_JAVA) >= _MIN_JAVA:
+        return _BUNDLED_JAVA
+    cands = []
+    for pat in ("/home/*/jdk*/bin/java", "/home/*/**/jdk/bin/java",
+                "/usr/lib/jvm/*/bin/java", "/opt/*/bin/java"):
+        cands += glob.glob(pat, recursive=True)
+    cands = [(c, _java_major(c)) for c in cands]
+    cands = [(c, m) for c, m in cands if m >= _MIN_JAVA]
+    if cands:
+        return max(cands, key=lambda cm: cm[1])[0]
+    raise DaoRpcError(
+        "找不到 ≥Java%d 的运行时跑 freerouting（自带 %s 缺失？跑 "
+        "dao_kicad/tools/install_freerouting.py 重装，或设 FREEROUTING_JAVA）"
+        % (_MIN_JAVA, _BUNDLED_JAVA))
+
+
+class DaoRpcError(RuntimeError):
+    pass
+
+
+class DaoRpc:
+    """纯 RPC 驱动：组合「五把钥匙」成全链路零 GUI 建板。"""
+
+    def __init__(self, port=29230, projects_dir=None):
+        self.port = port
+        self.eda = eda_api.EDA(port=port, validate=False)
+        self.ws = _d.connect_editor(port)
+        self.metrics = {"rpc_calls": 0, "evals": 0}
+        self.projects_dir = projects_dir or self._default_projects_dir()
+
+    def _default_projects_dir(self):
+        """默认工程目录 —— 按**引擎侧 OS**拼写(引擎 OS 可能 ≠ 宿主 OS)。
+
+        本源差异:Linux 宿主经 Wine 跑 Windows 版引擎时,引擎把 POSIX 路径
+        normalize 成反斜杠形(`/home/x` → `\\home\\x`),项目注册表(projectPaths)
+        按该拼写索引;`dmt_Project.getAllProjectsUuid(dir)` 是对 dir 字符串全等
+        过滤,形不同则永返 [] → openProject 链断。故以引擎自报路径判定引擎
+        OS,把目录翻译成引擎侧拼写 —— 同一套驱动在原生/Wine 端同行。"""
+        posix_dir = os.path.expanduser("~/Documents/LCEDA-Pro/projects")
+        try:
+            eda_path = self._call("sys_FileSystem.getEdaPath", timeout=15)
+        except Exception:
+            eda_path = None
+        eng_os = _plat.engine_os_of_path(eda_path or posix_dir)
+        return _plat.engine_dir(posix_dir, eng_os)
+
+    # ---------- 底层封装 ----------
+    def _eval(self, js, timeout=45, retries=2):
+        """求值。对**瞬时** NO_RESULT(CDP 偶发返回空结果——本会话实证:同一 eval
+        立即重发即成)做有限重试并自愈重连;真正的脚本错误/超时如实抛出,不掩盖。"""
+        last = None
+        for attempt in range(retries + 1):
+            self.metrics["evals"] += 1
+            v, e = _d.evaluate(self.ws, js, await_promise=True, timeout=timeout)
+            if not e:
+                try:
+                    return json.loads(v) if v else None
+                except Exception:
+                    return v
+            last = e
+            if "NO_RESULT" in str(e) and attempt < retries:
+                time.sleep(0.8 * (attempt + 1))
+                try:                       # 重连编辑器会话再发(防 ws 半死)
+                    self.ws = _d.connect_editor(self.port)
+                except Exception:
+                    pass
+                continue
+            break
+        raise DaoRpcError("eval: %s" % last)
+
+    def _call(self, ns_api, *args, **kw):
+        self.metrics["rpc_calls"] += 1
+        try:
+            return self.eda.call(ns_api, *args, **kw)
+        except Exception as e:
+            # 仅错误路径：NO_API（名不存在）时附上全量目录的最接近建议，
+            # 把「臆造名一律 NO_API」的教训变成可操作的纠错提示。
+            if "NO_API" in str(e):
+                hint = _suggest_api(ns_api)
+                if hint:
+                    raise DaoRpcError("%s | %s" % (e, hint))
+            raise
+
+    # ---------- 高频写侧·内部事务直调(改挂 dao_core) ----------
+    def _core(self):
+        """惰性接通 dao_core(L2 内部事务/总线直通);首次调用才连,失败如实抛。"""
+        c = getattr(self, "_dao_core", None)
+        if c is None:
+            import dao_core as _DC
+            c = _DC.DaoCore(port=self.port)
+            self._dao_core = c
+        return c
+
+    def batch_write_core(self, calls, settle_ms=0):
+        """把一批 facade 写**压进一次 CDP 往返**经 dao_core 落到 je 共享事务栈。
+
+        对比现有「每写一发 `_call`」(N 次 Python↔CDP 往返):本径 1 次往返即成,且
+        栈增量==写数(共栈落库,dao_core_writeproof 硬证 delta==N、快于逐发、可整体
+        je-undo 回退)。calls 形如
+          [{"ns":"pcb_PrimitiveVia","fn":"create","args":["",x,y,hole,dia]}, ...]
+        返回 dao_core.batch_write 的 {elapsed_ms,stack_before,stack_after,delta,results}。"""
+        return self._core().batch_write(calls, settle_ms=settle_ms)
+
+    def place_vias_core(self, vias):
+        """高频建 via 的内部事务批写径:vias=[(net,x,y,hole,dia),...] → 一次往返共栈落库。
+        与逐个 `self._call('pcb_PrimitiveVia.create',...)` 等效但省 N-1 次往返。"""
+        calls = [{"ns": "pcb_PrimitiveVia", "fn": "create",
+                  "args": [n, x, y, h, d]} for (n, x, y, h, d) in vias]
+        return self.batch_write_core(calls)
+
+    def undo_core(self, n=1):
+        """经 dao_core 内部事务管理器整体回退 n 步(高频写侧的「不劣化」闸)。"""
+        return self._core().undo_n(n)
+
+    # ---------- 钥匙 1：工程 ----------
+    def create_project(self, name):
+        """renderer 内 REST 建工程（嘉立创桌面的规范本源入口），返回工程 uuid。"""
+        # 同名工程已存在时 REST 返回 success:false → 追加短时戳保证可重跑、确定可达;
+        # 再缀端口区分同机双引擎(原生/Wine 共享同一工程目录,同秒同名会双双失败)
+        for cand in (name, "%s_%d" % (name, int(time.time())),
+                     "%s_%d_p%d" % (name, int(time.time()), self.port)):
+            js = (r'''(async function(){var b={path:%s,name:%s,content:"",public:false,default_sheet:""};
+var r=await fetch("/api/client/createProject",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});
+var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.result||{})[0]});})()'''
+                  % (json.dumps(self.projects_dir), json.dumps(cand)))
+            o = self._eval(js)
+            if o and o.get("uuid"):
+                self.project_name = cand
+                return o["uuid"]
+        raise DaoRpcError("create_project failed: %s" % o)
+
+    def open_pcb(self, project_uuid, settle=4):
+        """打开工程并切到 PCB 文档；返回 pcb_uuid。
+
+        桌面半离线版关键：`/api/client/createProject` 只把 `.eprj2` 落盘，
+        工程**尚未注册进内存工作区索引**，此时直接 `openProject(uuid)` 会
+        "open=True 但 getAllBoardsInfo 为空"。先以工程目录调一次
+        `getAllProjectsUuid(path)` 触发扫描注册，`openProject` 即可正常加载板。
+        （Web 在线版由 REST 建工程即注册，无需此步——这是桌面层独有的本源差异。）
+        """
+        # 本源教训（冷启动竞争）：刚启动的桌面客户端，**首个** createProject→scan→
+        # openProject 常出现 "open=True 但 getAllBoardsInfo 为空"——工作区索引尚未把
+        # 新落盘的 .eprj2 注册到位（启动期还在跑 autoBackup/库索引等异步初始化）。
+        # 暖机后此竞争消失。故此处不再「两发即弃」，而是**带退避地反复重扫+重开**，
+        # 让冷启动后的首块板也确定可达（实测首发失败、暖机后秒过 → 轮询即收敛）。
+        boards = None
+        for attempt in range(8):
+            self._call("dmt_Project.getAllProjectsUuid", self.projects_dir, timeout=20)
+            self._call("dmt_Project.openProject", project_uuid, timeout=30)
+            time.sleep(settle + min(attempt, 4))  # 线性退避，给冷启动初始化留足时间
+            boards = self._call("dmt_Board.getAllBoardsInfo")
+            if boards:
+                break
+        if not boards:
+            raise DaoRpcError("no boards after openProject")
+        pcb_uuid = boards[0]["pcb"]["uuid"]
+        self._call("dmt_EditorControl.openDocument", pcb_uuid, timeout=20)
+        time.sleep(settle)
+        self.pcb_uuid = pcb_uuid
+        return pcb_uuid
+
+    def reopen_pcb(self, settle=3):
+        """重开当前 PCB 文档,把图元从**已存盘的板**重新加载为**同步态**。
+
+        本源用途:freerouting `importAutoRouteSes` 之后,布线段在**本会话**里短暂处于
+        未落定的异步态,`modify` 会抛 `t.isAsync is not a function`(时窗不定)。因
+        build_board 在布线后已 `save()` 落盘,重开文档即从盘上**干净重载**为同步图元,
+        使随后的逐段 `modify`(布线后逐类线宽)**确定可写**——比静候/触发更稳的收敛。"""
+        if not getattr(self, "pcb_uuid", None):
+            return False
+        self._call("dmt_EditorControl.openDocument", self.pcb_uuid, timeout=20)
+        time.sleep(settle)
+        return True
+
+    # ---------- 器件检索 ----------
+    def search_device(self, query, index=0, retries=3):
+        """按关键字检索器件，返回 {uuid, libraryUuid, name}。
+
+        桌面半离线版的 `lib_Device.search` 走在线系统库，偶发瞬态失败
+        （`lib_Device.search -> [object Object]`）；此处带退避重试，
+        让大板（如 STM32，单板数十次检索）的整链路稳定可重跑。
+        """
+        last = None
+        for attempt in range(retries):
+            try:
+                res = self._call("lib_Device.search", query, timeout=30)
+            except Exception as e:  # 瞬态在线库错误 → 退避重试
+                last = e
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            if res:
+                d = res[index]
+                return {"uuid": d["uuid"], "libraryUuid": d["libraryUuid"],
+                        "name": d.get("name")}
+            last = DaoRpcError("device not found: %s" % query)
+            time.sleep(1.0)
+        raise DaoRpcError("search_device failed for %r: %s" % (query, last))
+
+    # ---------- 钥匙 2 + 3：放封装并绑网（单段 eval，活对象不出渲染层） ----------
+    def place_and_net(self, components, chunk=10):
+        """放置一批封装并给焊盘绑网（全程纯 RPC）。
+
+        components = [{"device":{uuid,libraryUuid}, "x","y","rotation",
+                       "designator", "pins":{padNumber: net}}, ...]
+        返回 {designator: primitiveId}。
+
+        本源教训（高脚数大板·本会话）：把「建件+枚举焊盘+逐脚绑网」全塞进**一发
+        大 eval**，在 ~37 件且含 48 脚 QFP（约 120 次 setState_Net→done）时单发耗时
+        破 90s → CDP `NO_RESULT`。故**按 `chunk` 件分批多发 eval**：每批工作量有界、
+        各批独立（器件间无依赖），ids/计数跨批累加。既治超时、又对任意规模线性可扩。"""
+        ids, bound = {}, 0
+        for i in range(0, len(components), max(1, chunk)):
+            part = components[i:i + max(1, chunk)]
+            o = self._place_chunk(part)
+            ids.update(o["ids"])
+            bound += o.get("bound", 0)
+        self._last_bound = bound
+        return ids
+
+    def _place_chunk(self, components):
+        js = r'''(async function(){try{
+  var PC=window._EXTAPI_ROOT_.pcb_PrimitiveComponent;
+  var spec=%s; var ids={}; var log=0;
+  for(var i=0;i<spec.length;i++){
+    var s=spec[i];
+    var c={uuid:s.device.uuid, libraryUuid:s.device.libraryUuid};
+    var r=await PC.create(c, s.layer||1, s.x|0, s.y|0, s.rotation|0, false);
+    var id=r.getState_PrimitiveId();
+    ids[s.designator]=id;
+    if(s.designator && PC.modify){ try{ await PC.modify(id,{designator:s.designator}); }catch(e){} }
+    var pads=await PC.getAllPinsByPrimitiveId(id);
+    for(var k=0;k<pads.length;k++){
+      var p=pads[k];
+      var num=p.getState_PadNumber?p.getState_PadNumber():p.padNumber;
+      var net=s.pins?s.pins[String(num)]:null;
+      if(net){ p.setState_Net(net); await p.done(); log++; }
+    }
+  }
+  return JSON.stringify({ids:ids, bound:log});
+}catch(e){return JSON.stringify({err:String(e&&e.message||e), stack:String(e&&e.stack).slice(0,300)});}})()''' % json.dumps(components)
+        o = self._eval(js, timeout=90)
+        if not o or o.get("err"):
+            raise DaoRpcError("place_and_net: %s" % (o and o.get("err")))
+        return o
+
+    def pad_xy(self):
+        """返回 {(designator, padNumber): (x,y,net)}，用于自动布线取脚坐标。"""
+        out = {}
+        for cid in (self._call("pcb_PrimitiveComponent.getAllPrimitiveId") or []):
+            comp = self._call("pcb_PrimitiveComponent.get", cid) or {}
+            des = (comp.get("designator") or comp.get("Designator")
+                   or comp.get("name") or cid[:6])
+            for p in (self._call("pcb_PrimitiveComponent.getAllPinsByPrimitiveId",
+                                 cid) or []):
+                out[(des, str(p.get("padNumber")))] = (
+                    p.get("x"), p.get("y"), p.get("net"))
+        return out
+
+    def auto_fanout(self, designator, pad_net, device, query="0603 10k",
+                    offset=420, depth_step=170, term_prefix="FT"):
+        """几何驱动的**通用扇出**：读某器件**真实焊盘坐标**，沿「焊盘→器件中心」反向
+        把每条信号脚就近引一颗 2-pad 串接元件(默认 0603 电阻)到器件外侧，绑 pin1→该网、
+        pin2→悬空端子网。**不对任何封装的引脚布局做硬假设**——逃逸边/方向全由焊盘几何推出。
+
+        本源(qfp 板实证升华)：高脚数器件能否一次布通，命门在**放置质量**而非布线器——
+        detached 栅格放 32 扇出残留 8 Connection Error，改「就近同侧逃逸」即一次过 DRC=0。
+        本法把这套手调几何**自动化**：①取该器件各脚 (x,y) 算中心;②每脚按 dx/dy 主轴定
+        逃逸边(右/左/上/下);③同侧按沿边坐标排序、逐颗递增 `depth_step` 错开深度,使同侧
+        串件排成不抢道的一列;④串件落在「脚的垂直对齐线 × 外延深度」处,回连最短最直。
+
+        参数：`designator` 目标器件位号(须已 place);`pad_net` {焊盘号: 网名};
+        `device` 串件检索结果(search_device 返回)或 None 时用 `query` 现检索;
+        `offset` 首颗离脚的外延(mil);`depth_step` 同侧逐颗深度递增(mil)。
+        返回 {放下的串件位号: 网名}。"""
+        if device is None:
+            device = self.search_device(query)
+        pads = {pn: (x, y) for (des, pn), (x, y, _net) in self.pad_xy().items()
+                if des == designator and x is not None}
+        if not pads:
+            raise DaoRpcError("auto_fanout: 器件 %r 无可读焊盘坐标" % designator)
+        cx = sum(p[0] for p in pads.values()) / len(pads)
+        cy = sum(p[1] for p in pads.values()) / len(pads)
+        # 按逃逸边分组：主轴(|dx| vs |dy|)定边，sign 定朝向
+        sides = {"R": [], "L": [], "T": [], "B": []}
+        for pn in pad_net:
+            if pn not in pads:
+                raise DaoRpcError("auto_fanout: %s 无焊盘 %s" % (designator, pn))
+            px, py = pads[pn]
+            dx, dy = px - cx, py - cy
+            if abs(dx) >= abs(dy):
+                sides["R" if dx >= 0 else "L"].append((pn, px, py))
+            else:
+                sides["T" if dy >= 0 else "B"].append((pn, px, py))
+        comps, placed = [], {}
+        i = 0
+        for side, items in sides.items():
+            # 沿边坐标排序：左右边按 y、上下边按 x，使同侧串件顺次排开
+            items.sort(key=lambda t: t[2] if side in ("L", "R") else t[1])
+            for j, (pn, px, py) in enumerate(items):
+                net = pad_net[pn]
+                d = offset + j * depth_step
+                if side == "R":
+                    x, y, rot = px + d, py, 0
+                elif side == "L":
+                    x, y, rot = px - d, py, 0
+                elif side == "T":
+                    x, y, rot = px, py + d, 90
+                else:
+                    x, y, rot = px, py - d, 90
+                ref = "%s_%s%d" % (term_prefix, designator, i)
+                comps.append({"device": device, "layer": 1,
+                              "x": int(x), "y": int(y), "rotation": rot,
+                              "designator": ref,
+                              "pins": {"1": net, "2": "%s_%s_%d" %
+                                       (term_prefix, designator, i)}})
+                placed[ref] = net
+                i += 1
+        for k in range(0, len(comps), 10):
+            self._place_chunk(comps[k:k + 10])
+        return placed
+
+    # ---------- 钥匙 5a：布线（按网聚合焊盘，画正交铜线） ----------
+    def route_track(self, net, x1, y1, x2, y2, layer=TOP, width=10):
+        return self._call("pcb_PrimitiveLine.create", net, layer,
+                          x1, y1, x2, y2, width, False, timeout=15)
+
+    def auto_route_star(self, layer=TOP, width=10, skip_nets=()):
+        """按网把所有同网焊盘以**星形/链式正交**铜线连通（纯几何、确定性）。
+
+        skip_nets 内的网（通常是被覆铜接管的 GND/电源平面）不画铜线——覆铜会通过
+        热焊盘自动连通同网焊盘，再画地线只会与信号线交叉、徒增 Track-to-Track 违规。
+        简单板（无交叉冲突）下足够 DRC-clean；复杂板可改走 freerouting（DSN→SES）。
+        返回 {net: 段数}。
+        """
+        skip = set(skip_nets)
+        bynet = {}
+        for (des, pad), (x, y, net) in self.pad_xy().items():
+            if net and net not in skip and x is not None:
+                bynet.setdefault(net, []).append((x, y))
+        seg = {}
+        for net, pts in bynet.items():
+            if len(pts) < 2:
+                continue
+            pts = sorted(set(pts))
+            n = 0
+            for i in range(1, len(pts)):
+                (ax, ay), (bx, by) = pts[i - 1], pts[i]
+                # L 形：先水平后竖直
+                self.route_track(net, ax, ay, bx, ay, layer, width)
+                if by != ay:
+                    self.route_track(net, bx, ay, bx, by, layer, width)
+                n += 1
+            seg[net] = n
+        return seg
+
+    def route_net_on_bottom(self, net, hole=12, dia=24, width=12):
+        """把某网（通常 GND）落到**底层**布线，避开顶层信号交叉（纯 RPC、确定性）。
+
+        本会话硬验证：headless 下覆铜填充 `rebuildCopperRegion()`（@alpha）不出实铜
+        （pcb_PrimitivePoured 恒 0，Worker 不产 fill）→ GND 平面无法靠覆铜接管连通。
+        故走「每个 GND 焊盘打过孔（顶→底，同网）→ 底层铜线链接各过孔」：连通性按网成立，
+        同网铜可重叠（无间距违规），且全在底层 → 与顶层信号零交叉。返回段数。
+        """
+        pts = []
+        for (_, _), (x, y, n) in self.pad_xy().items():
+            if n == net and x is not None:
+                pts.append((x, y))
+        pts = sorted(set(pts))
+        if len(pts) < 2:
+            return 0
+        for (x, y) in pts:
+            self._call("pcb_PrimitiveVia.create", net, x, y, hole, dia, timeout=12)
+        n = 0
+        for i in range(1, len(pts)):
+            (ax, ay), (bx, by) = pts[i - 1], pts[i]
+            self.route_track(net, ax, ay, bx, ay, BOTTOM, width)
+            if by != ay:
+                self.route_track(net, bx, ay, bx, by, BOTTOM, width)
+            n += 1
+        return n
+
+    # ---------- 钥匙 5b：板框 ----------
+    def board_outline(self, margin=120):
+        """从焊盘 bbox 自动算矩形板框（layer 11 闭合 Polyline）。"""
+        xs, ys = [], []
+        for (_, _), (x, y, _) in self.pad_xy().items():
+            if x is not None:
+                xs.append(x); ys.append(y)
+        if not xs:
+            raise DaoRpcError("board_outline: no pads")
+        x0 = min(xs) - margin
+        w = (max(xs) - min(xs)) + 2 * margin
+        top_y = max(ys) + margin
+        h = (max(ys) - min(ys)) + 2 * margin
+        rect = json.dumps(["R", int(x0), int(top_y), int(w), int(h), 0, 0])
+        js = ("(async()=>{try{var R=%s;"
+              "var poly=R.pcb_MathPolygon.createPolygon(%s);"
+              "var r=await R.pcb_PrimitivePolyline.create('',11,poly,10,false);"
+              "return JSON.stringify({ok:!!r,id:r&&r.primitiveId});}"
+              "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+              % (EXT, rect))
+        o = self._eval(js, timeout=25)
+        if not o or o.get("err"):
+            raise DaoRpcError("board_outline: %s" % (o and o.get("err")))
+        return {"id": o.get("id"), "rect": [x0, top_y, w, h]}
+
+    # ---------- 钥匙 4：覆铜 + 纯 RPC 重建 ----------
+    def ground_pour(self, net="GND", layers=(TOP, BOTTOM), margin=40):
+        """给指定层铺 net 覆铜并用官方 `rebuildCopperRegion()` 算出实铜（零 GUI）。"""
+        xs, ys = [], []
+        for (_, _), (x, y, _) in self.pad_xy().items():
+            if x is not None:
+                xs.append(x); ys.append(y)
+        if not xs:
+            raise DaoRpcError("ground_pour: no pads")
+        x0 = min(xs) - margin
+        w = (max(xs) - min(xs)) + 2 * margin
+        top_y = max(ys) + margin
+        h = (max(ys) - min(ys)) + 2 * margin
+        rect = json.dumps(["R", int(x0), int(top_y), int(w), int(h), 0, 0])
+        out = {}
+        for layer in layers:
+            js = ("(async()=>{try{var R=%s;"
+                  "var cp=R.pcb_MathPolygon.createComplexPolygon([%s]);"
+                  "var pour=await R.pcb_PrimitivePour.create(%s,%d,cp,'solid',false,%s,0,10,false);"
+                  "if(!pour)return JSON.stringify({err:'pour undefined'});"
+                  "await pour.done();"
+                  "var poured=await pour.rebuildCopperRegion();"
+                  "if(!poured){await new Promise(r=>setTimeout(r,400));poured=await pour.rebuildCopperRegion();}"
+                  "return JSON.stringify({ok:!!pour,id:pour.primitiveId,poured:!!poured});}"
+                  "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+                  % (EXT, rect, json.dumps(net), layer,
+                     json.dumps("%s_L%d" % (net, layer))))
+            o = self._eval(js, timeout=40)
+            if not o or o.get("err"):
+                raise DaoRpcError("ground_pour L%d: %s" % (layer, o and o.get("err")))
+            out["L%d" % layer] = o
+        return out
+
+    # ---------- DRC ----------
+    def drc(self, strict=True, timeout=90):
+        """结构化 DRC:返回 {total, by_type, by_net, violations}。total=0 即干净。
+
+        每违规附 **net + pos(x,y)**(实测 `pcb_Drc.check` 的 err 携 `net`/`pos`,
+        子组名亦是网名)。`by_net` 把『DRC=N 某型错』变成**可定位到具体网与坐标**的诊断清单
+        ——如 mcu 偶发不收敛时,by_net 立现是哪一域哪些网(如 GND2:10)未布通,据此对症。"""
+        tree = self._call("pcb_Drc.check", strict, False, True, timeout=timeout)
+        viol = []
+        for cat in (tree or []):
+            for sub in (cat.get("list") or []):
+                snet = sub.get("name")
+                for err in (sub.get("list") or []):
+                    pos = err.get("pos") or {}
+                    viol.append({"rule": err.get("ruleName"),
+                                 "type": err.get("errorType"),
+                                 "layer": err.get("layer"),
+                                 "net": err.get("net") or snet,
+                                 "pos": ([pos.get("x"), pos.get("y")]
+                                         if isinstance(pos, dict) and pos else None)})
+        by, by_net = {}, {}
+        for e in viol:
+            by[e["type"]] = by.get(e["type"], 0) + 1
+            if e["net"]:
+                by_net[e["net"]] = by_net.get(e["net"], 0) + 1
+        return {"total": len(viol), "by_type": by, "by_net": by_net,
+                "violations": viol}
+
+    def set_copper_layers(self, n):
+        """设板铜层数（2/4/6…）。`pcb_Layer.setTheNumberOfCopperLayers` 实测可用。
+
+        多层板实践的本源开关：4 层给布线让出内层（信号/电源/地），高密板更易收敛。
+        须在放件/导 DSN **之前**调用，使 `getDsnFile()` 导出的层栈即为多层。"""
+        ok = self._call("pcb_Layer.setTheNumberOfCopperLayers", int(n), timeout=20)
+        got = self._call("pcb_Layer.getTheNumberOfCopperLayers", timeout=15)
+        if got != int(n):
+            raise DaoRpcError("set_copper_layers(%s) 未生效（读回 %s）" % (n, got))
+        return {"requested": int(n), "copper_layers": got, "ok": bool(ok)}
+
+    # ---------- 高速 / 总线约束（net-class / diff-pair / 等长组） ----------
+    # 签名取自客户端 pro-api/api-types.d.ts（本源·非臆测）：
+    #   createNetClass(name, nets[], color|null)
+    #   addNetToNetClass(name, net|nets[])
+    #   createDifferentialPair(name, positiveNet, negativeNet)
+    #   createEqualLengthNetGroup(name, nets[], color|null)
+    def net_class(self, name, nets):
+        """建/补网络类（高速总线归组，喂布线/DRC 的差异化规则）。读回校验。"""
+        self._call("pcb_Drc.createNetClass", name, list(nets), None, timeout=20)
+        cur = {c["name"]: c for c in
+               (self._call("pcb_Drc.getAllNetClasses", timeout=15) or [])}
+        if name not in cur:
+            raise DaoRpcError("net_class(%s) 未落库" % name)
+        return cur[name]
+
+    def differential_pair(self, name, positive, negative):
+        """建差分对（USB/HDMI/以太网等）。读回校验。"""
+        self._call("pcb_Drc.createDifferentialPair", name, positive, negative,
+                   timeout=20)
+        cur = {p["name"]: p for p in
+               (self._call("pcb_Drc.getAllDifferentialPairs", timeout=15) or [])}
+        if name not in cur:
+            raise DaoRpcError("differential_pair(%s) 未落库" % name)
+        return cur[name]
+
+    def equal_length_group(self, name, nets):
+        """建等长网络组（DDR/并行总线时序匹配）。读回校验。"""
+        self._call("pcb_Drc.createEqualLengthNetGroup", name, list(nets), None,
+                   timeout=20)
+        cur = {g["name"]: g for g in
+               (self._call("pcb_Drc.getAllEqualLengthNetGroups", timeout=15) or [])}
+        if name not in cur:
+            raise DaoRpcError("equal_length_group(%s) 未落库" % name)
+        return cur[name]
+
+    def apply_constraints(self, constraints):
+        """按 spec 批量落高速约束。constraints = {
+            "net_classes": {名: [网络…]},
+            "diff_pairs":  {名: [正网, 负网]},
+            "equal_length":{名: [网络…]},
+            "track_rules":{名: {"default_mm":, "min_mm":, "max_mm":}},
+            "via_rules":  {名: {"outer_mm":, "inner_mm":}},
+            "spacing_rules":{名: {"clearance_mm":}},
+            "length_rules":{名: {"min_mm":, "max_mm":}},
+            "length_tolerance_rules":{名: {"tolerance_mm":}},
+            "diff_pair_rules":{名: {"width_mm":, "gap_mm":}},
+            "blind_via_rules":[{"start_layer":, "end_layer":,
+                                "via_size_rule":}],
+            "class_rules": {类名: {属性: 具名子规则}}}。返回落库回执。"""
+        out = {"net_classes": {}, "diff_pairs": {}, "equal_length": {},
+               "track_rules": {}, "via_rules": {}, "spacing_rules": {},
+               "length_rules": {}, "length_tolerance_rules": {},
+               "diff_pair_rules": {}, "blind_via_rules": [], "class_rules": {}}
+        for nm, nets in (constraints.get("net_classes") or {}).items():
+            out["net_classes"][nm] = self.net_class(nm, nets)
+        for nm, pair in (constraints.get("diff_pairs") or {}).items():
+            out["diff_pairs"][nm] = self.differential_pair(nm, pair[0], pair[1])
+        for nm, nets in (constraints.get("equal_length") or {}).items():
+            out["equal_length"][nm] = self.equal_length_group(nm, nets)
+        # 自定义线宽子规则须先建（供 class_rules 引用）
+        for nm, p in (constraints.get("track_rules") or {}).items():
+            out["track_rules"][nm] = self.add_track_rule(
+                nm, p["default_mm"], p.get("min_mm"), p.get("max_mm"))
+        for nm, p in (constraints.get("via_rules") or {}).items():
+            out["via_rules"][nm] = self.add_via_rule(
+                nm, p["outer_mm"], p["inner_mm"])
+        for nm, p in (constraints.get("spacing_rules") or {}).items():
+            out["spacing_rules"][nm] = self.add_spacing_rule(
+                nm, p["clearance_mm"])
+        for nm, p in (constraints.get("length_rules") or {}).items():
+            out["length_rules"][nm] = self.add_length_rule(
+                nm, p["min_mm"], p["max_mm"])
+        for nm, p in (constraints.get("length_tolerance_rules") or {}).items():
+            out["length_tolerance_rules"][nm] = self.add_length_tolerance_rule(
+                nm, p["tolerance_mm"])
+        for nm, p in (constraints.get("diff_pair_rules") or {}).items():
+            out["diff_pair_rules"][nm] = self.add_diff_pair_rule(
+                nm, p["width_mm"], p["gap_mm"])
+        for p in (constraints.get("blind_via_rules") or []):
+            out["blind_via_rules"].append(self.add_blind_buried_via_rule(
+                p["start_layer"], p["end_layer"],
+                p.get("via_size_rule", "")))
+        # 差异化规则须在网络类已建之后落（指向具名子规则）
+        for cls, rules in (constraints.get("class_rules") or {}).items():
+            out["class_rules"][cls] = {
+                attr: self.set_net_class_rule(cls, attr, prof)
+                for attr, prof in rules.items()}
+        return out
+
+    @staticmethod
+    def _net_track_widths(constraints):
+        """从约束推出 {网络: Track 线宽mm}，供 DSN 线宽注入（让 freerouting 按类宽布线）。
+
+        链路：`net_classes[类]=网络[]` × `class_rules[类]["Track"]=具名子规则` ×
+        `track_rules[名]["default_mm"]=宽度`。无 Track 规则的类不注入（用默认宽）。"""
+        if not constraints:
+            return None
+        tracks = constraints.get("track_rules") or {}
+        classes = constraints.get("net_classes") or {}
+        out = {}
+        for cls, rules in (constraints.get("class_rules") or {}).items():
+            rule = rules.get("Track")
+            w = (tracks.get(rule) or {}).get("default_mm") if rule else None
+            if w:
+                for net in classes.get(cls, []):
+                    out[net] = w
+        return out or None
+
+    def rule_profiles(self):
+        """规则档全景（只读，喂差异化规则的下一步）。返回 {configs, current,
+        categories}：configs=可选规则配置名（含 6 个 JLCPCB 内置档，高速板宜用
+        `High Frequency Board`）；categories={类目: {属性: [具名子规则…]}}——
+        `getNetRules()` 节点上 `Track`/`Safe Spacing`/`Differential Pair` 等键的值
+        即引用这里的具名子规则名。"""
+        configs = [c.get("name") for c in
+                   (self._call("pcb_Drc.getAllRuleConfigurations", True,
+                               timeout=25) or []) if isinstance(c, dict)]
+        cur = self._call("pcb_Drc.getCurrentRuleConfigurationName", timeout=15)
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        cats = {}
+        for cat, attrs in cfg.items():
+            if isinstance(attrs, dict):
+                cats[cat] = {k: (list(v.keys()) if isinstance(v, dict) else None)
+                             for k, v in attrs.items()}
+        return {"configs": configs, "current": cur, "categories": cats}
+
+    def add_track_rule(self, name, default_mm, min_mm=None, max_mm=None):
+        """新增一条**自定义线宽子规则**（Physics/Track，form 态数值）并应用到当前 PCB。
+
+        本源（读 `ui.js` 实证）：`Track` 子规则是 `form` 态——克隆既有子规则当模板、
+        把各层 min/default/max 改成目标值即可（`ez` 只校验 min≤default≤max）。经
+        `overwriteCurrentRuleConfiguration`（读全量 config→加这一项→整体写回，余者不动）
+        落到当前板，读回确认。建好后即可 `set_net_class_rule(类, "Track", name)` 引用。
+        参数单位 mm；min/max 缺省则取 default 的 0.5×/10×（且不超模板上限）。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        track = cfg.get("Physics", {}).get("Track", {})
+        if not track:
+            raise DaoRpcError("当前配置无 Physics/Track，无法加线宽子规则")
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(track.values())))
+        tmpl["editName"] = name
+        tmpl["isSetDefault"] = False  # 具名子规则只供类引用，绝不夺全局默认
+        lo = min_mm if min_mm is not None else round(default_mm * 0.5, 4)
+        hi = max_mm if max_mm is not None else round(default_mm * 10, 4)
+        for layer in tmpl.get("form", {}).get("data", {}):
+            tmpl["form"]["data"][layer] = {"minValue": lo,
+                                           "defaultValue": default_mm,
+                                           "maxValue": hi}
+        track[name] = tmpl
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Physics", {}).get("Track", {}))
+        if name not in back:
+            raise DaoRpcError("add_track_rule(%s) 未落库" % name)
+        return {"name": name, "min": lo, "default": default_mm, "max": hi}
+
+    def add_via_rule(self, name, outer_mm, inner_mm,
+                     outer_min=None, outer_max=None,
+                     inner_min=None, inner_max=None):
+        """新增一条**自定义过孔尺寸子规则**（Physics/Via Size，form 态）并应用到当前 PCB。
+
+        本源（读 `ui.js` 实证）：`Via Size` 子规则是扁平 `form` 态——`ez` 校验
+        `viaOuterdiameter{Min,Max,Default}` 与 `viaInnerdiameter{Min,Max,Default}`
+        各自 min≤default≤max。克隆模板改这 6 个数即可，经
+        `overwriteCurrentRuleConfiguration` 整体写回当前板并读回确认。建好后即可
+        `set_net_class_rule(类, "Via Size", name)` 引用。单位 mm；min/max 缺省取
+        default 的 0.5×/10×。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        vias = cfg.get("Physics", {}).get("Via Size", {})
+        if not vias:
+            raise DaoRpcError("当前配置无 Physics/Via Size，无法加过孔子规则")
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(vias.values())))
+        tmpl["editName"] = name
+        tmpl["isSetDefault"] = False  # 具名子规则只供类引用，绝不夺全局默认
+        f = tmpl.setdefault("form", {})
+        f["viaOuterdiameterDefault"] = outer_mm
+        f["viaOuterdiameterMin"] = (outer_min if outer_min is not None
+                                    else round(outer_mm * 0.5, 4))
+        f["viaOuterdiameterMax"] = (outer_max if outer_max is not None
+                                    else round(outer_mm * 10, 4))
+        f["viaInnerdiameterDefault"] = inner_mm
+        f["viaInnerdiameterMin"] = (inner_min if inner_min is not None
+                                    else round(inner_mm * 0.5, 4))
+        f["viaInnerdiameterMax"] = (inner_max if inner_max is not None
+                                    else round(inner_mm * 10, 4))
+        vias[name] = tmpl
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Physics", {}).get("Via Size", {}))
+        if name not in back:
+            raise DaoRpcError("add_via_rule(%s) 未落库" % name)
+        return {"name": name, "outer": outer_mm, "inner": inner_mm}
+
+    @staticmethod
+    def _blind_layer_order(layer, n_layers):
+        """复刻客户端 `getBlindLayerOrder`：把物理层号映射成层叠顺序位次。
+        顶层(1)→1、底层(2)→层数 N、内层 Inner1..(id 15,16,…)→ i-13（夹在顶底之间）。"""
+        return 1 if layer == 1 else (n_layers if layer == 2 else layer - 13)
+
+    def add_blind_buried_via_rule(self, start_layer, end_layer,
+                                  via_size_rule="", n_layers=None):
+        """新增一条**盲埋孔层对规则**（Physics/Blind/Buried Via，table 态）并应用到当前 PCB。
+        声明「`start_layer`↔`end_layer` 这对层之间允许打盲/埋孔」，可选绑定某具名过孔尺寸
+        子规则（`via_size_rule`，空串=用默认过孔规则）。
+
+        本源（读 `ui.js`/`pcb3dview.js` 实证）：`blindVia` 子规则节点为 `{editName,
+        isSetDefault, table}`——`table` 是层对条目表，**默认空**（无样本可克隆）。每行 schema
+        实测为 `{key, name, startLayer, endLayer, viaSizeRule}`：`name` 由客户端
+        `resetBlindViaRuleName` 按层叠位次生成（排序后 `"r-a"`），层对以 `sort(start,end)`
+        去重（同对不可重复）。物理层号（实测 `getAllLayers`）：顶层=1、底层=2、内层 Inner1..
+        起于 **15**（15,16,…）。`n_layers` 缺省时
+        以 `set_copper_layers` 读回的当前铜层数算位次（盲埋孔须 ≥3 层才有意义）。
+
+        注意：本函数把层对规则落库（读回确认）。盲/埋孔的**布线级**实现需具备盲埋孔能力的
+        布线器；freerouting 仅做通孔，故此规则的几何满足是更深前沿（如实记录）。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        bucket = cfg.get("Physics", {}).get("Blind/Buried Via", {})
+        if not bucket:
+            raise DaoRpcError("当前配置无 Physics/Blind/Buried Via")
+        sub = next(iter(bucket.values()))
+        tbl = sub.setdefault("table", [])
+        if n_layers is None:
+            n_layers = self._call("pcb_Layer.getTheNumberOfCopperLayers",
+                                  timeout=15) or 4
+        r = self._blind_layer_order(start_layer, n_layers)
+        a = self._blind_layer_order(end_layer, n_layers)
+        nm = "%d-%d" % (r, a) if r < a else "%d-%d" % (a, r)
+        pair = tuple(sorted((start_layer, end_layer)))
+        if any(tuple(sorted((row.get("startLayer"), row.get("endLayer")))) == pair
+               for row in tbl):
+            raise DaoRpcError("盲埋孔层对 %s 已存在（同对不可重复）" % (pair,))
+        tbl.append({"key": len(tbl), "name": nm,
+                    "startLayer": start_layer, "endLayer": end_layer,
+                    "viaSizeRule": via_size_rule})
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Physics", {})
+                .get("Blind/Buried Via", {}))
+        bsub = next(iter(back.values())) if back else {}
+        if not any(tuple(sorted((row.get("startLayer"), row.get("endLayer"))))
+                   == pair for row in bsub.get("table", [])):
+            raise DaoRpcError("add_blind_buried_via_rule(%s) 未落库" % (pair,))
+        return {"pair": [start_layer, end_layer], "name": nm,
+                "via_size_rule": via_size_rule}
+
+    def add_spacing_rule(self, name, clearance_mm):
+        """新增一条**自定义安全间距子规则**（Spacing/Safe Spacing）并应用到当前 PCB。
+
+        本源（读 `ui.js` 实证）：`Safe Spacing` 子规则是 `column/row/tables` 态——
+        `tables[*].content` 是 13 行三角矩阵（各行长 `[1..11,11,12]`，受 `Tcr` 校验），
+        每个数是「两类要素之间的间距(mm)」。统一间距 = 把矩阵所有格置为同一值。克隆既有
+        子规则当模板、改 content 即可，经 `overwriteCurrentRuleConfiguration` 整体写回、
+        读回确认。建好后 `set_net_class_rule(类, "Safe Spacing", name)` 引用。单位 mm。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        spc = cfg.get("Spacing", {}).get("Safe Spacing", {})
+        if not spc:
+            raise DaoRpcError("当前配置无 Spacing/Safe Spacing，无法加间距子规则")
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(spc.values())))
+        tmpl["editName"] = name
+        tmpl["isSetDefault"] = False  # 具名子规则只供类引用，绝不夺全局默认
+        for tbl in tmpl.get("tables", {}).values():
+            tbl["content"] = [[clearance_mm for _ in row]
+                              for row in tbl.get("content", [])]
+        spc[name] = tmpl
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Spacing", {})
+                .get("Safe Spacing", {}))
+        if name not in back:
+            raise DaoRpcError("add_spacing_rule(%s) 未落库" % name)
+        return {"name": name, "clearance": clearance_mm}
+
+    def set_default_clearance_mm(self, clearance_mm):
+        """把**全局默认** Safe Spacing 间距矩阵整体置为 clearance_mm——直接改板级默认间距。
+
+        与 `add_spacing_rule`(建具名子规则供类引用)不同,本法找到 `isSetDefault=True`
+        的那条默认子规则、把其 `tables[*].content` 全格置为同值,`overwriteCurrentRule
+        Configuration` 整体写回、读回确认。用途:布线后逐类改宽的**留白控制**——把默认间距
+        调小即给加宽让出裕度,使适度类宽落地不新增 Clearance Error。单位 mm。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        spc = cfg.get("Spacing", {}).get("Safe Spacing", {})
+        if not spc:
+            raise DaoRpcError("当前配置无 Spacing/Safe Spacing")
+        target = None
+        for k, v in spc.items():
+            if v.get("isSetDefault"):
+                target = k
+                break
+        if target is None:
+            target = next(iter(spc))
+        for tbl in spc[target].get("tables", {}).values():
+            tbl["content"] = [[clearance_mm for _ in row]
+                              for row in tbl.get("content", [])]
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Spacing", {})
+                .get("Safe Spacing", {}).get(target, {}))
+        got = None
+        for tbl in back.get("tables", {}).values():
+            for row in tbl.get("content", []):
+                if row:
+                    got = row[0]
+                    break
+            if got is not None:
+                break
+        return {"rule": target, "clearance": got}
+
+    def _add_form_rule(self, category, attr, name, form_updates):
+        """form 态数值子规则的通用落地：克隆该属性既有子规则当模板、改其 form 字段、
+        经 `overwriteCurrentRuleConfiguration` 整体写回当前板、读回确认。内部复用。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        bucket = cfg.get(category, {}).get(attr, {})
+        if not bucket:
+            raise DaoRpcError("当前配置无 %s/%s" % (category, attr))
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(bucket.values())))
+        tmpl["editName"] = name
+        tmpl["isSetDefault"] = False  # 具名子规则只供类引用，绝不夺全局默认
+        tmpl.setdefault("form", {}).update(form_updates)
+        bucket[name] = tmpl
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get(category, {}).get(attr, {}))
+        if name not in back:
+            raise DaoRpcError("_add_form_rule(%s/%s/%s) 未落库"
+                              % (category, attr, name))
+        return back[name].get("form", {})
+
+    def add_length_rule(self, name, min_mm, max_mm):
+        """新增**自定义网络长度范围子规则**（Physics/Net Length Range，form 态：
+        `netLengthMin`/`netLengthMax`，`ez` 校验 min≤max）。供 DDR/并行总线限定走线长度。
+        单位 mm。建好后 `set_net_class_rule(类, "Net Length Range", name)` 引用。"""
+        f = self._add_form_rule("Physics", "Net Length Range", name,
+                                {"netLengthMin": min_mm, "netLengthMax": max_mm})
+        return {"name": name, "min": min_mm, "max": max_mm, "form": f}
+
+    def add_length_tolerance_rule(self, name, tolerance_mm):
+        """新增**自定义等长容差子规则**（Physics/Net Length Tolerance，form 态：
+        `netLengthTolerance`）。供等长组限定组内走线长度差。单位 mm。"""
+        f = self._add_form_rule("Physics", "Net Length Tolerance", name,
+                                {"netLengthTolerance": tolerance_mm})
+        return {"name": name, "tolerance": tolerance_mm, "form": f}
+
+    def add_diff_pair_rule(self, name, width_mm, gap_mm, make_default=True):
+        """新增**自定义差分对子规则**（Physics/Differential Pair，form 态双表）并应用到
+        当前 PCB。供 USB/HDMI/以太网等差分阻抗匹配（线宽 + 对内间距）。
+
+        本源（读 `ui.js` 实证）：`form.strokeWidthTables.data[*]`=差分线宽
+        （`ez` 校验 min≤default≤max），`form.diffPairSpacingTables.data[*]`=对内间距
+        （`ez` 只校验 min≤default，max 可为 0 表无上限）。克隆模板改两表各层默认值即可，
+        经 `overwriteCurrentRuleConfiguration` 整体写回、读回确认。单位 mm。
+
+        **生效本源（实测纠错）**：`Differential Pair` 既不在 net/netClass 节点键里，差分对
+        对象（`getAllDifferentialPairs`）也只有 `{name,positiveNet,negativeNet}`、**无规则
+        引用字段**——即 DP 规则**不经任何绑定**，而是由子规则上的 `isSetDefault` 标志决定**哪
+        条作为全局默认**应用于所有差分对。故 `make_default=True`（默认）时，把新规则置为**唯一
+        默认**（其余 `isSetDefault=False`），新规则才真正生效；`False` 则仅落库不夺默认。"""
+        cfg = (self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+               or {}).get("config", {})
+        bucket = cfg.get("Physics", {}).get("Differential Pair", {})
+        if not bucket:
+            raise DaoRpcError("当前配置无 Physics/Differential Pair")
+        import copy as _copy
+        tmpl = _copy.deepcopy(next(iter(bucket.values())))
+        tmpl["editName"] = name
+        tmpl["isSetDefault"] = False  # 克隆默认会带 isSetDefault；下方 make_default 决定夺否
+        for layer in tmpl.get("form", {}).get("strokeWidthTables", {}).get(
+                "data", {}).values():
+            layer["minValue"] = round(width_mm * 0.5, 4)
+            layer["defaultValue"] = width_mm
+            layer["maxValue"] = round(width_mm * 10, 4)
+        for layer in tmpl.get("form", {}).get("diffPairSpacingTables", {}).get(
+                "data", {}).values():
+            layer["minValue"] = round(gap_mm * 0.5, 4)
+            layer["defaultValue"] = gap_mm
+        bucket[name] = tmpl
+        if make_default:
+            # DP 规则无绑定，唯 isSetDefault 决定全局生效项 → 立新规则为唯一默认
+            for key, sub in bucket.items():
+                sub["isSetDefault"] = (key == name)
+        self._call("pcb_Drc.overwriteCurrentRuleConfiguration", cfg, timeout=30)
+        back = ((self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=25)
+                 or {}).get("config", {}).get("Physics", {})
+                .get("Differential Pair", {}))
+        if name not in back:
+            raise DaoRpcError("add_diff_pair_rule(%s) 未落库" % name)
+        if make_default and not back[name].get("isSetDefault"):
+            raise DaoRpcError("add_diff_pair_rule(%s) 未夺得默认" % name)
+        return {"name": name, "width": width_mm, "gap": gap_mm,
+                "is_default": bool(back[name].get("isSetDefault"))}
+
+    def net_rules(self):
+        """网络/网络类的规则树（只读）。每个 netClass/net 节点带 Track、Safe Spacing、
+        Via Size、Net Length Range/Tolerance、Differential Pair 等属性，值多为 "default"
+        （引用具名规则档）。差异化（如给高速类单独的线宽/间距）须经
+        `overwriteNetRules` 改这些值——属覆写全表的高风险操作，且值为具名档引用而非裸
+        数值，签名/取值待逐一实测，故暂只读不写（知止不殆）。"""
+        return self._call("pcb_Drc.getNetRules", timeout=20) or []
+
+    def set_net_class_rule(self, class_name, attr, profile):
+        """给网络类挂差异化规则：把其规则节点的某属性（如 `Track`/`Safe Spacing`/
+        `Differential Pair`）指向某个具名子规则（见 `rule_profiles()`）。
+
+        本源做法（规避 `overwriteNetRules` 的「覆写全表」风险）：先 `getNetRules`
+        取**全量**规则树，只改目标类的那一个属性，再整树写回——其余规则原样保留，
+        无数据丢失。attr/profile 先按 `rule_profiles()` 的合法集校验，写后读回确认。"""
+        prof = self.rule_profiles()
+        valid = None
+        for cat, attrs in prof["categories"].items():
+            if attr in attrs:
+                valid = attrs[attr]; break
+        if valid is None:
+            raise DaoRpcError("未知规则属性 %r（合法属性见 rule_profiles）" % attr)
+        if profile not in valid:
+            raise DaoRpcError("属性 %s 的具名子规则只可取 %s，收到 %r"
+                              % (attr, valid, profile))
+        rules = self._call("pcb_Drc.getNetRules", timeout=20) or []
+        target = next((x for x in rules if x.get("type") == "netClass"
+                       and x.get("name") == class_name), None)
+        if target is None:
+            raise DaoRpcError("网络类 %r 不存在（先 net_class 建之）" % class_name)
+        # 本源校验：并非所有规则属性都在网络类层可绑（如 `Differential Pair` 不在
+        # netClass 节点上——它属差分对对象层）。只认该节点真实存在的键，免静默 no-op。
+        if attr not in target:
+            bindable = sorted(k for k in target
+                              if k not in ("type", "name", "sub", "targetNet"))
+            raise DaoRpcError("属性 %r 不可在网络类层绑定；该类可绑属性为 %s"
+                              % (attr, bindable))
+        target[attr] = profile
+        self._call("pcb_Drc.overwriteNetRules", rules, timeout=25)
+        back = self._call("pcb_Drc.getNetRules", timeout=20) or []
+        bnode = next((x for x in back if x.get("name") == class_name), None)
+        if not bnode or bnode.get(attr) != profile:
+            raise DaoRpcError("set_net_class_rule 未生效（读回 %s）"
+                              % (bnode and bnode.get(attr)))
+        return {"class": class_name, "attr": attr, "profile": profile}
+
+    def constraints_summary(self):
+        """高速约束快照：{net_classes, diff_pairs, equal_length}（只读，喂自审）。"""
+        return {
+            "net_classes": self._call("pcb_Drc.getAllNetClasses", timeout=15) or [],
+            "diff_pairs": self._call("pcb_Drc.getAllDifferentialPairs",
+                                     timeout=15) or [],
+            "equal_length": self._call("pcb_Drc.getAllEqualLengthNetGroups",
+                                       timeout=15) or []}
+
+    # ---------- 自审 / 感知（只读，喂闭环自我审视） ----------
+    def layer_info(self):
+        """板层快照：{copper_layers, stackup}。多层板实践的前置感知。"""
+        n = self._call("pcb_Layer.getTheNumberOfCopperLayers", timeout=15)
+        stack = self._call(
+            "pcb_Layer.getCurrentPhysicalStackingConfigurationName", timeout=15)
+        return {"copper_layers": n, "stackup": stack}
+
+    def net_summary(self, with_length=False):
+        """网络快照：{count, names, [lengths]}。length 单位同 EDA 内部（mil）。"""
+        names = self._call("pcb_Net.getAllNetsName", timeout=20) or []
+        out = {"count": len(names), "names": names}
+        if with_length:
+            lengths = {}
+            for nm in names:
+                try:
+                    lengths[nm] = self._call("pcb_Net.getNetLength", nm,
+                                             timeout=15)
+                except Exception:
+                    lengths[nm] = None
+            out["lengths"] = lengths
+        return out
+
+    def length_audit(self, constraints):
+        """**布线后**按约束量测真实布线长度,闭合「约束落库 → 是否被布线器兑现」这一环。
+
+        以 `pcb_Net.getNetLength` 取每网实测铜长(mil),对:
+          · diff_pairs {名:[P,N]}:报 P/N 实测长 + skew(|lP-lN|)——差分时序失配量;
+          · equal_length {名:[网…]}:报组内 max-min spread——等长组失配量。
+        诚实闭环:freerouting 当前**不做长度调谐(蛇形)**,故 skew/spread 通常非零;
+        本审计把「约束落了、但布线器未兑现」从口头判断变成**可量测的数字**,据实入档。"""
+        cons = constraints or {}
+        nets = set()
+        for pair in (cons.get("diff_pairs") or {}).values():
+            nets.update(pair)
+        for grp in (cons.get("equal_length") or {}).values():
+            nets.update(grp)
+        ln = {}
+        for nm in nets:
+            try:
+                ln[nm] = self._call("pcb_Net.getNetLength", nm, timeout=15)
+            except Exception:
+                ln[nm] = None
+
+        def _f(v):
+            return v if isinstance(v, (int, float)) else None
+        out = {"lengths_mil": ln, "diff_pairs": {}, "equal_length": {}}
+        for name, pair in (cons.get("diff_pairs") or {}).items():
+            vals = [_f(ln.get(n)) for n in pair]
+            skew = (abs(vals[0] - vals[1])
+                    if len(vals) == 2 and None not in vals else None)
+            out["diff_pairs"][name] = {"nets": pair, "lengths": vals,
+                                       "skew_mil": skew}
+        for name, grp in (cons.get("equal_length") or {}).items():
+            vals = [v for v in (_f(ln.get(n)) for n in grp) if v is not None]
+            out["equal_length"][name] = {
+                "nets": grp,
+                "spread_mil": (max(vals) - min(vals)) if len(vals) >= 2 else None}
+        return out
+
+    def _net_lines(self, net):
+        """某网在板上的全部铜线段 [{id,layer,sx,sy,ex,ey,w}]。"""
+        ids = self._call("pcb_PrimitiveLine.getAllPrimitiveId", timeout=25) or []
+        out = []
+        for i in ids:
+            g = self._call("pcb_PrimitiveLine.get", i, timeout=8)
+            if g and g.get("net") == net and g.get("primitiveType") == "Line":
+                out.append({"id": i, "layer": g.get("layer", TOP),
+                            "sx": g["startX"], "sy": g["startY"],
+                            "ex": g["endX"], "ey": g["endY"],
+                            "w": g.get("lineWidth", 10)})
+        return out
+
+    @staticmethod
+    def _meander_points(a, b, deficit, amp, min_cell, toward=None, inset=0.0,
+                        amp_max=120.0):
+        """直段 A→B 原位替换为**同端点**的单侧梳状蛇形,精确多走 deficit(mil)。
+
+        关键(v2·吃一堑实证):蛇形齿**全部朝板内**(由 `toward` 选垂直符号),而非盲目
+        交替两侧——交替会把铜推出板框/贴焊盘(实测 Board-Outline/Pad-to-Track 净距违规)。
+        且只在直段**中段**起蛇(两端 `inset` 留直,远离焊盘/拐角)。每齿出入各 amp → 每齿
+        +2*amp;k=min(ceil(deficit/2amp), floor(Lm/min_cell)),回算 amp 使长度精确;amp 封顶
+        `amp_max`,补不满则返回 residual 据实记(不强补、不冒净距险)。返回 (pts, residual)。"""
+        import math
+        ax, ay = a
+        bx, by = b
+        L = math.hypot(bx - ax, by - ay)
+        Lm = L - 2.0 * inset                 # 可蛇形的中段长
+        if L <= 0 or deficit <= 0 or Lm < min_cell:
+            return [a, b], deficit
+        ux, uy = (bx - ax) / L, (by - ay) / L
+        px, py = -uy, ux
+        # 垂直符号朝板内:perp 指向 toward 的一侧为正
+        sgn = 1.0
+        if toward is not None:
+            mx, my = (ax + bx) / 2.0, (ay + by) / 2.0
+            if (toward[0] - mx) * px + (toward[1] - my) * py < 0:
+                sgn = -1.0
+        k_room = max(1, int(Lm // min_cell))
+        k = min(max(1, int(math.ceil(deficit / (2.0 * amp)))), k_room)
+        amp_eff = deficit / (2.0 * k)
+        residual = 0.0
+        if amp_eff > amp_max:                # 振幅封顶:补不满则据实留 residual
+            amp_eff = amp_max
+            residual = deficit - 2.0 * amp_eff * k
+        s = amp_eff * sgn
+        cell = Lm / k
+        sx, sy = ax + ux * inset, ay + uy * inset       # 中段起点
+        pts = [a, (sx, sy)]                              # 端点→中段起(直)
+        for i in range(k):
+            c0x, c0y = sx + ux * (i * cell), sy + uy * (i * cell)
+            c1x, c1y = sx + ux * (i + 1) * cell, sy + uy * (i + 1) * cell
+            pts.append((c0x + px * s, c0y + py * s))
+            pts.append((c1x + px * s, c1y + py * s))
+            pts.append((c1x, c1y))
+        pts.append(b)                                    # 中段末→端点(直)
+        return pts, residual
+
+    def length_tune(self, constraints, amp=30, tol=8.0, max_passes=6):
+        """**布线后几何调长**:把 freerouting 不做的等长/差分蛇形补偿,用实铜蛇形补上——
+        把曾据实存档的『freerouting 不做长度调谐』**边界转成能力**(同 cap→qdiff 之道)。
+
+        以**组内最长网**为基准,给较短网在其**当前最长直段**处原位插朝板内的曼哈顿蛇形
+        (删原段 → 同端点画更长折线 → 端点不动故电气连续不破)。
+
+        **闭环迭代**(吃一堑实证):蛇形几何长 ≠ `getNetLength` 实测增量(实测铜长算法非简单
+        段长累加,单发开环常欠补),故每趟**重测实测长**按真实 deficit 续补,直到 spread≤tol
+        或无进展(max_passes 上限)。每趟自然落到**新的最长直段**,顺带在多段间分摊蛇形。
+        诚实定界:蛇形占相邻空间,过密/短网可能 clearance 或无处可蛇 → 留 residual 据实记,
+        不强补。返回后**务必复跑 drc** 确认未破净距(上层 build 已串 drc)。"""
+        import math
+        cons = constraints or {}
+        groups = []
+        for nm, grp in (cons.get("equal_length") or {}).items():
+            groups.append(("EQ:" + nm, list(grp)))
+        for nm, pair in (cons.get("diff_pairs") or {}).items():
+            groups.append(("DP:" + nm, list(pair)))
+
+        def _len(n):
+            try:
+                v = self._call("pcb_Net.getNetLength", n, timeout=15)
+                return v if isinstance(v, (int, float)) else None
+            except Exception:
+                return None
+
+        def _center():
+            allseg = []
+            ids = (self._call("pcb_PrimitiveLine.getAllPrimitiveId",
+                              timeout=25) or [])
+            for i in ids:
+                g = self._call("pcb_PrimitiveLine.get", i, timeout=8)
+                if g and g.get("primitiveType") == "Line":
+                    allseg += [(g["startX"], g["startY"]),
+                               (g["endX"], g["endY"])]
+            if not allseg:
+                return None
+            xs = [p[0] for p in allseg]
+            ys = [p[1] for p in allseg]
+            return ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+
+        allnets = set()
+        for _, nets in groups:
+            allnets.update(nets)
+        before = {n: _len(n) for n in allnets}
+        passes = []
+        for _ in range(max_passes):
+            cur = {n: _len(n) for n in allnets}
+            center = _center()
+            changed = False
+            for gname, nets in groups:
+                vals = [cur[n] for n in nets if cur.get(n) is not None]
+                if len(vals) < 2 or (max(vals) - min(vals)) <= tol:
+                    continue
+                target = max(vals)
+                for n in nets:
+                    c = cur.get(n)
+                    if c is None or target - c <= tol:
+                        continue
+                    deficit = target - c
+                    segs = self._net_lines(n)
+                    if not segs:
+                        continue
+                    seg = max(segs, key=lambda s: math.hypot(
+                        s["ex"] - s["sx"], s["ey"] - s["sy"]))
+                    min_cell = max(40.0, 4.0 * seg["w"])
+                    inset = max(20.0, 3.0 * seg["w"])
+                    pts, _r = self._meander_points(
+                        (seg["sx"], seg["sy"]), (seg["ex"], seg["ey"]),
+                        deficit, amp, min_cell, toward=center, inset=inset)
+                    if len(pts) <= 2:
+                        continue
+                    self._call("pcb_PrimitiveLine.delete", seg["id"],
+                               timeout=15)
+                    for j in range(len(pts) - 1):
+                        self.route_track(n, pts[j][0], pts[j][1],
+                                         pts[j + 1][0], pts[j + 1][1],
+                                         layer=seg["layer"], width=seg["w"])
+                    changed = True
+            if not changed:
+                break
+            self.save()
+            passes.append({n: _len(n) for n in allnets})
+
+        after = {n: _len(n) for n in allnets}
+        report = {"groups": {}, "before_mil": before, "after_mil": after,
+                  "passes": len(passes)}
+        for gname, nets in groups:
+            b = [before[n] for n in nets if before.get(n) is not None]
+            a = [after[n] for n in nets if after.get(n) is not None]
+            report["groups"][gname] = {
+                "nets": nets,
+                "spread_before": (max(b) - min(b)) if len(b) >= 2 else None,
+                "spread_after": (max(a) - min(a)) if len(a) >= 2 else None}
+        return report
+
+    def _settle_routed_primitives(self):
+        """把**全板**布线图元(直线+圆弧)`get` 读一遍,触发其从 SES 导入后的**未落定
+        异步态**落定为同步态。实证要点:紧随 freerouting 导入,`modify` 抛
+        `t.isAsync is not a function`;而**仅读目标网并不足以落定**——须**通读全板**
+        所有段方稳(实测:只读 PWR→仍失败;读齐全网后→稳过)。故逐类改宽前先全板通读一发。
+        `getAllPrimitiveId()`(不带网参)返回该类全部 id。返回触达段数。"""
+        js = ("(async()=>{try{var R=%s;var c=0;"
+              "for(var kind of ['pcb_PrimitiveLine','pcb_PrimitiveArc']){"
+              "var ids=await R[kind].getAllPrimitiveId()||[];"
+              "for(var id of ids){await R[kind].get(id);c++;}}"
+              "return JSON.stringify({touched:c});}"
+              "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+              % EXT)
+        o = self._eval(js, timeout=60) or {}
+        return o.get("touched", 0)
+
+    def _read_net_line_widths(self, net):
+        """读某网**已布线段**(直线+圆弧)的 [[kind, id, lineWidth_mil], …]。
+
+        用 `getAllPrimitiveId(net)` 取 id、再 `get(id)` 取带 `lineWidth` 的**普通对象**
+        (实证:get 回的是纯数据对象、非异步图元句柄)——**只读、不 modify**。实证教训:
+        `getAll(net)` 会**物化异步图元**、其残留句柄致**紧随其后另一发** eval 的
+        `modify` 抛 `t.isAsync is not a function`;而 `getAllPrimitiveId`+`get` 不物化,
+        写侧(`_apply_line_widths`)据 id 批量 `modify` 稳过。故读/写分两发、读侧避开 getAll。"""
+        js = ("(async()=>{try{var R=%s;var out=[];"
+              "for(var kind of ['pcb_PrimitiveLine','pcb_PrimitiveArc']){"
+              "var ids=await R[kind].getAllPrimitiveId(%s)||[];"
+              "for(var id of ids){var o=await R[kind].get(id);"
+              "if(o)out.push([kind,id,o.lineWidth]);}}"
+              "return JSON.stringify(out);}"
+              "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+              % (EXT, json.dumps(net)))
+        o = self._eval(js, timeout=40)
+        if isinstance(o, dict) and o.get("err"):
+            raise DaoRpcError("read_net_line_widths(%s): %s" % (net, o["err"]))
+        return o or []
+
+    def _modify_one(self, kind, pid, width_mil, tries=3):
+        """**一段一发 eval** 只 `modify(id,{lineWidth})`——写侧最小单元。成功返回 True。
+
+        实证:一发 eval 里**批量** `await modify` 必败(首刀把同批余下图元打回异步态,
+        次段即抛 `t.isAsync is not a function`);故写必须**一段一发**。遇 isAsync 属瞬态
+        (常见于 reopen 后首刀),通读全板 `_settle_routed_primitives` 后重试即过。"""
+        js = ("(async()=>{try{var R=%s;var r=await R['%s'].modify(%s,{lineWidth:%s});"
+              "return JSON.stringify({ok:!!r});}"
+              "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,90)})}})()"
+              % (EXT, kind, json.dumps(pid), json.dumps(round(width_mil, 3))))
+        for attempt in range(tries):
+            o = self._eval(js, timeout=40) or {}
+            if o.get("ok"):
+                return True
+            err = o.get("err")
+            if err and "isAsync" in err and attempt < tries - 1:
+                self._settle_routed_primitives()
+                time.sleep(0.3)
+                continue
+            break
+        return False
+
+    def _converge_net_width(self, net, target_mil, per_round=5, max_rounds=60):
+        """把某网**已布线段**(直线+圆弧)线宽**收敛**到 target_mil——布线后改宽/回退共用。
+
+        实证根因(彻底定位·四条铁律):freerouting SES 导入后布线段处未落定异步态,
+          ① **批量 modify 必败**——须一段一发(见 `_modify_one`);
+          ② **写有额度会蔓延**——连续 modify 约 8~13 段后余段整体滑回异步,`get` 通读已
+             救不回,唯 **`save()`+`reopen_pcb()` 从盘干净重载**能复位写额度;
+          ③ **reopen 会合并共线同宽段**——段数/ id 随之变(实测 16→10),故**不能**靠固定
+             id 表逐段写;
+          ④ 综上采**收敛循环**:每轮 `_read_net_line_widths` 读**当前**段、挑出未达标者、
+             一段一发改至多 `per_round`(< 额度上限留裕度)段、`save+reopen+settle` 复位,
+             **重读再来**;直到全网段宽 == target 为止(自然吸收合并/瞬态)。
+        `_converge` 亦是回退原语:回退即「收敛回原宽」(布线网通常单一宽,故精确)。
+        返回 {changed, rounds, final:{widths,segments}}。"""
+        target = round(target_mil, 3)
+        self._settle_routed_primitives()
+        changed = 0
+        rounds = 0
+        while True:
+            trip = self._read_net_line_widths(net)
+            off = [(k, i) for k, i, w in trip if round(w, 3) != target]
+            if not off:
+                break
+            rounds += 1
+            if rounds > max_rounds:
+                raise DaoRpcError("converge_net_width(%s→%.3f): 未收敛, 余 %d 段"
+                                  % (net, target, len(off)))
+            did = 0
+            for kind, pid in off[:per_round]:
+                if self._modify_one(kind, pid, target):
+                    did += 1
+                    changed += 1
+            self.save()
+            self.reopen_pcb(settle=4)        # 复位写额度(会合并共线同宽段)
+            self._settle_routed_primitives()
+            if did == 0:                      # 一轮零进展 → 防死循环
+                raise DaoRpcError("converge_net_width(%s→%.3f): 一轮零进展, 余 %d 段"
+                                  % (net, target, len(off)))
+        return {"changed": changed, "rounds": rounds,
+                "final": self.net_track_widths_mil([net])[net]}
+
+    def net_track_widths_mil(self, nets=None):
+        """量测每网**实测布线段**的线宽集合(mil),把「线到底布多宽」变成可读数字。
+
+        返回 {net: {"widths": [去重宽…], "segments": 段数}}。无布线段的网(如
+        相邻脚直连、或被覆铜接管的 GND)返回 segments=0。用于逐类线宽的前/后核验。"""
+        names = (nets if nets is not None
+                 else (self._call("pcb_Net.getAllNetsName", timeout=20) or []))
+        out = {}
+        for nm in names:
+            trip = self._read_net_line_widths(nm)
+            ws = sorted({round(w, 3) for _, _, w in trip})
+            out[nm] = {"widths": ws, "segments": len(trip)}
+        return out
+
+    def apply_track_widths_postroute(self, constraints, revert_on_worse=True,
+                                     drc_timeout=90):
+        """**布线后逐网改宽**(真·逐类线宽) —— 安全的「不劣化即改进」原语。
+
+        本源背景(见 DESKTOP_OFFLINE_FINDINGS「下轮前沿」):现行 DSN 注入把全局默认宽
+        **抬到最严类宽**让 freerouting 按最宽布线——细线类也被一并加宽。本法反其道:让
+        布线器按**默认(细)宽**布线保住间距,**布线后**只把宽线类(电源/大电流)逐网加到
+        其类宽,细线类保持细→密板省间距。
+
+        权衡(诚实定界):布线后加宽会让线变粗、与邻线间距缩小,密板可能**反引入
+        Clearance Error**。故本法**先量 DRC、改宽、再量 DRC**;若 `revert_on_worse`
+        且 DRC 变差则**逐段精确回退**(还原到改宽前),净效果「要么改进/持平、要么原样」——
+        **永不劣化板子**(与残余补布同一心法)。
+
+        从 `constraints` 经 `_net_track_widths`(net_classes × class_rules[Track] ×
+        track_rules.default_mm)推出 {网: 类宽mm};无逐类 Track 规则则空操作。
+        返回审计:{applied, reverted, drc_before, drc_after, targets_mm, per_net,
+        widths_before, widths_after}。"""
+        targets = self._net_track_widths(constraints) or {}
+        audit = {"applied": False, "reverted": False, "targets_mm": targets,
+                 "per_net": {}, "drc_before": None, "drc_after": None,
+                 "widths_before": {}, "widths_after": {}}
+        if not targets:
+            audit["reason"] = "no per-class track widths in constraints"
+            return audit
+        nets = list(targets.keys())
+        audit["widths_before"] = self.net_track_widths_mil(nets)
+        audit["drc_before"] = self.drc(timeout=drc_timeout)["total"]
+        # 写侧实证(彻底定位·见 `_converge_net_width`):布线段导入后处未落定异步态,批量
+        # modify 必败、写有额度会蔓延、reopen 会合并共线同宽段——故改宽用**收敛循环**逐网
+        # 把线宽推到类宽(自然吸收异步/合并);回退亦是「收敛回原宽」。base_mil 记各网原宽
+        # (布线网通常单一宽)用于精确回退。
+        base_mil = {}
+        for net in nets:
+            ws = audit["widths_before"][net]["widths"]
+            base_mil[net] = ws[0] if len(ws) == 1 else None
+        for net, mm in targets.items():
+            w_mil = round(mm / self._MM_PER_MIL, 3)
+            r = self._converge_net_width(net, w_mil)
+            audit["per_net"][net] = {"target_mm": mm, "target_mil": w_mil,
+                                     "segments": r["changed"], "rounds": r["rounds"]}
+        audit["widths_after"] = self.net_track_widths_mil(nets)
+        audit["drc_after"] = self.drc(timeout=drc_timeout)["total"]
+        if revert_on_worse and audit["drc_after"] > audit["drc_before"]:
+            reverted = 0
+            for net in targets:
+                b = base_mil.get(net)
+                if b is None:                  # 原宽非单一 → 无法精确收敛回,跳过并标注
+                    audit.setdefault("revert_skipped", []).append(net)
+                    continue
+                reverted += self._converge_net_width(net, b)["changed"]
+            audit["reverted"] = True
+            audit["reverted_segments"] = reverted
+            audit["widths_after"] = self.net_track_widths_mil(nets)
+            audit["drc_after"] = self.drc(timeout=drc_timeout)["total"]
+        else:
+            audit["applied"] = True
+        return audit
+
+    def design_rules(self, raw=False):
+        """当前 DRC 规则配置：{name, categories[, config]}。
+
+        `getCurrentRuleConfiguration` 返回的 config 体量很大（整张间距矩阵），
+        默认只回名字与顶层类目（Spacing/Width/…）；raw=True 才带全量 config。
+        """
+        name = self._call("pcb_Drc.getCurrentRuleConfigurationName", timeout=15)
+        cfg = self._call("pcb_Drc.getCurrentRuleConfiguration", timeout=20) or {}
+        inner = cfg.get("config", cfg) if isinstance(cfg, dict) else {}
+        cats = sorted(inner.keys()) if isinstance(inner, dict) else []
+        out = {"name": name, "categories": cats}
+        if raw:
+            out["config"] = cfg
+        return out
+
+    def board_report(self):
+        """一次性自审快照：层 + 网络 + 规则 + 高速约束 + DRC，供闭环「自我审视」。"""
+        rep = {"layers": self.layer_info(), "nets": self.net_summary(),
+               "rules": self.design_rules()}
+        try:
+            rep["constraints"] = self.constraints_summary()
+        except Exception as e:
+            rep["constraints"] = {"error": str(e)}
+        try:
+            rep["drc"] = self.drc()
+        except Exception as e:
+            rep["drc"] = {"error": str(e)}
+        return rep
+
+    def doc_source(self, pcb_uuid=None, parse=True, raw=False):
+        """**PCB 文档本源序列化读出**:经 `sys_FileManager.getDocumentSource` 取当前
+        PCB 的官方序列化——行记录流 `{"type":TAG,"ticket":N,"id":..}||{payload}|`
+        (DOCHEAD/CANVAS/LAYER/LAYER_PHYS/NET/RULE/RULE_SELECTOR/COMPONENT/ATTR/
+        PAD_NET/LINE/VIA/POLY/…),可整文导出或按 type 结构化解析。
+
+        把「PCB 文件本源」从内部 op-log(`.eprj2` 实为 SQLite·状态由 history/branch
+        操作日志重建,documents.dataStr 常空)的**脆弱泥潭**,抽到**稳定的官方序列化层**
+        ——同 cap→qdiff 之道:绕表层、锚本源。整板读出比逐 primitive `.get` 快一个量级。
+
+        **读写分治(吃一堑实证)**:此为**只读/导出**信道——`setDocumentSource(uuid,src)`
+        实测恒返 `False`、整文回写**不生效**(改 LINE.width 读回不变)。故编辑仍走 typed
+        primitive(`.modify/.create/.delete`),布线结果走 `importAutoRouteSesFile/
+        importChanges`。各得其所,不强行整文写(知止不殆)。
+
+        返回 {uuid, raw_len, counts:{type:n}, records:[{type,ticket,id,payload}]};
+        raw=True 附原文,parse=False 仅原文不解析。"""
+        if pcb_uuid is None:
+            info = self._call("dmt_Pcb.getCurrentPcbInfo", timeout=15) or {}
+            pcb_uuid = info.get("uuid")
+        if not pcb_uuid:
+            raise DaoRpcError("doc_source: no open PCB document")
+        src = self._call("sys_FileManager.getDocumentSource", pcb_uuid,
+                         timeout=30) or ""
+        res = {"uuid": pcb_uuid, "raw_len": len(src)}
+        if raw:
+            res["raw"] = src
+        if not parse:
+            return res
+        recs, counts = [], {}
+        for ln in src.split("\n"):
+            ln = ln.strip()
+            if not ln:
+                continue
+            head, sep, pay = ln.partition("||")
+            try:
+                h = json.loads(head)
+            except Exception:
+                counts["<unparsed>"] = counts.get("<unparsed>", 0) + 1
+                continue
+            t = h.get("type")
+            counts[t] = counts.get(t, 0) + 1
+            try:
+                payload = json.loads(pay.rstrip("|")) if sep else None
+            except Exception:
+                payload = None
+            recs.append({"type": t, "ticket": h.get("ticket"),
+                         "id": h.get("id"), "payload": payload})
+        res["counts"] = counts
+        res["records"] = recs
+        return res
+
+    def capabilities(self, detail=False):
+        """introspect `_EXTAPI_ROOT_`：{ns_count, method_count[, methods]}。
+
+        把「软件本体所有可操作模块」摊给后续会话——人能点的这里都在册。
+        detail=True 时附 {ns: [method,…]} 全表（体量较大）。
+        """
+        js = (r'''(function(){var R=%s;if(!R)return JSON.stringify({err:"no extapi"});
+var out={},nc=0,mc=0;Object.keys(R).forEach(function(ns){var o=R[ns];
+if(!o||typeof o!=="object"){return;}var names=[],seen={},p=o;
+while(p&&p!==Object.prototype){Object.getOwnPropertyNames(p).forEach(function(k){
+if(seen[k])return;seen[k]=1;try{if(typeof o[k]==="function"&&k!=="constructor")names.push(k);}catch(e){}});
+p=Object.getPrototypeOf(p);}if(names.length){out[ns]=names.sort();nc++;mc+=names.length;}});
+return JSON.stringify({ns_count:nc,method_count:mc,methods:out});})()''' % EXT)
+        o = self._eval(js, timeout=30) or {}
+        if o.get("err"):
+            raise DaoRpcError("capabilities: %s" % o["err"])
+        res = {"ns_count": o.get("ns_count"),
+               "method_count": o.get("method_count")}
+        if detail:
+            res["methods"] = o.get("methods")
+        return res
+
+    # ---------- 导出 ----------
+    _BLOB = (r'''(async function(){try{var f=await %s;if(!f)return JSON.stringify({err:"no file"});
+var ab=await f.arrayBuffer();var u=new Uint8Array(ab);var s="";for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);
+return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return JSON.stringify({err:String(e&&e.message||e)});}})()''')
+
+    def _export(self, getter, out_path, timeout=120):
+        o = self._eval(self._BLOB % getter, timeout=timeout)
+        if not o or o.get("err"):
+            raise DaoRpcError("export: %s" % (o and o.get("err")))
+        if o.get("name") and not os.path.basename(out_path):
+            out_path = os.path.join(out_path, o["name"])
+        with open(out_path, "wb") as fh:
+            fh.write(base64.b64decode(o["b64"]))
+        return {"path": out_path, "size": o["size"], "name": o.get("name")}
+
+    def export_gerber(self, out_path, name="Gerber"):
+        return self._export("%s.pcb_ManufactureData.getGerberFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_bom(self, out_path, name="BOM"):
+        return self._export("%s.pcb_ManufactureData.getBomFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_pnp(self, out_path, name="PnP"):
+        return self._export("%s.pcb_ManufactureData.getPickAndPlaceFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    # ---------- 制造数据：扩展导出全谱（纯 RPC，逆 pcb_ManufactureData） ----------
+    # 本源：`pcb_ManufactureData` 远不止 Gerber/BOM/PnP——官方把整套制造/交换格式都挂
+    # 在这一命名空间，每个 get*File() 都返回一个 File(Blob)，走与 Gerber 同一通用 blob
+    # 通道即可落地真字节。「官方有的东西我们全都能调用」：下列方法在桌面离线底座
+    # （ns≈93）逐格式活体实测产出真字节；凡 headless 不可达者如实定界、不纳入全谱。
+    def export_pdf(self, out_path, name="PDF"):
+        return self._export("%s.pcb_ManufactureData.getPdfFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_3d(self, out_path, name="3D", fmt="step"):
+        """3D 模型导出（fmt='step'|'obj'）。实测 step≈1.9MB / obj≈139KB 真字节。"""
+        return self._export("%s.pcb_ManufactureData.get3DFile(%s,%s)"
+                            % (EXT, json.dumps(name), json.dumps(fmt)), out_path)
+
+    def export_dxf(self, out_path, name="DXF"):
+        return self._export("%s.pcb_ManufactureData.getDxfFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_ipc_d356a(self, out_path, name="IPC356"):
+        """IPC-D-356A 网络测试点表（裸板电测）。"""
+        return self._export("%s.pcb_ManufactureData.getIpcD356AFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_odb(self, out_path, name="ODB"):
+        """ODB++ 制造数据库（getOpenDatabaseDoublePlusFile）。"""
+        return self._export(
+            "%s.pcb_ManufactureData.getOpenDatabaseDoublePlusFile(%s)"
+            % (EXT, json.dumps(name)), out_path)
+
+    def export_ibom(self, out_path, name="iBOM"):
+        """交互式 HTML BOM（getInteractiveBomFile，实测≈5.5MB 单页）。"""
+        return self._export("%s.pcb_ManufactureData.getInteractiveBomFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_altium(self, out_path, name="AD"):
+        """导出为 Altium Designer 工程。"""
+        return self._export("%s.pcb_ManufactureData.getAltiumDesignerFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_testpoint(self, out_path, name="TestPoint"):
+        return self._export("%s.pcb_ManufactureData.getTestPointFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_netlist_file(self, out_path, name="Netlist"):
+        """网络表文件（.enet，getNetlistFile）。"""
+        return self._export("%s.pcb_ManufactureData.getNetlistFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    def export_autoroute_json(self, out_path, name="AutoRoute"):
+        return self._export("%s.pcb_ManufactureData.getAutoRouteJsonFile(%s)"
+                            % (EXT, json.dumps(name)), out_path)
+
+    # 全谱导出清单：键 → (官方方法名, 额外参数 JS 片段)。仅含桌面离线底座**活体实测
+    # 可达**者（首格式名作 fileName 实参）。诚实定界（VM 实测，不纳入全谱）：
+    #   · getIpc2581CFile —— 无头离线底座**恒挂起**（疑待 GUI 配置对话框，即便显式
+    #     给 fileType='xml' 仍不返回）；需要时单独调原始 getter 并自带硬超时。
+    #   · get3DShellFile —— 返回 "no file"（本板型无外壳模型）。
+    _EXPORT_SUITE = (
+        ("gerber", "getGerberFile", ""),
+        ("bom", "getBomFile", ""),
+        ("pnp", "getPickAndPlaceFile", ""),
+        ("pdf", "getPdfFile", ""),
+        ("3d_step", "get3DFile", ',"step"'),
+        ("dxf", "getDxfFile", ""),
+        ("ipc_d356a", "getIpcD356AFile", ""),
+        ("odb", "getOpenDatabaseDoublePlusFile", ""),
+        ("ibom", "getInteractiveBomFile", ""),
+        ("altium", "getAltiumDesignerFile", ""),
+        ("testpoint", "getTestPointFile", ""),
+        ("netlist", "getNetlistFile", ""),
+        ("pads", "getPadsFile", ""),
+        ("flyprobe", "getFlyingProbeTestFile", ""),
+        ("autoroute_json", "getAutoRouteJsonFile", ""),
+    )
+
+    def export_all(self, out_dir, suite=None, timeout=150):
+        """一次导出全谱制造/交换数据（纯 RPC、零 GUI）。
+
+        返回 {fmt: {size,name,path}} 或 {fmt: {err}}——逐格式**如实**记录，单格式失败
+        不阻断其余（无为而无不为：能导的全导，不能导的据实标注，不掩盖、不夸大）。"""
+        os.makedirs(out_dir, exist_ok=True)
+        res = {}
+        for key, meth, extra in (suite or self._EXPORT_SUITE):
+            getter = "%s.pcb_ManufactureData.%s(%s%s)" % (
+                EXT, meth, json.dumps(key), extra)
+            try:
+                r = self._export(getter, out_dir + "/", timeout=timeout)
+                res[key] = {"size": r["size"], "name": r["name"],
+                            "path": r["path"]}
+            except Exception as e:
+                res[key] = {"err": str(e)[:160]}
+        return res
+
+    def save(self):
+        return self._call("pcb_Document.save", timeout=20)
+
+    # ---------- 钥匙 5c：官方 DSN/SES 自动布线闭环（纯 RPC + freerouting） ----------
+    def export_dsn(self, out_path, name="AutoRoute_DSN", retries=8, settle=2.0):
+        """官方 `getDsnFile()` 导出 Specctra DSN（含器件/焊盘/网/板框/设计规则）。
+
+        硬学习（大板暴露，两步逼近）：
+          ① 在刚放置完的**大板**（≳27 元件 / 48 脚 IC）上立即取 DSN，`getDsnFile()`
+             会**瞬态返回 null**——板的异步几何索引尚未落定；小板从不触发。
+          ② 关键反直觉：**重试间绝不能再 `save()`**——save 会重新弄脏文档、令刚要建好的
+             几何索引失效，于是每次重试都踩在「又被重置」的窗口上、永远取不到。
+        故本源解法 = 取 DSN 前**仅** save 一次，随后**只等待、不再写**，纯轮询 getDsnFile
+        直到非空（默认 8 次 × 2s）。这与「无为」一致：停止扰动，让索引自然落定。"""
+        getter = "%s.pcb_ManufactureData.getDsnFile(%s)" % (EXT, json.dumps(name))
+        self.save()
+        last = None
+        for k in range(retries):
+            try:
+                return self._export(getter, out_path)
+            except DaoRpcError as e:
+                last = e
+                if "no file" not in str(e):
+                    raise
+                time.sleep(settle)   # 只等待、不再 save（save 会重置索引）
+        raise DaoRpcError("export_dsn: DSN 始终为空（板索引未就绪）: %s" % last)
+
+    def import_ses(self, ses_path):
+        """把 freerouting 产出的 SES **注入渲染层为 File** 并经官方
+        `importAutoRouteSesFile()` 回灌布线（纯 RPC，零 GUI）。"""
+        with open(ses_path, "rb") as fh:
+            b64 = base64.b64encode(fh.read()).decode()
+        name = os.path.basename(ses_path)
+        js = ("(async()=>{try{var R=%s;"
+              "var bytes=Uint8Array.from(atob(%s),c=>c.charCodeAt(0));"
+              "var f=new File([bytes],%s,{type:'text/plain'});"
+              "var ok=await R.pcb_Document.importAutoRouteSesFile(f);"
+              "return JSON.stringify({ok:!!ok});}"
+              "catch(e){return JSON.stringify({err:String(e&&e.message||e).slice(0,120)})}})()"
+              % (EXT, json.dumps(b64), json.dumps(name)))
+        o = self._eval(js, timeout=60)
+        if not o or o.get("err"):
+            raise DaoRpcError("import_ses: %s" % (o and o.get("err")))
+        return o["ok"]
+
+    def freeroute(self, dsn_path, ses_path, passes=10, timeout=300):
+        """以 freerouting（自带 jar + 最新 JDK）把 DSN 自动布线为 SES。
+
+        这是「LCEDA-native 放置/绑网/DRC/导出 + 标准 Specctra 交换格式委派 NP-hard 布线」
+        的本源闭环：把最难的布线交给久经考验的布线器，结果经官方 RPC 无缝回灌。
+        `-Djava.awt.headless=true` 必带：否则有 DISPLAY 时 freerouting 走 AWT/GUI 会卡死。"""
+        java = _find_java()
+        # 本源教训：先删旧 SES。否则 freerouting 这次没产出（如 JRE 不匹配启动失败），
+        # `os.path.exists` 仍为真 → 静默回灌**上一轮的陈旧 SES**（网络对不上 →
+        # Connection/Clearance Error 假性回归）。删后再以「新鲜产出」为成功判据。
+        if os.path.exists(ses_path):
+            os.remove(ses_path)
+        cmd = [java, "-Djava.awt.headless=true", "-jar", _FREEROUTING_JAR,
+               "-de", dsn_path, "-do", ses_path, "-mp", str(passes)]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        if not os.path.exists(ses_path) or os.path.getsize(ses_path) == 0:
+            raise DaoRpcError(
+                "freeroute 未产出 SES（java=%s）：\n%s"
+                % (java, (r.stderr or r.stdout)[-400:]))
+        # freerouting 把统计打到 stdout：抓「session completed: ... unrouted nets」整句
+        summary = None
+        for line in (r.stdout + "\n" + r.stderr).splitlines():
+            if "session completed" in line:
+                summary = line.split("INFO")[-1].strip()
+        return {"ses": ses_path, "java": java, "summary": summary}
+
+    # DSN 分辨率单位 mil（见 export 头 `(resolution mil 1000)`），1mil=0.0254mm
+    _MM_PER_MIL = 0.0254
+
+    @staticmethod
+    def _dsn_inject_net_widths(text, net_width_mil):
+        """把 DSN 线宽改成网络类 Track 规则宽度（mil），让 freerouting 按规则宽布线。
+
+        本源（实测·阳向压测逐层逼出，两段发现）：
+        ① JLCEDA `getDsnFile()` 把**所有网络**导成统一默认线宽（每个 `(class NET …)` 的
+           `(rule (width 默认))` 都一样），**不**把 DRC 网络类的自定义 Track 子规则宽度编进
+           DSN——故布线器一律按默认宽布线，回灌后较严的类（如电源 0.4mm）被 DRC 判「线过窄」。
+        ② **freerouting 只认 structure 级全局默认宽 `(rule(width …))`，无视各 `(class …)` 内的
+           线宽**（实测：改全局宽→所有 wire 同步变宽；只改类宽→布线宽不变）。
+
+        故此函数双管齐下：把各 `(class NET …)` 块写成该网络的类宽（前向兼容「认类宽」的布线器），
+        **并把 structure 级全局默认宽抬到所有目标宽的最大值**——freerouting 据此把全网布到
+        ≥最严类宽，使任何网络都不再违反其最小线宽规则（代价：细线类也被加宽，密板需另权衡）。"""
+        import re
+        def repl(m):
+            net = m.group(2)
+            w = net_width_mil.get(net)
+            return m.group(1) + (("%.4f" % w) if w else m.group(3)) + m.group(4)
+        pat = re.compile(r"(\(class\s+(\S+)\s+'[^']*'.*?\(rule\s.*?\(width\s+)"
+                         r"([\d.]+)(\))", re.DOTALL)
+        text = pat.sub(repl, text)
+        if net_width_mil:
+            wmax = max(net_width_mil.values())
+            text = re.sub(r"(\(rule\(width\s+)([\d.]+)(\)\))",
+                          lambda m: (m.group(1) + ("%.4f" % wmax) + m.group(3))
+                          if float(m.group(2)) < wmax else m.group(0), text)
+        return text
+
+    def autoroute(self, work_dir, passes=80, net_widths_mm=None):
+        """官方 DSN→freerouting→SES 单发全自动布线（纯 RPC 编排）。返回审计含 drc。
+
+        关键约束（本会话硬学习）：`importAutoRouteSesFile()` 是**追加**语义，且
+        `clearRouting()` 在无头渲染层不解析（挂起）——故**不能在同一块板上反复重布**
+        （两次布线叠加 → 异网交叠 Clearance Error）。所以单板单发；布线随机残留的
+        收敛交给上层「整板重建重试」(build_until_clean) —— 每次都是一块全新的、无既有
+        布线的板，首次 import 永远不叠加，配合 freerouting 的运行间随机性必然收敛。
+
+        `net_widths_mm`={网络: 线宽mm}：把网络类 Track 规则宽度注入 DSN（见
+        `_dsn_inject_net_widths`），让 freerouting 按类宽布线（否则较严的类回灌后被 DRC 判窄）。"""
+        os.makedirs(work_dir, exist_ok=True)
+        dsn = os.path.join(work_dir, "board.dsn")
+        ses = os.path.join(work_dir, "board.ses")
+        self.export_dsn(dsn)
+        if net_widths_mm:
+            w_mil = {n: (mm / self._MM_PER_MIL)
+                     for n, mm in net_widths_mm.items()}
+            with open(dsn, "r", encoding="utf-8") as f:
+                txt = f.read()
+            with open(dsn, "w", encoding="utf-8") as f:
+                f.write(self._dsn_inject_net_widths(txt, w_mil))
+        fr = self.freeroute(dsn, ses, passes=passes)
+        imported = self.import_ses(ses)
+        self.save()
+        drc = self.drc()
+        return {"dsn": dsn, "ses": ses, "imported": imported,
+                "freerouting": fr.get("summary"), "java": fr.get("java"),
+                "drc": drc}
+
+    # ---------- 全链路编排 ----------
+    def build_board(self, spec, out_dir=None, router="freerouting", pour=False):
+        """端到端建板（纯 RPC、零 GUI）。spec 见 examples/。返回审计字典。
+
+        router:
+          "freerouting"（默认·本源闭环）：放置/绑网后导出官方 DSN → freerouting 自动
+            布线 → 官方 `importAutoRouteSesFile()` 回灌。最难的布线交给久经考验的布线器，
+            经标准 Specctra 交换格式与 LCEDA 无缝衔接 → DRC-clean、可扩展到复杂大板。
+          "geometric"：内置确定性正交星形布线 + GND 过孔下底层（简单板/无外部依赖时用）。
+        pour=False：headless 下覆铜填充不出实铜（@alpha rebuildCopperRegion 不产 fill）。
+        """
+        t0 = time.time()
+        out_dir = out_dir or os.path.expanduser("~/dao_pcb_out/%s" % spec["name"])
+        os.makedirs(out_dir, exist_ok=True)
+        audit = {"name": spec["name"], "router": router,
+                 "out_dir": out_dir, "steps": {}}
+
+        puuid = self.create_project(spec["name"])
+        audit["project_uuid"] = puuid
+        self.open_pcb(puuid)
+
+        # 多层板：放件/导 DSN 之前先定层数，使层栈在 DSN 中即为多层
+        if spec.get("copper_layers"):
+            audit["steps"]["layers"] = self.set_copper_layers(spec["copper_layers"])
+
+        # 解析器件谱：每个 ref 用 query 检索一次（缓存同 query）
+        cache = {}
+        comps = []
+        for c in spec["components"]:
+            q = c["query"]
+            if q not in cache:
+                cache[q] = self.search_device(q)
+            # auto_fanout 的 {脚:网} 先并进器件 pins，使器件侧焊盘随放置即绑网；
+            # 配套串件待放置后按真实焊盘坐标几何落点（见下）。
+            pins = dict(c.get("pins", {}))
+            af = c.get("auto_fanout")
+            if af:
+                pins.update({str(k): v for k, v in af.items()})
+            comps.append({"device": cache[q], "layer": c.get("layer", 1),
+                          "x": c["x"], "y": c["y"],
+                          "rotation": c.get("rotation", 0),
+                          "designator": c["ref"], "pins": pins})
+        ids = self.place_and_net(comps)
+        # 几何驱动扇出：器件放定后，读其真实焊盘坐标就近落配套串件（不假设引脚布局）
+        fan = {}
+        for c in spec["components"]:
+            af = c.get("auto_fanout")
+            if af:
+                fq = c.get("fanout_query", "0603 10k")
+                fan[c["ref"]] = self.auto_fanout(
+                    c["ref"], {str(k): v for k, v in af.items()},
+                    device=(cache[fq] if fq in cache else None), query=fq,
+                    offset=c.get("fanout_offset", 420),
+                    depth_step=c.get("fanout_depth_step", 170))
+        if fan:
+            audit["steps"]["auto_fanout"] = {k: len(v) for k, v in fan.items()}
+        audit["steps"]["place_and_net"] = {"placed": len(ids),
+                                           "nets": self._call("pcb_Net.getAllNetsName")}
+
+        # 高速/总线约束：网络已绑定后、布线之前落（net-class/diff-pair/等长组）
+        if spec.get("constraints"):
+            audit["steps"]["constraints"] = self.apply_constraints(
+                spec["constraints"])
+
+        gnd = spec.get("gnd_net")
+        # 板框需在布线/DSN 之前存在（DSN boundary 取自板框）
+        audit["steps"]["outline"] = self.board_outline(margin=spec.get("margin", 120))
+        self.save()
+
+        ar = None
+        if router == "freerouting":
+            ar = self.autoroute(out_dir,
+                                net_widths_mm=self._net_track_widths(
+                                    spec.get("constraints")))
+            audit["steps"]["autoroute"] = ar
+        else:
+            skip = (gnd,) if gnd else ()
+            audit["steps"]["route"] = self.auto_route_star(
+                layer=spec.get("route_layer", TOP),
+                width=spec.get("track_width", 10), skip_nets=skip)
+            if gnd:
+                audit["steps"]["route_gnd_bottom"] = self.route_net_on_bottom(
+                    gnd, width=spec.get("track_width", 12))
+            if pour and gnd:
+                audit["steps"]["pour"] = self.ground_pour(
+                    net=gnd, layers=tuple(spec.get("pour_layers", (TOP, BOTTOM))))
+        self.save()
+
+        # 可选:布线后几何调长(原位蛇形补偿等长/差分),把 freerouting「不调长」转成能力。
+        # 调长改了铜 → DRC 须**重测**(不能复用布线器旧结果)。
+        tuned = False
+        if spec.get("length_tune") and spec.get("constraints"):
+            try:
+                audit["steps"]["length_tune"] = self.length_tune(
+                    spec["constraints"])
+                tuned = True
+            except Exception as e:
+                audit["steps"]["length_tune"] = {"error": str(e)}
+
+        # freerouting 路径已在自愈闭环里 DRC 收敛，直接复用其最终结果（避免二次发散）;
+        # 但若刚调长改了铜,必须重测 DRC 以反映蛇形是否破净距。
+        audit["steps"]["drc"] = (self.drc() if (tuned or not ar)
+                                 else ar["drc"])
+        # 布线后长度审计：实测差分 skew / 等长组 spread（约束兑现度，据实入档）
+        if spec.get("constraints"):
+            try:
+                audit["steps"]["length_audit"] = self.length_audit(
+                    spec["constraints"])
+            except Exception as e:
+                audit["steps"]["length_audit"] = {"error": str(e)}
+        # 闭环自审：每块板落审前先记一份真实板态快照（层/网络/规则）
+        try:
+            audit["review"] = {"layers": self.layer_info(),
+                               "rules": self.design_rules()}
+        except Exception as e:
+            audit["review"] = {"error": str(e)}
+        if spec.get("export_all"):
+            # 全谱制造/交换数据（spec 显式开启时）——一次导齐 13 格式，如实记录
+            audit["exports"] = self.export_all(out_dir)
+        else:
+            audit["exports"] = {
+                "gerber": self.export_gerber(out_dir + "/"),
+                "bom": self.export_bom(out_dir + "/"),
+                "pnp": self.export_pnp(out_dir + "/"),
+            }
+        audit["elapsed_s"] = round(time.time() - t0, 1)
+        audit["metrics"] = dict(self.metrics)
+        with open(out_dir + "/audit.json", "w") as fh:
+            json.dump(audit, fh, ensure_ascii=False, indent=2)
+        return audit
+
+    def build_until_clean(self, spec, out_dir=None, router="freerouting",
+                          pour=False, tries=4):
+        """整板重建重试，直到 DRC=0 或耗尽 tries（纯 RPC、零 GUI）。
+
+        每次 build_board 都会 create_project 起一块**全新的板**——首次 SES import
+        永不叠加（规避 clearRouting 无头挂起 + import 追加语义）；freerouting 运行间
+        的随机性使「全新板单发」必然在数次内收敛到全布通。返回最后一块干净板的审计；
+        若始终未净则返回 DRC 违规最少的那次（并在审计里标注 tries/attempts）。"""
+        best = None
+        history = []
+        for k in range(1, tries + 1):
+            audit = self.build_board(spec, out_dir=out_dir, router=router, pour=pour)
+            total = audit["steps"]["drc"]["total"]
+            history.append({"try": k, "project": self.project_name, "drc": total})
+            if best is None or total < best["steps"]["drc"]["total"]:
+                best = audit
+            if total == 0:
+                break
+        best["build_attempts"] = history
+        with open(best["out_dir"] + "/audit.json", "w") as fh:
+            json.dump(best, fh, ensure_ascii=False, indent=2)
+        return best
+
+
+def _main(argv):
+    """轻量自审 CLI：对当前打开的板做只读快照（零 GUI、不改板）。
+
+    用法：
+        python dao_rpc_driver.py report [--port 29230]   # 层/网络/规则/DRC 自审
+        python dao_rpc_driver.py caps   [--port 29230]    # _EXTAPI_ROOT_ 能力面
+        python dao_rpc_driver.py docsrc [--port 29230] [--records]  # 文档本源序列化(按 type 计数/全记录)
+        python dao_rpc_driver.py export <out_dir> [--port 29230]  # 当前板全谱导出
+    """
+    cmd = argv[0] if argv else "report"
+    port = 29230
+    if "--port" in argv:
+        port = int(argv[argv.index("--port") + 1])
+    drv = DaoRpc(port=port)
+    if cmd == "caps":
+        out = drv.capabilities(detail="--detail" in argv)
+    elif cmd == "report":
+        out = drv.board_report()
+    elif cmd == "docsrc":
+        ds = drv.doc_source(parse=True)
+        out = {"uuid": ds["uuid"], "raw_len": ds["raw_len"],
+               "counts": ds["counts"]}
+        if "--records" in argv:
+            out["records"] = ds["records"]
+    elif cmd == "export":
+        pos = [a for a in argv[1:] if not a.startswith("--")
+               and argv[argv.index(a) - 1] != "--port"]
+        out = drv.export_all(pos[0] if pos else
+                             os.path.expanduser("~/dao_pcb_out/export_all"))
+    else:
+        out = {"err": "unknown cmd %r; use report|caps|docsrc|export" % cmd}
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    import sys
+    _main(sys.argv[1:])

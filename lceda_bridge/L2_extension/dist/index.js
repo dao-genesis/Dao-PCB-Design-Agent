@@ -44,11 +44,21 @@ var edaEsbuildExportName = (() => {
 	});
 
 	// ─── 配置 ───────────────────────────────────────────────────────────
-	const WS_ID = "dao-lceda-bridge";
+	// WS 连接 ID: 每次尝试用全新 ID。实测 v3.2.149 的 sys_WebSocket 对同 ID
+	// close→register 存在异步竞态(旧 close 落地会杀掉新 register 的socket),
+	// 且同 ID 活跃连接不更新参数 —— 唯一化即绕开全部竞态。
+	const WS_ID_BASE = "dao-lceda-bridge";
+	let wsSeq = 0;
+	let WS_ID = null;
+
+	function nextWsId() {
+		wsSeq += 1;
+		return WS_ID_BASE + "-" + wsSeq + "-" + Math.random().toString(36).slice(2, 6);
+	}
 	const PORT_START = 9930;
 	const PORT_END = 9939;
 	const SERVICE_ID = "lceda-bridge";
-	const CONNECT_TIMEOUT_MS = 1200;   // 单端口连接+握手超时
+	const CONNECT_TIMEOUT_MS = 6000;   // 单端口连接+握手超时 (实测 sys_WebSocket 建连约 3.7s)
 	const RETRY_DELAY_MS = 3000;       // 全端口扫描失败后重试间隔
 	const HEARTBEAT_INTERVAL_MS = 15000;
 	const HEARTBEAT_TIMEOUT_MS = 5000;
@@ -89,7 +99,9 @@ var edaEsbuildExportName = (() => {
 	}
 
 	function closeWs() {
+		if (WS_ID === null) return;
 		try { eda.sys_WebSocket.close(WS_ID); } catch (e) { /* noop */ }
+		WS_ID = null;
 	}
 
 	function clearTimers() {
@@ -195,11 +207,13 @@ var edaEsbuildExportName = (() => {
 			}
 
 			if (!isActive(s)) { resolve(false); return; }
-			closeWs();  // register 对同 ID 活跃连接不更新参数, 先关旧的
+			closeWs();
+			const wsId = nextWsId();
+			WS_ID = wsId;
 
 			try {
 				eda.sys_WebSocket.register(
-					WS_ID,
+					wsId,
 					"ws://127.0.0.1:" + port + "/eda",
 					async (event) => {
 						if (!isActive(s)) { done(false); return; }

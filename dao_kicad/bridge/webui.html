@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<!-- DAO KiCad · 归一面板 — 反者道之动: 插件自主的只有两块 (对话管理 + 配置),
+     其余一切界面都是 KiCad 原生板块本体 (xpra 窗口协议级路由, 非投屏)。
+     AI 的每个操作也全部落在原生板块的同一份内存文档上 (官方 IPC 底层直驱, 不经 GUI),
+     用户在原生前端实时看到 AI 的每一步变动 — 人与 agent 同文档, 貌同心同。 -->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>☯ DAO KiCad · 归一面板</title>
+<style>
+:root{--bg:#12141a;--panel:#1a1e27;--line:#2a3040;--fg:#d8dce6;--dim:#8a93a6;
+      --acc:#4da3ff;--ok:#39c07f;--bad:#e0596a;--chip:#232a38}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+     background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:12px;padding:8px 14px;
+       border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:15px;margin:0;font-weight:600}
+#health{font-size:12px;color:var(--dim)}
+#health.ok{color:var(--ok)} #health.bad{color:var(--bad)}
+main{flex:1;display:flex;min-height:0}
+button{background:var(--chip);border:1px solid var(--line);color:var(--fg);border-radius:6px;
+       padding:5px 10px;cursor:pointer;font-size:12px}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);border-color:var(--acc);color:#08111f;font-weight:600}
+input{background:var(--bg);border:1px solid var(--line);color:var(--fg);
+      border-radius:6px;padding:5px 8px;font-size:12px}
+/* ── 左: 对话管理 (插件自主面 ①) ── */
+#ai{width:340px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--panel)}
+#chathead{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;
+          border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+#chatlog{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.msg{border-radius:10px;padding:7px 10px;max-width:95%;white-space:pre-wrap;word-break:break-word;font-size:13px}
+.msg.user{align-self:flex-end;background:#243b5e}
+.msg.bot{align-self:flex-start;background:var(--chip)}
+.msg.stage{align-self:flex-start;color:var(--dim);background:none;padding:0 4px;font-size:12px}
+#slash{display:none;padding:4px 10px;border-top:1px solid var(--line);flex-wrap:wrap;gap:4px}
+#slash.show{display:flex}
+#chatbar{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
+#chatbar input{flex:1;padding:7px 9px;font-size:13px}
+.chip{padding:2px 8px;border:1px solid var(--line);border-radius:10px;cursor:pointer;user-select:none;font-size:12px}
+/* ── 中: 本体 (KiCad 原生一切板块) + 配置 ── */
+#center{flex:1;display:flex;flex-direction:column;min-width:0}
+nav#boards{display:flex;gap:2px;padding:4px 8px 0;border-bottom:1px solid var(--line);
+           background:var(--panel)}
+nav#boards .tab{padding:6px 12px;font-size:13px;color:var(--dim);cursor:pointer;user-select:none;
+                border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;white-space:nowrap}
+nav#boards .tab.on{color:var(--fg);background:var(--bg);border-color:var(--line)}
+.board{display:none;flex:1;min-height:0;flex-direction:column;overflow:auto}
+.board.on{display:flex}
+.pad{padding:14px}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--panel)}
+.card h3{margin:0 0 6px;font-size:13px;color:var(--acc)}
+.card .kv{font-size:12px;color:var(--dim)}
+.libbar{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);
+        font-size:12px;color:var(--dim);flex-wrap:wrap}
+.hint{color:var(--dim)}
+pre{background:#0c0e13;border:1px solid var(--line);border-radius:8px;padding:10px;
+    overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-word}
+</style>
+</head>
+<body>
+<header>
+  <h1>☯ DAO KiCad · 归一面板</h1>
+  <span id="health">连接中…</span>
+</header>
+<main>
+  <!-- 左: 对话管理 — 一切意图从这里直驱 KiCad 底层, 结果落在右侧原生前端 -->
+  <aside id="ai">
+    <div id="chathead"><span>☯ 对话 · 一切操作落在原生板块</span>
+      <button onclick="clearChat()" title="清空会话历史">清空</button></div>
+    <div id="chatlog"></div>
+    <div id="slash"></div>
+    <div id="chatbar">
+      <input id="chatin" placeholder="说意图, 如: 生成 无人机飞控 (/ 看命令)">
+      <button class="primary" onclick="send()">发送</button>
+    </div>
+  </aside>
+  <!-- 中: ☯ 本体 = KiCad 原生一切板块 (工程管理器/原理图/PCB/符号/封装/Gerber/计算器…全部本尊) -->
+  <section id="center">
+    <nav id="boards"></nav>
+    <div class="board" data-b="native">
+      <div class="libbar" id="nativebar">
+        <span id="nativeStat" class="kv">本体状态…</span>
+        <button class="primary" onclick="nativeStart()">启动本体</button>
+        <input id="nativePath" placeholder="可带 .kicad_pro/.kicad_sch/.kicad_pcb 路径在本体打开" style="flex:1;min-width:200px">
+        <button onclick="nativeOpenSel()">在本体打开</button>
+        <button onclick="nativeReconnect()">重连</button>
+        <button onclick="nativeStop()">停止</button>
+      </div>
+      <div style="flex:1;min-height:0;position:relative">
+        <iframe id="nativeFrame" style="border:0;width:100%;height:100%;background:#0d0f14" allow="clipboard-read; clipboard-write"></iframe>
+        <div id="nativeHint" class="hint" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+          点「启动本体」— KiCad 软件本体 (工程管理器与全部编辑器) 的真实窗口将在此处直接出现并可完整操作。</div>
+      </div>
+    </div>
+    <!-- 👤 账号 (归一插件同构板块): Devin 账号池 · 切号 -->
+    <div class="board pad" data-b="acct">
+      <div class="card"><h3>👤 账号池 · Devin</h3>
+        <div class="kv">归一插件同构的账号管理板块: 登记多个 Devin 账号, 一键切活。
+        token 落盘 ~/.dao/kicad_ai.json, 界面只显脱敏。
+        <a href="https://app.devin.ai" target="_blank">打开 Devin 官网 ↗</a></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <input id="acName" placeholder="账号名" style="width:110px">
+          <input id="acEmail" placeholder="邮箱" style="flex:1;min-width:180px">
+          <input id="acToken" placeholder="Token (可空)" type="password" style="width:180px">
+          <button class="primary" onclick="acAdd()">保存账号</button>
+        </div>
+        <div id="acList" class="kv" style="margin-top:8px">载入中…</div></div>
+    </div>
+    <!-- ⚙ 配置 (插件自主面 ②): 渠道配置 / 对话数据 / 外接 API 文档 -->
+    <div class="board pad" data-b="cfg">
+      <div class="card"><h3>② 渠道配置 · 第三方 API</h3>
+        <div class="kv">接入任意 OpenAI 兼容渠道: 意图词(生成/布线/DRC/铜线/过孔/移件…)直驱 KiCad 底层,
+        其余问答经激活渠道路由。key 落盘 ~/.dao/kicad_ai.json, 界面只显脱敏。</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <input id="chName" placeholder="渠道名" style="width:110px">
+          <input id="chEp" placeholder="Endpoint (https://…/v1)" style="flex:1;min-width:200px">
+          <input id="chKey" placeholder="API Key" type="password" style="width:160px">
+          <input id="chModel" placeholder="模型 (如 gpt-4o-mini)" style="width:150px">
+          <button class="primary" onclick="chAdd()">保存渠道</button>
+        </div>
+        <div id="chList" class="kv" style="margin-top:8px">载入中…</div></div>
+      <div class="card"><h3>💬 对话数据管理</h3>
+        <div class="kv">左侧对话全量沉淀于服务端, 可回放 / 删除。
+          <button onclick="chatListLoad()" style="margin-left:8px">刷新</button>
+          <button onclick="chatDelAll()">清空全部</button></div>
+        <div id="chatList" class="kv" style="margin-top:8px">载入中…</div></div>
+      <div class="card"><h3>🔌 外接 API / Agent 直连</h3>
+        <div class="kv">① 外接 API: 第三方程序按 /api/capabilities 机读 schema 直连 REST 端点。<br>
+        ② Agent MD 直连: 把 GET /api/doc 文档整体发给任意成熟 Agent, 它即可全方位接管引擎。<br>
+        ③ 核心模块面直达: <a href="/api/health">/api/health</a> ·
+        <a href="/api/tree">/api/tree</a> ·
+        <a href="/api/render/sch">/api/render/sch</a> ·
+        <a href="/api/render/pcb">/api/render/pcb</a> ·
+        /api/agent (POST) · /api/job?id=…</div></div>
+      <div class="card"><h3>📜 Agent 桥接文档 (/api/doc)</h3><pre id="agentmd">载入中…</pre></div>
+      <div class="card"><h3>🧰 外接 API capabilities (/api/capabilities)</h3><pre id="caps">载入中…</pre></div>
+    </div>
+  </section>
+</main>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const SLASH=[["生成","智枢 DNA 生成工程并在本体打开, 如: 生成 无人机飞控"],
+             ["全链路","网表→建板→布线→DRC, 产物自动在本体打开"],
+             ["布线","自动布线"],["drc","板子 DRC"],["erc","原理图 ERC"],["fab","Gerber/钻孔/贴片"],
+             ["铜线","IPC 直落铜线, 如: 铜线 10,20 到 30,20"],
+             ["过孔","IPC 直落过孔, 如: 过孔 25,30"],
+             ["移件","IPC 移动封装, 如: 移件 C1 到 12,18"],
+             ["铺铜","IPC 重铺铜"],["保存","IPC 保存活动板"],
+             ["守护","风险守护"],["bom","BOM/成本"]];
+// 分而治之 (归一插件同构): 每个 KiCad 原生模块一张标签 (同一 xpra 会话内,
+// 点标签即拉起对应本尊窗口); 插件自主面只有 账号 / 配置。
+const MODULES=[["kicad","☯ 本体"],["eeschema","🖋 原理图"],["pcbnew","🧩 PCB"],
+               ["gerbview","🧾 Gerber"],["pcb_calculator","🧮 计算"],
+               ["bitmap2component","🖼 图转"],["pl_editor","📐 图框"]];
+const BOARDS=[...MODULES.map(([m,l])=>["native",l,m]),
+              ["acct","👤 账号",null],["cfg","⚙ 配置",null]];
+
+const nav=$("#boards");
+for(const [k,label,mod] of BOARDS){
+  const t=document.createElement("span"); t.className="tab"; t.dataset.b=k;
+  if(mod) t.dataset.m=mod;
+  t.textContent=label;
+  t.onclick=()=>showBoard(k,mod); nav.appendChild(t);
+}
+function showBoard(k,mod){
+  for(const t of nav.children)
+    t.classList.toggle("on",t.dataset.b===k&&(!mod&&!t.dataset.m||t.dataset.m===mod));
+  for(const b of document.querySelectorAll(".board")) b.classList.toggle("on",b.dataset.b===k);
+  localStorage.setItem("dao.board",k);
+  if(k==="cfg") loadCfgBoard();
+  if(k==="acct") acLoad();
+  if(k==="native"){ if(mod) moduleOpen(mod); nativeRefresh(); }
+}
+async function moduleOpen(mod){
+  $("#nativeStat").textContent="… 拉起模块 "+mod;
+  try{
+    const j=await (await fetch("/api/native/module",{method:"POST",
+        body:JSON.stringify({module:mod})})).json();
+    $("#nativeStat").textContent=j.ok?`● 已拉起 ${j.label||mod}`:("失败: "+(j.error||""));
+  }catch(e){$("#nativeStat").textContent="桥不可达: "+e;}
+  setTimeout(nativeRefresh,1500);
+}
+
+// ── 👤 账号池 (归一插件同构板块) ──
+async function acLoad(){
+  try{
+    const j=await (await fetch("/api/ai/config")).json();
+    const box=$("#acList"); box.innerHTML="";
+    if(!(j.accounts||[]).length){box.textContent="尚无账号 — 保存后可一键切活。";return;}
+    for(const a of j.accounts){
+      const d=document.createElement("div"); d.style.margin="3px 0";
+      const on=a.name===j.active_account;
+      d.innerHTML=`<b style="color:${on?"var(--ok)":"var(--fg)"}">${on?"● ":""}${a.name}</b>`+
+        ` · ${a.email||"(无邮箱)"} · token ${a.token}`;
+      const use=document.createElement("button"); use.textContent="切活"; use.style.marginLeft="8px";
+      use.onclick=async()=>{await cfgPost({op:"acct_use",name:a.name});acLoad();};
+      const del=document.createElement("button"); del.textContent="删除"; del.style.marginLeft="4px";
+      del.onclick=async()=>{await cfgPost({op:"acct_del",name:a.name});acLoad();};
+      d.appendChild(use); d.appendChild(del); box.appendChild(d);
+    }
+  }catch(e){$("#acList").textContent="载入失败: "+e;}
+}
+async function acAdd(){
+  const j=await cfgPost({op:"acct_add",name:$("#acName").value.trim(),
+    email:$("#acEmail").value.trim(),token:$("#acToken").value});
+  if(!j.ok)alert(j.error||"保存失败");
+  $("#acToken").value=""; acLoad();
+}
+
+// ── ☯ 本体: KiCad 软件本体窗口协议级路由 (xpra HTML5) + IPC 同进程直连 ──
+const NATIVE_URL=()=>`http://${location.hostname||"127.0.0.1"}:9932/`;
+async function nativeRefresh(){
+  let j; try{j=await (await fetch("/api/native/status")).json();}catch(e){$("#nativeStat").textContent="桥接不可达";return;}
+  const desktop=j.mode==="desktop";
+  const live=j.live&&(j.html||desktop);
+  $("#nativeStat").textContent=live
+    ?`● 本体运行中${desktop?" (本机桌面)":""} · ${j.windows.length} 窗口 · IPC ${j.ipc?"已连":"未连"}`
+    :(j.kicad&&(desktop||j.xpra)?"○ 本体未启动"
+      :(desktop?"✕ 缺 kicad (请安装 KiCad)":"✕ 缺 xpra/kicad (apt install xpra kicad)"));
+  const f=$("#nativeFrame"), h=$("#nativeHint");
+  if(live&&j.html){ if(!f.src) f.src=NATIVE_URL(); h.style.display="none"; }
+  else {
+    f.removeAttribute("src"); h.style.display="flex";
+    h.textContent=(live&&desktop)
+      ?"● 本体运行于本机桌面 — 真实窗口就在这台电脑屏幕上, 对话/IPC 操作实时落在其中。"
+      :"点「启动本体」— KiCad 软件本体 (工程管理器与全部编辑器) 的真实窗口将在此处直接出现并可完整操作。";
+  }
+}
+function nativeReconnect(){
+  const f=$("#nativeFrame");
+  f.removeAttribute("src"); requestAnimationFrame(()=>{f.src=NATIVE_URL();});
+  $("#nativeStat").textContent="… 重连本体画面";
+  setTimeout(nativeRefresh,1500);
+}
+async function nativeStart(){
+  $("#nativeStat").textContent="… 启动本体中";
+  const path=$("#nativePath").value.trim();
+  try{await (await fetch("/api/native/start",{method:"POST",body:JSON.stringify(path?{path}:{})})).json();}
+  catch(e){$("#nativeStat").textContent="启动失败: "+e;return;}
+  setTimeout(nativeRefresh,1500);
+}
+async function nativeOpenSel(){
+  const path=$("#nativePath").value.trim();
+  if(!path){$("#nativeStat").textContent="先填路径";return;}
+  const j=await (await fetch("/api/native/open",{method:"POST",body:JSON.stringify({path})})).json();
+  $("#nativeStat").textContent=j.ok?`已在本体打开: ${path}`:("失败: "+(j.error||""));
+  setTimeout(nativeRefresh,2000);
+}
+async function nativeStop(){
+  await fetch("/api/native/stop",{method:"POST",body:"{}"});
+  setTimeout(nativeRefresh,1000);
+}
+setInterval(()=>{const b=document.querySelector('.board[data-b="native"]');
+  if(b&&b.classList.contains("on")) nativeRefresh();},5000);
+
+// ── health ──
+fetch("/api/health").then(r=>r.json()).then(j=>{
+  const h=$("#health");
+  h.textContent=j.ok?`已连接 · KiCad ${j.kicad}`:"桥不可用";
+  h.className=j.ok?"ok":"bad";
+}).catch(()=>{const h=$("#health");h.textContent="桥不可用";h.className="bad";});
+
+// ── ⚙ 配置: 渠道 / 对话数据 / 外接文档 ──
+let cfgLoaded=false;
+async function loadCfgBoard(){
+  chLoad(); chatListLoad();
+  if(cfgLoaded)return; cfgLoaded=true;
+  try{$("#agentmd").textContent=await (await fetch("/api/doc")).text();}
+  catch(e){$("#agentmd").textContent="载入失败: "+e;}
+  try{$("#caps").textContent=JSON.stringify(await (await fetch("/api/capabilities")).json(),null,2);}
+  catch(e){$("#caps").textContent="载入失败: "+e;}
+}
+async function chLoad(){
+  try{
+    const j=await (await fetch("/api/ai/config")).json();
+    const box=$("#chList"); box.innerHTML="";
+    if(!(j.channels||[]).length){box.textContent="尚无渠道 — 未配时左侧对话仍由 KiCad 引擎意图路由兼管。";return;}
+    for(const c of j.channels){
+      const d=document.createElement("div"); d.style.margin="3px 0";
+      d.innerHTML=`<b style="color:${c.name===j.active?"var(--ok)":"var(--fg)"}">`+
+        `${c.name===j.active?"● ":""}${c.name}</b> · ${c.endpoint} · ${c.model||"(自动)"} · key ${c.key}`;
+      const on=document.createElement("button"); on.textContent="启用"; on.style.marginLeft="8px";
+      on.onclick=async()=>{await cfgPost({op:"activate",name:c.name});chLoad();};
+      const del=document.createElement("button"); del.textContent="删除"; del.style.marginLeft="4px";
+      del.onclick=async()=>{await cfgPost({op:"del",name:c.name});chLoad();};
+      d.appendChild(on); d.appendChild(del); box.appendChild(d);
+    }
+  }catch(e){$("#chList").textContent="载入失败: "+e;}
+}
+async function cfgPost(b){return (await fetch("/api/ai/config",{method:"POST",body:JSON.stringify(b)})).json();}
+async function chAdd(){
+  const j=await cfgPost({op:"add",name:$("#chName").value.trim(),endpoint:$("#chEp").value.trim(),
+    key:$("#chKey").value,model:$("#chModel").value.trim()});
+  if(!j.ok)alert(j.error||"保存失败");
+  $("#chKey").value=""; chLoad();
+}
+async function chatListLoad(){
+  try{
+    const j=await (await fetch("/api/chat/list")).json();
+    const box=$("#chatList"); box.innerHTML="";
+    if(!(j.chats||[]).length){box.textContent="尚无沉淀对话。";return;}
+    for(const c of j.chats.slice().reverse()){
+      const d=document.createElement("div"); d.style.margin="3px 0";
+      d.innerHTML=`<b>${c.title||"(无题)"}</b> · ${c.n} 条 · ${new Date(c.ts*1000).toLocaleString()}`;
+      const open=document.createElement("button"); open.textContent="回放"; open.style.marginLeft="8px";
+      open.onclick=()=>chatOpen(c.id);
+      const del=document.createElement("button"); del.textContent="删除"; del.style.marginLeft="4px";
+      del.onclick=async()=>{await fetch("/api/chat/del",{method:"POST",body:JSON.stringify({id:c.id})});chatListLoad();};
+      d.appendChild(open); d.appendChild(del); box.appendChild(d);
+    }
+  }catch(e){$("#chatList").textContent="载入失败: "+e;}
+}
+async function chatDelAll(){
+  await fetch("/api/chat/del",{method:"POST",body:JSON.stringify({all:true})});chatListLoad();
+}
+async function chatOpen(id){
+  const j=await (await fetch("/api/chat/get?id="+encodeURIComponent(id))).json();
+  if(!j.ok)return;
+  curChatId=id; $("#chatlog").innerHTML="";
+  for(const m of j.chat.messages) addMsg(m.role==="user"?"user":"bot",m.content,false);
+}
+
+// ── 对话管理: 历史持久 / 斜杠命令 / job 轮询; 一切结果落在本体原生前端 ──
+const LOG_KEY="dao.chat";
+function chatHistory(){try{return JSON.parse(localStorage.getItem(LOG_KEY))||[];}catch(e){return [];}}
+function pushHistory(m){const h=chatHistory();h.push(m);localStorage.setItem(LOG_KEY,JSON.stringify(h.slice(-200)));}
+function clearChat(){localStorage.removeItem(LOG_KEY);localStorage.removeItem("dao.chatid");
+  curChatId="";$("#chatlog").innerHTML="";}
+function addMsg(role,text,save=true){
+  const d=document.createElement("div"); d.className="msg "+role; d.textContent=text;
+  $("#chatlog").appendChild(d); $("#chatlog").scrollTop=1e9;
+  if(save&&role!=="stage") pushHistory({role,text});
+  return d;
+}
+for(const m of chatHistory()) addMsg(m.role,m.text,false);
+
+const slash=$("#slash");
+for(const [cmd,doc] of SLASH){
+  const c=document.createElement("span"); c.className="chip"; c.textContent=`${cmd} · ${doc}`;
+  c.onclick=()=>{$("#chatin").value=`${cmd} `;slash.classList.remove("show");$("#chatin").focus();};
+  slash.appendChild(c);
+}
+$("#chatin").addEventListener("input",e=>{
+  slash.classList.toggle("show",e.target.value.startsWith("/")&&!e.target.value.includes(" "));
+});
+$("#chatin").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
+
+let curChatId=localStorage.getItem("dao.chatid")||"";
+function sendText(t){$("#chatin").value=t;send();}
+async function send(){
+  let text=$("#chatin").value.trim(); if(!text)return;
+  $("#chatin").value=""; slash.classList.remove("show");
+  addMsg("user",text);
+  if(text.startsWith("/")) text=text.slice(1);
+  const root=localStorage.getItem("dao.root")||null;
+  let j;
+  try{
+    j=await (await fetch("/api/ai/chat",{method:"POST",
+        body:JSON.stringify({text,root,chat_id:curChatId})})).json();
+  }catch(e){addMsg("bot","桥不可达: "+e);return;}
+  if(j.chat_id){curChatId=j.chat_id;localStorage.setItem("dao.chatid",curChatId);}
+  addMsg("bot",j.reply||JSON.stringify(j));
+  if(j.job) pollJob(j.job,j.action);
+  else if(j.result||j.pcb) finishTurn(j.action,j.result||j);
+}
+async function pollJob(id,action){
+  const st=addMsg("stage","…",false);
+  for(;;){
+    await new Promise(r=>setTimeout(r,3000));
+    let s; try{s=await (await fetch("/api/job?id="+id)).json();}catch(e){continue;}
+    if(s.done){st.remove();finishTurn(action,s.result||{});return;}
+    st.textContent="⏳ "+(s.stage||"运行中")+" …";
+  }
+}
+function finishTurn(action,res){
+  const pcb=res.pcb||res.pcb_path||(res.steps&&res.steps.build&&res.steps.build.path)||null;
+  const drc=res.steps&&res.steps.drc||("violations" in res?res:null);
+  let line=`${action} ${res.ok!==false?"完成 ✔":"未完全收敛"}`;
+  if(drc){
+    line+=` · violations ${drc.violations??"?"}`;
+    if(drc.unconnected!==undefined) line+=` · unconnected ${drc.unconnected}`;
+  }
+  if(pcb) line+=`\n${pcb}\n→ 已在 ☯ 本体原生板块打开, 右侧实时可见`;
+  addMsg("bot",line);
+  if(pcb){ showBoard("native","kicad"); setTimeout(nativeRefresh,2000); }
+}
+
+// 初始板块: ?board=xxx 优先, 否则恢复上次; ?embed=1 (VS Code 插件内嵌) 时隐藏左对话栏
+(()=>{ const p=new URLSearchParams(location.search);
+  if(p.get("embed")==="1"){ $("#ai").style.display="none"; }
+  const r=p.get("root"); if(r){ localStorage.setItem("dao.root",r); }
+  const b=p.get("board")||localStorage.getItem("dao.board");
+  showBoard(b==="cfg"||b==="acct"?b:"native",b==="cfg"||b==="acct"?null:"kicad"); })();
+</script>
+</body>
+</html>

@@ -9,6 +9,7 @@ footprint libraries.
 """
 from __future__ import annotations
 
+import glob
 import os
 import shutil
 import subprocess
@@ -16,6 +17,30 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
+
+# Self-contained runtime mounted by tools/install_kicad.py — checked before
+# any system install so the vendored engine wins wherever it exists. The
+# default lives under tools/kicad; on Windows the provisioner may relocate
+# it off the system drive and record the real path in tools/kicad.mount.
+_TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
+_MOUNT_ROOT = _TOOLS_DIR / "kicad"
+_MOUNT_POINTER = _TOOLS_DIR / "kicad.mount"
+
+
+def _mount_roots() -> list[Path]:
+    roots: list[Path] = []
+    override = os.environ.get("DAOKICAD_MOUNT")
+    if override:
+        roots.append(Path(override))
+    try:
+        if _MOUNT_POINTER.is_file():
+            p = _MOUNT_POINTER.read_text(encoding="utf-8").strip()
+            if p:
+                roots.append(Path(p))
+    except OSError:
+        pass
+    roots.append(_MOUNT_ROOT)
+    return roots
 
 # Common install roots across platforms. Newer versions first.
 _WINDOWS_ROOTS = [
@@ -29,6 +54,85 @@ _POSIX_ROOTS = [
     "/usr/local/lib/kicad",
     "/Applications/KiCad/KiCad.app/Contents",
 ]
+
+
+def _windows_registry_roots() -> list[Path]:
+    """KiCad install locations recorded by the installer (any drive, any version)."""
+    if os.name != "nt":
+        return []
+    try:
+        import winreg
+    except ImportError:  # pragma: no cover
+        return []
+    roots: list[Path] = []
+    hives = [
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+    ]
+    for hive, base in hives:
+        try:
+            key = winreg.OpenKey(hive, base)
+        except OSError:
+            continue
+        with key:
+            for i in range(winreg.QueryInfoKey(key)[0]):
+                try:
+                    sub = winreg.OpenKey(key, winreg.EnumKey(key, i))
+                except OSError:
+                    continue
+                with sub:
+                    try:
+                        name = winreg.QueryValueEx(sub, "DisplayName")[0]
+                        if "kicad" not in str(name).lower():
+                            continue
+                        loc = winreg.QueryValueEx(sub, "InstallLocation")[0]
+                    except OSError:
+                        continue
+                    if loc:
+                        roots.append(Path(loc))
+    return roots
+
+
+def _windows_drive_roots() -> list[Path]:
+    """Scan every fixed drive for KiCad-style roots (D:\\KiCad, E:\\KiCad\\9.0, ...)."""
+    if os.name != "nt":
+        return []
+    roots: list[Path] = []
+    for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
+        drive = Path(f"{letter}:/")
+        if not drive.exists():
+            continue
+        for base in (drive, drive / "Program Files", drive / "Program Files (x86)"):
+            try:
+                matches = sorted(base.glob("KiCad*"), reverse=True)
+            except OSError:
+                continue
+            for m in matches:
+                if not m.is_dir():
+                    continue
+                roots.append(m)
+                try:  # version subdirs (e.g. KiCad\9.0), newest first
+                    roots.extend(sorted((d for d in m.iterdir() if d.is_dir()), reverse=True))
+                except OSError:
+                    pass
+    return roots
+
+
+def _posix_extra_roots() -> list[Path]:
+    if os.name == "nt":
+        return []
+    roots: list[Path] = []
+    for pat in ("/Applications/KiCad*/KiCad.app/Contents",
+                "/Applications/KiCad*.app/Contents",
+                "/opt/kicad*",
+                "/snap/kicad/current/usr",
+                "/var/lib/flatpak/app/org.kicad.KiCad/current/active/files",
+                os.path.expanduser(
+                    "~/.local/share/flatpak/app/org.kicad.KiCad"
+                    "/current/active/files")):
+        roots.extend(Path(p) for p in sorted(glob.glob(pat), reverse=True))
+    return roots
 
 
 @dataclass
@@ -75,9 +179,20 @@ def _candidate_roots() -> list[Path]:
     env_root = os.environ.get("KICAD_ROOT") or os.environ.get("DAOKICAD_ROOT")
     if env_root:
         roots.append(Path(env_root))
+    roots.extend(_mount_roots())
     raw = _WINDOWS_ROOTS if os.name == "nt" else _POSIX_ROOTS
     roots.extend(Path(r) for r in raw)
-    return roots
+    roots.extend(_windows_registry_roots())
+    roots.extend(_windows_drive_roots())
+    roots.extend(_posix_extra_roots())
+    seen: set[str] = set()
+    uniq: list[Path] = []
+    for r in roots:
+        k = str(r).lower()
+        if k not in seen:
+            seen.add(k)
+            uniq.append(r)
+    return uniq
 
 
 def _find_cli() -> Optional[Path]:
@@ -160,8 +275,9 @@ def require() -> KiCadEnv:
     env = detect()
     if not env.available:
         raise RuntimeError(
-            "KiCad not found. Install KiCad (kicad-cli must be on PATH or under "
-            "C:\\Program Files\\KiCad), or set KICAD_ROOT."
+            "KiCad not found. Searched PATH, the Windows registry, every drive's "
+            "KiCad*/Program Files roots and common POSIX paths. Set KICAD_ROOT to "
+            "your install directory to override."
         )
     return env
 

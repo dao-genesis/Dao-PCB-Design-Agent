@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "dao-pcb-design-agent"
@@ -11,7 +11,13 @@ requires-python = ">=3.10"
 license = {text = "MIT"}
 
 [project.optional-dependencies]
-live = ["kipy", "pywinauto"]
+# KiCad 9 IPC API client imports as `kipy`; PyPI package is `kicad-python`.
+# protobuf pinned to match kipy gencode; pywinauto is Windows-only (GUI 兜底).
+live = [
+    "kicad-python>=0.4",
+    "protobuf>=5.29.6,<8",
+    "pywinauto; sys_platform == 'win32'",
+]
 dev = ["pytest", "ruff"]
 
 [tool.setuptools.packages.find]

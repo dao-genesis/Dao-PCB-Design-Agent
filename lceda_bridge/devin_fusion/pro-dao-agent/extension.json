@@ -1,0 +1,14 @@
+{
+    "services": {
+        "dao-agent": [
+            "/agent.js"
+        ]
+    },
+    "name": "pro-dao-agent",
+    "version": "0.1.0",
+    "files": {
+        "/agent.js": "42e8643aa33c4040d0b7b3d99904b025",
+        "/panel.html": "f450ad683f81b8fc58ec7e1f04088d7e"
+    },
+    "innerSign": ""
+}

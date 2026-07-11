@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-syntax:
+    name: Python syntax gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Compile all tracked Python (except documented quarantine)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ignore_file=".github/ci-syntax-ignore.txt"
+          # Build the quarantine set (strip comments/blank lines).
+          declare -A IGN=()
+          if [ -f "$ignore_file" ]; then
+            while IFS= read -r line; do
+              line="${line%%#*}"
+              line="$(echo -n "$line" | xargs || true)"
+              [ -n "$line" ] && IGN["$line"]=1
+            done < "$ignore_file"
+          fi
+          gate=(); skip=()
+          while IFS= read -r -d '' f; do
+            if [ -n "${IGN[$f]:-}" ]; then skip+=("$f"); else gate+=("$f"); fi
+          done < <(git ls-files -z '*.py')
+          echo "Gating ${#gate[@]} file(s); quarantined ${#skip[@]} file(s)."
+          if [ ${#gate[@]} -gt 0 ]; then
+            python -m py_compile "${gate[@]}"
+          fi
+          echo "py_compile gate OK"
+
+      - name: Report quarantined files (non-blocking)
+        if: always()
+        shell: bash
+        run: |
+          ignore_file=".github/ci-syntax-ignore.txt"
+          [ -f "$ignore_file" ] || { echo "no quarantine file"; exit 0; }
+          echo "## Quarantined (pre-existing, content lost at commit)" >> "$GITHUB_STEP_SUMMARY"
+          grep -vE '^\s*(#|$)' "$ignore_file" | while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            echo "- \`$f\`" >> "$GITHUB_STEP_SUMMARY"
+            python -m py_compile "$f" 2>>"$GITHUB_STEP_SUMMARY" || true
+          done

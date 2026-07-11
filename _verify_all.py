@@ -150,6 +150,25 @@ def main() -> int:
         check("Dao import", True)
         dao = Dao()
         check("Dao instantiate", dao is not None)
+        # 回归: feedback timing 必须真实反映结果 (修复前: 前置校验失败的提前
+        # return 仍打 ✓). 无当前板时 run_drc 应 ok=False 且 emit ✗。
+        import io as _io
+        from kicad_origin.dao.feedback import (Feedback as _FB,
+                                               FileFeedback as _FF)
+        import tempfile as _tf
+        _tmp = _tf.NamedTemporaryFile("w+", suffix=".jsonl", delete=False)
+        _tmp.close()
+        _probe = Dao(feedback=_FB(_FF(_tmp.name)))
+        _r = _probe.run_drc()  # 无板 → 提前 return
+        check("feedback: early-return marks ✗ (no false ✓)",
+              _r.ok is False)
+        import json as _json
+        _events = [_json.loads(ln) for ln in open(_tmp.name)
+                   if ln.strip()]
+        _drc_ev = [e for e in _events if e.get("action") == "run_drc"]
+        check("feedback: emit ok=False on guard return",
+              bool(_drc_ev) and _drc_ev[-1]["ok"] is False,
+              f"{len(_drc_ev)} event(s)")
     except Exception as e:
         check("Dao", False, str(e))
 
@@ -169,6 +188,19 @@ def main() -> int:
         ipc = IPCChannel()
         check("IPC instantiate", True)
         check("IPC library", isinstance(ipc.library_ok, bool))
+        if ipc.available:
+            st = ipc.status()
+            check("IPC server_up (live)", st.server_up, st.version)
+            # 回归: open_documents 必须带 DocumentType, 修复前恒空表
+            docs = ipc.open_documents()
+            check("IPC open_documents typed (live)", isinstance(docs, list),
+                  f"{len(docs)} doc(s)")
+            refs = ipc.pcb_footprint_refs()
+            check("IPC footprint_refs (live)", isinstance(refs, list),
+                  f"{len(refs)} fp")
+        else:
+            check("IPC live ops skipped (no running KiCad)", True,
+                  "graceful degrade")
     except Exception as e:
         check("IPC", False, str(e))
 
@@ -189,7 +221,7 @@ def main() -> int:
     try:
         from pcb_brain.circuit_dna import CircuitDNA, DNA, Comp
         check("CircuitDNA import", True)
-        check("21 templates", CircuitDNA.count() == 21, f"count={CircuitDNA.count()}")
+        check("templates >=21", CircuitDNA.count() >= 21, f"count={CircuitDNA.count()}")
     except Exception as e:
         check("CircuitDNA", False, str(e))
 
@@ -199,18 +231,25 @@ def main() -> int:
     except Exception as e:
         check("pcb_gen", False, str(e))
 
-    # ── DNA → PCB → DRC (all 21) ────────────────────────────────
-    print("\n── DNA → PCB → DRC (21 templates) ──")
+    # ── DNA → PCB → solve_drc → DRC (真实流水线) ─────────────────
+    # dna_to_board 仅产生"原始占位布局"(占位焊盘, 待 solve_drc 推开消解重叠);
+    # 系统真实流水线是 dna_to_board → PcbAgent.solve_drc → DRC-clean。
+    # 故此处验证"经布局闭环求解后"的板子无 ERROR (而非原始中间态)。
+    print(f"\n── DNA → PCB → solve_drc → DRC ({CircuitDNA.count()} templates) ──")
     try:
         from pcb_brain.pcb_gen import dna_to_board
         from kicad_origin.engine.drc import DRCEngine
+        from kicad_origin.dao.dao import Dao
+        from kicad_origin.agent.loop import PcbAgent
         for name in CircuitDNA.list_names():
             dna = CircuitDNA.get(name)
             board = dna_to_board(dna)
-            engine = DRCEngine(board)
-            report = engine.run()
+            raw_e = DRCEngine(board).run().error_count
+            dao = Dao(); dao._board = board
+            PcbAgent(dao, max_iters=200).solve_drc()
+            report = DRCEngine(board).run()
             check(f"DNA:{name}", report.passed,
-                  f"{dna.component_count}c {dna.net_count}n E={report.error_count}")
+                  f"{dna.component_count}c {dna.net_count}n raw_E={raw_e}→E={report.error_count}")
     except Exception as e:
         check("DNA pipeline", False, str(e))
 
@@ -274,6 +313,145 @@ def main() -> int:
               f"passed={r['passed']}/{r['total']}")
     except Exception as e:
         check("MCP", False, str(e))
+
+    # ── 全链路制造包 (kicad-cli 真工具 / 纯Python 降级双轨) ──────────
+    print("\n── build_fab_package (real kicad-cli OR graceful degrade) ──")
+    try:
+        from pcb_brain.pcb_gen import build_fab_package
+        from kicad_origin.engine import kicad_cli as kc
+        avail = kc.kicad_cli_available()
+        check("kicad_cli_available()", isinstance(avail, bool),
+              f"kicad-cli {'present '+(kc.kicad_cli_version() or '') if avail else 'absent → pure-python'}")
+        r = build_fab_package("dht22_sensor", output_dir="output/_verify_fab",
+                              render=False)
+        check("fab.ok", r.get("ok") is True, f"backend={r.get('backend')}")
+        check("fab.solved", r["internal_drc"]["solved_errors"] == 0,
+              f"E {r['internal_drc']['raw_errors']}→{r['internal_drc']['solved_errors']}")
+        check("fab.gerbers", r["steps"]["gerbers"].get("ok") is True)
+        if avail:
+            check("fab.drc(real)", r["steps"]["drc"].get("ok") is True,
+                  str(r["steps"]["drc"].get("data")))
+            check("fab.render artifacts", len(r["steps"]["step"].get("artifacts", [])) >= 1)
+    except Exception as e:
+        check("build_fab_package", False, str(e))
+
+    # ── 逆向: 旋转感知 DRC 在真实工业板上零假阳 ───────────────────
+    print("\n── reverse: rotation-aware DRC vs gold (no false positives) ──")
+    try:
+        from kicad_origin.origin.env import detect_kicad
+        from kicad_origin.pcb.board import Board
+        from kicad_origin.engine.drc import DRCEngine
+        info = detect_kicad()
+        root = info.get("root")
+        demo = None
+        if root:
+            cand = (Path(root) / "share" / "kicad" / "demos" /
+                    "complex_hierarchy" / "complex_hierarchy.kicad_pcb")
+            demo = str(cand) if cand.exists() else None
+        if demo:
+            b = Board.load(demo)
+            rep = DRCEngine(b).run()
+            # gold kicad-cli 判这块工业板几何无误 (0 violations);
+            # 旋转感知修复后我们也应为 0, 不得误报。
+            check("reverse.complex_hierarchy no false-positive",
+                  rep.error_count == 0,
+                  f"our DRC errors={rep.error_count} (gold=0)")
+        else:
+            skip("reverse.complex_hierarchy", "demo not found")
+        # stickhub: 钢网开孔 (晶振 Y1 num='' 仅 *.Paste) + 正反面异层焊盘,
+        # gold kicad-cli 判 0; 铜层过滤 + 层共享判定修复后 R001/R005 应零假阳。
+        demo2 = None
+        if root:
+            c2 = (Path(root) / "share" / "kicad" / "demos" /
+                  "stickhub" / "StickHub.kicad_pcb")
+            demo2 = str(c2) if c2.exists() else None
+        if demo2:
+            import collections as _c
+            rep2 = DRCEngine(Board.load(demo2)).run()
+            by = _c.Counter(v.rule for v in rep2.violations)
+            check("reverse.stickhub no R001/R005 false-positive",
+                  by.get("R001", 0) == 0 and by.get("R005", 0) == 0,
+                  f"R001={by.get('R001',0)} R005={by.get('R005',0)} (gold=0)")
+        else:
+            skip("reverse.stickhub", "demo not found")
+        # 单元级: 仅 paste 层焊盘判为非铜; F.Cu/B.Cu 不共享铜层
+        from kicad_origin.engine.drc import _pad_is_copper, _pads_share_copper
+
+        class _P:
+            def __init__(self, layers, typ="smd"):
+                self.layers, self.type = layers, typ
+        check("drc._pad_is_copper excludes paste aperture",
+              _pad_is_copper(_P(["B.Paste"])) is False
+              and _pad_is_copper(_P(["B.Cu", "B.Mask"])) is True)
+        check("drc._pads_share_copper rejects F.Cu vs B.Cu",
+              _pads_share_copper(_P(["F.Cu"]), _P(["B.Cu"])) is False
+              and _pads_share_copper(_P(["B.Cu"]), _P(["B.Cu"])) is True)
+    except Exception as e:
+        check("reverse rotation-aware DRC", False, str(e))
+
+    # ── 正向: freerouting 布线闭环 (unconnected→0) ────────────────
+    print("\n── forward: freerouting routing closure (unconnected→0) ──")
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).parent / "dao_kicad"))
+        from daokicad import route as _route
+        if _route.available():
+            check("forward.freerouting available", True,
+                  f"java+jar resolved")
+        else:
+            skip("forward.routing closure",
+                 "java/freerouting.jar not installed")
+    except Exception as e:
+        skip("forward.routing closure", str(e))
+
+    # ── 深层嫁接: KiCad 全功能面逆流 + 常驻 pcbnew 工人 ──────────
+    print("\n── deep: KiCad capability surface + persistent pcbnew worker ──")
+    try:
+        from kicad_origin.origin import introspect
+        from kicad_origin.origin.env import detect_kicad
+        # 能力面逆流: kicad-cli 子命令树 (无需 KiCad python, 仅需 cli)
+        cli_s = introspect.cli_surface(max_depth=3)
+        if cli_s.get("available"):
+            check("introspect.cli surface (leaf commands)",
+                  cli_s.get("leaf_count", 0) >= 20,
+                  f"{cli_s.get('leaf_count')} leaf commands enumerated")
+        else:
+            skip("introspect.cli surface", "kicad-cli not found")
+        # 能力面逆流: pcbnew SWIG 全符号目录 (需 KiCad python)
+        pn = introspect.pcbnew_surface()
+        if pn.get("available"):
+            check("introspect.pcbnew surface (SWIG symbols)",
+                  pn.get("total", 0) >= 500,
+                  f"{pn.get('total')} symbols, {pn.get('classes')} classes")
+        else:
+            skip("introspect.pcbnew surface", pn.get("reason", "no kicad py"))
+        # 常驻 pcbnew 工人: load 一次, 多次查询同一已加载板 (进程内嫁接)
+        from kicad_origin.live.pcbnew_session import (
+            PcbnewSession, pcbnew_session_available)
+        root = detect_kicad().get("root")
+        demo = None
+        if root:
+            cand = (Path(root) / "share" / "kicad" / "demos" /
+                    "complex_hierarchy" / "complex_hierarchy.kicad_pcb")
+            demo = str(cand) if cand.exists() else None
+        if pcbnew_session_available() and demo:
+            with PcbnewSession() as s:
+                s.load(demo)
+                st = s.stats()
+                conn = s.connectivity()
+                bm = s.symbol_methods("BOARD")
+            check("pcbnew_session persistent load+query",
+                  st.get("footprints", 0) > 0
+                  and conn.get("net_groups", 0) > 0
+                  and bm.get("method_count", 0) > 100,
+                  f"fp={st.get('footprints')} net_groups="
+                  f"{conn.get('net_groups')} BOARD.methods="
+                  f"{bm.get('method_count')}")
+        else:
+            skip("pcbnew_session persistent load+query",
+                 "KiCad python or demo not available")
+    except Exception as e:
+        check("deep KiCad fusion", False, str(e))
 
     # ── Top-level package ────────────────────────────────────────
     print("\n── Top-level package ──")

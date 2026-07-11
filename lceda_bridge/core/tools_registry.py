@@ -28,6 +28,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+from . import verbs as _verbs
+
 
 # ──────────────────────────────────────────────────────────
 # 数据模型
@@ -116,33 +118,6 @@ def list_mcp() -> list[dict]:
 
 def list_openai() -> list[dict]:
     return [t.to_openai() for t in _REGISTRY.values()]
-
-
-# ──────────────────────────────────────────────────────────
-# 安全调用辅助 (try fallback path 链)
-# ──────────────────────────────────────────────────────────
-def _try_paths(transport, candidates: list[tuple[str, list]]) -> dict:
-    """依次尝试候选 (path, args), 返回首个成功结果. 全失败则返回带 errors 的 dict.
-
-    transport: 任意 callable (path, args) -> Any (HttpTransport / BusTransport / CdpTransport).
-    candidates: [(path, args), ...]
-    """
-    errors = []
-    for path, args in candidates:
-        try:
-            res = transport(path, args)
-            return {"ok": True, "path": path, "result": res}
-        except Exception as e:
-            errors.append({"path": path, "error": str(e)[:300]})
-    return {"ok": False, "errors": errors, "tried": [p for p, _ in candidates]}
-
-
-def _eval_in_bus(bus, js: str) -> Any:
-    """走 BusTransport 跑 JS, 返回结果. 若 bus 无 eval_in_sandbox 则报错."""
-    fn = getattr(bus, "eval_in_sandbox", None)
-    if not callable(fn):
-        raise RuntimeError("当前 transport 不支持 eval_in_sandbox (需 BusTransport)")
-    return fn(js)
 
 
 # ──────────────────────────────────────────────────────────
@@ -236,281 +211,20 @@ def execute(transport, name: str, params: Optional[dict] = None, *, observer=Non
 EMPTY_SCHEMA = {"type": "object", "properties": {}, "additionalProperties": False}
 
 
-# ── 1. 环境 / 系统信息 ─────────────────────────────────
-register(Tool(
-    name="eda.environment.info",
-    description="★ 查看嘉立创EDA当前环境: 编辑器版本/在线模式/客户端类型/Pro版本判定. 应优先调用以确认环境.",
-    input_schema=EMPTY_SCHEMA,
-    side_effect="read", visibility="silent", tags=("environment", "info"),
-    handler=lambda t: {
-        "editor_version": _try_paths(t, [("sys_Environment.getEditorVersion", [])]),
-        "is_online": _try_paths(t, [("sys_Environment.isOnlineMode", [])]),
-        "is_client": _try_paths(t, [("sys_Environment.isClient", [])]),
-        "is_pro": _try_paths(t, [("sys_Environment.isJLCEDAProEdition", [])]),
-        "is_offline": _try_paths(t, [("sys_Environment.isOfflineMode", [])]),
-    },
-))
-
-
-# ── 2. 工程管理 ────────────────────────────────────────
-register(Tool(
-    name="eda.project.current",
-    description="★ 获取当前打开工程的详细信息 (含 uuid/name/路径/包含的文档列表).",
-    input_schema=EMPTY_SCHEMA,
-    side_effect="read", visibility="silent", tags=("project",),
-    handler=lambda t: _try_paths(t, [("dmt_Project.getCurrentProjectInfo", [])]),
-))
-
-register(Tool(
-    name="eda.project.list",
-    description="列出当前用户所有工程 (返回 uuid+name 数组). 注: 实际 API 名因版本可能不同, 内部尝试多个候选.",
-    input_schema=EMPTY_SCHEMA,
-    side_effect="read", visibility="silent", tags=("project",),
-    handler=lambda t: _try_paths(t, [
-        ("dmt_Project.getProjectList", []),
-        ("dmt_Project.getProjects", []),
-        ("dmt_Project.listProjects", []),
-        ("dmt_Project.getAllProjects", []),
-    ]),
-))
-
-register(Tool(
-    name="eda.project.open",
-    description="按 UUID 打开指定工程. 触发 EDA 切换工程 (interactive 副作用).",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "uuid": {"type": "string", "description": "工程 UUID"},
-        },
-        "required": ["uuid"],
-        "additionalProperties": False,
-    },
-    side_effect="interactive", visibility="toast", tags=("project",),
-    handler=lambda t, uuid: _try_paths(t, [
-        ("dmt_Project.openProject", [uuid]),
-        ("dmt_Project.openProjectById", [uuid]),
-        ("dmt_Project.open", [uuid]),
-    ]),
-))
-
-
-# ── 3. 文档管理 ────────────────────────────────────────
-register(Tool(
-    name="eda.document.list",
-    description="列出当前工程内所有文档 (原理图页 / PCB / 符号 / 封装).",
-    input_schema=EMPTY_SCHEMA,
-    side_effect="read", visibility="silent", tags=("document",),
-    handler=lambda t: _try_paths(t, [
-        ("dmt_Document.getDocumentList", []),
-        ("dmt_Document.getDocuments", []),
-        ("dmt_Project.getDocuments", []),
-        ("dmt_Document.list", []),
-    ]),
-))
-
-register(Tool(
-    name="eda.document.active",
-    description="获取当前激活文档信息 (类型/uuid/标题/编辑器实例).",
-    input_schema=EMPTY_SCHEMA,
-    side_effect="read", visibility="silent", tags=("document",),
-    handler=lambda t: _try_paths(t, [
-        ("dmt_Document.getActiveDocument", []),
-        ("dmt_Document.getCurrentDocument", []),
-        ("dmt_Document.current", []),
-    ]),
-))
-
-
-# ── 4. 元件搜索 ────────────────────────────────────────
-register(Tool(
-    name="eda.component.search",
-    description="按关键字搜索元件 (符号/封装/器件). 返回匹配列表, 含 uuid+title+desc.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "keyword": {"type": "string", "description": "搜索关键字, e.g. STM32 / 0805 / LM358"},
-            "limit": {"type": "integer", "default": 20, "minimum": 1, "maximum": 200},
-        },
-        "required": ["keyword"],
-        "additionalProperties": False,
-    },
-    side_effect="read", visibility="silent", tags=("component", "search"),
-    handler=lambda t, keyword, limit=20: _try_paths(t, [
-        ("dmt_Component.searchComponent", [keyword, limit]),
-        ("dmt_Component.search", [keyword, limit]),
-        ("dmt_Component.searchByKeyword", [keyword, limit]),
-    ]),
-))
-
-
-# ── 5. PCB 操作 ────────────────────────────────────────
-register(Tool(
-    name="eda.pcb.drc",
-    description="对当前 PCB 文档运行 DRC (设计规则检查). 返回违规报告.",
-    input_schema=EMPTY_SCHEMA,
-    side_effect="write", visibility="toast", tags=("pcb", "drc"),
-    handler=lambda t: _try_paths(t, [
-        ("pcb_DesignRule.runCheckAll", []),
-        ("pcb_Drc.runCheck", []),
-        ("pcb_Drc.check", []),
-    ]),
-))
-
-register(Tool(
-    name="eda.pcb.export_gerber",
-    description="导出当前 PCB 为 Gerber 制造文件 (压缩包). 高级操作 — 触发文件保存对话.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "output_dir": {"type": "string", "description": "输出目录 (可选, 不填弹对话框)"},
-        },
-        "additionalProperties": False,
-    },
-    side_effect="destructive", visibility="toast", tags=("pcb", "gerber", "export"),
-    handler=lambda t, output_dir=None: _try_paths(t, [
-        ("pcb_Manufacture.exportGerber", [output_dir]),
-        ("pcb_Manufacture.gerber", [output_dir]),
-        ("dmt_Document.exportGerber", [output_dir]),
-    ]),
-))
-
-
-# ── 6. 原理图操作 ──────────────────────────────────────
-register(Tool(
-    name="eda.sch.netlist",
-    description="导出当前原理图的网表 (字符串 NDJSON 或 SPICE).",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "format": {"type": "string", "enum": ["spice", "json", "ndjson"], "default": "json"},
-        },
-        "additionalProperties": False,
-    },
-    side_effect="read", visibility="log", tags=("sch", "netlist"),
-    handler=lambda t, format="json": _try_paths(t, [
-        ("sch_Netlist.export", [format]),
-        ("sch_Document.exportNetlist", [format]),
-    ]),
-))
-
-
-# ── 7. BOM ─────────────────────────────────────────────
-register(Tool(
-    name="eda.bom.export",
-    description="导出当前工程 BOM (物料清单). 返回 BOM 数据数组或文件路径.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "format": {"type": "string", "enum": ["json", "csv", "xlsx"], "default": "json"},
-        },
-        "additionalProperties": False,
-    },
-    side_effect="read", visibility="log", tags=("bom", "export"),
-    handler=lambda t, format="json": _try_paths(t, [
-        ("dmt_Bom.export", [format]),
-        ("dmt_Bom.getBom", [format]),
-        ("dmt_Project.exportBom", [format]),
-    ]),
-))
-
-
-# ── 8. 系统提示 (用户感知层) ───────────────────────────
-register(Tool(
-    name="eda.system.notify",
-    description="在 EDA 内弹出消息提示 (用户能看见). 用于 agent 同步状态给用户.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "message": {"type": "string", "description": "消息正文"},
-            "title":   {"type": "string", "description": "标题 (可选)", "default": "Agent"},
-            "level":   {"type": "string", "enum": ["info", "warn", "error", "success"], "default": "info"},
-        },
-        "required": ["message"],
-        "additionalProperties": False,
-    },
-    side_effect="interactive", visibility="silent", tags=("system", "ui"),
-    handler=lambda t, message, title="Agent", level="info": _try_paths(t, [
-        ("sys_MessageBox.showInformationMessage", [message, title, "OK"]),
-        ("sys_Notification.show", [title, message, level]),
-        ("sys_MessageBox.show", [message, title]),
-    ]),
-))
-
-register(Tool(
-    name="eda.system.console_log",
-    description="在 EDA 渲染进程的 DevTools console 输出一条消息 (开发者可见).",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "message": {"type": "string"},
-            "level": {"type": "string", "enum": ["log", "info", "warn", "error"], "default": "log"},
-        },
-        "required": ["message"],
-        "additionalProperties": False,
-    },
-    side_effect="write", visibility="silent", tags=("system", "log"),
-    handler=lambda t, message, level="log": _eval_in_bus(
-        t, f"console.{level}({json.dumps('[Agent] ' + message)}); return true;"
-    ),
-))
-
-
-# ── 9. 高级 / 逃生口 ───────────────────────────────────
-register(Tool(
-    name="eda.system.call",
-    description="(高级) 直接调任意 eda.<class>.<method>(args). 用于 agent 探索未注册的 API.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "path": {"type": "string", "description": "如 'sys_Environment.getEditorVersion' 或 'dmt_Project.getCurrentProjectInfo'"},
-            "args": {"type": "array", "description": "参数数组", "default": []},
-        },
-        "required": ["path"],
-        "additionalProperties": False,
-    },
-    side_effect="write", visibility="log", tags=("system", "raw"),
-    handler=lambda t, path, args=None: t(path, args or []),
-))
-
-register(Tool(
-    name="eda.system.eval",
-    description="(高级) 在嘉立创沙箱内执行任意 JS 表达式, 返回结果. 仅 BusTransport 可用. 禁止用户在 prod 环境随意暴露.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "expr": {"type": "string", "description": "JS 代码 (return ... 取值; 或 await Promise)"},
-        },
-        "required": ["expr"],
-        "additionalProperties": False,
-    },
-    side_effect="destructive", visibility="log", requires=("bus",),
-    tags=("system", "eval", "advanced"),
-    handler=lambda t, expr: _eval_in_bus(t, expr),
-))
-
-register(Tool(
-    name="eda.system.introspect",
-    description="(自省) 列出 eda 顶层可用对象与各类的方法. 用于 agent 自学习 API. 仅 BusTransport 可用.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "klass": {"type": "string", "description": "类名 (空则列顶层); e.g. 'sys_Environment'"},
-        },
-        "additionalProperties": False,
-    },
-    side_effect="read", visibility="silent", requires=("bus",),
-    tags=("system", "introspect"),
-    handler=lambda t, klass="": _eval_in_bus(t, (
-        f"if (!{json.dumps(klass)}) {{"
-        f"  return Object.keys(eda || {{}}).sort();"
-        f"}}"
-        f"const c = eda[{json.dumps(klass)}]; "
-        f"if (!c) return {{ error: 'unknown class: ' + {json.dumps(klass)} }}; "
-        f"return Object.getOwnPropertyNames(Object.getPrototypeOf(c) || c)"
-        f"  .filter(k => typeof c[k] === 'function' && !k.startsWith('_'))"
-        f"  .sort();"
-    )),
-))
+# ── 1–9. 声明式动词 (环境/工程/文档/元件/PCB/原理图/BOM/系统/逃生口) ──
+# 单一事实来源在 core/verbs.py: 同一份 recipe 既生成此处的后端 handler,
+# 也生成前端面板的 verbs.manifest.js — 前后端同一套动词、同一执行语义.
+for _spec, _handler in _verbs.iter_specs():
+    register(Tool(
+        name=_spec["name"],
+        description=_spec["description"],
+        input_schema=_spec["input_schema"],
+        handler=_handler,
+        side_effect=_spec.get("side_effect", "read"),
+        visibility=_spec.get("visibility", "silent"),
+        requires=tuple(_spec.get("requires", ())),
+        tags=tuple(_spec.get("tags", ())),
+    ))
 
 
 # ── 10. 道直连器自身 ───────────────────────────────────

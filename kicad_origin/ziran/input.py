@@ -21,11 +21,15 @@ Public API:
 """
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 import sys
 import time
 from typing import Iterable, Optional, Tuple, Union
 
 _IS_WIN = sys.platform == "win32"
+_IS_LINUX = sys.platform.startswith("linux")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -134,6 +138,45 @@ if _IS_WIN:
 
 
 # ─────────────────────────────────────────────────────────────
+# Linux 真后端: X11 XTEST via xdotool (零 python 依赖, 真硬件级事件)
+#
+# 与 Windows SendInput 同构: 任何被 KiCad GUI 看到的鼠键事件 = 真用户操作。
+# DISPLAY 不在 / xdotool 不在 → _LINUX_OK=False, 各动作优雅空转 (与非 Win 同)。
+# ─────────────────────────────────────────────────────────────
+_XDOTOOL: Optional[str] = shutil.which("xdotool") if _IS_LINUX else None
+_LINUX_OK = bool(_IS_LINUX and os.environ.get("DISPLAY") and _XDOTOOL)
+
+# 鼠标按钮 → X11 button number (1=左 2=中 3=右; 4/5=滚轮上/下)
+_X_BTN = {"left": 1, "middle": 2, "right": 3}
+
+# 友好键名 → X keysym (xdotool key)。未列出的单字符直接透传。
+_X_KEYSYM = {
+    "enter": "Return", "return": "Return", "esc": "Escape", "escape": "Escape",
+    "tab": "Tab", "space": "space", "backspace": "BackSpace", "back": "BackSpace",
+    "delete": "Delete", "del": "Delete", "insert": "Insert",
+    "home": "Home", "end": "End", "pageup": "Prior", "pagedown": "Next",
+    "up": "Up", "down": "Down", "left": "Left", "right": "Right",
+    "ctrl": "ctrl", "control": "ctrl", "shift": "shift", "alt": "alt",
+    "win": "super", "lwin": "super", "rwin": "super", "menu": "Menu",
+    "capslock": "Caps_Lock", "numlock": "Num_Lock",
+}
+for _i in range(1, 25):
+    _X_KEYSYM[f"f{_i}"] = f"F{_i}"
+
+
+def _x_key(name: str) -> str:
+    k = name.strip().lower()
+    return _X_KEYSYM.get(k, k)
+
+
+def _xdo(*args: str, timeout: float = 10.0) -> str:
+    """跑一条 xdotool 命令, 返回 stdout (失败抛 CalledProcessError 由调用方吞)。"""
+    return subprocess.run(
+        [_XDOTOOL, *args], capture_output=True, text=True,
+        timeout=timeout, check=True).stdout
+
+
+# ─────────────────────────────────────────────────────────────
 # 内部: 发 INPUT 数组
 # ─────────────────────────────────────────────────────────────
 
@@ -196,6 +239,13 @@ def _check_fail_safe() -> None:
 # ─────────────────────────────────────────────────────────────
 
 def get_cursor() -> Tuple[int, int]:
+    if _LINUX_OK:
+        try:
+            out = _xdo("getmouselocation", "--shell")
+            d = dict(ln.split("=", 1) for ln in out.split() if "=" in ln)
+            return (int(d.get("X", 0)), int(d.get("Y", 0)))
+        except Exception:
+            return (0, 0)
     if not _IS_WIN:
         return (0, 0)
     p = wt.POINT()
@@ -204,6 +254,12 @@ def get_cursor() -> Tuple[int, int]:
 
 
 def screen_size() -> Tuple[int, int]:
+    if _LINUX_OK:
+        try:
+            w, h = _xdo("getdisplaygeometry").split()[:2]
+            return (int(w), int(h))
+        except Exception:
+            return (0, 0)
     if not _IS_WIN:
         return (0, 0)
     return (user32.GetSystemMetrics(SM_CXSCREEN),
@@ -212,6 +268,12 @@ def screen_size() -> Tuple[int, int]:
 
 def move(x: int, y: int, *, duration: float = 0.25, steps: int = 0) -> None:
     """鼠标平滑移动到 (x,y). duration=0 → 瞬移."""
+    if _LINUX_OK:
+        try:
+            _xdo("mousemove", "--sync", str(int(x)), str(int(y)))
+        except Exception:
+            pass
+        return
     if not _IS_WIN:
         return
     _check_fail_safe()
@@ -237,16 +299,17 @@ def move(x: int, y: int, *, duration: float = 0.25, steps: int = 0) -> None:
     _check_fail_safe()
 
 
-_BTN_DOWN = {
-    "left": MOUSEEVENTF_LEFTDOWN,
-    "right": MOUSEEVENTF_RIGHTDOWN,
-    "middle": MOUSEEVENTF_MIDDLEDOWN,
-}
-_BTN_UP = {
-    "left": MOUSEEVENTF_LEFTUP,
-    "right": MOUSEEVENTF_RIGHTUP,
-    "middle": MOUSEEVENTF_MIDDLEUP,
-}
+if _IS_WIN:
+    _BTN_DOWN = {
+        "left": MOUSEEVENTF_LEFTDOWN,
+        "right": MOUSEEVENTF_RIGHTDOWN,
+        "middle": MOUSEEVENTF_MIDDLEDOWN,
+    }
+    _BTN_UP = {
+        "left": MOUSEEVENTF_LEFTUP,
+        "right": MOUSEEVENTF_RIGHTUP,
+        "middle": MOUSEEVENTF_MIDDLEUP,
+    }
 
 
 def click(button: str = "left", *,
@@ -254,6 +317,19 @@ def click(button: str = "left", *,
           duration: float = 0.25, double: bool = False,
           press_hold: float = 0.05) -> None:
     """点击. 若 (x,y) 给出 → 先 move 到那里再点."""
+    if _LINUX_OK:
+        if x is not None and y is not None:
+            move(x, y, duration=duration)
+        btn = str(_X_BTN.get(button, 1))
+        args = ["click"]
+        if double:
+            args += ["--repeat", "2", "--delay", "80"]
+        args.append(btn)
+        try:
+            _xdo(*args)
+        except Exception:
+            pass
+        return
     if not _IS_WIN:
         return
     if x is not None and y is not None:
@@ -273,6 +349,16 @@ def click(button: str = "left", *,
 def drag(start: Tuple[int, int], end: Tuple[int, int], *,
          button: str = "left", duration: float = 0.5) -> None:
     """从 start 拖到 end. 平滑."""
+    if _LINUX_OK:
+        btn = str(_X_BTN.get(button, 1))
+        move(*start, duration=duration / 3)
+        try:
+            _xdo("mousedown", btn)
+            move(*end, duration=duration * 2 / 3)
+            _xdo("mouseup", btn)
+        except Exception:
+            pass
+        return
     if not _IS_WIN:
         return
     move(*start, duration=duration / 3)
@@ -284,6 +370,16 @@ def drag(start: Tuple[int, int], end: Tuple[int, int], *,
 
 def scroll(amount: int, *, x: Optional[int] = None, y: Optional[int] = None) -> None:
     """滚轮. amount: 正=上 (远离用户), 负=下. 单位 = 120 = 1 槽."""
+    if _LINUX_OK:
+        if x is not None and y is not None:
+            move(x, y, duration=0.15)
+        btn = "4" if amount > 0 else "5"
+        notches = max(1, abs(int(amount)))
+        try:
+            _xdo("click", "--repeat", str(notches), btn)
+        except Exception:
+            pass
+        return
     if not _IS_WIN:
         return
     if x is not None and y is not None:
@@ -304,6 +400,13 @@ def _key_to_vk(key: str) -> Optional[int]:
 def press(key: str, *, modifiers: Iterable[str] = (),
           press_hold: float = 0.04) -> None:
     """单键. modifiers 例: ['ctrl'], ['shift','alt']."""
+    if _LINUX_OK:
+        combo = "+".join([_x_key(m) for m in modifiers] + [_x_key(key)])
+        try:
+            _xdo("key", combo)
+        except Exception:
+            pass
+        return
     if not _IS_WIN:
         return
     _check_fail_safe()
@@ -339,6 +442,14 @@ def type_text(text: str, *, interval: float = 0.04) -> None:
 
     interval: 字符间隔. 0 = 极快, 0.04 = 用户能看到字符在打入.
     """
+    if _LINUX_OK:
+        delay = max(0, int(interval * 1000))
+        try:
+            _xdo("type", "--delay", str(delay), text,
+                 timeout=max(10.0, len(text) * 0.05 + 5))
+        except Exception:
+            pass
+        return
     if not _IS_WIN:
         return
     for ch in text:

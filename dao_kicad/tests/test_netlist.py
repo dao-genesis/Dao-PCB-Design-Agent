@@ -391,3 +391,29 @@ def test_build_from_schematic_missing_file():
     from daokicad.live import LiveKiCad
     res = LiveKiCad().build_from_schematic("nope_does_not_exist.kicad_sch", "out/x.kicad_pcb")
     assert res["ok"] is False and "原理图" in res["reason"]
+
+
+def test_heal_footprints_project_lib_relibrary(tmp_path):
+    """A netlist citing an unmapped lib nickname heals onto the single
+    project-local lib that owns the verbatim footprint name (the vme-wren
+    ``Pads:MTG270_500`` -> ``wren:MTG270_500`` regression); names owned by
+    several project libs stay untouched — never guess."""
+    from daokicad.live import LiveKiCad
+
+    wren = tmp_path / "wren.pretty"
+    other = tmp_path / "other.pretty"
+    wren.mkdir(); other.mkdir()
+    (wren / "MTG270_500.kicad_mod").write_text("(footprint)", encoding="utf-8")
+    for d in (wren, other):
+        (d / "DUPLICATED.kicad_mod").write_text("(footprint)", encoding="utf-8")
+    lib_dirs = {"wren": str(wren), "other": str(other)}
+    fps = [
+        {"ref": "B1", "lib": "Pads", "fp": "MTG270_500"},   # unique owner -> heal
+        {"ref": "B2", "lib": "Pads", "fp": "DUPLICATED"},   # ambiguous -> untouched
+        {"ref": "B3", "lib": "Pads", "fp": "NOWHERE"},      # absent -> untouched
+    ]
+    subs = LiveKiCad().heal_footprints(fps, lib_dirs)
+    assert {s["ref"] for s in subs} == {"B1"}
+    assert (fps[0]["lib"], fps[0]["fp"]) == ("wren", "MTG270_500")
+    assert fps[1]["lib"] == "Pads"
+    assert fps[2]["lib"] == "Pads"

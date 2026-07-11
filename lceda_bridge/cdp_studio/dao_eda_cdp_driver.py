@@ -90,25 +90,44 @@ class CDPSession:
         h += mask
         self.s.sendall(bytes(h) + bytes(b ^ mask[i % 4] for i, b in enumerate(p)))
 
+    def _recv_exact(self, n):
+        """读满 n 字节再返回(TCP recv(n) 可能短读——不满则续读);连接关闭返回 None。
+
+        道:旧版直接 struct.unpack(">H", self.s.recv(2)) 默认 recv 恰好回 n 字节,
+        但 TCP 可只回 1 字节 → unpack "requires a buffer of 2 bytes" 崩溃(本会话
+        NE555 板实证)。补一个读满循环,桌面/web 两通道帧读取一并变稳。"""
+        out = b""
+        while len(out) < n:
+            try:
+                c = self.s.recv(n - len(out))
+            except Exception:
+                return None
+            if not c:
+                return None
+            out += c
+        return out
+
     def _recv(self):
-        try:
-            b1 = self.s.recv(1)
-        except Exception:
-            return None
+        b1 = self._recv_exact(1)
         if not b1:
             return None
-        b2 = self.s.recv(1)[0]
-        ln = b2 & 0x7F
+        b2 = self._recv_exact(1)
+        if not b2:
+            return None
+        ln = b2[0] & 0x7F
         if ln == 126:
-            ln = struct.unpack(">H", self.s.recv(2))[0]
+            ext = self._recv_exact(2)
+            if not ext:
+                return None
+            ln = struct.unpack(">H", ext)[0]
         elif ln == 127:
-            ln = struct.unpack(">Q", self.s.recv(8))[0]
-        out = b""
-        while len(out) < ln:
-            c = self.s.recv(ln - len(out))
-            if not c:
-                break
-            out += c
+            ext = self._recv_exact(8)
+            if not ext:
+                return None
+            ln = struct.unpack(">Q", ext)[0]
+        out = self._recv_exact(ln) if ln else b""
+        if out is None:
+            return None
         try:
             return json.loads(out.decode("utf-8", "replace"))
         except Exception:
@@ -165,7 +184,7 @@ def evaluate(ws, expression, await_promise=False, timeout=20):
 # 命名空间是对象实例(方法挂原型上), 故支持两种寻址:
 #   "dmt_Project.getCurrentProjectInfo"  → R['dmt_Project'].getCurrentProjectInfo(...)  (推荐)
 #   "dmt_Project_getCurrentProjectInfo"  → 先按平铺 R[key] 试, 不行再按最后一个下划线拆 ns/method
-_CALL_TPL = """(async function(){
+_CALL_TPL = r"""(async function(){
   try{
     var R = window._EXTAPI_ROOT_;
     if(!R) return JSON.stringify({ok:false, err:'NO_EXTAPI_ROOT'});
@@ -175,8 +194,51 @@ _CALL_TPL = """(async function(){
     else if(typeof R[key]==='function'){ fn=R[key]; ctx=R; }
     else { var i=key.lastIndexOf('_'); ns=key.slice(0,i); method=key.slice(i+1); ctx=R[ns]; fn=ctx?ctx[method]:null; }
     if(typeof fn!=='function') return JSON.stringify({ok:false, err:'NO_API '+key});
-    var r = await fn.apply(ctx, %(args)s);
+    var r = await fn.apply(ctx, __daoDemat(%(args)s));
+    r = await __daoMaterialize(r);
     return JSON.stringify({ok:true, ret:(r===undefined?null:r)});
+    // File/Blob 等宿主对象 JSON 化即空壳; 就地物化为 {__file__,name,size,text|base64}
+    async function __daoMaterialize(v){
+      if (v == null) return v;
+      if ((typeof File!=='undefined' && v instanceof File) ||
+          (typeof Blob!=='undefined' && v instanceof Blob)) {
+        var name = v.name || null, size = v.size, type = v.type || '';
+        var textLike = /^(text\/|application\/(json|xml|x-ndjson))/.test(type) ||
+                       /\.(net|json|txt|csv|xml|rep|log|bom)$/i.test(name||'');
+        if (textLike || size <= 4*1024*1024) {
+          try {
+            if (textLike) return {__file__:true, name:name, size:size, type:type, text: await v.text()};
+            var buf = await v.arrayBuffer(); var b = new Uint8Array(buf), s='';
+            for (var i=0;i<b.length;i++) s += String.fromCharCode(b[i]);
+            return {__file__:true, name:name, size:size, type:type, base64: btoa(s)};
+          } catch(e) {}
+        }
+        return {__file__:true, name:name, size:size, type:type, unread:true};
+      }
+      if (Array.isArray(v)) {
+        for (var j=0;j<v.length;j++) v[j] = await __daoMaterialize(v[j]);
+        return v;
+      }
+      return v;
+    }
+    // 反向: 参数里的 {__file__,name,type,text|base64} 还原为真 File (双向物化闭环)
+    function __daoDemat(v){
+      if (v == null) return v;
+      if (Array.isArray(v)) return v.map(__daoDemat);
+      if (typeof v === 'object') {
+        if (v.__file__ === true && (typeof v.text === 'string' || typeof v.base64 === 'string')) {
+          var bits;
+          if (typeof v.text === 'string') bits = [v.text];
+          else { var s = atob(v.base64), u = new Uint8Array(s.length);
+                 for (var i=0;i<s.length;i++) u[i]=s.charCodeAt(i); bits=[u]; }
+          return new File(bits, v.name || 'file', {type: v.type || 'application/octet-stream'});
+        }
+        var o = {};
+        Object.keys(v).forEach(function(k){ o[k] = __daoDemat(v[k]); });
+        return o;
+      }
+      return v;
+    }
   }catch(e){ return JSON.stringify({ok:false, err:String(e&&e.message||e)}); }
 })()"""
 

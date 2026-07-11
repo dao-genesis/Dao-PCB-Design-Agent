@@ -7,7 +7,6 @@ use (``F.Cu``, ``F_Cu``, ``BL_F_Cu``, ``f.cu``).
 """
 from __future__ import annotations
 
-from typing import Any
 
 from kipy.geometry import Vector2, Angle
 from kipy.util.board_layer import BoardLayer

@@ -248,6 +248,19 @@ def _drc_run(pcb, report=None, **kw) -> dict:
     return LiveKiCad().drc(pcb, report=report, **kw)
 
 
+def _reverse_extract(pcb, roundtrip_out=None, **kw) -> dict:
+    """Reverse-engineer a finished board (builtin engine).
+
+    Default: recover the design source (netlist/BOM/placement/stackup/rules).
+    With ``roundtrip_out`` set, rebuild from the recovered source and diff
+    connectivity against the original.
+    """
+    from . import reverse as _rev
+    if roundtrip_out:
+        return _rev.roundtrip(pcb, roundtrip_out)
+    return _rev.extract(pcb)
+
+
 def default_registry() -> Registry:
     """Build the registry of every capability backend this project knows about.
 
@@ -389,6 +402,15 @@ def default_registry() -> Registry:
         "GPL-3.0", "kicad-cli", Probe("func", func=_kicad_ready,
                                       label="kicad-cli present"), priority=55,
         invoke=_render))
+
+    # ---- reverse_engineer ----
+    reg.register(Backend(
+        "dao-reverse", "reverse_engineer",
+        "Recover a finished board's source: netlist/BOM/stackup/rules + "
+        "embedded-footprint harvest + rebuild round-trip (builtin engine).",
+        "repo", "daokicad.reverse", Probe("func", func=_kicad_can_script,
+                                          label="pcbnew scriptable"),
+        priority=50, invoke=_reverse_extract))
 
     return reg
 

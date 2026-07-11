@@ -227,6 +227,178 @@ def test_build_and_drc(tmp_path):
     assert "violations" in drc
 
 
+def test_reverse_diff_specs_connectivity_is_rename_invariant():
+    """diff_specs compares the *partition* of pins into nets, so renaming nets
+    must not register as a change, but moving a pin to another net must."""
+    from daokicad import reverse
+
+    base = {"footprints": [{"ref": "R1"}, {"ref": "R2"}],
+            "connections": [{"ref": "R1", "pad": "1", "net": "A"},
+                            {"ref": "R2", "pad": "1", "net": "A"},
+                            {"ref": "R1", "pad": "2", "net": "B"},
+                            {"ref": "R2", "pad": "2", "net": "B"}]}
+    renamed = {"footprints": [{"ref": "R1"}, {"ref": "R2"}],
+               "connections": [{"ref": "R1", "pad": "1", "net": "NET99"},
+                               {"ref": "R2", "pad": "1", "net": "NET99"},
+                               {"ref": "R1", "pad": "2", "net": "B"},
+                               {"ref": "R2", "pad": "2", "net": "B"}]}
+    assert reverse.diff_specs(base, renamed)["connectivity_identical"]
+
+    broken = {"footprints": [{"ref": "R1"}, {"ref": "R2"}],
+              "connections": [{"ref": "R1", "pad": "1", "net": "A"},
+                              {"ref": "R2", "pad": "1", "net": "B"},  # moved
+                              {"ref": "R1", "pad": "2", "net": "B"},
+                              {"ref": "R2", "pad": "2", "net": "B"}]}
+    assert not reverse.diff_specs(base, broken)["connectivity_identical"]
+
+
+@needs_script
+def test_reverse_extract_recovers_source(tmp_path):
+    """Build a known board, then walk it backwards: extract must recover every
+    footprint, the net partition, the BOM, and copper/stackup stats."""
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("voltage_divider")
+    pcb = tmp_path / "vd.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+
+    rep = reverse.extract(pcb)
+    assert rep["ok"]
+    assert {f["ref"] for f in rep["spec"]["footprints"]} >= {"J1", "R1", "R2"}
+    assert rep["counts"]["footprints"] == len(rep["spec"]["footprints"])
+    assert rep["stackup"]["copper_layers"] >= 2
+    assert sum(b["qty"] for b in rep["bom"]) == rep["counts"]["footprints"]
+
+
+@needs_script
+def test_reverse_roundtrip_preserves_connectivity(tmp_path):
+    """Round-trip a finished board through harvest→rebuild→re-extract; the
+    recovered connectivity must be identical (guards the harvest + multilayer
+    fixes that let real boards rebuild without their original libraries)."""
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("ams1117_regulator")
+    pcb = tmp_path / "src.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+
+    r = reverse.roundtrip(pcb, tmp_path / "rebuilt.kicad_pcb")
+    assert r["ok"], r
+    assert r["diff"]["connectivity_identical"], r["diff"]
+    assert r["rebuilt_counts"]["footprints"] == r["original_counts"]["footprints"]
+
+
+@needs_script
+def test_reverse_reconstructs_routing_on_inner_layers(tmp_path):
+    """Recovered track/via geometry must rebuild faithfully — including copper
+    on inner layers, which collapsed onto F.Cu before _layer learned every
+    In*.Cu id (the defect routing reconstruction on multilayer boards exposed)."""
+    import pcbnew
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("voltage_divider")
+    spec["layers"] = 4
+    # an inner-layer track + a via: the round-trip must place them exactly.
+    spec["tracks"] = [{"start": [30.0, 30.0], "end": [40.0, 30.0],
+                       "width": 0.25, "layer": "In1.Cu"}]
+    spec["vias"] = [{"at": [40.0, 30.0], "drill": 0.3, "size": 0.6}]
+    pcb = tmp_path / "routed.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+
+    rep = reverse.extract(pcb)
+    geo = rep["routing_geometry"]
+    assert rep["routing"]["vias"] == 1
+    inner = [t for t in geo["tracks"] if t["layer"] == pcbnew.In1_Cu]
+    assert inner, geo["tracks"]                 # track stayed on In1.Cu, not F.Cu
+
+    r = reverse.roundtrip(pcb, tmp_path / "rt.kicad_pcb")
+    assert r["ok"] and r["diff"]["connectivity_identical"], r
+    assert r["routing"]["tracks_identical"] and r["routing"]["vias_identical"], r["routing"]
+
+
+@needs_script
+def test_reroute_eval_grades_against_human(tmp_path, monkeypatch):
+    """reroute_eval strips a board's copper, re-routes with our engine and grades
+    the result vs the human-routed original. The autorouter (Java) is stubbed so
+    the test exercises the orchestration: build unrouted -> route -> DRC both ->
+    compare cleanliness."""
+    from daokicad import live as _live
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("voltage_divider")
+    pcb = tmp_path / "product.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+
+    def _fake_autoroute(self, src, out, **kw):       # no freerouting/Java
+        shutil.copy(src, out)
+        return {"ok": True, "stage": "import_ses", "tracks": 7, "path": str(out)}
+
+    monkeypatch.setattr(_live.LiveKiCad, "autoroute", _fake_autoroute)
+    monkeypatch.setattr(_live.LiveKiCad, "drc",
+                        lambda self, p, *a, **k: {"clean": True, "violations": 0,
+                                                  "unconnected": 0, "ok": True})
+
+    r = reverse.reroute_eval(pcb, tmp_path / "rerouted.kicad_pcb")
+    assert r["ok"], r
+    assert r["nets"] >= 1
+    assert r["our_drc"]["clean"] and r["human_drc"]["clean"]
+    assert r["matches_human_cleanliness"] is True
+
+
+@needs_script
+def test_reverse_harvest_writes_kicad_mods(tmp_path):
+    """harvest_footprints must recover a .kicad_mod for every unique footprint
+    straight from the board, independent of any installed library."""
+    from daokicad import reverse
+
+    live = LiveKiCad(_KENV)
+    pcb = tmp_path / "rc.kicad_pcb"
+    assert live.build_board(dna.make("rc_lowpass"), pcb)["ok"]
+
+    pretty = tmp_path / "harvested.pretty"
+    mapping = reverse.harvest_footprints(pcb, pretty)
+    assert mapping
+    mods = list(pretty.glob("*.kicad_mod"))
+    assert len(mods) == len(set(mapping.values()))
+
+
+@needs_script
+def test_build_supports_six_copper_layers(tmp_path):
+    """The build engine must honour real multilayer stackups, not silently
+    flatten everything past 4 layers to 2 (the defect reverse-eng exposed)."""
+    import pcbnew
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("voltage_divider")
+    spec["layers"] = 6
+    pcb = tmp_path / "six.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    assert pcbnew.LoadBoard(str(pcb)).GetCopperLayerCount() == 6
+
+
+@needs_script
+def test_build_places_bottom_side_footprint(tmp_path):
+    """Rebuilding a board with explicit placement + a bottom-side part must not
+    crash: flipping a footprint before it belongs to the board segfaults pcbnew
+    (the defect reverse-eng round-trip exposed on boards with bottom parts)."""
+    import pcbnew
+
+    live = LiveKiCad(_KENV)
+    spec = dna.make("voltage_divider")
+    for i, fp in enumerate(spec["footprints"]):
+        fp["x"], fp["y"] = 40.0 + 10 * i, 40.0      # force explicit-placement path
+    spec["footprints"][0]["side"] = "bottom"
+    pcb = tmp_path / "bottom.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    board = pcbnew.LoadBoard(str(pcb))
+    flipped = {f.GetReference(): f.IsFlipped() for f in board.GetFootprints()}
+    assert flipped[spec["footprints"][0]["ref"]] is True
+    assert sum(flipped.values()) == 1
+
+
 @needs_script
 def test_summary_roundtrip(tmp_path):
     live = LiveKiCad(_KENV)
@@ -441,3 +613,75 @@ def test_ipc_session_no_gui_is_graceful():
     assert res["ok"] is False and "reason" in res
     assert s.connected is False
     assert s.board_info()["ok"] is False
+
+
+@needs_script
+def test_library_edge_cuts_stripped_from_footprints(tmp_path):
+    """Edge-connector footprints (USB-C…) ship Edge.Cuts fragments meant for
+    flush board-edge mounting; placed mid-board they corrupt the spec-owned
+    outline (invalid_outline + bogus copper_edge_clearance). The builder must
+    drop them so the board carries only the spec outline."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "edgecut",
+        "footprints": [{"ref": "J1", "lib": "Connector_USB",
+                        "fp": "USB_C_Receptacle_Amphenol_12401948E412A"}],
+        "connections": [],
+    }
+    pcb = tmp_path / "edge.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    for fp in board.GetFootprints():
+        assert not any(g.GetLayer() == pcbnew.Edge_Cuts
+                       for g in fp.GraphicalItems()), fp.GetReference()
+
+
+@needs_script
+def test_duplicate_pad_numbers_all_join_net(tmp_path):
+    """Footprints expose several physical pads under one number (solder
+    jumpers, TO-263 tab+pin…). Every one must join the net — a leftover no-net
+    sibling trips hole/clearance DRC against its own footprint."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "dup_pads",
+        "footprints": [{"ref": "U1", "lib": "Package_TO_SOT_SMD",
+                        "fp": "TO-263-3_TabPin2"}],
+        "connections": [{"ref": "U1", "pad": "2", "net": "GND"}],
+    }
+    pcb = tmp_path / "dup.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    fp = board.FindFootprintByReference("U1")
+    pads2 = [p for p in fp.Pads() if p.GetNumber() == "2"]
+    assert len(pads2) >= 2
+    assert all(p.GetNetname() == "GND" for p in pads2)
+
+
+@needs_script
+def test_intrinsic_mask_bridges_allowed(tmp_path):
+    """Fine-pitch connectors ship pads whose mask apertures overlap by design
+    (USB-C…). The builder must mark such footprints "allow bridged solder
+    mask" — the designer's own remedy — while separated pads stay strict."""
+    live = LiveKiCad(_KENV)
+    spec = {
+        "name": "maskbridge",
+        "footprints": [
+            {"ref": "J1", "fp": "TIGHT", "pads": [
+                {"num": "1", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                {"num": "2", "x": 0.5, "y": 0.0, "w": 1.0, "h": 1.0}]},
+            {"ref": "J2", "fp": "LOOSE", "pads": [
+                {"num": "1", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                {"num": "2", "x": 3.0, "y": 0.0, "w": 1.0, "h": 1.0}]},
+        ],
+        "connections": [],
+    }
+    pcb = tmp_path / "mask.kicad_pcb"
+    assert live.build_board(spec, pcb)["ok"]
+    import pcbnew
+    board = pcbnew.LoadBoard(str(pcb))
+    flags = {fp.GetReference():
+             bool(fp.GetAttributes() & pcbnew.FP_ALLOW_SOLDERMASK_BRIDGES)
+             for fp in board.GetFootprints()}
+    assert flags == {"J1": True, "J2": False}

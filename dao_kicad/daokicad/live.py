@@ -88,7 +88,24 @@ class LiveKiCad:
     def pcbnew_version(self) -> dict:
         return self._worker("version")
 
-    def build_board(self, spec: dict, out_path: str | Path) -> dict:
+    @staticmethod
+    def build_timeout_for(spec: dict) -> int:
+        """Worker wall-clock budget (seconds) for a build, scaled to board size.
+
+        A fixed 300s cap silently abandons large industrial boards: rebuilding
+        vme-wren (1508 footprints / 6828 pads / 12 layers) needs to load and
+        save a 68 MB board and overruns 300s. Give big boards proportionally
+        more time (footprints, connections AND reconstructed routing all drive
+        the cost), clamped to a sane ceiling so a genuinely stuck worker still
+        fails."""
+        fps = len(spec.get("footprints") or [])
+        conns = len(spec.get("connections") or [])
+        # reconstructed routing: each track/via is another board item to add.
+        routing = len(spec.get("tracks") or []) + len(spec.get("vias") or [])
+        return max(300, min(5400, fps + conns // 5 + routing // 20))
+
+    def build_board(self, spec: dict, out_path: str | Path,
+                    *, timeout: Optional[int] = None) -> dict:
         """Build a real .kicad_pcb from a declarative spec (二生三)."""
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -97,7 +114,8 @@ class LiveKiCad:
             json.dump(spec, f, ensure_ascii=False)
             spec_path = f.name
         try:
-            return self._worker("build", spec_path, str(out_path))
+            return self._worker("build", spec_path, str(out_path),
+                                timeout=timeout or self.build_timeout_for(spec))
         finally:
             Path(spec_path).unlink(missing_ok=True)
 
@@ -132,6 +150,21 @@ class LiveKiCad:
                 "name": "Power", "track_width": 0.5,
                 "via_size": 0.9, "via_drill": 0.45, "nets": pnets,
             }])
+        # 4+ layer boards get real inner power planes: GND on the last inner
+        # layer and the widest supply net on the first. Point-to-point routing
+        # of plane nets is how real boards end up with unroutable GND ratlines;
+        # the DSN export carries the planes so freerouting drops vias into them.
+        if layers >= 4 and pnets:
+            netnames = spec.get("nets", [])
+            planes = []
+            if "GND" in pnets:
+                planes.append({"layer": f"In{layers - 2}.Cu", "net": "GND"})
+            supply = next((p for p in pnets if p != "GND" and p in netnames),
+                          None)
+            if supply:
+                planes.append({"layer": "In1.Cu", "net": supply})
+            if planes:
+                spec.setdefault("zones", planes)
         if extra_spec:
             spec.update(extra_spec)
         if not spec.get("footprints"):
@@ -146,9 +179,22 @@ class LiveKiCad:
                 f"封装名自动修正: {s['ref']} {s['lib']}:{s['from']} → {s['to']}")
         missing = self.missing_footprints(spec["footprints"], lib_dirs)
         if missing:
+            # Reference-board harvest (逆推回本源): when replicating a real
+            # project, the shipped .kicad_pcb embeds the exact footprint a
+            # stale/renamed library reference points at. Harvest those boards
+            # into a local library and re-point only the still-missing parts
+            # whose verbatim ``lib:fp`` is embedded there — never a guess.
+            got = self._harvest_missing(spec, missing, pdir, out_path, lib_dirs)
+            for m in got:
+                warnings.append(f"封装取自项目成品板: {m['ref']} "
+                                f"{m['lib']}:{m['fp']} → harvested")
+            missing = self.missing_footprints(spec["footprints"], lib_dirs)
+        if missing:
             return {"ok": False, "reason": "部分封装在库中找不到(请在原理图里换用库内封装)",
                     "missing": missing, "warnings": warnings,
                     "from_netlist": str(netlist)}
+        if lib_dirs:
+            spec["fp_lib_dirs"] = lib_dirs
         res = self.build_board(spec, out_path)
         sk = res.get("skipped_connections") or []
         if sk:
@@ -370,9 +416,9 @@ class LiveKiCad:
                         lib_dirs: Optional[dict] = None) -> list[dict]:
         """Repair footprints whose name was renamed in the library, in place.
 
-        Five safe, high-confidence strategies. The first three repair a renamed
-        entry *within the declared lib*; the last two remap across libraries when
-        the declared lib itself is unavailable:
+        Six safe, high-confidence strategies. The first three repair a renamed
+        entry *within the declared lib*; the last three remap across libraries
+        when the declared lib itself is unavailable:
         1. **Gender-rename** (KiCad v6: ``_Female_``→``_Socket_``,
            ``_Male_``→``_Pins_``) — substitute the gender token for its
            specific synonym and accept a name that exists verbatim in the lib.
@@ -390,6 +436,9 @@ class LiveKiCad:
            install library (vendored libs like jetson's ``antmicro-footprints``),
            keep the name and fix only the library. Ambiguous names are left
            untouched so we never guess.
+        6. **Project-lib relibrary** — the cited nickname is unmapped but
+           exactly one *project-local* library owns the verbatim footprint name
+           (renamed/merged local libs); keep the name, fix only the library.
 
         Returns the list of substitutions made (``ref``/``lib``/``from``/``to``)
         so the caller can record them; footprints with their own ``pads`` or an
@@ -442,6 +491,15 @@ class LiveKiCad:
                     stock = self._stock_fp_lib(f["fp"])
                     if stock and stock != f["lib"]:
                         remap = (stock, f["fp"])
+                # 6) verbatim project-lib relibrary — the netlist cites a lib
+                #    nickname the project no longer maps (renamed/merged local
+                #    lib), yet exactly one *project-local* library owns a
+                #    footprint of that verbatim name. Keep the name, fix the lib.
+                if not remap and not in_lib:
+                    owners = sorted({nick for nick, d in (lib_dirs or {}).items()
+                                     if (Path(d) / (f["fp"] + ".kicad_mod")).is_file()})
+                    if len(owners) == 1:
+                        remap = (owners[0], f["fp"])
             if remap:
                 subs.append({"ref": f.get("ref"), "lib": f["lib"],
                              "from": f["fp"], "to": f"{remap[0]}:{remap[1]}"})
@@ -451,6 +509,46 @@ class LiveKiCad:
                              "from": f["fp"], "to": repl})
                 f["fp"] = repl
         return subs
+
+    def _harvest_missing(self, spec: dict, missing: list[dict],
+                         project_dir, out_path,
+                         lib_dirs: dict[str, str]) -> list[dict]:
+        """Resolve still-missing footprints from the project's shipped boards.
+
+        Harvests every ``.kicad_pcb`` in ``project_dir`` into
+        ``<out>/harvested.pretty`` and re-points only the missing specs whose
+        verbatim ``lib:fp`` id is embedded there (existence-gated, no guessing).
+        ``spec['fp_lib_dirs']`` gains the harvested library when anything hits.
+        Returns the resolved entries.
+        """
+        pdir = Path(project_dir) if project_dir else None
+        if pdir is None or not pdir.is_dir():
+            return []
+        outp = Path(out_path)
+        boards = [b for b in sorted(pdir.glob("*.kicad_pcb"))
+                  if b.resolve() != outp.resolve()]
+        if not boards:
+            return []
+        pretty = outp.with_suffix("").parent / "harvested.pretty"
+        mapping: dict[str, str] = {}
+        for b in boards:
+            r = self._worker("harvest", str(b), str(pretty), timeout=300)
+            if r.get("ok"):
+                mapping.update(r.get("mapping") or {})
+        if not mapping:
+            return []
+        resolved: list[dict] = []
+        for m in missing:
+            name = mapping.get(f"{m['lib']}:{m['fp']}")
+            if not name:
+                continue
+            for f in spec["footprints"]:
+                if f.get("lib") == m["lib"] and f.get("fp") == m["fp"]:
+                    f["lib"], f["fp"] = "harvested", name
+            resolved.append(m)
+        if resolved:
+            lib_dirs["harvested"] = str(pretty)
+        return resolved
 
     def missing_footprints(self, footprints: list[dict],
                            lib_dirs: Optional[dict] = None) -> list[dict]:
@@ -494,6 +592,13 @@ class LiveKiCad:
     def import_ses(self, pcb: str | Path, ses: str | Path,
                    out: str | Path) -> dict:
         return self._worker("ses", str(pcb), str(ses), str(out))
+
+    def stitch(self, pcb: str | Path, out: str | Path,
+               max_mm: float = 8.0, *, timeout: int = 300) -> dict:
+        """Close small same-net tails the autorouter left (clearance-checked
+        direct/L tracks). Guard with DRC: adopt only when strictly better."""
+        return self._worker("stitch", str(pcb), str(out), str(max_mm),
+                            timeout=timeout)
 
     def read_tracks(self, pcb: str | Path, *, timeout: int = 120) -> dict:
         """Serialize a board's tracks + vias (nm coords) — used to reflect a
@@ -567,14 +672,15 @@ class LiveKiCad:
 
     def autoroute(self, pcb: str | Path, out: Optional[str | Path] = None, *,
                   margin_nm: int = 5000, passes: int = 10,
-                  timeout: Optional[int] = None) -> dict:
+                  timeout: Optional[int] = None, seed: int = 0) -> dict:
         """Round-trip a placed board through freerouting -> routed board.
 
         margin_nm widens netclass clearance only in the DSN handed to the
         router, so freerouting keeps a hair of slack and the re-imported board
         still passes KiCad DRC. ``timeout`` (seconds) bounds freerouting; when
         ``None`` the router's own default applies. Big boards need more — see
-        :func:`route_timeout_for`.
+        :func:`route_timeout_for`. ``seed`` picks a deterministic DSN ordering
+        so retries can sample a different routing basin reproducibly.
         """
         pcb = Path(pcb)
         out = Path(out) if out else pcb
@@ -593,7 +699,7 @@ class LiveKiCad:
         # lands too close to the edge (interf_u/stickhub DRC). Inset the DSN
         # boundary by that clearance so the routed copper stays legal.
         self._inset_dsn_boundary(dsn, exp.get("edge_clearance") or 0)
-        kw = {"passes": passes}
+        kw = {"passes": passes, "seed": seed}
         if timeout is not None:
             kw["timeout"] = timeout
         rr = _route.route_dsn(dsn, ses, **kw)

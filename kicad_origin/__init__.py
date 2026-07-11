@@ -71,14 +71,19 @@ from kicad_origin.lib import (
 # 二·PCB 内核 (Layer 2 · pcb)
 from kicad_origin.pcb import (
     Point, BBox, rotate_point, distance,
-    Board, Footprint, Pad, Segment, Via, Arc, Net, NetClass, Zone,
+    Board, Footprint, Pad, Segment, Via, Net, NetClass, Zone,
 )
 
 # 三·制造引擎 (Layer 3 · engine)
 from kicad_origin.engine import (
-    DRCViolation, DRCReport, DRCEngine, run_drc,
+    DRCViolation, DRCReport, DRCEngine,
     SEVERITY_ERROR, SEVERITY_WARNING, SEVERITY_INFO,
-    GerberWriter, write_gerber, ExcellonWriter, write_excellon,
+    generate_gerber, GerberResult,
+    write_excellon, ExcellonWriter,
+    generate_bom, save_bom, bom_to_csv, BOMResult,
+    generate_dsn, run_freerouting, DSNResult,
+    board_to_netlist, export_kicad_netlist, Netlist,
+    board_to_svg, save_board_svg,
 )
 
 # 万物·应用层 (Layer 4 · app)
@@ -88,9 +93,9 @@ from kicad_origin.app import (
 
 # 道·直连器 + 反馈 + MCP (dao)
 from kicad_origin.dao import (
-    Dao, DaoStatus, DaoAction, DaoResult,
-    Feedback, FeedbackChannel, ConsoleFeedback, JSONFeedback, MultiFeedback,
-    MCPServer, MCPTool, list_tools, run_mcp_stdio, DaoBridge,
+    Dao, DaoResult,
+    Feedback, FeedbackChannel, ConsoleFeedback, FeedbackEvent, TimingContext,
+    MCPServer, MCPTool, list_tools, run_mcp_stdio, DaoBridge, Action,
 )
 
 __all__ = [
@@ -110,15 +115,20 @@ __all__ = [
     "mirror_sync", "mirror_status", "MirrorScope",
     # pcb (Layer 2)
     "Point", "BBox", "rotate_point", "distance",
-    "Board", "Footprint", "Pad", "Segment", "Via", "Arc", "Net", "NetClass", "Zone",
+    "Board", "Footprint", "Pad", "Segment", "Via", "Net", "NetClass", "Zone",
     # engine (Layer 3)
-    "DRCViolation", "DRCReport", "DRCEngine", "run_drc",
+    "DRCViolation", "DRCReport", "DRCEngine",
     "SEVERITY_ERROR", "SEVERITY_WARNING", "SEVERITY_INFO",
-    "GerberWriter", "write_gerber", "ExcellonWriter", "write_excellon",
+    "generate_gerber", "GerberResult",
+    "write_excellon", "ExcellonWriter",
+    "generate_bom", "save_bom", "bom_to_csv", "BOMResult",
+    "generate_dsn", "run_freerouting", "DSNResult",
+    "board_to_netlist", "export_kicad_netlist", "Netlist",
+    "board_to_svg", "save_board_svg",
     # app (Layer 4)
     "pcbnew_compat", "install_pcbnew_compat", "uninstall_pcbnew_compat",
     # dao
-    "Dao", "DaoStatus", "DaoAction", "DaoResult",
-    "Feedback", "FeedbackChannel", "ConsoleFeedback", "JSONFeedback", "MultiFeedback",
-    "MCPServer", "MCPTool", "list_tools", "run_mcp_stdio", "DaoBridge",
+    "Dao", "DaoResult",
+    "Feedback", "FeedbackChannel", "ConsoleFeedback", "FeedbackEvent", "TimingContext",
+    "MCPServer", "MCPTool", "list_tools", "run_mcp_stdio", "DaoBridge", "Action",
 ]

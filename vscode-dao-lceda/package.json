@@ -1,0 +1,174 @@
+{
+  "name": "dao-lceda",
+  "displayName": "DAO LCEDA (嘉立创EDA · 归一面板)",
+  "description": "把整个嘉立创EDA(Web/桌面, Windows/Linux)整块路由进 VS Code / Devin Desktop:中间面板承载 EDA 本体, 左侧工程树, 右侧道之对话。",
+  "version": "0.1.0",
+  "publisher": "dao",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "daoLceda.open",
+        "title": "DAO LCEDA: 打开嘉立创EDA (Open LCEDA Panel)"
+      },
+      {
+        "command": "daoLceda.restartBridge",
+        "title": "DAO LCEDA: 重启桥接服务 (Restart Bridge)"
+      },
+      {
+        "command": "daoLceda.refreshTree",
+        "title": "DAO LCEDA: 刷新工程树 (Refresh Tree)",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "daoLceda.clearChat",
+        "title": "DAO LCEDA: 清空对话会话 (Clear Chat History)"
+      },
+      {
+        "command": "daoLceda.screenshot",
+        "title": "DAO LCEDA: 画布截图 (Canvas Screenshot)"
+      },
+      {
+        "command": "daoLceda.cascade.open",
+        "title": "嘉立创EDA · AI: 聚焦 Cascade 三模式面板"
+      },
+      {
+        "command": "daoLceda.cascade.newSession",
+        "title": "嘉立创EDA · AI: 新建 Cascade 会话",
+        "icon": "$(add)"
+      },
+      {
+        "command": "daoLceda.cascade.history",
+        "title": "嘉立创EDA · AI: Cascade 历史会话",
+        "icon": "$(history)"
+      },
+      {
+        "command": "daoLceda.cascade.deepwiki",
+        "title": "嘉立创EDA · AI: DeepWiki 解释选中符号"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "daoLcedaProjects",
+          "name": "嘉立创EDA 工程"
+        }
+      ],
+      "daoLcedaChatContainer": [
+        {
+          "id": "daoLcedaChat",
+          "type": "webview",
+          "name": "道之对话 (LCEDA AI)"
+        }
+      ],
+      "daoLcedaSideContainer": [
+        {
+          "id": "daoLcedaChatSide",
+          "type": "webview",
+          "name": "道之对话 (LCEDA AI)"
+        }
+      ],
+      "daoLceda-cascade": [
+        {
+          "id": "daoLceda.cascade",
+          "name": "Cascade · 三模式",
+          "type": "webview"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "daoLcedaChatContainer",
+          "title": "道之对话",
+          "icon": "$(comment-discussion)"
+        }
+      ],
+      "activitybar": [
+        {
+          "id": "daoLcedaSideContainer",
+          "title": "嘉立创EDA",
+          "icon": "$(circuit-board)"
+        },
+        {
+          "id": "daoLceda-cascade",
+          "title": "嘉立创EDA · AI",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "daoLceda.refreshTree",
+          "when": "view == daoLcedaProjects",
+          "group": "navigation"
+        },
+        {
+          "command": "daoLceda.cascade.newSession",
+          "when": "view == daoLceda.cascade",
+          "group": "navigation@1"
+        },
+        {
+          "command": "daoLceda.cascade.history",
+          "when": "view == daoLceda.cascade",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DAO LCEDA",
+      "properties": {
+        "daoLceda.panelMode": {
+          "type": "string",
+          "default": "shell",
+          "enum": [
+            "shell",
+            "native",
+            "screencast"
+          ],
+          "enumDescriptions": [
+            "归一外壳(本源): 网页套网页, 标签栏平级承载 本地EDA(/native)·官网网页版(/web)·配置(/config), 可无限延伸",
+            "原生嵌入: 面板仅承载本地 EDA 本体真实页面(反代中转, 真实 DOM/登录态, 非投屏)",
+            "帧流兜底: CDP screencast(仅当原生嵌入不可用时显式选用)"
+          ],
+          "description": "中间面板承载方式"
+        },
+        "daoLceda.port": {
+          "type": "number",
+          "default": 9940,
+          "description": "本地桥接端口"
+        },
+        "daoLceda.python": {
+          "type": "string",
+          "default": "python3",
+          "description": "Python 可执行文件(Windows 可设为 python)"
+        },
+        "daoLceda.bridgePath": {
+          "type": "string",
+          "default": "",
+          "description": "bridge_server.py 所在目录(留空则在工作区内自动发现 lceda_bridge/vscode_lceda)"
+        },
+        "daoLceda.cdpPorts": {
+          "type": "string",
+          "default": "9222,29229,29230",
+          "description": "候选 CDP 端口(本机桌面客户端 9222 优先 / Web 版 29229,29230 兜底)"
+        },
+        "daoLceda.preferLocalEda": {
+          "type": "boolean",
+          "default": true,
+          "description": "本源·本地优先: 自动唤起并优先接管用户本机安装的嘉立创EDA客户端(底层数据来源于用户自己的机器, 云端仅兜底)"
+        }
+      }
+    }
+  }
+}
