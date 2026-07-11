@@ -87,8 +87,8 @@ class AcpWssClient {
     if (this._ws) this._ws.send(JSON.stringify({ jsonrpc: "2.0", method, params }));
   }
 
-  async newSession(cwd) {
-    const res = await this._request("session/new", { cwd: cwd || "/", mcpServers: [] });
+  async newSession(cwd, mcpServers) {
+    const res = await this._request("session/new", { cwd: cwd || "/", mcpServers: mcpServers || [] });
     this.sessionId = res && res.sessionId;
     return res;
   }

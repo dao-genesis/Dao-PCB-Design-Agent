@@ -26,15 +26,18 @@
   .fail{display:none;padding:20px}
   .fail code{color:#4da3ff}
   /* 模式面板 */
-  #modes{padding:26px;max-width:720px}
-  #modes h2{font-size:16px;margin:0 0 4px}
-  #modes .sub{color:#8b93a7;margin-bottom:18px}
+  .board{padding:26px;max-width:720px}
+  .board h2{font-size:16px;margin:0 0 4px}
+  .board .sub{color:#8b93a7;margin-bottom:18px}
   .mode{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:10px;
     border:1px solid #262a36;border-radius:10px;cursor:pointer;background:#171a22}
   .mode:hover{border-color:#3a415a}
   .mode.on{border-color:#4da3ff;background:#182234}
   .mode .name{font-size:14px;font-weight:600;min-width:120px}
-  .mode .desc{color:#8b93a7}
+  .mode .desc{color:#8b93a7;flex:1}
+  .tbtn{background:#22304a;color:#cfe1ff;border:1px solid #3a5a8a;border-radius:7px;
+    padding:5px 14px;cursor:pointer;font:12px inherit}
+  .tbtn:hover{background:#2a3c5e}
   #spinfo{color:#5d6478;margin-top:14px}
 </style>
 </head>
@@ -43,6 +46,8 @@
   <div class="tab on" data-pane="kicad">☯ KiCad<span class="dot" id="dot-kicad"></span></div>
   <div class="tab" data-pane="lceda">⚡ 嘉立创EDA<span class="dot" id="dot-lceda"></span></div>
   <div class="tab" data-pane="modes">⚙ 模式<span id="mode-now" style="margin-left:8px;color:#4da3ff"></span></div>
+  <div class="tab" data-pane="bridge">🌐 穿透</div>
+  <div class="tab" data-pane="acct">👤 账号</div>
 </div>
 <div id="stage">
   <div class="pane on" id="pane-kicad">
@@ -61,7 +66,7 @@
     </div>
   </div>
   <div class="pane" id="pane-modes">
-    <div id="modes">
+    <div class="board">
       <h2>☯ PCB 四态 (Proxy Pro 同源提示词隔离/替换)</h2>
       <div class="sub">道并行而不相悖 —— 四态一体, 官方工具体系之下并列原生注入领域工具。</div>
       <div class="mode" data-mode="native"><span class="name">⌨ 原生</span>
@@ -73,6 +78,30 @@
       <div class="mode" data-mode="lceda"><span class="name">☯ 嘉立创EDA</span>
         <span class="desc">道魂 + EDA 领域 SP + CDP 桥工具目录 (MCP lceda-dao 原生并列)</span></div>
       <div id="spinfo"></div>
+    </div>
+  </div>
+  <div class="pane" id="pane-bridge">
+    <div class="board">
+      <h2>🌐 公网穿透 (零账号 · 去中心化)</h2>
+      <div class="sub">cloudflared 快速隧道, 无需任何 Cloudflare 账号; 固定域名为可选项非前置条件。
+        把归一工作台暴露公网, 任意浏览器/手机直开。</div>
+      <div class="mode" id="tun-kicad"><span class="name">☯ KiCad 桥</span>
+        <span class="desc" id="tun-kicad-st">未开启</span>
+        <button class="tbtn" data-port="kicad">开启</button></div>
+      <div class="mode" id="tun-lceda"><span class="name">⚡ 嘉立创EDA 桥</span>
+        <span class="desc" id="tun-lceda-st">未开启</span>
+        <button class="tbtn" data-port="lceda">开启</button></div>
+      <div id="tun-info" style="color:#5d6478;margin-top:14px"></div>
+    </div>
+  </div>
+  <div class="pane" id="pane-acct">
+    <div class="board">
+      <h2>👤 Devin 账号 (自持引擎)</h2>
+      <div class="sub">插件自持 devin ACP 引擎, 登录态落本机凭据, 不依赖 Devin Desktop 宿主。</div>
+      <div class="mode"><span class="name" id="acct-name">…</span>
+        <span class="desc" id="acct-st">查询中</span>
+        <button class="tbtn" id="acct-login">去登录</button></div>
+      <div style="color:#5d6478;margin-top:14px">登录入口在侧栏「PCB · AI」Cascade 面板(三模式公用同一登录态)。</div>
     </div>
   </div>
 </div>
@@ -105,6 +134,27 @@
   }
   if (vscode) vscode.postMessage({ type: "daopcb.modeGet" });
 
+  // 穿透板块
+  const PORTS = { kicad: null, lceda: null };  // 实际端口由宿主 tunnel 状态回推得知
+  try {
+    PORTS.kicad = parseInt(new URL("__KICAD__").port, 10);
+    PORTS.lceda = parseInt(new URL("__LCEDA_BASE__").port, 10);
+  } catch (_) {}
+  let tunUp = {};
+  for (const b of document.querySelectorAll(".tbtn[data-port]")) {
+    b.addEventListener("click", () => {
+      const port = PORTS[b.dataset.port];
+      if (!vscode || !port) return;
+      vscode.postMessage({ type: tunUp[port] ? "daopcb.tunnelStop" : "daopcb.tunnelStart", port });
+      b.textContent = "…";
+    });
+  }
+  if (vscode) vscode.postMessage({ type: "daopcb.tunnelGet" });
+  document.getElementById("acct-login").addEventListener("click", () => {
+    if (vscode) vscode.postMessage({ type: "daopcb.authLogin" });
+  });
+  if (vscode) vscode.postMessage({ type: "daopcb.authGet" });
+
   function show(pane, up, reload, src) {
     const f = document.getElementById("f-" + pane);
     const fail = document.getElementById("fail-" + pane);
@@ -124,6 +174,26 @@
     if (m.type === "daopcb.health") {
       show("kicad", m.kicad, m.reloadKicad, srcKicad);
       show("lceda", m.lceda, m.reloadLceda, srcLceda);
+    }
+    if (m.type === "daopcb.tunnel") {
+      tunUp = {};
+      for (const key of ["kicad", "lceda"]) {
+        const port = PORTS[key];
+        const t = (m.tunnels || {})[port];
+        tunUp[port] = !!(t && t.up && t.url);
+        document.getElementById("tun-" + key + "-st").textContent =
+          tunUp[port] ? t.url : "未开启";
+        document.querySelector('.tbtn[data-port="' + key + '"]').textContent =
+          tunUp[port] ? "关闭" : "开启";
+      }
+      document.getElementById("tun-info").textContent =
+        m.bin ? "cloudflared 就绪 · 零账号快速隧道" : "未检到 cloudflared 二进制 (安装后即可零账号穿透)";
+    }
+    if (m.type === "daopcb.auth") {
+      document.getElementById("acct-name").textContent = m.name || "未登录";
+      document.getElementById("acct-st").textContent =
+        m.loggedIn ? "已登录 · 三模式(Cascade/Devin Local/Devin Cloud)可用"
+          : (m.bin === false ? "未发现 devin 引擎二进制" : "未登录");
     }
     if (m.type === "daopcb.mode") {
       document.getElementById("mode-now").textContent = m.label || "";

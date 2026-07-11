@@ -30,6 +30,20 @@ const VIEW_ID = "dao.cascade";
 // 未注册或 native 模式时字节级直通, 不碰原文(道并行而不相惖)。
 let _promptShaper = null;
 function setPromptShaper(s) { _promptShaper = s; }
+
+// 领域 MCP 服务器(ACP 原生并列层) —— 领域插件可注册一个提供函数:
+//   () => [{ name, command, args, env? }, …]  (ACP session/new 的 mcpServers 描述子)
+// 三模式建会话时经 session/new 直接下发 —— 领域工具与官方工具在 agent 侧同层并列、
+// 原生 function-calling 直达, 不依赖宿主 mcp_config.json。提供函数可按当前模态返回不同集合。
+let _domainMcp = null;
+function setDomainMcpServers(fn) { _domainMcp = fn; }
+function _domainMcpServers() {
+  if (!_domainMcp) return [];
+  try {
+    const v = typeof _domainMcp === "function" ? _domainMcp() : _domainMcp;
+    return Array.isArray(v) ? v : [];
+  } catch (_) { return []; }
+}
 function _shapeText(text, ctx) {
   if (!_promptShaper) return text;
   try {
@@ -325,7 +339,7 @@ class CascadePanelProvider {
     this._acp.start();
     await this._acp.initialize();
     // 自持凭据:CLI 本地已登录时无需 ACP authenticate(实测 session/new 直接可用)。
-    const res = await this._acp.newSession();
+    const res = await this._acp.newSession(undefined, _domainMcpServers());
     this._pushSessionMeta(res);
     this._acpReady = true;
     this._handleSessionsList();
@@ -1163,7 +1177,7 @@ class CascadePanelProvider {
     this._post({ type: "history-clear", home: true });
     try {
       await this._ensureAcp();
-      const res = await this._acp.newSession();
+      const res = await this._acp.newSession(undefined, _domainMcpServers());
       this._pushSessionMeta(res);
       this._post({ type: "history-done" });
       this._handleSessionsList();
@@ -1376,7 +1390,7 @@ class CascadePanelProvider {
         if (!this._cloud.sessionId) {
           const cwd = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0]
             && vscode.workspace.workspaceFolders[0].uri.fsPath) || "/";
-          const res = await this._cloud.newSession(cwd);
+          const res = await this._cloud.newSession(cwd, _domainMcpServers());
           if (res && res.configOptions) this._post({ type: "config-options", agent: "acp", configOptions: res.configOptions });
         }
         await this._cloud.prompt(msg.text);
@@ -2332,4 +2346,4 @@ function register(context, log, opts) {
   return provider;
 }
 
-module.exports = { register, setPromptShaper, VIEW_ID, AGENTS };
+module.exports = { register, setPromptShaper, setDomainMcpServers, VIEW_ID, AGENTS };
