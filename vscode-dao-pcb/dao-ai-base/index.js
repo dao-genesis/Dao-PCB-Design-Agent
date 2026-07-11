@@ -113,4 +113,6 @@ module.exports = {
   activateDaoAiBase, deactivateDaoAiBase, genContributes,
   // 领域提示词塑形器(隔离/替换层): 领域插件注册后, 三模式发送前统一塑形。
   setPromptShaper: daoCascade.setPromptShaper,
+  // 领域 MCP 服务器(ACP 原生并列层): session/new 直接下发, 领域工具与官方工具同层并列。
+  setDomainMcpServers: daoCascade.setDomainMcpServers,
 };

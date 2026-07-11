@@ -12,6 +12,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const http = require("http");
+const tunnel = require("./tunnel");
 
 let kicadProc = null;
 let lcedaProc = null;
@@ -256,6 +257,7 @@ async function openHome(context) {
   homePanel.webview.html = html;
   watchHealth(homePanel, kicadPort, lcedaPort);
   wireModeBridge(homePanel);
+  wireBoards(homePanel, context);
 }
 
 // 宿主侧健康探测: webview 内 fetch http://127.0.0.1 会被混合内容策略拦截,
@@ -296,6 +298,37 @@ function wireModeBridge(panel) {
   push();
 }
 
+// 穿透/账号板块 ↔ 宿主桥: 公网隧道(零账号 cloudflared 快速隧道)与 Devin 账号自持登录。
+function wireBoards(panel, context) {
+  const pushTunnel = () => panel.webview.postMessage({ type: "daopcb.tunnel", ...tunnel.status() });
+  const pushAuth = async () => {
+    try {
+      const prov = require("./dao-ai-base/dao-cascade/devin-provision");
+      const bin = prov.resolveEngine(context.extensionPath,
+        context.globalStorageUri && context.globalStorageUri.fsPath);
+      const st = await prov.authStatus(bin);
+      panel.webview.postMessage({ type: "daopcb.auth", loggedIn: st.loggedIn, name: st.name, bin: !!bin });
+    } catch (e) {
+      panel.webview.postMessage({ type: "daopcb.auth", loggedIn: false, name: null, error: e.message });
+    }
+  };
+  panel.webview.onDidReceiveMessage(async (m) => {
+    if (!m) return;
+    if (m.type === "daopcb.tunnelGet") pushTunnel();
+    if (m.type === "daopcb.tunnelStart") {
+      const r = await tunnel.start(m.port, (s) => console.log("[dao-pcb] " + s));
+      tunnel.persist();
+      if (!r.ok) vscode.window.showWarningMessage("DAO PCB 穿透: " + r.error);
+      pushTunnel();
+    }
+    if (m.type === "daopcb.tunnelStop") { tunnel.stop(m.port); tunnel.persist(); pushTunnel(); }
+    if (m.type === "daopcb.authGet") pushAuth();
+    if (m.type === "daopcb.authLogin") vscode.commands.executeCommand("daoPcb.cascade.open");
+  });
+  pushTunnel();
+  pushAuth();
+}
+
 // ---------- 道之对话(侧栏) ----------
 function chatHtml(context, port) {
   let html = fs.readFileSync(path.join(context.extensionPath, "media", "chat.html"), "utf8");
@@ -331,6 +364,34 @@ function activate(context) {
       log: (m) => console.log("[pcb-mode] " + m),
     });
     daoAiBase.setPromptShaper(_shaper);
+    // ACP 原生并列层: 领域 MCP 经 session/new 直接下发进三模式会话,
+    // 与官方工具同层原生 function-calling; 按当前模态取相应位面(道/原生态不带领域工具)。
+    if (typeof daoAiBase.setDomainMcpServers === "function") {
+      daoAiBase.setDomainMcpServers(() => {
+        const mode = _shaper ? _shaper.getMode() : "native";
+        const py = findPython();
+        const out = [];
+        const kicadEngine = findKicadEngine();
+        if ((mode === "kicad") && kicadEngine) {
+          out.push({
+            name: "dao-kicad",
+            command: py,
+            args: [path.join(kicadEngine, "bridge", "mcp_server.py")],
+            env: { PYTHONPATH: kicadEngine + path.delimiter + path.dirname(kicadEngine) },
+          });
+        }
+        const lcedaDir = findLcedaBridge();
+        if ((mode === "lceda") && lcedaDir) {
+          out.push({
+            name: "lceda-dao",
+            command: py,
+            args: ["-m", "core.mcp_server"],
+            env: { PYTHONPATH: path.dirname(lcedaDir) },
+          });
+        }
+        return out;
+      });
+    }
   } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
 
   // 状态栏四态药丸: 一键循环 原生 → 道 → KiCad → 嘉立创EDA。
@@ -405,6 +466,7 @@ function activate(context) {
 function deactivate() {
   if (kicadProc) kicadProc.kill();
   if (lcedaProc) lcedaProc.kill();
+  tunnel.stopAll();
 }
 
 module.exports = { activate, deactivate };
