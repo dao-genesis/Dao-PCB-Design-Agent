@@ -1198,6 +1198,17 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/tools":
             # 原生第三方接入: 机器可读工具目录(dao_tools 全链路能力)。
             self._send(200, {"ok": True, "tools": _agent().catalog()})
+        elif path == "/api/capabilities":
+            # Devin Desktop 官方工具层格式: 机器可读 schema, Agent 自发现(与 @kicad 对等)。
+            self._send(200, _lceda_capabilities())
+        elif path == "/api/doc":
+            # Agent 接入文档(复制即接入)。
+            doc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "AGENT_API.md")
+            if os.path.isfile(doc):
+                with open(doc, "rb") as f:
+                    self._send(200, f.read(), ctype="text/markdown; charset=utf-8")
+            else:
+                self._send(404, {"ok": False, "err": "doc missing"})
         elif path.startswith("/api/agent/"):
             job = _agent().JOBS.get(path.rsplit("/", 1)[-1])
             if job:
@@ -1391,7 +1402,101 @@ class Handler(BaseHTTPRequestHandler):
                 self._serve_native("POST", prebody=(raw or None))
 
 
+# ----------------------------------------------------------------------------
+# Devin Desktop 官方工具层格式 (与 dao_kicad/bridge/ide_server.py 同构):
+#   /api/capabilities  机器可读工具 schema (Agent 自发现)
+#   /api/doc           Agent 接入文档 (AGENT_API.md)
+#   ~/.dao/subplugins/lceda.json  归一插件总控注册 @lceda 子板块 (与 @kicad 对等)
+# ----------------------------------------------------------------------------
+_CAPABILITIES = {
+    "service": "dao-lceda-bridge",
+    "mention": "lceda",
+    "description": "REST bridge to 嘉立创EDA (LCEDA) Pro: CDP 画面/输入直连, "
+                   "官方 EXTAPI 700+ 动词直调 (原理图/PCB/工程/器件/网络/制造), "
+                   "dao_tools 全链路能力, 自然语言→动词编排, 网页套网页归一外壳.",
+    "doc": "/api/doc",
+    "tools": [
+        {"method": "GET", "path": "/api/health", "params": {},
+         "desc": "服务与 CDP/本地EDA 状态、当前 target、帧序号"},
+        {"method": "GET", "path": "/api/frame", "params": {},
+         "desc": "最新 JPEG 画面帧 (Page.startScreencast 呈现面)"},
+        {"method": "GET", "path": "/api/meta", "params": {},
+         "desc": "当前帧序号与设备宽高元信息"},
+        {"method": "GET", "path": "/api/tree", "params": {},
+         "desc": "工程树 (云端工程 + 本地 .eprj/.epro)"},
+        {"method": "GET", "path": "/api/tree/pcb", "params": {"limit": "器件上限"},
+         "desc": "工程树下沉: 器件/网络级 (供 IDE 树懒加载)"},
+        {"method": "GET", "path": "/api/verbs", "params": {"ns": "可选命名空间"},
+         "desc": "官方 EXTAPI 全景自省 (93 命名空间/700+ 方法)"},
+        {"method": "GET", "path": "/api/verbs/health", "params": {},
+         "desc": "底层能力体检: 全命名空间零参只读方法实调可用性"},
+        {"method": "GET", "path": "/api/tools", "params": {},
+         "desc": "dao_tools 机器可读工具目录 (原生第三方接入)"},
+        {"method": "POST", "path": "/api/verb",
+         "params": {"ns": "命名空间", "method": "方法名", "args": "参数数组"},
+         "desc": "官方 EXTAPI 动词直调 window._EXTAPI_ROOT_.<ns>.<method>(...)"},
+        {"method": "POST", "path": "/api/verbs/batch",
+         "params": {"calls": "[{ns,method,args}] 批量"},
+         "desc": "批量动词直调 (一次往返多动作)"},
+        {"method": "POST", "path": "/api/input",
+         "params": {"type": "mouse/key", "...": "CDP 输入参数"},
+         "desc": "webview 鼠键 → CDP Input 事件 (执行面)"},
+        {"method": "POST", "path": "/api/chat",
+         "params": {"text": "自然语言指令"},
+         "desc": "自然语言 → 动词 (极简编排)"},
+        {"method": "POST", "path": "/api/agent",
+         "params": {"goal": "目标", "...": "工具调度参数"},
+         "desc": "dao_tools 智能体作业 (返回 job, 轮询 /api/agent/<id>)"},
+        {"method": "GET", "path": "/api/agent/<id>", "params": {},
+         "desc": "轮询智能体作业进度/结果"},
+        {"method": "POST", "path": "/api/login",
+         "params": {}, "desc": "触发嘉立创登录流程 (需国内出口)"},
+        {"method": "POST", "path": "/api/eval",
+         "params": {"code": "JS 表达式"}, "desc": "运行期 JS 求值 (调试面)"},
+        {"method": "GET", "path": "/api/ops", "params": {"since": "序号"},
+         "desc": "道之痕: AI 操作实时直播流 (增量)"},
+        {"method": "GET", "path": "/api/web/health", "params": {},
+         "desc": "网页套网页 (Web 版 EDA) 浏览器健康"},
+        {"method": "GET", "path": "/api/capabilities", "params": {},
+         "desc": "本工具层机器可读 schema (Agent 自发现)"},
+        {"method": "GET", "path": "/api/doc", "params": {},
+         "desc": "Agent 接入文档 (复制即接入)"},
+    ],
+}
+
+
+def _lceda_capabilities():
+    """在静态 REST schema 之上附挂 dao_tools 动态目录 (软编码自生成)."""
+    caps = dict(_CAPABILITIES)
+    caps["endpoint"] = "http://127.0.0.1:%d" % BRIDGE_PORT
+    try:
+        caps["dao_tools"] = _agent().catalog()
+    except Exception:
+        caps["dao_tools"] = []
+    return caps
+
+
+def _write_subplugin_descriptor(host, port):
+    """向归一插件总控注册 @lceda 子板块 (~/.dao/subplugins/lceda.json)，与 @kicad 对等。"""
+    try:
+        d = os.path.join(os.path.expanduser("~"), ".dao", "subplugins")
+        os.makedirs(d, exist_ok=True)
+        spec = {
+            "app_id": "lceda",
+            "name": "嘉立创EDA · PCB 设计",
+            "mention": "lceda",
+            "description": _CAPABILITIES["description"],
+            "endpoint": "http://%s:%d" % (host, port),
+            "verbs": [t["path"] for t in _CAPABILITIES["tools"]],
+        }
+        with open(os.path.join(d, "lceda.json"), "w", encoding="utf-8") as f:
+            json.dump(spec, f, ensure_ascii=False, indent=1)
+    except OSError:
+        pass
+
+
 def main():
+    _write_subplugin_descriptor("127.0.0.1", BRIDGE_PORT)
     SESSION.ensure()
     srv = ThreadingHTTPServer(("127.0.0.1", BRIDGE_PORT), Handler)
     print("[lceda-bridge] listening on http://127.0.0.1:%d  cdp=%s target=%s" % (
