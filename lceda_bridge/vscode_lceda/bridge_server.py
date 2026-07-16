@@ -188,18 +188,21 @@ def discover_target(ports):
             targets = _http_get("http://127.0.0.1:%d/json" % port)
         except Exception:
             continue
-        # 优先 editor, 其次任意 page
+        # 优先 editor, 其次任意 page (passport 登录页除外——其 redirectUrl 参数会误含 lceda)
         editor = None
         for t in targets:
             if t.get("type") != "page":
                 continue
             url = t.get("url", "")
-            if "editor" in url or "lceda" in url or url.startswith("https://client"):
+            host = urlparse(url).netloc
+            if "passport" in host:
+                continue
+            if "editor" in url or "lceda" in host or host.startswith("client"):
                 editor = t
                 break
         if not editor:
             for t in targets:
-                if t.get("type") == "page":
+                if t.get("type") == "page" and "passport" not in urlparse(t.get("url", "")).netloc:
                     editor = t
                     break
         if editor and editor.get("webSocketDebuggerUrl"):
