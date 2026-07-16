@@ -241,10 +241,11 @@ class KiCadArm:
                 fp = fp_by_ref.get(ref)
                 if not fp:
                     continue
+                # 同编号焊盘全部赋网(KiCad 语义: 同号焊盘=同一引脚,
+                # 如 SOT-223 TabPin2 的引脚2与散热 Tab 同为 "2")
                 for pad in fp.Pads():
                     if pad.GetNumber() == str(pin_num):
                         pad.SetNet(net_item)
-                        break
 
     # ─────────────────────────────────────────────────────────
     # 封装焊盘解析 — 代码/软件平衡的核心
