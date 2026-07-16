@@ -113,6 +113,7 @@ function buildKicadSp(catalog, engineStatus, port) {
   lines.push("- 验证优先: 任何生成/修改后立即 drc/erc, 违例必须修复到 0 才算完成。");
   lines.push("- 器件与资料检索用 web_search (PCB 领域优先级排序), 不要凭记忆编造封装与参数。");
   lines.push("- 用户能看到的一切(原理图/板图)可用 render_* 渲染 SVG 呈现; KiCad 本体 GUI 可用 native_*/ipc_* 直驱。");
+  lines.push("- DRC 修复循环: 改动 → drc → 读逐条违例(类型/坐标/网络) → 针对性修复 → 再 drc, 直到 0 违例; 自动布线优先 autoroute(freerouting), 不要手写顺序逃逸算法(实测会产生大量 clearance 违例)。");
   lines.push("- 回答用简体中文, 结论先行; 道法自然, 无为而无不为。");
   return lines.join("\n");
 }
@@ -139,6 +140,11 @@ function buildLcedaSp(catalog, port) {
   lines.push("- 设计闭环: 建/开工程 → 原理图 → 网表进 PCB → 布局布线铺铜 → DRC → Gerber/BOM → 打样下单。");
   lines.push("- 复刻优先: 先检索 oshwhub/立创商城已有设计与元件(lib.search), 不要凭记忆编造 LCSC 编号与封装。");
   lines.push("- 验证优先: 任何生成/修改后立即 DRC, 违例必须修复到 0 才算完成; 画布可 canvas.image 截图五感可观。");
+  lines.push("");
+  lines.push("## 实战已知缺陷(实机验证, 勿重踩)");
+  lines.push("- LCSC C10418(USB Micro-B) 会使 pcb.sync/importChanges 静默失败(返 False、0 器件入板); 遇同步 0 器件先排查 BOM 是否含 C10418, 可换 C2907 等兼容件规避。");
+  lines.push("- ExtAPI createNetClass 不持久化(返 null、getAllNetClasses 恒空); 网络约束改用 getNetRules/overwriteNetRules 或差分对 createDifferentialPair(两者实测可用)。");
+  lines.push("- 自动布线用 pcb.autoroute, 不要手写逃逸走线(实测产生 34 条 clearance 违例); 布完必 pcb.drc 循环修复到 0。");
   lines.push("- 回答用简体中文, 结论先行; 道法自然, 无为而无不为。");
   return lines.join("\n");
 }

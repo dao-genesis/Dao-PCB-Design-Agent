@@ -1094,9 +1094,27 @@ def _cdp_page_fetch(url, method, headers, body):
     return SESSION.cdp_fetch(url, method=method, headers=headers, body=body)
 
 
+# 公网防护: 环境变量 DAO_PCB_TOKEN 非空时, 经隧道(cloudflared, Cf-Connecting-Ip 头)
+# 进来的请求除 /api/health 外一律需 Bearer/?token=; 本地回环直连不受影响。
+_ACCESS_TOKEN = os.environ.get("DAO_PCB_TOKEN", "").strip()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
+
+    def _authorized(self, u) -> bool:
+        if not _ACCESS_TOKEN:
+            return True
+        if not self.headers.get("Cf-Connecting-Ip"):
+            return True  # 本地直连(非隧道), 保持开放
+        if u.path == "/api/health":
+            return True
+        auth = self.headers.get("Authorization") or ""
+        if auth == "Bearer " + _ACCESS_TOKEN:
+            return True
+        q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        return q.get("token", "") == _ACCESS_TOKEN
 
     def _send(self, code, body, ctype="application/json", extra=None):
         if isinstance(body, (dict, list)):
@@ -1129,6 +1147,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
+        if not self._authorized(u):
+            return self._send(401, {"ok": False, "err": "unauthorized"})
         path = u.path
         if path == "/api/health":
             ok = SESSION.ensure()
@@ -1274,6 +1294,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        if not self._authorized(u):
+            return self._send(401, {"ok": False, "err": "unauthorized"})
         path = u.path
         n = int(self.headers.get("Content-Length", 0) or 0)
         raw = self.rfile.read(n) if n else b""

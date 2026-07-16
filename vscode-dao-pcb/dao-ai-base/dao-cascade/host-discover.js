@@ -16,7 +16,9 @@ try { ({ hostState } = require("../windsurf-shim")); } catch (_) {}
 
 const SVC = "/exa.language_server_pb.LanguageServerService/";
 
+// 登录态 apiKey: 与 ls-bridge 同源(credentials.toml 真源 + state.vscdb 回退)
 function apiKey() {
+  try { return require("./ls-bridge").apiKey(); } catch (_) {}
   try {
     const t = fs.readFileSync(path.join(os.homedir(), ".local", "share", "devin", "credentials.toml"), "utf8");
     const m = t.match(/windsurf_api_key\s*=\s*"([^"]+)"/);
