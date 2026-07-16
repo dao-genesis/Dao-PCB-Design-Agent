@@ -1,22 +1,30 @@
-# 冷启动 · Dao-PCB-Design-Agent（Windows · 后端优先 · 零 GUI）
+# 冷启动 · Dao-PCB-Design-Agent（后端优先 · 零 GUI）
 
-> 一条命令从裸 Windows VM 到全链路就绪：KiCad + Devin Desktop + 归一 VSIX + 双桥 + 双 MCP。
-> 幂等设计：产物存在即跳过，复跑近零成本。
+> 一条命令从裸 VM 到全链路就绪：KiCad + Devin Desktop + 归一 VSIX + 双桥 + 双 MCP。
+> 幂等设计：产物存在即跳过，复跑近零成本。Windows 与 Linux 双形态。
 
 ```powershell
+# Windows
 powershell -ExecutionPolicy Bypass -File coldstart\up.ps1            # 全链路
 powershell -ExecutionPolicy Bypass -File coldstart\up.ps1 -Status    # 只看现状
 powershell -ExecutionPolicy Bypass -File coldstart\up.ps1 -RunOnly   # 已装机, 仅启双桥
 ```
 
+```bash
+# Linux (Ubuntu, 已在 Devin Linux VM 实测全通)
+bash coldstart/up.sh            # 全链路
+bash coldstart/up.sh --status   # 只看现状
+bash coldstart/up.sh --run-only # 已装机, 仅启双桥
+```
+
 ## 阶段 / 产物（存在即跳过）
 
-| 阶段 | 产物 | 说明 |
-|---|---|---|
-| 1 KiCad | `C:\Program Files\KiCad\9.0\bin\kicad-cli.exe` | NSIS `/S /allusers` 静默装（已实测） |
-| 2 Devin Desktop | `%LOCALAPPDATA%\Programs\Devin\bin\devin-desktop.cmd` | Inno `/VERYSILENT` 用户级静默装 |
-| 3 归一 VSIX | `vscode-dao-pcb\dao-pcb.vsix` + `dao.dao-pcb` 已装 | `npx @vscode/vsce package` + `--install-extension` |
-| 4 双桥 | `127.0.0.1:9931 /api/health` · `127.0.0.1:9940 /api/health` | wrapper 启动，健康即跳过 |
+| 阶段 | Windows 产物 | Linux 产物 | 说明 |
+|---|---|---|---|
+| 1 KiCad | `C:\Program Files\KiCad\9.0\bin\kicad-cli.exe` | `/usr/bin/kicad-cli` | Win: NSIS `/S /allusers`; Linux: PPA `kicad/kicad-9.0-releases` + **必须装 `kicad-footprints kicad-symbols`** |
+| 2 Devin Desktop | `%LOCALAPPDATA%\Programs\Devin\bin\devin-desktop.cmd` | `~/devin-desktop/bin/devin-desktop` | Win: Inno `/VERYSILENT`; Linux: tar.gz 免安装解包（`build=linux-x64`） |
+| 3 归一 VSIX | `vscode-dao-pcb\dao-pcb.vsix` + `dao.dao-pcb` 已装 | 同左 | `npx @vscode/vsce package` + `--install-extension` |
+| 4 双桥 | `127.0.0.1:9931 /api/health` · `127.0.0.1:9940 /api/health` | 同左 | wrapper 启动，健康即跳过 |
 
 ## 环境变量
 
@@ -35,19 +43,27 @@ powershell -ExecutionPolicy Bypass -File coldstart\up.ps1 -RunOnly   # 已装机
 5. **CDP 目标选择**：passport 登录页 `redirectUrl` 参数含 `lceda`，必须按 host 过滤（`bridge_server.py` 已修复, PR #5）。
 6. **Devin Desktop 登录**：OAuth 回跳 `devin://`，无法后端注入，仅此一步需 GUI（浏览器输账密 → Open 回跳）。
 7. **MiMo API**：模型名必须用 `mimo-v2.5`，`mimo` 会 400。
+8. **Linux KiCad 库**：`apt install --no-install-recommends kicad` 不带 footprints/symbols，
+   会导致 `brain_design` 出空板（routed 0，"无网络信息"）——必须显式装 `kicad-footprints kicad-symbols`。
+9. **Linux 后台桥**：一次性 shell 里直接 `nohup ... &` 会随 shell 退出被连带杀掉，须 `setsid nohup ... < /dev/null &`。
+10. **私有仓克隆（dao-bridge-hub 等）**：Devin git 代理对组织私有仓可能 403，用
+    `git -c url."https://x-access-token:$PAT@github.com/dao-genesis/".insteadOf="https://github.com/dao-genesis/" clone ...`。
 
 ## MCP（stdio）
 
-```powershell
-python coldstart\run_kicad_mcp.py   # dao-kicad · 36 tools
-python coldstart\run_lceda_mcp.py   # lceda-dao · 44 tools
+```bash
+python3 coldstart/run_kicad_mcp.py   # dao-kicad · 36 tools
+python3 coldstart/run_lceda_mcp.py   # lceda-dao · 44 tools
 ```
 
 ## 验证清单
 
-```powershell
-& "C:\Program Files\KiCad\9.0\bin\kicad-cli.exe" version                        # 9.0.9
-curl.exe -H "Authorization: Bearer %DAO_PCB_TOKEN%" http://127.0.0.1:9931/api/health
-curl.exe -H "Authorization: Bearer %DAO_PCB_TOKEN%" http://127.0.0.1:9940/api/health
-cd vscode-dao-pcb && node test\pcb-mode.test.js                                 # 13 项
+```bash
+kicad-cli version                                                              # 9.0.9
+curl -H "Authorization: Bearer $DAO_PCB_TOKEN" http://127.0.0.1:9931/api/health
+curl -H "Authorization: Bearer $DAO_PCB_TOKEN" http://127.0.0.1:9940/api/health
+cd vscode-dao-pcb && node test/pcb-mode.test.js                                # 13 项
+# golden path (真实出板+布线+DRC)
+curl -X POST -H "Authorization: Bearer $DAO_PCB_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"brain_design","args":{"template":"ams1117_power"}}' http://127.0.0.1:9931/api/tools/call
 ```
