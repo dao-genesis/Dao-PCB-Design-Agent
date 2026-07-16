@@ -74,7 +74,8 @@ function apiJson(method, port, apiPath, body) {
     const data = body ? Buffer.from(JSON.stringify(body)) : null;
     const req = http.request({
       host: "127.0.0.1", port, path: apiPath, method,
-      headers: data ? { "Content-Type": "application/json", "Content-Length": data.length } : {},
+      headers: Object.assign({ Authorization: "Bearer " + accessToken() },
+        data ? { "Content-Type": "application/json", "Content-Length": data.length } : {}),
       timeout: 30000,
     }, (res) => {
       let buf = "";
@@ -131,6 +132,21 @@ function registerMcp(py) {
   } catch (e) { console.error("[dao-pcb] MCP 注册失败: " + e.message); }
 }
 
+// ---------- 公网防护令牌 ----------
+// 桥经隧道暴露公网时的访问令牌: 首次生成后持久化 ~/.dao-pcb/token,
+// 双桥以 DAO_PCB_TOKEN 环境变量启动(除 /api/health 外需 Bearer/?token=)。
+function accessToken() {
+  const dir = path.join(os.homedir(), ".dao-pcb");
+  const f = path.join(dir, "token");
+  try {
+    const t = fs.readFileSync(f, "utf8").trim();
+    if (t) return t;
+  } catch (_) {}
+  const t = "dao-pcb-" + require("crypto").randomBytes(16).toString("hex");
+  try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(f, t); } catch (_) {}
+  return t;
+}
+
 // ---------- 双桥拉起 ----------
 async function ensureKicadServer(context) {
   const port = cfg().get("kicadPort") || 9931;
@@ -145,7 +161,8 @@ async function ensureKicadServer(context) {
   registerMcp(py);
   kicadProc = cp.spawn(py, ["-m", "bridge.ide_server", "--port", String(port)], {
     cwd: engine,
-    env: { ...process.env, PYTHONPATH: engine + path.delimiter + path.dirname(engine) },
+    env: { ...process.env, PYTHONPATH: engine + path.delimiter + path.dirname(engine),
+           DAO_PCB_TOKEN: accessToken() },
   });
   kicadProc.on("error", (e) =>
     vscode.window.showErrorMessage("DAO PCB: KiCad 桥接启动失败: " + e.message));
@@ -176,6 +193,7 @@ async function ensureLcedaServer(context) {
       LCEDA_BRIDGE_PORT: String(port),
       DAO_CDP_PORTS: cfg().get("cdpPorts") || "9222,29229,29230",
       DAO_PREFER_LOCAL_EDA: cfg().get("preferLocalEda") === false ? "0" : "1",
+      DAO_PCB_TOKEN: accessToken(),
     },
   });
   lcedaProc.on("error", (e) =>
@@ -250,8 +268,8 @@ async function openHome(context) {
   const lcedaPath = lcedaMode === "screencast" ? "/panel"
     : (lcedaMode === "native" ? "/native" : "/shell");
   html = html
-    .replace(/__KICAD__/g, "http://127.0.0.1:" + kicadPort)
-    .replace(/__LCEDA__/g, "http://127.0.0.1:" + lcedaPort + lcedaPath)
+    .replace(/__KICAD__/g, "http://127.0.0.1:" + kicadPort + "/?token=" + accessToken())
+    .replace(/__LCEDA__/g, "http://127.0.0.1:" + lcedaPort + lcedaPath + "?token=" + accessToken())
     .replace(/__LCEDA_BASE__/g, "http://127.0.0.1:" + lcedaPort)
     .replace(/__ROOT__/g, root ? root.uri.fsPath.replace(/\\/g, "\\\\") : "");
   homePanel.webview.html = html;
@@ -300,7 +318,7 @@ function wireModeBridge(panel) {
 
 // 穿透/账号板块 ↔ 宿主桥: 公网隧道(零账号 cloudflared 快速隧道)与 Devin 账号自持登录。
 function wireBoards(panel, context) {
-  const pushTunnel = () => panel.webview.postMessage({ type: "daopcb.tunnel", ...tunnel.status() });
+  const pushTunnel = () => panel.webview.postMessage({ type: "daopcb.tunnel", token: accessToken(), ...tunnel.status() });
   const pushAuth = async () => {
     try {
       const prov = require("./dao-ai-base/dao-cascade/devin-provision");

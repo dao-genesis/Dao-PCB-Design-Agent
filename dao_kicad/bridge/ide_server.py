@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import tempfile
@@ -1368,9 +1369,28 @@ def _run_job(jid: str, fn, body: dict) -> None:
         _JOBS[jid] = {"done": True, "result": res}
 
 
+# 公网防护: 环境变量 DAO_PCB_TOKEN 非空时, 经隧道(cloudflared, 以 Cf-Connecting-Ip
+# 头辨识)进来的请求除 /api/health 外一律需 Authorization: Bearer <token> 或
+# ?token=<token>; 本地回环直连(IDE iframe/宿主)不受影响。未设时完全开放。
+_ACCESS_TOKEN = os.environ.get("DAO_PCB_TOKEN", "").strip()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):  # quiet
         pass
+
+    def _authorized(self, u) -> bool:
+        if not _ACCESS_TOKEN:
+            return True
+        if not self.headers.get("Cf-Connecting-Ip"):
+            return True  # 本地直连(非隧道), 保持开放
+        if u.path == "/api/health":
+            return True
+        auth = self.headers.get("Authorization") or ""
+        if auth == "Bearer " + _ACCESS_TOKEN:
+            return True
+        q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        return q.get("token", "") == _ACCESS_TOKEN
 
     def _send(self, obj, code=200):
         data = json.dumps(obj, ensure_ascii=False).encode()
@@ -1408,6 +1428,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
+        if not self._authorized(u):
+            return self._send({"ok": False, "error": "unauthorized"}, 401)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
             if u.path in ("/", "/index.html", "/webui.html"):
@@ -1504,6 +1526,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        if not self._authorized(u):
+            return self._send({"ok": False, "error": "unauthorized"}, 401)
         name = u.path.rsplit("/", 1)[-1]
         fn = _POST_PATHS.get(u.path) or (
             _ACTIONS.get(name) if u.path.startswith("/api/") else None)

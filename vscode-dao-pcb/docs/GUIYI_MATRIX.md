@@ -2,6 +2,9 @@
 
 > 本文把「以 Devin Desktop 插件版为基底, 二合一 + Proxy Pro + KiCad + 嘉立创EDA 全整合进 PCB 仓库」
 > 的全部需求解构为可追踪矩阵。改动本插件前先对照本表, 勿丢板块。
+> 基底真源: `dao-ai-base/` vendored 自 `dao-genesis/windsurf-assistant`(plugins/dao-ai-base + plugins/dao-desktop),
+> 用其 `plugins/dao-ai-base/sync.js` 同步; 本仓在其上叠加 setPromptShaper/setDomainMcpServers/mode-toggle 三处延伸。
+> 全景审查见 `docs/DEEP_ANALYSIS_2026-07.md`(仓根 docs/)。
 
 | # | 需求(本源) | 实现落点 | 验证方式 |
 |---|-----------|---------|---------|
@@ -19,6 +22,9 @@
 | 12 | 账号管理保留 | 主页「👤 账号」板块: 自持 devin 引擎 `auth status`/manual-token 登录(`devin-provision`) | 面板显示登录态 |
 | 13 | KiCad + LCEDA 双线合并, 单仓迭代 | 本插件为归一交付本体; `vscode-dao-kicad`/`vscode-dao-lceda` 为两位面事实源, `dao-ai-base` 双份 vendored 必须字节级同步 | `diff -rq vscode-dao-kicad/dao-ai-base vscode-dao-pcb/dao-ai-base` |
 | 14 | Agent 揭底两软件(测试验证闭环) | KiCad: ide_server 无头引擎(可挂载自带底座); LCEDA: CDP 直连本体 | VM 实测 + 录屏 |
+| 15 | 第三方 AI provider(Proxy Pro 另一半: 不依赖 Devin 资源) | 仓根 `dao-proxy-pro/`(vendored 真源 windsurf-assistant v9.9.347): 多 Key/多端点负载均衡+故障转移+模型路由/解锁+本地 OpenAI/Anthropic 反代, 与本插件同装互不干扰 | `node --check dao-proxy-pro/extension.js` + 控制面 `/origin/ping` |
+| 16 | 公网暴露防护(隧道不裸奔) | 双桥 `DAO_PCB_TOKEN` 令牌闸: 经隧道(Cf-Connecting-Ip)请求需 Bearer/?token=, 本地回环不受影响; 令牌持久化 `~/.dao-pcb/token` | 实测: 隧道头无令牌 401 / 带 Bearer 200 / 本地直连 200 |
+| 17 | 实战知识注入(勿重踩坑) | `pcb-mode.js` 领域 SP 编入 DEFECTS 实机经验(C10418 断 sync/换 C2907、createNetClass 不持久化/改 NetRules、勿手写逃逸布线) + DRC 修复循环范式 | 单测 + SP 文本包含检查 |
 
 ## 自检清单(改完必跑)
 
