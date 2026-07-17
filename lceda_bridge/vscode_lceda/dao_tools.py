@@ -68,7 +68,16 @@ def click_text(texts, retries=3):
 
 
 # ---------------------------------------------------------------- 工程
-PROJECTS_DIR = os.path.expanduser("~/Documents/LCEDA-Pro/projects")
+def _projects_dir():
+    """国内(LCEDA-Pro)与国际(EasyEDA-Pro)客户端工程目录名不同, 取实际存在者。"""
+    for d in ("~/Documents/LCEDA-Pro/projects", "~/Documents/EasyEDA-Pro/projects"):
+        p = os.path.normpath(os.path.expanduser(d))
+        if os.path.isdir(p):
+            return p
+    return os.path.normpath(os.path.expanduser("~/Documents/LCEDA-Pro/projects"))
+
+
+PROJECTS_DIR = _projects_dir()
 
 
 def _rest_create_project(name):
