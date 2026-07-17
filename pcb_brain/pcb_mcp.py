@@ -971,10 +971,14 @@ def _run_stdio():
         "kicad_sense":      _kicad_sense,
     }
 
+    # stdio 协议帧独占真 stdout; 工具内部 print 全部改道 stderr, 防污染 JSON-RPC 流
+    proto_out = sys.stdout
+    sys.stdout = sys.stderr
+
     def write_response(obj):
         line = json.dumps(obj, ensure_ascii=False)
-        sys.stdout.write(line + "\n")
-        sys.stdout.flush()
+        proto_out.write(line + "\n")
+        proto_out.flush()
 
     def handle(req: dict):
         method = req.get("method", "")
