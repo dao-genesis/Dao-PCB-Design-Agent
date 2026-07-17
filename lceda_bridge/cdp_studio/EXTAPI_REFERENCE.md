@@ -2,7 +2,7 @@
 
 > 一次性全量逆流·一劳永逸。自 `api-types.d.ts`（TypeScript 声明，权威）解析，与运行期 `_EXTAPI_ROOT_` introspection 交叉核对 live 可达性。
 >
-> - API 版本：`0.2.53.aee2f57a`　生成：`2026-06-30`
+> - API 版本：`0.2.53.aee2f57a`　生成：`2026-07-17`
 > - 命名空间 **95** 个，可直接 RPC 调用方法 **749** 个；返回/数据类型 **31** 个（链式方法 766 个）。
 > - 词汇：枚举 **69** 个、接口 **128** 个、类型别名 **30** 个（见文末「词汇表」，含层 id/图元类型/库类型等取值）。
 > - 根映射：`EDA` 根类把每个命名空间以「类名首段小写」暴露（`PCB_Drc`→`pcb_Drc`），经源码核实。
@@ -657,13 +657,13 @@
 | `getAllPrimitiveId` | `getAllPrimitiveId(net?: string, primitiveLock?: boolean): Promise<Array<string>>` | 获取所有过孔图元 ID | ✓ |
 | `getAll` | `getAll(net?: string, primitiveLock?: boolean): Promise<Array<IPCB_PrimitiveVia>>` | 获取所有过孔 | ✓ |
 
-### `pcb_RayTracerEngine` · PCB_RayTracerEngine （live 可达 2/3）
+### `pcb_RayTracerEngine` · PCB_RayTracerEngine （live 可达 3/3）
 
 | 方法 | 签名 | 说明 | live |
 |---|---|---|:--:|
 | `init` | `init(lut: Array<{ [key: string]: any; }>): Promise<void>` | 初始化光线追踪引擎 | ✓ |
 | `dispose` | `dispose(): Promise<void>` | 停止光线追踪引擎 | ✓ |
-| `setRenderConfigurations` | `setRenderConfigurations(configurations: any): Promise<void>` | 设置光线追踪渲染配置 | · |
+| `setRenderConfigurations` | `setRenderConfigurations(configurations: any): Promise<void>` | 设置光线追踪渲染配置 | ✓ |
 
 ### `pcb_SelectControl` · PCB_SelectControl （live 可达 8/8）
 

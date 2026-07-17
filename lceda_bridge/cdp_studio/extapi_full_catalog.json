@@ -1,7 +1,7 @@
 {
  "source": "JLCEDA Pro EXTAPI TypeScript declaration (api-types.d.ts)",
  "api_version": "0.2.53.aee2f57a",
- "generated": "2026-06-30",
+ "generated": "2026-07-17",
  "namespace_count": 95,
  "namespace_method_count": 749,
  "data_type_count": 31,
@@ -3033,7 +3033,7 @@
      "name": "setRenderConfigurations",
      "signature": "setRenderConfigurations(configurations: any): Promise<void>",
      "doc": "设置光线追踪渲染配置",
-     "live": false
+     "live": true
     }
    ]
   },
