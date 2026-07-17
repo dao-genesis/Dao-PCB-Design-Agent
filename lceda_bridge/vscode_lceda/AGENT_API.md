@@ -22,6 +22,7 @@ VS Code 插件(vscode-dao-lceda): 中间面板 /panel · 左侧 /api/tree · 对
 | `/api/frame` | GET | 最新画面 JPEG(呈现面) |
 | `/api/input` | POST | 鼠标/键盘/字符注入(执行面) |
 | `/api/verb` | POST | 官方 `_EXTAPI_ROOT_` 动词直调(反馈面) |
+| `/api/sig` | GET | 官方签名反向提取: `?key=ns.method` 源码 / `?key=ns` 全方法签名头(调前自省防盲猜) |
 | `/api/eval` | POST | 页内 JS 求值(高阶, 仅本机) |
 | `/api/tree` | GET | 工程树(左侧文件树数据源) |
 | `/api/chat` | POST | 极简同步问答(旧通道, 保留兼容) |
