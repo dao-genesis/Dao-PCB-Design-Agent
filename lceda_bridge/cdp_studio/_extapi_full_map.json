@@ -1,889 +1,890 @@
 {
-  "dmt_Board": [
-    "createBoard",
-    "modifyBoardName",
-    "copyBoard",
-    "getBoardInfo",
-    "getAllBoardsInfo",
-    "getCurrentBoardInfo",
-    "deleteBoard"
-  ],
-  "dmt_EditorControl": [
-    "openDocument",
-    "openLibraryDocument",
-    "closeDocument",
-    "getSplitScreenTree",
-    "getSplitScreenIdByTabId",
-    "getTabsBySplitScreenId",
-    "createSplitScreen",
-    "moveDocumentToSplitScreen",
-    "activateDocument",
-    "activateSplitScreen",
-    "tileAllDocumentToSplitScreen",
-    "mergeAllDocumentFromSplitScreen",
-    "getCurrentRenderedAreaImage",
-    "zoomToRegion",
-    "zoomTo",
-    "zoomToAllPrimitives",
-    "zoomToSelectedPrimitives",
-    "generateIndicatorMarkers",
-    "removeIndicatorMarkers"
-  ],
-  "dmt_Event": [
-    "addEditorTabEventListener",
-    "removeEventListener",
-    "isEventListenerAlreadyExist"
-  ],
-  "dmt_Folder": [
-    "createFolder",
-    "modifyFolderName",
-    "modifyFolderDescription",
-    "moveFolderToFolder",
-    "getAllFoldersUuid",
-    "getFolderInfo",
-    "deleteFolder"
-  ],
-  "dmt_Panel": [
-    "createPanel",
-    "modifyPanelName",
-    "copyPanel",
-    "getPanelInfo",
-    "getAllPanelsInfo",
-    "getCurrentPanelInfo",
-    "deletePanel"
-  ],
-  "dmt_Pcb": [
-    "createPcb",
-    "modifyPcbName",
-    "copyPcb",
-    "getPcbInfo",
-    "getAllPcbsInfo",
-    "getCurrentPcbInfo",
-    "deletePcb"
-  ],
-  "dmt_Project": [
-    "openProject",
-    "createProject",
-    "modifyProjectFriendlyName",
-    "modifyProjectDescription",
-    "modifyProjectCollaborationMode",
-    "moveProject",
-    "moveProjectToFolder",
-    "copyProject",
-    "getAllProjectsUuid",
-    "getProjectInfo",
-    "getCurrentProjectInfo",
-    "deleteProject"
-  ],
-  "dmt_Schematic": [
-    "createSchematic",
-    "createSchematicPage",
-    "modifySchematicName",
-    "modifySchematicPageName",
-    "modifySchematicPageTitleBlock",
-    "copySchematic",
-    "copySchematicPage",
-    "getSchematicInfo",
-    "getSchematicPageInfo",
-    "getAllSchematicsInfo",
-    "getAllSchematicPagesInfo",
-    "getCurrentSchematicAllSchematicPagesInfo",
-    "getCurrentSchematicInfo",
-    "getCurrentSchematicPageInfo",
-    "reorderSchematicPages",
-    "deleteSchematic",
-    "deleteSchematicPage"
-  ],
-  "dmt_SelectControl": [
-    "getCurrentDocumentInfo"
-  ],
-  "dmt_Team": [
-    "getAllTeamsInfo",
-    "getAllInvolvedTeamInfo",
-    "getCurrentTeamInfo"
-  ],
-  "dmt_Workspace": [
-    "getAllWorkspacesInfo",
-    "toggleToWorkspace",
-    "getCurrentWorkspaceInfo"
-  ],
-  "lib_3DModel": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "copy",
-    "search"
-  ],
-  "lib_Cbb": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "copy",
-    "search",
-    "openProjectInEditor",
-    "openSymbolInEditor"
-  ],
-  "lib_Classification": [
-    "createPrimary",
-    "createSecondary",
-    "getIndexByName",
-    "getNameByUuid",
-    "getNameByIndex",
-    "getAllClassificationTree",
-    "deleteByUuid",
-    "deleteByIndex"
-  ],
-  "lib_Device": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "copy",
-    "search",
-    "searchByProperties",
-    "getByLcscIds"
-  ],
-  "lib_Footprint": [
-    "create",
-    "delete",
-    "modify",
-    "updateDocumentSource",
-    "get",
-    "copy",
-    "search",
-    "searchByProperties",
-    "openInEditor",
-    "getRenderImage"
-  ],
-  "lib_LibrariesList": [
-    "getSystemLibraryUuid",
-    "getPersonalLibraryUuid",
-    "getProjectLibraryUuid",
-    "getFavoriteLibraryUuid",
-    "getAllLibrariesList",
-    "registerExtendLibrary"
-  ],
-  "lib_PanelLibrary": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "copy",
-    "search",
-    "openInEditor"
-  ],
-  "lib_SelectControl": [
-    "getSelectedLibraryRowInfo"
-  ],
-  "lib_Symbol": [
-    "create",
-    "delete",
-    "modify",
-    "updateDocumentSource",
-    "get",
-    "copy",
-    "search",
-    "searchByProperties",
-    "openInEditor",
-    "getRenderImage"
-  ],
-  "pcb_Document": [
-    "importChanges",
-    "importAutoRouteJsonFile",
-    "importAutoRouteSesFile",
-    "importAutoLayoutJsonFile",
-    "save",
-    "getCalculatingRatlineStatus",
-    "startCalculatingRatline",
-    "stopCalculatingRatline",
-    "convertCanvasOriginToDataOrigin",
-    "convertDataOriginToCanvasOrigin",
-    "getCanvasOrigin",
-    "setCanvasOrigin",
-    "navigateToCoordinates",
-    "navigateToRegion",
-    "getPrimitiveAtPoint",
-    "getPrimitivesInRegion",
-    "zoomToBoardOutline",
-    "getCurrentFilterConfiguration",
-    "clearRouting"
-  ],
-  "pcb_Drc": [
-    "check",
-    "getRealTimeDrcStatus",
-    "startRealTimeDrc",
-    "stopRealTimeDrc",
-    "getCurrentRuleConfigurationName",
-    "getCurrentRuleConfiguration",
-    "getRuleConfiguration",
-    "getAllRuleConfigurations",
-    "saveRuleConfiguration",
-    "renameRuleConfiguration",
-    "deleteRuleConfiguration",
-    "getDefaultRuleConfigurationName",
-    "setAsDefaultRuleConfiguration",
-    "overwriteCurrentRuleConfiguration",
-    "getNetRules",
-    "overwriteNetRules",
-    "getNetByNetRules",
-    "overwriteNetByNetRules",
-    "getRegionRules",
-    "overwriteRegionRules",
-    "createNetClass",
-    "deleteNetClass",
-    "modifyNetClassName",
-    "addNetToNetClass",
-    "removeNetFromNetClass",
-    "getAllNetClasses",
-    "createDifferentialPair",
-    "deleteDifferentialPair",
-    "modifyDifferentialPairName",
-    "modifyDifferentialPairPositiveNet",
-    "modifyDifferentialPairNegativeNet",
-    "getAllDifferentialPairs",
-    "createEqualLengthNetGroup",
-    "deleteEqualLengthNetGroup",
-    "modifyEqualLengthNetGroupName",
-    "addNetToEqualLengthNetGroup",
-    "removeNetFromEqualLengthNetGroup",
-    "getAllEqualLengthNetGroups",
-    "createPadPairGroup",
-    "deletePadPairGroup",
-    "modifyPadPairGroupName",
-    "addPadPairToPadPairGroup",
-    "removePadPairFromPadPairGroup",
-    "getAllPadPairGroups",
-    "getPadPairGroupMinWireLength"
-  ],
-  "pcb_Event": [
-    "addMouseEventListener",
-    "addPrimitiveEventListener",
-    "addNetEventListener",
-    "addCrossProbeSelectEventListener",
-    "addRealTimeDrcResultEventListener",
-    "removeEventListener",
-    "isEventListenerAlreadyExist"
-  ],
-  "pcb_Layer": [
-    "getCurrentLayer",
-    "selectLayer",
-    "setLayerVisible",
-    "setLayerInvisible",
-    "lockLayer",
-    "unlockLayer",
-    "setTheNumberOfCopperLayers",
-    "getTheNumberOfCopperLayers",
-    "setLayerColorConfiguration",
-    "setInactiveLayerTransparency",
-    "setPcbType",
-    "addCustomLayer",
-    "removeLayer",
-    "modifyLayer",
-    "getAllLayers",
-    "setInactiveLayerDisplayMode",
-    "getCurrentPhysicalStackingConfigurationName",
-    "getCurrentPhysicalStackingConfiguration",
-    "getPhysicalStackingConfiguration",
-    "getAllPhysicalStackingConfigurations",
-    "savePhysicalStackingConfiguration",
-    "renamePhysicalStackingConfiguration",
-    "deletePhysicalStackingConfiguration",
-    "getDefaultPhysicalStackingConfigurationName",
-    "setAsDefaultPhysicalStackingConfiguration",
-    "overwriteCurrentPhysicalStackingConfiguration"
-  ],
-  "pcb_ManufactureData": [
-    "getGerberFile",
-    "get3DFile",
-    "get3DShellFile",
-    "getPickAndPlaceFile",
-    "getFlyingProbeTestFile",
-    "getBomTemplates",
-    "uploadBomTemplateFile",
-    "getBomTemplateFile",
-    "deleteBomTemplate",
-    "getBomFile",
-    "getTestPointFile",
-    "getNetlistFile",
-    "getDxfFile",
-    "getPdfFile",
-    "getIpcD356AFile",
-    "getIpc2581CFile",
-    "getOpenDatabaseDoublePlusFile",
-    "getInteractiveBomFile",
-    "getDsnFile",
-    "getAutoRouteJsonFile",
-    "getAutoRouteJsonFileForJRouter",
-    "getAutoLayoutJsonFile",
-    "getAltiumDesignerFile",
-    "getPadsFile",
-    "getPcbInfoFile",
-    "getIdxFile",
-    "placeComponentsOrder",
-    "placeSmtComponentsOrder",
-    "placePcbOrder",
-    "place3DShellOrder",
-    "getManufactureData"
-  ],
-  "pcb_MathPolygon": [
-    "createPolygon",
-    "createComplexPolygon",
-    "splitPolygon",
-    "discretize",
-    "calculateWidth",
-    "calculateHeight",
-    "calculateBBoxHeight",
-    "convertImageToComplexPolygon",
-    "calculateBBoxWidth"
-  ],
-  "pcb_Net": [
-    "getAllNets",
-    "getNet",
-    "getAllNetsName",
-    "getAllNetName",
-    "getNetLength",
-    "getNetColor",
-    "setNetColor",
-    "getAllPrimitivesByNet",
-    "selectNet",
-    "unselectNet",
-    "unselectAllNets",
-    "highlightNet",
-    "unhighlightNet",
-    "unhighlightAllNets",
-    "getNetlist",
-    "setNetlist"
-  ],
-  "pcb_Primitive": [
-    "getPrimitiveTypeByPrimitiveId",
-    "getPrimitiveByPrimitiveId",
-    "getPrimitivesByPrimitiveId",
-    "getPrimitivesBBox",
-    "getPrimitiveBoardLine"
-  ],
-  "pcb_PrimitiveArc": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveAttribute": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveComponent": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll",
-    "getAllPinsByPrimitiveId",
-    "placeComponentWithMouse",
-    "placeFootprintWithMouse",
-    "getAllPropertyNames"
-  ],
-  "pcb_PrimitiveFill": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveDimension": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveImage": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveLine": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveObject": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitivePad": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitivePolyline": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitivePour": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitivePoured": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveRegion": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveString": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_PrimitiveVia": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "pcb_RayTracerEngine": [
-    "init",
-    "dispose"
-  ],
-  "pcb_SelectControl": [
-    "getAllSelectedPrimitives_PrimitiveId",
-    "getAllSelectedPrimitives",
-    "getSelectedPrimitives",
-    "doSelectPrimitives",
-    "doCrossProbeSelect",
-    "doCrossProbeSelectByObject",
-    "clearSelected",
-    "getCurrentMousePosition"
-  ],
-  "pnl_Document": [
-    "save"
-  ],
-  "sch_Document": [
-    "importChanges",
-    "save",
-    "navigateToCoordinates",
-    "navigateToRegion",
-    "getPrimitiveAtPoint",
-    "getPrimitivesInRegion",
-    "getCurrentFilterConfiguration",
-    "autoRouting",
-    "autoLayout"
-  ],
-  "sch_Drc": [
-    "check"
-  ],
-  "sch_Event": [
-    "addMouseEventListener",
-    "addPrimitiveEventListener",
-    "addSimulationEnginePullEventListener",
-    "removeEventListener",
-    "isEventListenerAlreadyExist"
-  ],
-  "sch_ManufactureData": [
-    "getAssemblyVariantsConfigs",
-    "getBomTemplates",
-    "uploadBomTemplateFile",
-    "getBomTemplateFile",
-    "deleteBomTemplate",
-    "getBomFile",
-    "getNetlistFile",
-    "getSimulationNetlistFile",
-    "getExportDocumentFile",
-    "placeComponentsOrder",
-    "placeSmtComponentsOrder"
-  ],
-  "sch_Net": [
-    "getCurrentProjectAllNets",
-    "getAllNets",
-    "getNet",
-    "getAllNetsName"
-  ],
-  "sch_Netlist": [
-    "getNetlist",
-    "setNetlist"
-  ],
-  "sch_Primitive": [
-    "getPrimitiveTypeByPrimitiveId",
-    "getPrimitiveByPrimitiveId",
-    "getPrimitivesByPrimitiveId",
-    "getPrimitivesBBox"
-  ],
-  "sch_PrimitiveArc": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sch_PrimitiveAttribute": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll",
-    "createNetLabel"
-  ],
-  "sch_PrimitiveBus": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sch_PrimitiveCircle": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sch_PrimitiveComponent": [
-    "setNetFlagComponentUuid_Power",
-    "setNetFlagComponentUuid_Ground",
-    "setNetFlagComponentUuid_AnalogGround",
-    "setNetFlagComponentUuid_ProtectGround",
-    "setNetPortComponentUuid_IN",
-    "setNetPortComponentUuid_OUT",
-    "setNetPortComponentUuid_BI",
-    "create",
-    "createNetFlag",
-    "createNetPort",
-    "createShortCircuitFlag",
-    "createCbbSymbol",
-    "placeCbbSchematicPage",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll",
-    "getAllPinsByPrimitiveId",
-    "placeComponentWithMouse",
-    "placeSymbolWithMouse",
-    "getAllPropertyNames",
-    "getComponentDetail",
-    "checkComponentType",
-    "initUuid"
-  ],
-  "sch_PrimitivePin": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sch_PrimitivePolygon": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sch_PrimitiveRectangle": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sch_PrimitiveText": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sch_PrimitiveWire": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sch_SelectControl": [
-    "getAllSelectedPrimitives_PrimitiveId",
-    "getAllSelectedPrimitives",
-    "getSelectedPrimitives_PrimitiveId",
-    "getSelectedPrimitives",
-    "doSelectPrimitives",
-    "doCrossProbeSelect",
-    "clearSelected",
-    "getCurrentMousePosition",
-    "getAllSelectedPrimitives3"
-  ],
-  "sch_SimulationEngine": [
-    "pushData"
-  ],
-  "sch_Utils": [
-    "splitLines"
-  ],
-  "sch_PrimitiveObject": [
-    "create",
-    "delete",
-    "modify",
-    "get",
-    "getAllPrimitiveId",
-    "getAll"
-  ],
-  "sys_ClientUrl": [
-    "request"
-  ],
-  "sys_Dialog": [
-    "createReactComponentizationDialogInterface",
-    "showInformationMessage",
-    "showConfirmationMessage",
-    "showInputDialog",
-    "showSelectDialog",
-    "insertScriptToDialog"
-  ],
-  "sys_Environment": [
-    "isWeb",
-    "isClient",
-    "isEasyEDAProEdition",
-    "isJLCEDAProEdition",
-    "isProPrivateEdition",
-    "isOnlineMode",
-    "isHalfOfflineMode",
-    "isOfflineMode",
-    "getEditorCurrentVersion",
-    "getEditorCompliedDate",
-    "getUserInfo",
-    "setKeepProjectHasOnlyOneBoard"
-  ],
-  "sys_FileManager": [
-    "getProjectFile",
-    "getDocumentFile",
-    "getDocumentSource",
-    "getDocumentFootprintSources",
-    "setDocumentSource",
-    "getProjectFileByProjectUuid",
-    "getDeviceFileByDeviceUuid",
-    "getSymbolFileBySymbolUuid",
-    "getFootprintFileByFootprintUuid",
-    "getCbbFileByCbbUuid",
-    "getPanelLibraryFileByPanelLibraryUuid",
-    "importProjectByProjectFile",
-    "extractProjectInfo",
-    "extractLibInfo"
-  ],
-  "sys_FileSystem": [
-    "getExtensionFile",
-    "openReadFileDialog",
-    "openReadFolderDialog",
-    "saveFile",
-    "readFileFromFileSystem",
-    "saveFileToFileSystem",
-    "listFilesOfFileSystem",
-    "deleteFileInFileSystem",
-    "getEdaPath",
-    "getDocumentsPath",
-    "getLibrariesPaths",
-    "getProjectsPaths"
-  ],
-  "sys_FontManager": [
-    "getFontsList",
-    "addFont",
-    "deleteFont"
-  ],
-  "sys_FormatConversion": [
-    "convertAltiumDesignerLibrariesToEasyEDASingleFile",
-    "convertAltiumDesignerLibrariesToEasyEDAMultiFiles",
-    "convertDisaLibrariesToEasyEDASingleFile",
-    "convertDisaLibrariesToEasyEDAMultiFiles"
-  ],
-  "sys_HeaderMenu": [
-    "insertHeaderMenus",
-    "removeHeaderMenus",
-    "replaceHeaderMenus",
-    "removeSystemHeaderMenuItem",
-    "insertSystemHeaderMenuItem",
-    "insertSystemHeaderMenus"
-  ],
-  "sys_I18n": [
-    "text",
-    "getCurrentLanguage",
-    "getAllSupportedLanguages",
-    "isLanguageSupported",
-    "importMultilingual",
-    "importMultilingualLanguage",
-    "importMultilingualNamespace",
-    "addLanguageChangedEventListener",
-    "removeEventListener",
-    "isEventListenerAlreadyExist"
-  ],
-  "sys_IFrame": [
-    "openIFrame",
-    "closeIFrame",
-    "hideIFrame",
-    "showIFrame",
-    "isIFrameAlreadyExist"
-  ],
-  "sys_LoadingAndProgressBar": [
-    "showProgressBar",
-    "destroyProgressBar",
-    "showLoading",
-    "destroyLoading"
-  ],
-  "sys_Log": [
-    "add",
-    "clear",
-    "export",
-    "sort",
-    "find"
-  ],
-  "sys_Message": [
-    "showToastMessage",
-    "showFollowMouseTip",
-    "removeFollowMouseTip"
-  ],
-  "sys_MessageBox": [
-    "showInformationMessage",
-    "showConfirmationMessage"
-  ],
-  "sys_MessageBus": [
-    "createPrivateMessageBus",
-    "removePrivateMessageBus",
-    "push",
-    "pushPublic",
-    "pull",
-    "pullPublic",
-    "pullAsync",
-    "pullAsyncPublic",
-    "publish",
-    "publishPublic",
-    "subscribe",
-    "subscribePublic",
-    "subscribeOnce",
-    "subscribeOncePublic",
-    "rpcCall",
-    "rpcCallPublic",
-    "rpcService",
-    "rpcServicePublic"
-  ],
-  "sys_PanelControl": [
-    "openLeftPanel",
-    "closeLeftPanel",
-    "toggleLeftPanelLockState",
-    "isLeftPanelLocked",
-    "openRightPanel",
-    "closeRightPanel",
-    "toggleRightPanelLockState",
-    "isRightPanelLocked",
-    "openBottomPanel",
-    "closeBottomPanel",
-    "toggleBottomPanelLockState",
-    "isBottomPanelLocked"
-  ],
-  "sys_RightClickMenu": [
-    "changeMenu"
-  ],
-  "sys_Setting": [
-    "restoreDefault"
-  ],
-  "sys_ShortcutKey": [
-    "registerShortcutKey",
-    "unregisterShortcutKey",
-    "getShortcutKeys"
-  ],
-  "sys_Storage": [
-    "getExtensionAllUserConfigs",
-    "setExtensionAllUserConfigs",
-    "clearExtensionAllUserConfigs",
-    "getExtensionUserConfig",
-    "setExtensionUserConfig",
-    "deleteExtensionUserConfig"
-  ],
-  "sys_Timer": [
-    "setIntervalTimer",
-    "clearIntervalTimer",
-    "setTimeoutTimer",
-    "clearTimeoutTimer"
-  ],
-  "sys_ToastMessage": [
-    "showMessage"
-  ],
-  "sys_Tool": [
-    "netlistComparison",
-    "schematicComparison",
-    "pcbComparison"
-  ],
-  "sys_Unit": [
-    "getFrontendDataUnit",
-    "milToMm",
-    "milToInch",
-    "mmToMil",
-    "mmToInch",
-    "inchToMil",
-    "inchToMm"
-  ],
-  "sys_WebSocket": [
-    "register",
-    "send",
-    "close"
-  ],
-  "sys_Window": [
-    "open",
-    "addEventListener",
-    "removeEventListener",
-    "openUI",
-    "getCurrentTheme",
-    "getUrlParam",
-    "getUrlAnchor",
-    "urlPushState",
-    "urlReplaceState"
-  ]
+ "dmt_Board": [
+  "createBoard",
+  "modifyBoardName",
+  "copyBoard",
+  "getBoardInfo",
+  "getAllBoardsInfo",
+  "getCurrentBoardInfo",
+  "deleteBoard"
+ ],
+ "dmt_EditorControl": [
+  "openDocument",
+  "openLibraryDocument",
+  "closeDocument",
+  "getSplitScreenTree",
+  "getSplitScreenIdByTabId",
+  "getTabsBySplitScreenId",
+  "createSplitScreen",
+  "moveDocumentToSplitScreen",
+  "activateDocument",
+  "activateSplitScreen",
+  "tileAllDocumentToSplitScreen",
+  "mergeAllDocumentFromSplitScreen",
+  "getCurrentRenderedAreaImage",
+  "zoomToRegion",
+  "zoomTo",
+  "zoomToAllPrimitives",
+  "zoomToSelectedPrimitives",
+  "generateIndicatorMarkers",
+  "removeIndicatorMarkers"
+ ],
+ "dmt_Event": [
+  "addEditorTabEventListener",
+  "removeEventListener",
+  "isEventListenerAlreadyExist"
+ ],
+ "dmt_Folder": [
+  "createFolder",
+  "modifyFolderName",
+  "modifyFolderDescription",
+  "moveFolderToFolder",
+  "getAllFoldersUuid",
+  "getFolderInfo",
+  "deleteFolder"
+ ],
+ "dmt_Panel": [
+  "createPanel",
+  "modifyPanelName",
+  "copyPanel",
+  "getPanelInfo",
+  "getAllPanelsInfo",
+  "getCurrentPanelInfo",
+  "deletePanel"
+ ],
+ "dmt_Pcb": [
+  "createPcb",
+  "modifyPcbName",
+  "copyPcb",
+  "getPcbInfo",
+  "getAllPcbsInfo",
+  "getCurrentPcbInfo",
+  "deletePcb"
+ ],
+ "dmt_Project": [
+  "openProject",
+  "createProject",
+  "modifyProjectFriendlyName",
+  "modifyProjectDescription",
+  "modifyProjectCollaborationMode",
+  "moveProject",
+  "moveProjectToFolder",
+  "copyProject",
+  "getAllProjectsUuid",
+  "getProjectInfo",
+  "getCurrentProjectInfo",
+  "deleteProject"
+ ],
+ "dmt_Schematic": [
+  "createSchematic",
+  "createSchematicPage",
+  "modifySchematicName",
+  "modifySchematicPageName",
+  "modifySchematicPageTitleBlock",
+  "copySchematic",
+  "copySchematicPage",
+  "getSchematicInfo",
+  "getSchematicPageInfo",
+  "getAllSchematicsInfo",
+  "getAllSchematicPagesInfo",
+  "getCurrentSchematicAllSchematicPagesInfo",
+  "getCurrentSchematicInfo",
+  "getCurrentSchematicPageInfo",
+  "reorderSchematicPages",
+  "deleteSchematic",
+  "deleteSchematicPage"
+ ],
+ "dmt_SelectControl": [
+  "getCurrentDocumentInfo"
+ ],
+ "dmt_Team": [
+  "getAllTeamsInfo",
+  "getAllInvolvedTeamInfo",
+  "getCurrentTeamInfo"
+ ],
+ "dmt_Workspace": [
+  "getAllWorkspacesInfo",
+  "toggleToWorkspace",
+  "getCurrentWorkspaceInfo"
+ ],
+ "lib_3DModel": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "copy",
+  "search"
+ ],
+ "lib_Cbb": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "copy",
+  "search",
+  "openProjectInEditor",
+  "openSymbolInEditor"
+ ],
+ "lib_Classification": [
+  "createPrimary",
+  "createSecondary",
+  "getIndexByName",
+  "getNameByUuid",
+  "getNameByIndex",
+  "getAllClassificationTree",
+  "deleteByUuid",
+  "deleteByIndex"
+ ],
+ "lib_Device": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "copy",
+  "search",
+  "searchByProperties",
+  "getByLcscIds"
+ ],
+ "lib_Footprint": [
+  "create",
+  "delete",
+  "modify",
+  "updateDocumentSource",
+  "get",
+  "copy",
+  "search",
+  "searchByProperties",
+  "openInEditor",
+  "getRenderImage"
+ ],
+ "lib_LibrariesList": [
+  "getSystemLibraryUuid",
+  "getPersonalLibraryUuid",
+  "getProjectLibraryUuid",
+  "getFavoriteLibraryUuid",
+  "getAllLibrariesList",
+  "registerExtendLibrary"
+ ],
+ "lib_PanelLibrary": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "copy",
+  "search",
+  "openInEditor"
+ ],
+ "lib_SelectControl": [
+  "getSelectedLibraryRowInfo"
+ ],
+ "lib_Symbol": [
+  "create",
+  "delete",
+  "modify",
+  "updateDocumentSource",
+  "get",
+  "copy",
+  "search",
+  "searchByProperties",
+  "openInEditor",
+  "getRenderImage"
+ ],
+ "pcb_Document": [
+  "importChanges",
+  "importAutoRouteJsonFile",
+  "importAutoRouteSesFile",
+  "importAutoLayoutJsonFile",
+  "save",
+  "getCalculatingRatlineStatus",
+  "startCalculatingRatline",
+  "stopCalculatingRatline",
+  "convertCanvasOriginToDataOrigin",
+  "convertDataOriginToCanvasOrigin",
+  "getCanvasOrigin",
+  "setCanvasOrigin",
+  "navigateToCoordinates",
+  "navigateToRegion",
+  "getPrimitiveAtPoint",
+  "getPrimitivesInRegion",
+  "zoomToBoardOutline",
+  "getCurrentFilterConfiguration",
+  "clearRouting"
+ ],
+ "pcb_Drc": [
+  "check",
+  "getRealTimeDrcStatus",
+  "startRealTimeDrc",
+  "stopRealTimeDrc",
+  "getCurrentRuleConfigurationName",
+  "getCurrentRuleConfiguration",
+  "getRuleConfiguration",
+  "getAllRuleConfigurations",
+  "saveRuleConfiguration",
+  "renameRuleConfiguration",
+  "deleteRuleConfiguration",
+  "getDefaultRuleConfigurationName",
+  "setAsDefaultRuleConfiguration",
+  "overwriteCurrentRuleConfiguration",
+  "getNetRules",
+  "overwriteNetRules",
+  "getNetByNetRules",
+  "overwriteNetByNetRules",
+  "getRegionRules",
+  "overwriteRegionRules",
+  "createNetClass",
+  "deleteNetClass",
+  "modifyNetClassName",
+  "addNetToNetClass",
+  "removeNetFromNetClass",
+  "getAllNetClasses",
+  "createDifferentialPair",
+  "deleteDifferentialPair",
+  "modifyDifferentialPairName",
+  "modifyDifferentialPairPositiveNet",
+  "modifyDifferentialPairNegativeNet",
+  "getAllDifferentialPairs",
+  "createEqualLengthNetGroup",
+  "deleteEqualLengthNetGroup",
+  "modifyEqualLengthNetGroupName",
+  "addNetToEqualLengthNetGroup",
+  "removeNetFromEqualLengthNetGroup",
+  "getAllEqualLengthNetGroups",
+  "createPadPairGroup",
+  "deletePadPairGroup",
+  "modifyPadPairGroupName",
+  "addPadPairToPadPairGroup",
+  "removePadPairFromPadPairGroup",
+  "getAllPadPairGroups",
+  "getPadPairGroupMinWireLength"
+ ],
+ "pcb_Event": [
+  "addMouseEventListener",
+  "addPrimitiveEventListener",
+  "addNetEventListener",
+  "addCrossProbeSelectEventListener",
+  "addRealTimeDrcResultEventListener",
+  "removeEventListener",
+  "isEventListenerAlreadyExist"
+ ],
+ "pcb_Layer": [
+  "getCurrentLayer",
+  "selectLayer",
+  "setLayerVisible",
+  "setLayerInvisible",
+  "lockLayer",
+  "unlockLayer",
+  "setTheNumberOfCopperLayers",
+  "getTheNumberOfCopperLayers",
+  "setLayerColorConfiguration",
+  "setInactiveLayerTransparency",
+  "setPcbType",
+  "addCustomLayer",
+  "removeLayer",
+  "modifyLayer",
+  "getAllLayers",
+  "setInactiveLayerDisplayMode",
+  "getCurrentPhysicalStackingConfigurationName",
+  "getCurrentPhysicalStackingConfiguration",
+  "getPhysicalStackingConfiguration",
+  "getAllPhysicalStackingConfigurations",
+  "savePhysicalStackingConfiguration",
+  "renamePhysicalStackingConfiguration",
+  "deletePhysicalStackingConfiguration",
+  "getDefaultPhysicalStackingConfigurationName",
+  "setAsDefaultPhysicalStackingConfiguration",
+  "overwriteCurrentPhysicalStackingConfiguration"
+ ],
+ "pcb_ManufactureData": [
+  "getGerberFile",
+  "get3DFile",
+  "get3DShellFile",
+  "getPickAndPlaceFile",
+  "getFlyingProbeTestFile",
+  "getBomTemplates",
+  "uploadBomTemplateFile",
+  "getBomTemplateFile",
+  "deleteBomTemplate",
+  "getBomFile",
+  "getTestPointFile",
+  "getNetlistFile",
+  "getDxfFile",
+  "getPdfFile",
+  "getIpcD356AFile",
+  "getIpc2581CFile",
+  "getOpenDatabaseDoublePlusFile",
+  "getInteractiveBomFile",
+  "getDsnFile",
+  "getAutoRouteJsonFile",
+  "getAutoRouteJsonFileForJRouter",
+  "getAutoLayoutJsonFile",
+  "getAltiumDesignerFile",
+  "getPadsFile",
+  "getPcbInfoFile",
+  "getIdxFile",
+  "placeComponentsOrder",
+  "placeSmtComponentsOrder",
+  "placePcbOrder",
+  "place3DShellOrder",
+  "getManufactureData"
+ ],
+ "pcb_MathPolygon": [
+  "createPolygon",
+  "createComplexPolygon",
+  "splitPolygon",
+  "discretize",
+  "calculateWidth",
+  "calculateHeight",
+  "calculateBBoxHeight",
+  "convertImageToComplexPolygon",
+  "calculateBBoxWidth"
+ ],
+ "pcb_Net": [
+  "getAllNets",
+  "getNet",
+  "getAllNetsName",
+  "getAllNetName",
+  "getNetLength",
+  "getNetColor",
+  "setNetColor",
+  "getAllPrimitivesByNet",
+  "selectNet",
+  "unselectNet",
+  "unselectAllNets",
+  "highlightNet",
+  "unhighlightNet",
+  "unhighlightAllNets",
+  "getNetlist",
+  "setNetlist"
+ ],
+ "pcb_Primitive": [
+  "getPrimitiveTypeByPrimitiveId",
+  "getPrimitiveByPrimitiveId",
+  "getPrimitivesByPrimitiveId",
+  "getPrimitivesBBox",
+  "getPrimitiveBoardLine"
+ ],
+ "pcb_PrimitiveArc": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveAttribute": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveComponent": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll",
+  "getAllPinsByPrimitiveId",
+  "placeComponentWithMouse",
+  "placeFootprintWithMouse",
+  "getAllPropertyNames"
+ ],
+ "pcb_PrimitiveFill": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveDimension": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveImage": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveLine": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveObject": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitivePad": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitivePolyline": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitivePour": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitivePoured": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveRegion": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveString": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_PrimitiveVia": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "pcb_RayTracerEngine": [
+  "init",
+  "dispose",
+  "setRenderConfigurations"
+ ],
+ "pcb_SelectControl": [
+  "getAllSelectedPrimitives_PrimitiveId",
+  "getAllSelectedPrimitives",
+  "getSelectedPrimitives",
+  "doSelectPrimitives",
+  "doCrossProbeSelect",
+  "doCrossProbeSelectByObject",
+  "clearSelected",
+  "getCurrentMousePosition"
+ ],
+ "pnl_Document": [
+  "save"
+ ],
+ "sch_Document": [
+  "importChanges",
+  "save",
+  "navigateToCoordinates",
+  "navigateToRegion",
+  "getPrimitiveAtPoint",
+  "getPrimitivesInRegion",
+  "getCurrentFilterConfiguration",
+  "autoRouting",
+  "autoLayout"
+ ],
+ "sch_Drc": [
+  "check"
+ ],
+ "sch_Event": [
+  "addMouseEventListener",
+  "addPrimitiveEventListener",
+  "addSimulationEnginePullEventListener",
+  "removeEventListener",
+  "isEventListenerAlreadyExist"
+ ],
+ "sch_ManufactureData": [
+  "getAssemblyVariantsConfigs",
+  "getBomTemplates",
+  "uploadBomTemplateFile",
+  "getBomTemplateFile",
+  "deleteBomTemplate",
+  "getBomFile",
+  "getNetlistFile",
+  "getSimulationNetlistFile",
+  "getExportDocumentFile",
+  "placeComponentsOrder",
+  "placeSmtComponentsOrder"
+ ],
+ "sch_Net": [
+  "getCurrentProjectAllNets",
+  "getAllNets",
+  "getNet",
+  "getAllNetsName"
+ ],
+ "sch_Netlist": [
+  "getNetlist",
+  "setNetlist"
+ ],
+ "sch_Primitive": [
+  "getPrimitiveTypeByPrimitiveId",
+  "getPrimitiveByPrimitiveId",
+  "getPrimitivesByPrimitiveId",
+  "getPrimitivesBBox"
+ ],
+ "sch_PrimitiveArc": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sch_PrimitiveAttribute": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll",
+  "createNetLabel"
+ ],
+ "sch_PrimitiveBus": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sch_PrimitiveCircle": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sch_PrimitiveComponent": [
+  "setNetFlagComponentUuid_Power",
+  "setNetFlagComponentUuid_Ground",
+  "setNetFlagComponentUuid_AnalogGround",
+  "setNetFlagComponentUuid_ProtectGround",
+  "setNetPortComponentUuid_IN",
+  "setNetPortComponentUuid_OUT",
+  "setNetPortComponentUuid_BI",
+  "create",
+  "createNetFlag",
+  "createNetPort",
+  "createShortCircuitFlag",
+  "createCbbSymbol",
+  "placeCbbSchematicPage",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll",
+  "getAllPinsByPrimitiveId",
+  "placeComponentWithMouse",
+  "placeSymbolWithMouse",
+  "getAllPropertyNames",
+  "getComponentDetail",
+  "checkComponentType",
+  "initUuid"
+ ],
+ "sch_PrimitivePin": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sch_PrimitivePolygon": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sch_PrimitiveRectangle": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sch_PrimitiveText": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sch_PrimitiveWire": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sch_SelectControl": [
+  "getAllSelectedPrimitives_PrimitiveId",
+  "getAllSelectedPrimitives",
+  "getSelectedPrimitives_PrimitiveId",
+  "getSelectedPrimitives",
+  "doSelectPrimitives",
+  "doCrossProbeSelect",
+  "clearSelected",
+  "getCurrentMousePosition",
+  "getAllSelectedPrimitives3"
+ ],
+ "sch_SimulationEngine": [
+  "pushData"
+ ],
+ "sch_Utils": [
+  "splitLines"
+ ],
+ "sch_PrimitiveObject": [
+  "create",
+  "delete",
+  "modify",
+  "get",
+  "getAllPrimitiveId",
+  "getAll"
+ ],
+ "sys_ClientUrl": [
+  "request"
+ ],
+ "sys_Dialog": [
+  "createReactComponentizationDialogInterface",
+  "showInformationMessage",
+  "showConfirmationMessage",
+  "showInputDialog",
+  "showSelectDialog",
+  "insertScriptToDialog"
+ ],
+ "sys_Environment": [
+  "isWeb",
+  "isClient",
+  "isEasyEDAProEdition",
+  "isJLCEDAProEdition",
+  "isProPrivateEdition",
+  "isOnlineMode",
+  "isHalfOfflineMode",
+  "isOfflineMode",
+  "getEditorCurrentVersion",
+  "getEditorCompliedDate",
+  "getUserInfo",
+  "setKeepProjectHasOnlyOneBoard"
+ ],
+ "sys_FileManager": [
+  "getProjectFile",
+  "getDocumentFile",
+  "getDocumentSource",
+  "getDocumentFootprintSources",
+  "setDocumentSource",
+  "getProjectFileByProjectUuid",
+  "getDeviceFileByDeviceUuid",
+  "getSymbolFileBySymbolUuid",
+  "getFootprintFileByFootprintUuid",
+  "getCbbFileByCbbUuid",
+  "getPanelLibraryFileByPanelLibraryUuid",
+  "importProjectByProjectFile",
+  "extractProjectInfo",
+  "extractLibInfo"
+ ],
+ "sys_FileSystem": [
+  "getExtensionFile",
+  "openReadFileDialog",
+  "openReadFolderDialog",
+  "saveFile",
+  "readFileFromFileSystem",
+  "saveFileToFileSystem",
+  "listFilesOfFileSystem",
+  "deleteFileInFileSystem",
+  "getEdaPath",
+  "getDocumentsPath",
+  "getLibrariesPaths",
+  "getProjectsPaths"
+ ],
+ "sys_FontManager": [
+  "getFontsList",
+  "addFont",
+  "deleteFont"
+ ],
+ "sys_FormatConversion": [
+  "convertAltiumDesignerLibrariesToEasyEDASingleFile",
+  "convertAltiumDesignerLibrariesToEasyEDAMultiFiles",
+  "convertDisaLibrariesToEasyEDASingleFile",
+  "convertDisaLibrariesToEasyEDAMultiFiles"
+ ],
+ "sys_HeaderMenu": [
+  "insertHeaderMenus",
+  "removeHeaderMenus",
+  "replaceHeaderMenus",
+  "removeSystemHeaderMenuItem",
+  "insertSystemHeaderMenuItem",
+  "insertSystemHeaderMenus"
+ ],
+ "sys_I18n": [
+  "text",
+  "getCurrentLanguage",
+  "getAllSupportedLanguages",
+  "isLanguageSupported",
+  "importMultilingual",
+  "importMultilingualLanguage",
+  "importMultilingualNamespace",
+  "addLanguageChangedEventListener",
+  "removeEventListener",
+  "isEventListenerAlreadyExist"
+ ],
+ "sys_IFrame": [
+  "openIFrame",
+  "closeIFrame",
+  "hideIFrame",
+  "showIFrame",
+  "isIFrameAlreadyExist"
+ ],
+ "sys_LoadingAndProgressBar": [
+  "showProgressBar",
+  "destroyProgressBar",
+  "showLoading",
+  "destroyLoading"
+ ],
+ "sys_Log": [
+  "add",
+  "clear",
+  "export",
+  "sort",
+  "find"
+ ],
+ "sys_Message": [
+  "showToastMessage",
+  "showFollowMouseTip",
+  "removeFollowMouseTip"
+ ],
+ "sys_MessageBox": [
+  "showInformationMessage",
+  "showConfirmationMessage"
+ ],
+ "sys_MessageBus": [
+  "createPrivateMessageBus",
+  "removePrivateMessageBus",
+  "push",
+  "pushPublic",
+  "pull",
+  "pullPublic",
+  "pullAsync",
+  "pullAsyncPublic",
+  "publish",
+  "publishPublic",
+  "subscribe",
+  "subscribePublic",
+  "subscribeOnce",
+  "subscribeOncePublic",
+  "rpcCall",
+  "rpcCallPublic",
+  "rpcService",
+  "rpcServicePublic"
+ ],
+ "sys_PanelControl": [
+  "openLeftPanel",
+  "closeLeftPanel",
+  "toggleLeftPanelLockState",
+  "isLeftPanelLocked",
+  "openRightPanel",
+  "closeRightPanel",
+  "toggleRightPanelLockState",
+  "isRightPanelLocked",
+  "openBottomPanel",
+  "closeBottomPanel",
+  "toggleBottomPanelLockState",
+  "isBottomPanelLocked"
+ ],
+ "sys_RightClickMenu": [
+  "changeMenu"
+ ],
+ "sys_Setting": [
+  "restoreDefault"
+ ],
+ "sys_ShortcutKey": [
+  "registerShortcutKey",
+  "unregisterShortcutKey",
+  "getShortcutKeys"
+ ],
+ "sys_Storage": [
+  "getExtensionAllUserConfigs",
+  "setExtensionAllUserConfigs",
+  "clearExtensionAllUserConfigs",
+  "getExtensionUserConfig",
+  "setExtensionUserConfig",
+  "deleteExtensionUserConfig"
+ ],
+ "sys_Timer": [
+  "setIntervalTimer",
+  "clearIntervalTimer",
+  "setTimeoutTimer",
+  "clearTimeoutTimer"
+ ],
+ "sys_ToastMessage": [
+  "showMessage"
+ ],
+ "sys_Tool": [
+  "netlistComparison",
+  "schematicComparison",
+  "pcbComparison"
+ ],
+ "sys_Unit": [
+  "getFrontendDataUnit",
+  "milToMm",
+  "milToInch",
+  "mmToMil",
+  "mmToInch",
+  "inchToMil",
+  "inchToMm"
+ ],
+ "sys_WebSocket": [
+  "register",
+  "send",
+  "close"
+ ],
+ "sys_Window": [
+  "open",
+  "addEventListener",
+  "removeEventListener",
+  "openUI",
+  "getCurrentTheme",
+  "getUrlParam",
+  "getUrlAnchor",
+  "urlPushState",
+  "urlReplaceState"
+ ]
 }
