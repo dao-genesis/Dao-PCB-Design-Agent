@@ -162,7 +162,13 @@ class DaoRpc:
         按该拼写索引;`dmt_Project.getAllProjectsUuid(dir)` 是对 dir 字符串全等
         过滤,形不同则永返 [] → openProject 链断。故以引擎自报路径判定引擎
         OS,把目录翻译成引擎侧拼写 —— 同一套驱动在原生/Wine 端同行。"""
+        # 国内客户端目录名 LCEDA-Pro, 国际版(EasyEDA Pro)为 EasyEDA-Pro — 取实际存在者
         posix_dir = os.path.expanduser("~/Documents/LCEDA-Pro/projects")
+        for cand in ("~/Documents/LCEDA-Pro/projects", "~/Documents/EasyEDA-Pro/projects"):
+            p = os.path.expanduser(cand)
+            if os.path.isdir(p):
+                posix_dir = p
+                break
         try:
             eda_path = self._call("sys_FileSystem.getEdaPath", timeout=15)
         except Exception:
