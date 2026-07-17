@@ -181,32 +181,36 @@ def _http_get(url, timeout=6):
     return json.load(urllib.request.urlopen(url, timeout=timeout))
 
 
+def _is_eda_url(url):
+    """是否为嘉立创EDA编辑器页(web: pro.lceda.cn/editor; 桌面: client/editor)。"""
+    host = urlparse(url or "").netloc
+    if "passport" in host:
+        return False
+    return "editor" in (url or "") or "lceda" in host or host.startswith("client")
+
+
 def discover_target(ports):
-    """在候选端口里找嘉立创EDA编辑器 page 目标(web: pro.lceda.cn/editor; 桌面: client/editor)。"""
+    """在候选端口里找嘉立创EDA编辑器 page 目标。
+
+    两遍扫描: 第一遍跨**全部**端口只认 editor 页; 第二遍才退而求其次接受
+    任意 page —— 避免前位端口的无关页(如 chrome://newtab)挡住后位端口上
+    真正的编辑器(冷启动/激活重载窗口期实测会命中)。"""
+    port_targets = []
     for port in ports:
         try:
-            targets = _http_get("http://127.0.0.1:%d/json" % port)
+            port_targets.append((port, _http_get("http://127.0.0.1:%d/json" % port)))
         except Exception:
             continue
-        # 优先 editor, 其次任意 page (passport 登录页除外——其 redirectUrl 参数会误含 lceda)
-        editor = None
+    for port, targets in port_targets:
         for t in targets:
-            if t.get("type") != "page":
-                continue
-            url = t.get("url", "")
-            host = urlparse(url).netloc
-            if "passport" in host:
-                continue
-            if "editor" in url or "lceda" in host or host.startswith("client"):
-                editor = t
-                break
-        if not editor:
-            for t in targets:
-                if t.get("type") == "page" and "passport" not in urlparse(t.get("url", "")).netloc:
-                    editor = t
-                    break
-        if editor and editor.get("webSocketDebuggerUrl"):
-            return port, editor
+            if (t.get("type") == "page" and _is_eda_url(t.get("url", ""))
+                    and t.get("webSocketDebuggerUrl")):
+                return port, t
+    for port, targets in port_targets:
+        for t in targets:
+            if (t.get("type") == "page" and t.get("webSocketDebuggerUrl")
+                    and "passport" not in urlparse(t.get("url", "")).netloc):
+                return port, t
     return None, None
 
 
@@ -228,6 +232,22 @@ class EdaSession:
 
     def ensure(self):
         with self._connect_lock:
+            if self.cdp and self.cdp.alive:
+                # 自愈: 当前挂在非 EDA 页(如 chrome://newtab)而真正的编辑器
+                # 已在别处就绪 → 断开重连到编辑器目标。
+                if not _is_eda_url((self.target or {}).get("url", "")):
+                    port, target = discover_target(self.ports)
+                    if target and _is_eda_url(target.get("url", "")):
+                        try:
+                            self.cdp._alive = False
+                            self.cdp.s.close()
+                        except Exception:
+                            pass
+                        self.cdp = None
+                    else:
+                        return True
+                else:
+                    return True
             if self.cdp and self.cdp.alive:
                 return True
             # 本源·本地优先: 先唤起用户本机安装的嘉立创EDA客户端(带 CDP),
