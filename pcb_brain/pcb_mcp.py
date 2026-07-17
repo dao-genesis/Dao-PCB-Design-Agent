@@ -527,12 +527,15 @@ def _parse_pcb(pcb_path: str = "") -> Dict[str, Any]:
     """解析PCB文件结构 (S-expression纯Python解析器)"""
     pcb = Path(pcb_path) if pcb_path else None
     if not pcb or not pcb.is_file():
-        candidates = sorted((_HERE / "output").rglob("*.kicad_pcb"),
-                            key=lambda p: p.stat().st_mtime, reverse=True)
-        if candidates:
-            pcb = candidates[0]
+        if _LAST_PCB and Path(_LAST_PCB).is_file():
+            pcb = Path(_LAST_PCB)
         else:
-            return {"status": "error", "error": "未找到PCB文件"}
+            candidates = sorted((_HERE / "output").rglob("*.kicad_pcb"),
+                                key=lambda p: p.stat().st_mtime, reverse=True)
+            if candidates:
+                pcb = candidates[0]
+            else:
+                return {"status": "error", "error": "未找到PCB文件"}
     try:
         import kicad_native as kn
         data = kn.parse_pcb(str(pcb))
