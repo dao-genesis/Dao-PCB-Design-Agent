@@ -115,6 +115,13 @@ def pcb_design(template: str = "", spec: Dict[str, Any] = None,
     if engine == "lceda":
         if not spec:
             return {"error": "engine=lceda 需要 spec(器件/坐标/网络)"}
+        missing = [c.get("ref", "#%d" % i) for i, c in
+                   enumerate(spec.get("components", []))
+                   if not all(k in c for k in ("query", "x", "y"))]
+        if missing or not spec.get("components"):
+            return {"error": "spec.components 每项需要 query/x/y(mil)/ref/pins, "
+                             "缺失项: %s; 格式见 lceda_bridge/cdp_studio/examples/"
+                             "specs.py" % (missing or "components 为空")}
         out = output_dir or str(Path.home() / "dao_pcb_out" / spec.get("name", "board"))
         return _lceda().build_until_clean(spec, out_dir=out)
     if not template:
@@ -277,9 +284,13 @@ def tools_meta():
 
 
 def run_stdio():
+    # stdio 协议帧独占真 stdout; 工具内部 print 全部改道 stderr, 防污染 JSON-RPC 流
+    proto_out = sys.stdout
+    sys.stdout = sys.stderr
+
     def write(obj):
-        sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
-        sys.stdout.flush()
+        proto_out.write(json.dumps(obj, ensure_ascii=False) + "\n")
+        proto_out.flush()
 
     for line in sys.stdin:
         line = line.strip()

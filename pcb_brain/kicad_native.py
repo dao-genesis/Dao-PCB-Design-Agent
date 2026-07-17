@@ -807,6 +807,11 @@ class PCBFileEditor:
         fps = []
         for fp in SExprParser.find_all(self._tree, "footprint"):
             ref  = SExprParser.get_val(fp, "reference")
+            if not ref:  # KiCad 6+ 参考位号在 (property "Reference" "R1")
+                for prop in SExprParser.find_all(fp, "property"):
+                    if len(prop) >= 3 and prop[1] == "Reference":
+                        ref = prop[2]
+                        break
             at   = SExprParser.find_first(fp, "at")
             fps.append({
                 "ref":    str(ref) if ref else "?",
