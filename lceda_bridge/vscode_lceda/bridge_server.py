@@ -445,6 +445,19 @@ class EdaSession:
         except Exception:
             return {"ok": False, "err": "PARSE", "namespaces": {}}
 
+    def signature(self, key):
+        """反者道之动 · 官方签名反向提取: 直接读官方 EXTAPI 函数源码(toString),
+        传 ns.method → 该方法完整签名+源码; 传 ns → 该命名空间全部方法签名头。
+        让任意 Agent 在调用前自省真实参数, 杜绝盲猜参数导致的 NO_API/参数错误。"""
+        self.ensure_extapi()
+        val, err = self.eval_js(_SIG_JS % json.dumps(key or ""))
+        if err:
+            return {"ok": False, "err": err}
+        try:
+            return json.loads(val)
+        except Exception:
+            return {"ok": False, "err": "PARSE"}
+
     def verbs_health(self):
         """底层能力体检: 对全部命名空间的零参只读方法(get/is/has/list)实调一遍,
         逐方法记 ok:<类型>/err:<原因>/skip(带参或写方法不碰), 汇总通过率 —— 让
@@ -509,6 +522,24 @@ return 'started';})()"""
 
 _SWEEP_POLL_JS = r"""(function(){var S=window.__daoSweep||{};
 return JSON.stringify({done:!!S.done,out:S.out||{}});})()"""
+
+
+# JS: 官方签名反向提取 — 读 EXTAPI 函数源码, ns.method → 头+源码, ns → 全方法签名头。
+_SIG_JS = r"""(function(){var R=window._EXTAPI_ROOT_;
+if(!R)return JSON.stringify({ok:false,err:'NO_EXTAPI_ROOT'});
+var key=%s;var out={};
+function head(s){var i=s.indexOf('{');return (i>0?s.slice(0,i):s.slice(0,160)).replace(/\s+/g,' ').trim();}
+if(key.indexOf('.')>0){var p=key.split('.');var o=R[p[0]];var fn=o&&o[p[1]];
+ if(typeof fn!=='function')return JSON.stringify({ok:false,err:'NO_API '+key});
+ var s=String(fn);out[key]={head:head(s),src:s.slice(0,4000)};}
+else{var o=R[key];if(!o)return JSON.stringify({ok:false,err:'NO_NS '+key});
+ var proto=o,seen={};
+ while(proto&&proto!==Object.prototype){
+  Object.getOwnPropertyNames(proto).forEach(function(m){
+   if(m!=='constructor'&&typeof o[m]==='function')seen[m]=1;});
+  proto=Object.getPrototypeOf(proto);}
+ Object.keys(seen).sort().forEach(function(m){out[key+'.'+m]={head:head(String(o[m]))};});}
+return JSON.stringify({ok:true,signatures:out});})()"""
 
 
 # JS: 按需重建 _EXTAPI_ROOT_ 门面。门面已在则秒回; 缺失则拉取页面已加载的官方
@@ -1195,6 +1226,10 @@ class Handler(BaseHTTPRequestHandler):
             # 底层能力自省: 官方 EXTAPI 全景(93 命名空间/700+ 方法), ?ns= 取单命名空间方法清单。
             ns = (parse_qs(u.query).get("ns") or [None])[0]
             self._send(200, SESSION.capabilities(ns))
+        elif path == "/api/sig":
+            # 反者道之动: 官方签名反向提取(?key=ns.method 源码 / ?key=ns 全方法签名头)。
+            key = (parse_qs(u.query).get("key") or [""])[0]
+            self._send(200, SESSION.signature(key))
         elif path == "/api/tools":
             # 原生第三方接入: 机器可读工具目录(dao_tools 全链路能力)。
             self._send(200, {"ok": True, "tools": _agent().catalog()})
@@ -1430,6 +1465,8 @@ _CAPABILITIES = {
          "desc": "官方 EXTAPI 全景自省 (93 命名空间/700+ 方法)"},
         {"method": "GET", "path": "/api/verbs/health", "params": {},
          "desc": "底层能力体检: 全命名空间零参只读方法实调可用性"},
+        {"method": "GET", "path": "/api/sig", "params": {"key": "ns 或 ns.method"},
+         "desc": "官方签名反向提取: 方法真实参数/源码, 调用前自省防盲猜"},
         {"method": "GET", "path": "/api/tools", "params": {},
          "desc": "dao_tools 机器可读工具目录 (原生第三方接入)"},
         {"method": "POST", "path": "/api/verb",

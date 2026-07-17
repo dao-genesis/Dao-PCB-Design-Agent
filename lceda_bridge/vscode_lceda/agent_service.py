@@ -61,6 +61,35 @@ def _tool_verb_call(args):
                   timeout=min(int(args.get("timeout", 60)), 120))
 
 
+_SIG_TOOL_JS = (
+    "(function(){var R=window._EXTAPI_ROOT_;"
+    "if(!R)return JSON.stringify({ok:false,err:'NO_EXTAPI_ROOT'});"
+    "var key=%s;var out={};"
+    "function head(s){var i=s.indexOf('{');"
+    "return (i>0?s.slice(0,i):s.slice(0,160)).replace(/\\s+/g,' ').trim();}"
+    "if(key.indexOf('.')>0){var p=key.split('.');var o=R[p[0]];var fn=o&&o[p[1]];"
+    "if(typeof fn!=='function')return JSON.stringify({ok:false,err:'NO_API '+key});"
+    "var s=String(fn);out[key]={head:head(s),src:s.slice(0,4000)};}"
+    "else{var o=R[key];if(!o)return JSON.stringify({ok:false,err:'NO_NS '+key});"
+    "var proto=o,seen={};"
+    "while(proto&&proto!==Object.prototype){"
+    "Object.getOwnPropertyNames(proto).forEach(function(m){"
+    "if(m!=='constructor'&&typeof o[m]==='function')seen[m]=1;});"
+    "proto=Object.getPrototypeOf(proto);}"
+    "Object.keys(seen).sort().forEach(function(m){"
+    "out[key+'.'+m]={head:head(String(o[m]))};});}"
+    "return JSON.stringify({ok:true,signatures:out});})()")
+
+
+def _tool_verb_sig(args):
+    import json as _json
+    ret = T.ev(_SIG_TOOL_JS % _json.dumps(args.get("key") or ""), timeout=30)
+    try:
+        return _json.loads(ret) if isinstance(ret, str) else ret
+    except Exception:
+        return {"ok": False, "err": "PARSE"}
+
+
 def _tool_search_device(args):
     # 实战缺陷结论: search 只收关键字一个参数, 追加分页参数会命中另一重载并返回空。
     # 关键字支持 "|" 分隔候选链, 逐个回退(STM32 实战: 型号未命中需通用词兜底)。
@@ -158,6 +187,8 @@ TOOLS = {
     "verb.call":      {"fn": _tool_verb_call,
                        "params": {"ns": "str", "args": "list?", "timeout": "int?"},
                        "desc": "直调任意官方 EXTAPI 动词(91 命名空间 · 操作一切本源)"},
+    "verb.sig":       {"fn": _tool_verb_sig, "params": {"key": "str (ns 或 ns.method)"},
+                       "desc": "官方签名反向提取: 方法真实参数/源码, 调前自省防盲猜"},
     "device.search":  {"fn": _tool_search_device, "params": {"keyword": "str"},
                        "desc": "元件库检索(LCSC), 返回可放置对象"},
     "sch.place":      {"fn": _tool_place,

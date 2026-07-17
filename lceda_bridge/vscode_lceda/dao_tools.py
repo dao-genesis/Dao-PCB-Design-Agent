@@ -525,6 +525,12 @@ def fab_outputs(prefix=None):
     if not prefix:
         import tempfile
         prefix = os.path.join(tempfile.gettempdir(), "fab")
+    # 出产 API 只对"当前打开的 PCB 文档"生效(实战结论: 文档未开 → undefined blob),
+    # 先切到当前工程 PCB 文档再导出。
+    try:
+        open_doc(project_uuids()["pcb"])
+    except Exception:
+        pass
     out = {}
     for call, suffix in (("getBomFile()", "_bom.xlsx"),
                          ("getPickAndPlaceFile()", "_xy.csv"),
