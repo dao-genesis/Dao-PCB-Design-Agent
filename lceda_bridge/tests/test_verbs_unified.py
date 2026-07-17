@@ -16,6 +16,10 @@ import subprocess
 import sys
 import tempfile
 
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
@@ -159,7 +163,7 @@ def t4_js_parity(py_results: dict):
             ["node", harness,
              os.path.join(IDE, "verbs.manifest.js"),
              os.path.join(IDE, "dao_verbs.js"), scen],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, encoding="utf-8", timeout=60,
         )
         check("node 执行成功", proc.returncode == 0, proc.stderr[:500])
         if proc.returncode != 0:
