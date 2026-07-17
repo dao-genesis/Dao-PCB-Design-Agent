@@ -94,6 +94,9 @@ def _list_templates(category: str = "") -> Dict[str, Any]:
     }
 
 
+_LAST_PCB = ""  # 会话内最近一次 design_pcb 产物, 供 run_drc/export_gerber 省参直接接力
+
+
 def _design_pcb(template: str, output_dir: str = "", auto_layout: bool = True) -> Dict[str, Any]:
     """生成PCB文件"""
     from circuit_dna import CircuitDNA, auto_layout as do_layout
@@ -118,6 +121,8 @@ def _design_pcb(template: str, output_dir: str = "", auto_layout: bool = True) -
         if not ok:
             return {"status": "error", "template": template,
                     "error": "PCB文件生成失败", "hint": "检查KiCad是否安装: D:/KICAD/"}
+        global _LAST_PCB
+        _LAST_PCB = pcb_file
         return {
             "status": "ok",
             "template": template,
@@ -154,18 +159,21 @@ def _get_bom(template: str, output_dir: str = "", qty: int = 5) -> Dict[str, Any
         return {"status": "error", "error": str(e)}
 
 
-def _run_drc(pcb_path: str) -> Dict[str, Any]:
+def _run_drc(pcb_path: str = "") -> Dict[str, Any]:
     """运行DRC检查"""
     pcb = Path(pcb_path) if pcb_path else Path(".")
     if not pcb_path or not pcb.is_file():
-        # 自动从output目录找最新PCB文件
-        candidates = sorted((_HERE / "output").rglob("*.kicad_pcb"),
-                            key=lambda p: p.stat().st_mtime, reverse=True)
-        if candidates:
-            pcb = candidates[0]
+        # 省参: 先接本会话最近 design_pcb 产物(含自定义 output_dir), 再扫 output 目录
+        if _LAST_PCB and Path(_LAST_PCB).is_file():
+            pcb = Path(_LAST_PCB)
         else:
-            return {"status": "error", "error": "未找到PCB文件",
-                    "hint": "先运行 design_pcb 生成PCB文件"}
+            candidates = sorted((_HERE / "output").rglob("*.kicad_pcb"),
+                                key=lambda p: p.stat().st_mtime, reverse=True)
+            if candidates:
+                pcb = candidates[0]
+            else:
+                return {"status": "error", "error": "未找到PCB文件",
+                        "hint": "先运行 design_pcb 生成PCB文件"}
 
     from kicad_arm import KiCadArm
     try:
@@ -188,16 +196,19 @@ def _run_drc(pcb_path: str) -> Dict[str, Any]:
                 "hint": "DRC需要KiCad CLI: D:/KICAD/bin/kicad-cli.exe"}
 
 
-def _export_gerber(pcb_path: str, output_dir: str = "") -> Dict[str, Any]:
+def _export_gerber(pcb_path: str = "", output_dir: str = "") -> Dict[str, Any]:
     """导出Gerber生产文件"""
     pcb = Path(pcb_path) if pcb_path else Path(".")
     if not pcb_path or not pcb.is_file():
-        candidates = sorted((_HERE / "output").rglob("*.kicad_pcb"),
-                            key=lambda p: p.stat().st_mtime, reverse=True)
-        if candidates:
-            pcb = candidates[0]
+        if _LAST_PCB and Path(_LAST_PCB).is_file():
+            pcb = Path(_LAST_PCB)
         else:
-            return {"status": "error", "error": f"PCB文件不存在: {pcb_path}"}
+            candidates = sorted((_HERE / "output").rglob("*.kicad_pcb"),
+                                key=lambda p: p.stat().st_mtime, reverse=True)
+            if candidates:
+                pcb = candidates[0]
+            else:
+                return {"status": "error", "error": f"PCB文件不存在: {pcb_path}"}
 
     from pcb_eye import touch_verify_gerbers
     from kicad_arm import KiCadArm
@@ -213,9 +224,11 @@ def _export_gerber(pcb_path: str, output_dir: str = "") -> Dict[str, Any]:
         return {
             "status": "ok",
             "gerber_dir": str(out),
-            "files": verify.get("files", []),
-            "layers": verify.get("layer_count", 0),
-            "jlcpcb_ready": verify.get("jlcpcb_ready", False),
+            "file_count": verify.get("file_count", 0),
+            "layers_found": verify.get("layers_found", {}),
+            "missing_layers": verify.get("missing_layers", []),
+            "jlcpcb_ready": verify.get("ready", False),
+            "verdict": verify.get("verdict", ""),
             "next_step": f"上传 {out} 到 https://jlcpcb.com 下单",
         }
     except Exception as e:
