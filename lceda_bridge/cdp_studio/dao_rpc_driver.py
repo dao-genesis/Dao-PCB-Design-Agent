@@ -538,7 +538,10 @@ var j=await r.json();return JSON.stringify({ok:j.success,uuid:Object.keys(j.resu
 
     # ---------- 钥匙 4：覆铜 + 纯 RPC 重建 ----------
     def ground_pour(self, net="GND", layers=(TOP, BOTTOM), margin=40):
-        """给指定层铺 net 覆铜并用官方 `rebuildCopperRegion()` 算出实铜（零 GUI）。"""
+        """给指定层铺 net 覆铜并用官方 `rebuildCopperRegion()` 算出实铜。
+
+        实测：引擎有渲染上下文（X/Xvfb 桌面）时 poured=True 出实铜；
+        纯 headless 时 @alpha 接口可能不产 fill，调用方按返回的 poured 字段判断。"""
         xs, ys = [], []
         for (_, _), (x, y, _) in self.pad_xy().items():
             if x is not None:
@@ -1816,7 +1819,9 @@ return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return 
             布线 → 官方 `importAutoRouteSesFile()` 回灌。最难的布线交给久经考验的布线器，
             经标准 Specctra 交换格式与 LCEDA 无缝衔接 → DRC-clean、可扩展到复杂大板。
           "geometric"：内置确定性正交星形布线 + GND 过孔下底层（简单板/无外部依赖时用）。
-        pour=False：headless 下覆铜填充不出实铜（@alpha rebuildCopperRegion 不产 fill）。
+        pour=True：布线后给 gnd_net 铺铜并 rebuildCopperRegion() 算实铜
+          （需引擎带渲染上下文, 如 X/Xvfb 桌面; 纯 headless 下 @alpha 接口可能不产 fill,
+          审计 steps.pour.L*.poured 为准）。
         """
         t0 = time.time()
         out_dir = out_dir or os.path.expanduser("~/dao_pcb_out/%s" % spec["name"])
@@ -1882,6 +1887,9 @@ return JSON.stringify({b64:btoa(s),size:u.length,name:f.name});}catch(e){return 
                                 net_widths_mm=self._net_track_widths(
                                     spec.get("constraints")))
             audit["steps"]["autoroute"] = ar
+            if pour and gnd:
+                audit["steps"]["pour"] = self.ground_pour(
+                    net=gnd, layers=tuple(spec.get("pour_layers", (TOP, BOTTOM))))
         else:
             skip = (gnd,) if gnd else ()
             audit["steps"]["route"] = self.auto_route_star(

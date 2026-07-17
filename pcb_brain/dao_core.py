@@ -123,7 +123,8 @@ def pcb_design(template: str = "", spec: Dict[str, Any] = None,
                              "缺失项: %s; 格式见 lceda_bridge/cdp_studio/examples/"
                              "specs.py" % (missing or "components 为空")}
         out = output_dir or str(Path.home() / "dao_pcb_out" / spec.get("name", "board"))
-        return _lceda().build_until_clean(spec, out_dir=out)
+        return _lceda().build_until_clean(spec, out_dir=out,
+                                          pour=bool(spec.get("pour")))
     if not template:
         return {"error": "engine=kicad 需要 template(用 pcb_search kind=template 找)"}
     return pcb_mcp._design_pcb(template, output_dir=output_dir)
